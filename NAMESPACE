@@ -1,0 +1,15 @@
+useDynLib(mirt, .registration=TRUE)
+
+# Exported functions
+export(bfactor,mirt,polymirt,confmirt,key2binary,expand.table,fscores,itemplot,simdata,
+	specify.model)
+
+# Imported functions
+importFrom(sem, specify.model)
+importFrom(SparseM, solve)
+importFrom("graphics", plot) 
+importFrom("stats", anova, coef, fitted, residuals, logLik)
+
+exportClasses("mirtClass", "bfactorClass", "polymirtClass", "confmirtClass")
+exportMethods(anova, fscores, plot, fitted, residuals, coef, summary, itemplot, logLik)
+
