@@ -13,9 +13,13 @@ setMethod(
 		if(length(x@logLik) > 0){
 			cat("Log-likelihood = ", x@logLik,", SE = ",round(x@SElogLik,3), "\n",sep='')			
 			cat("AIC =", x@AIC, "\n")
-			cat("G^2 = ", round(x@G2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4), "\n", sep="")
-		}				
+			if(x@p < 1)
+				cat("G^2 = ", round(x@G2,2), ", df = ", 
+					x@df, ", p = ", round(x@p,4), "\n", sep="")
+			else 
+				cat("G^2 = ", NA, ", df = ", 
+					x@df, ", p = ", NA, "\n", sep="")	
+		}					
 	} 
 )
 
@@ -34,8 +38,12 @@ setMethod(
 		if(length(object@logLik) > 0){
 			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')			
 			cat("AIC =", object@AIC, "\n")
-			cat("G^2 = ", round(object@G2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4), "\n", sep="")
+			if(object@p < 1)
+				cat("G^2 = ", round(object@G2,2), ", df = ", 
+					object@df, ", p = ", round(object@p,4), "\n", sep="")
+			else 
+				cat("G^2 = ", NA, ", df = ", 
+					object@df, ", p = ", NA, "\n", sep="")
 		}			
 	} 
 )
@@ -72,7 +80,7 @@ setMethod(
 			cat("\nRotated factor loadings: \n\n")
 			print(loads,digits)		
 			if(attr(rotF, "oblique")){
-				cat("\nFactor correlations: \n")
+				cat("\nFactor correlations: \n\n")
 				Phi <- rotF$Phi	  
 				Phi <- round(Phi, digits)
 				colnames(Phi) <- rownames(Phi) <- colnames(F)
@@ -238,7 +246,7 @@ setMethod(
 setMethod(
 	f = "logLik",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object, draws = 3000, G2 = TRUE){	
+	definition = function(object, draws = 2000, G2 = TRUE){	
 		nfact <- ncol(object@Theta)
 		N <- nrow(object@Theta)
 		J <- length(object@K)
@@ -248,8 +256,7 @@ setMethod(
 		zetas <- t(zetas)[!is.na(t(zetas))]		
 		mu <- rep(0,nfact)
 		sigma <- diag(nfact)		
-		LL <- matrix(0,N,draws)
-		theta <- matrix(0,N,nfact*draws)
+		LL <- matrix(0,N,draws)		
 		guess <- object@guess
 		guess[is.na(guess)] <- 0
 		K <- object@K
@@ -268,9 +275,9 @@ setMethod(
 						as.integer(J),
 						as.integer(N),
 						as.integer(nfact))		
-		}
+		}		
 		rwmeans <- rowMeans(LL)
-		logLik <- sum(log(rwmeans))				
+		logLik <- sum(log(rwmeans))		
 		pats <- apply(fulldata,1,paste,collapse = "/")
 		freqs <- table(pats)
 		nfreqs <- length(freqs)		
@@ -284,20 +291,35 @@ setMethod(
 		for (i in 1:N) logN <- logN + log(i)
 		for (i in 1:length(r)) 
 			for (j in 1:r[i]) 
-				logr[i] <- logr[i] + log(j)    		
-		logLik <- logLik + logN/sum(logr)		
-		SElogLik <- sqrt(var(log(rowMeans(LL))) / draws)
+				logr[i] <- logr[i] + log(j) 
+		if(sum(logr) != 0)								
+			logLik <- logLik + logN/sum(logr)		
+		SElogLik <- sqrt(var(log(rwmeans)) / draws)
 		df <- (length(r) - 1) - nfact*J - sum(K - 1) + nfact*(nfact - 1)/2
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
-		if(G2){
-			for (j in 1:nrow(tabdata)){          
-				TFvec <- colSums(ifelse(t(fulldata) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
-				rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
-			}
-			G2 <- 2 * sum(log(1/(N*rwmeans)))
-			p <- 1 - pchisq(G2,df) 
-			object@G2 <- G2	
-			object@p <- p
+		if(G2){				
+			data <- object@data
+			if(any(is.na(data))){
+				object@G2 <- 0	
+				object@p <- 1					
+			} else {
+				pats <- apply(data,1,paste,collapse = "/")			
+				freqs <- table(pats)
+				nfreqs <- length(freqs)		
+				r <- as.vector(freqs)
+				ncolfull <- ncol(data)
+				tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
+				tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
+				tabdata <- cbind(tabdata,r)							
+				for (j in 1:nrow(tabdata)){          
+					TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
+					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
+				}
+				G2 <- 2 * sum(log(1/(N*rwmeans)))
+				p <- 1 - pchisq(G2,df) 
+				object@G2 <- G2	
+				object@p <- p
+			}	
 		}		
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
@@ -424,14 +446,14 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
     #preamble for MRHM algorithm			
 	theta0 <- matrix(0,N,nfact)	
 	cand.t.var <- 1	
-	tmp <- .05
+	tmp <- .1
 	for(i in 1:30){			
 		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var)
 		if(i > 5){		
-			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + tmp 
+			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp 
 			else if(attr(theta0,"Proportion Accepted") > .25 && nfact > 3) cand.t.var <- cand.t.var + tmp	
 			else if(attr(theta0,"Proportion Accepted") < .2 && nfact < 4) cand.t.var <- cand.t.var - tmp
-			else if(attr(theta0,"Proportion Accepted") < .1) cand.t.var <- cand.t.var - tmp
+			else if(attr(theta0,"Proportion Accepted") < .1) cand.t.var <- cand.t.var - 2*tmp
 			if (cand.t.var < 0){
 				cand.t.var <- tmp		
 				tmp <- tmp / 2
@@ -546,8 +568,7 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		correction[correction > .5] <- .5
 		correction[correction < -0.5] <- -0.5	
 		if(any(estGuess))
-			correction[gind] <- 0					
-		pars <- pars + gamma*correction
+			correction[gind] <- 0							
 		if(printcycles && (cycles + 1) %% 10 == 0){ 
 			cat(", gam = ",sprintf("%.3f",gamma),", Max Change = ", 
 				sprintf("%.4f",max(abs(gamma*correction))), "\n", sep='')
@@ -556,7 +577,8 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		if(all(abs(parsold - pars) < tol)) conv <- conv + 1
 			else conv <- 0	
 		if(conv == 3) break		
-		parsold <- pars	
+		parsold <- pars
+		pars <- pars + gamma*correction	
 		pars[pars[gind] < 0] <- parsold[pars[gind] < 0]
 		pars[pars[gind] > .4] <- parsold[pars[gind] > .4]
 		
@@ -609,7 +631,7 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 	if(calcLL){
 		cat("Calculating log-likelihood...\n")
 		flush.console()
-		mod <- logLik(mod,draws)		
+		mod <- logLik(mod,draws,...)		
 	}	
 	return(mod)	
 }
