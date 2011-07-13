@@ -33,6 +33,7 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{logLik}:}{Object of class \code{"numeric"}, log-likelihood }
     \item{\code{SElogLik}:}{Object of class \code{"numeric"}, std error for log-likelihood }
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
+    \item{\code{BIC}:}{Object of class \code{"numeric"}, Bayesian Information Criteria }
     \item{\code{df}:}{Object of class \code{"integer"}, degrees of freedom }
     \item{\code{h2}:}{Object of class \code{"numeric"}, communalities }
     \item{\code{F}:}{Object of class \code{"matrix"}, factor loadings }
@@ -40,6 +41,7 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{nconstvalues}:}{Object of class \code{"integer"}, fixed parameters count }
     \item{\code{G2}:}{Object of class \code{"numeric"}, G2 model fit statistic }
     \item{\code{p}:}{Object of class \code{"numeric"}, p-value for G2 }
+    \item{\code{tabdata}:}{Object of class \code{"matrix"}, tabulated data with expected values }
     \item{\code{Call}:}{Object of class \code{"call"},  call }
   }
 }

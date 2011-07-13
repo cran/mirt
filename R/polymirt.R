@@ -12,7 +12,8 @@ setMethod(
 			cat("Estimation stopped after ", x@cycles, " iterations.\n", sep="")		
 		if(length(x@logLik) > 0){
 			cat("Log-likelihood = ", x@logLik,", SE = ",round(x@SElogLik,3), "\n",sep='')			
-			cat("AIC =", x@AIC, "\n")
+			cat("AIC =", x@AIC, "\n")			
+			cat("BIC =", x@BIC, "\n")
 			if(x@p < 1)
 				cat("G^2 = ", round(x@G2,2), ", df = ", 
 					x@df, ", p = ", round(x@p,4), "\n", sep="")
@@ -36,8 +37,9 @@ setMethod(
 		else 	
 			cat("Estimation stopped after ", object@cycles, " iterations.\n", sep="")	
 		if(length(object@logLik) > 0){
-			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')			
-			cat("AIC =", object@AIC, "\n")
+			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')
+			cat("AIC =", object@AIC, "\n")							
+			cat("BIC =", object@BIC, "\n")
 			if(object@p < 1)
 				cat("G^2 = ", round(object@G2,2), ", df = ", 
 					object@df, ", p = ", round(object@p,4), "\n", sep="")
@@ -139,10 +141,10 @@ setMethod(
 setMethod(
 	f = "plot",
 	signature = signature(x = 'polymirtClass', y = "missing"),
-	definition = function(x, y, npts = 50, 
+	definition = function(x, y, type = 'info', npts = 50, 
 		rot = list(xaxis = -70, yaxis = 30, zaxis = 10))
-	{  
-		type = 'curve'
+	{  		
+		if (!type %in% c('info','infocontour')) stop(type, " is not a valid plot type.")
 		rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
 		K <- x@K		
 		nfact <- ncol(x@Theta)
@@ -171,21 +173,28 @@ setMethod(
 			}			
 		}		
 		plt <- data.frame(cbind(info,Theta))
-		if(nfact > 1){
-			require(lattice)			
-			colnames(plt) <- c("info", "Theta1", "Theta2")
-			wireframe(info ~ Theta1 + Theta2, data = plt, main = "Item Information", 
-				zlab = "I", xlab = "Theta 1", ylab = "Theta 2", scales = list(arrows = FALSE),
-				screen = rot)	
-		} else 
-			plot(Theta, info, type='l',main = 'Item Information', xlab = 'Theta', ylab='Information')
+		if(nfact == 2){						
+			colnames(plt) <- c("info", "Theta1", "Theta2")			
+			if(type == 'infocontour')												
+				contour(theta, theta, matrix(info,length(theta),length(theta)), 
+					main = paste("Test Information Contour"), xlab = "Theta 1", ylab = "Theta 2")
+			if(type == 'info')
+				return(wireframe(info ~ Theta1 + Theta2, data = plt, main = "Test Information", 
+					zlab = "I", xlab = "Theta 1", ylab = "Theta 2", scales = list(arrows = FALSE),
+					screen = rot))
+		} else {
+			if(type == 'info')
+				plot(Theta, info, type='l',main = 'Test Information', xlab = 'Theta', ylab='Information')
+			if(type == 'infocontour') 
+				cat('No \'contour\' plots for 1-dimensional models\n')
+		}		
 	}	  
 )	
 
 setMethod(
 	f = "residuals",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object, digits = 3, ...){ 	
+	definition = function(object, restype = 'LD', digits = 3, ...){ 	
 		fulldata <- object@fulldata	
 		data <- object@data
 		data[data==99] <- NA
@@ -207,39 +216,48 @@ setMethod(
 		colnames(res) <- rownames(res) <- colnames(data)
 		prior <- dmvnorm(Theta,rep(0,nfact),diag(nfact))
 		prior <- prior/sum(prior)
-		loc <- loc2 <- 1	
-		for(i in 1:J){
-			if(i > 1) loc <- loc + K[i-1] - 1	
-			loc2 <- 1
-			for(j in 1:J){			
-				if(i < j){
-					if(K[i] > 2) P1 <- P.poly(lambdas[i,],zetas[loc:(loc+K[i]-2)],Theta,itemexp=TRUE)
-					else { 
-						P1 <- P.mirt(lambdas[i,],zetas[loc], Theta, guess[i])
-						P1 <- cbind(1 - P1, P1)
-					}	
-					if(K[j] > 2) P2 <- P.poly(lambdas[j,],zetas[loc2:(loc2+K[j]-2)],Theta,itemexp=TRUE)
-					else {
-						P2 <- P.mirt(lambdas[j,],zetas[loc2], Theta, guess[j])	
-						P2 <- cbind(1 - P2, P2)
+		loc <- loc2 <- 1
+		if(restype == 'LD'){	
+			for(i in 1:J){
+				if(i > 1) loc <- loc + K[i-1] - 1	
+				loc2 <- 1
+				for(j in 1:J){			
+					if(i < j){
+						if(K[i] > 2) P1 <- P.poly(lambdas[i,],zetas[loc:(loc+K[i]-2)],Theta,itemexp=TRUE)
+						else { 
+							P1 <- P.mirt(lambdas[i,],zetas[loc], Theta, guess[i])
+							P1 <- cbind(1 - P1, P1)
+						}	
+						if(K[j] > 2) P2 <- P.poly(lambdas[j,],zetas[loc2:(loc2+K[j]-2)],Theta,itemexp=TRUE)
+						else {
+							P2 <- P.mirt(lambdas[j,],zetas[loc2], Theta, guess[j])	
+							P2 <- cbind(1 - P2, P2)
+						}
+						tab <- table(data[,i],data[,j])		
+						Etab <- matrix(0,K[i],K[j])
+						for(k in 1:K[i])
+							for(m in 1:K[j])						
+								Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)	
+						s <- gamma.cor(tab) - gamma.cor(Etab)
+						if(s == 0) s <- 1				
+						res[j,i] <- sum(((tab - Etab)^2)/Etab) /
+							((K[i] - 1) * (K[j] - 1)) * sign(s)
+						res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))	
 					}
-					tab <- table(data[,i],data[,j])		
-					Etab <- matrix(0,K[i],K[j])
-					for(k in 1:K[i])
-						for(m in 1:K[j])						
-							Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)	
-					s <- gamma.cor(tab) - gamma.cor(Etab)
-					if(s == 0) s <- 1				
-					res[j,i] <- sum(((tab - Etab)^2)/Etab) /
-						((K[i] - 1) * (K[j] - 1)) * sign(s)
-					res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))	
+				loc2 <- loc2 + K[j] - 1 	
 				}
-			loc2 <- loc2 + K[j] - 1 	
-			}
-		}	
-		cat("LD matrix:\n\n")	
-		res <- round(res,digits)
-		res
+			}	
+			cat("LD matrix:\n\n")	
+			res <- round(res,digits)
+			print(res)
+		} 
+		if(restype == 'exp'){
+			tabdata <- object@tabdata
+			res <- (tabdata[,J+1] - tabdata[,J+2]) / sqrt(tabdata[,J+2])
+			tabdata <- round(cbind(tabdata,res),digits)
+			colnames(tabdata) <- c(colnames(object@data), 'freq', 'exp', 'std_res')
+			tabdata
+		}
 	}
 )
 
@@ -297,6 +315,7 @@ setMethod(
 		SElogLik <- sqrt(var(log(rwmeans)) / draws)
 		df <- (length(r) - 1) - nfact*J - sum(K - 1) + nfact*(nfact - 1)/2
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
+		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)
 		if(G2){				
 			data <- object@data
 			if(any(is.na(data))){
@@ -310,24 +329,30 @@ setMethod(
 				ncolfull <- ncol(data)
 				tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
 				tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
-				tabdata <- cbind(tabdata,r)							
+				tabdata <- cbind(tabdata,r)	
+				expected <- rep(0,nrow(tabdata))	
 				for (j in 1:nrow(tabdata)){          
 					TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
-					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
+					expected[j] <- mean(rwmeans[TFvec])
+					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]					
 				}
+				tabdata <- cbind(tabdata,expected*N)
 				G2 <- 2 * sum(log(1/(N*rwmeans)))
 				p <- 1 - pchisq(G2,df) 
 				object@G2 <- G2	
 				object@p <- p
+				object@tabdata <- tabdata
 			}	
 		}		
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
 		object@AIC <- AIC
+		object@BIC <- BIC
 		object@df <- as.integer(df)
 		return(object)
 	} 	
 )
+
 
 setMethod(
 	f = "anova",
@@ -346,10 +371,12 @@ setMethod(
 		}
 		X2 <- 2*object2@logLik - 2*object@logLik 
 		AICdiff <- object@AIC - object2@AIC
+		BICdiff <- object@BIC - object2@BIC
 		se <- round(object@SElogLik + object2@SElogLik,3)	
 		cat("\nChi-squared difference: \n\nX2 = ", round(X2,3), 
 			" (SE = ", se,"), df = ", df, ", p = ", round(1 - pchisq(X2,df),4), "\n", sep="")
 		cat("AIC difference = ", round(AICdiff,3)," (SE = ", se,")\n", sep='')  
+		cat("BIC difference = ", round(BICdiff,3)," (SE = ", se,")\n", sep='') 
 	}		
 )
 

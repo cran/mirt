@@ -12,18 +12,17 @@
 }
 
 \usage{
-polymirt(data, nfact, guess = 0, prev.cor = NULL,
-	ncycles = 2000, burnin = 100, SEM.cycles = 50, kdraws = 1,
-    tol = .001, printcycles = TRUE, calcLL = TRUE, draws = 2000,
-    debug = FALSE, ...)
+polymirt(data, nfact, guess = 0, prev.cor = NULL,ncycles = 2000, burnin = 100, 
+SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, calcLL = TRUE, 
+draws = 2000, debug = FALSE, ...)
 
 \S4method{summary}{polymirt}(object, rotate='varimax', suppress = 0, digits = 3, ...)
 
 \S4method{coef}{polymirt}(object, SE = TRUE, digits = 3, ...)
 
-\S4method{plot}{polymirt}(x, npts = 50, rot = list(x = -70, y = 30, z = 10), ...)
+\S4method{plot}{polymirt}(x, npts = 50, type = 'info', rot = list(x = -70, y = 30, z = 10), ...)
 
-\S4method{residuals}{polymirt}(object, digits = 3, ...)
+\S4method{residuals}{polymirt}(object, restype = 'LD', digits = 3, ...)
 
 \S4method{anova}{polymirt}(object, object2, ...)
 
@@ -50,7 +49,9 @@ polymirt(data, nfact, guess = 0, prev.cor = NULL,
   \item{rot}{allows rotation of the 3D graphics}
   \item{printcycles}{logical; display iteration history during estimation?}
   \item{calcLL}{logical; calculate the log-likelihood?}
+  \item{restype}{type of residuals to be displayed. Can be either \code{'LD'} for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the expected values for the frequencies of every response pattern}
   \item{draws}{the number of Monte Carlo draws to estimate the log-likelihood}
+  \item{type}{either \code{'info'} or \code{'infocontour'} to plot test information plots}
   \item{debug}{logical; turn on debugging features?}
   \item{...}{additional arguments to be passed}
 }
@@ -94,12 +95,12 @@ anova(mod1,mod2)
 ###########
 #data from the 'ltm' package in numeric format
 data(Science)
-(mod1 <- polymirt(Science,1))
+(mod1 <- polymirt(Science, 1))
 summary(mod1)
 residuals(mod1)
 coef(mod1)
 
-(mod2 <- polymirt(Science,2, calcLL = FALSE)) #don't calculate log-likelihood
+(mod2 <- polymirt(Science, 2, calcLL = FALSE)) #don't calculate log-likelihood
 mod2 <- logLik(mod2,5000) #calc log-likelihood here with more draws
 summary(mod2, 'promax', suppress = .3)
 coef(mod2)
