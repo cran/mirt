@@ -1,6 +1,6 @@
 Package: mirt
-Version: 0.1-13
-Date: 2011-06-26
+Version: 0.1-14
+Date: 2011-07-04
 Type: Package
 Title: Multidimensional Item Response Theory
 Author: Phil Chalmers <rphilip.chalmers@gmail.com>
@@ -18,5 +18,7 @@ Suggests: lattice
 Repository: CRAN
 License: GPL (>= 2)
 URL:
-Packaged: 2011-07-02 16:40:57 UTC; Phil
-Date/Publication: 2011-07-02 17:11:08
+Repository/R-Forge/Project: mirt
+Repository/R-Forge/Revision: 88
+Date/Publication: 2011-07-23 13:57:19
+Packaged: 2011-07-12 20:58:41 UTC; rforge

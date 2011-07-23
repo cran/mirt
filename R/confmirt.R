@@ -8,8 +8,12 @@ setMethod(
 		if(length(x@logLik) > 0){
 			cat("Log-likelihood = ", x@logLik,", SE = ",round(x@SElogLik,3), "\n",sep='')			
 			cat("AIC =", x@AIC, "\n")
-			cat("G^2 = ", round(x@G2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4), "\n", sep="")
+			if(x@p < 1)
+				cat("G^2 = ", round(x@G2,2), ", df = ", 
+					x@df, ", p = ", round(x@p,4), "\n", sep="")
+			else 
+				cat("G^2 = ", NA, ", df = ", 
+					x@df, ", p = ", NA, "\n", sep="")		
 		}
 		if(x@converge == 1)	
 			cat("Converged in ", x@cycles, " iterations.\n", sep="")
@@ -27,9 +31,13 @@ setMethod(
 		cat("Full-information item factor analysis with ", ncol(object@Theta), " factors \n", sep="")
 		if(length(object@logLik) > 0){
 			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')
-			cat("AIC =", object@AIC, "\n")	
-			cat("G^2 = ", round(object@G2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4), "\n", sep="")
+			cat("AIC =", object@AIC, "\n")
+			if(object@p < 1)	
+				cat("G^2 = ", round(object@G2,2), ", df = ", 
+					object@df, ", p = ", round(object@p,4), "\n", sep="")
+			else 
+				cat("G^2 = ", NA, ", df = ", 
+					object@df, ", p = ", NA, "\n", sep="")
 		}
 		if(object@converge == 1)	
 			cat("Converged in ", object@cycles, " iterations.\n", sep="")
@@ -167,7 +175,7 @@ setMethod(
 setMethod(
 	f = "logLik",
 	signature = signature(object = 'confmirtClass'),
-	definition = function(object, draws = 3000, G2 = TRUE){	
+	definition = function(object, draws = 2000, G2 = TRUE){	
 		nfact <- ncol(object@Theta)
 		N <- nrow(object@Theta)
 		J <- length(object@K)
@@ -178,8 +186,7 @@ setMethod(
 		zetas <- t(zetas)[!is.na(t(zetas))]		
 		mu <- object@gpars$u
 		sigma <- object@gpars$sig		
-		LL <- matrix(0,N,draws)
-		theta <- matrix(0,N,nfact*draws)
+		LL <- matrix(0,N,draws)		
 		guess <- object@guess
 		guess[is.na(guess)] <- 0
 		K <- object@K	
@@ -197,7 +204,7 @@ setMethod(
 						as.integer(J),
 						as.integer(N),
 						as.integer(nfact))		
-		}
+		}		
 		rwmeans <- rowMeans(LL)
 		logLik <- sum(log(rwmeans))				
 		pats <- apply(fulldata,1,paste,collapse = "/")
@@ -217,22 +224,38 @@ setMethod(
 		for (i in 1:length(r)) 
 			for (j in 1:r[i]) 
 				logr[i] <- logr[i] + log(j)    		
-		logLik <- logLik + logN/sum(logr)		
+		if(sum(logr) != 0)		
+			logLik <- logLik + logN/sum(logr)
+			
 		SElogLik <- sqrt(var(log(rowMeans(LL))) / draws)
 		x <- object@estpars	
 		df <- as.integer(length(r) - sum(x$estlam) - sum(x$estgcov) - 
 			sum(x$estgmeans) - length(zetas) + object@nconstvalues + 
 			nfact*(nfact - 1)/2 - 1)			
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
-		if(G2){
-			for (j in 1:nrow(tabdata)){          
-				TFvec <- colSums(ifelse(t(fulldata) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
-				rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
-			}
-			G2 <- 2 * sum(log(1/(N*rwmeans)))
-			p <- 1 - pchisq(G2,df) 
-			object@G2 <- G2	
-			object@p <- p
+		if(G2){			
+			data <- object@data
+			if(any(is.na(data))){
+				object@G2 <- 0	
+				object@p <- 1					
+			} else {			
+				pats <- apply(data,1,paste,collapse = "/")			
+				freqs <- table(pats)
+				nfreqs <- length(freqs)		
+				r <- as.vector(freqs)
+				ncolfull <- ncol(data)
+				tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
+				tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
+				tabdata <- cbind(tabdata,r)					
+				for (j in 1:nrow(tabdata)){          
+					TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
+					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
+				}
+				G2 <- 2 * sum(log(1/(N*rwmeans)))
+				p <- 1 - pchisq(G2,df) 
+				object@G2 <- G2	
+				object@p <- p
+			}	
 		}	
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
@@ -270,9 +293,9 @@ setMethod(
 #Main Function
 
 confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000, 
-	burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, 
-	calcLL = TRUE, draws = 2000, debug = FALSE, ...){
-		
+	burnin = 150, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, 
+	calcLL = TRUE, draws = 2000, debug = FALSE, ...)
+{		
 	Call <- match.call()   
 	itemnames <- colnames(data)
 	data <- as.matrix(data)		
@@ -296,7 +319,7 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 		tmp <- paste(itemnames[i], "<->", itemnames[i])
 		sem.model <- rbind(sem.model,c(tmp,paste("th",i,sep=""),NA))		
 	}	
-	SEM <- sem.mod(sem.model,Rpoly,N)
+	SEM <- sem.mod(sem.model,Rpoly,N)	
 	ram <- SEM$ram	
 	coefs <- rep(.5,nrow(ram))
 	ramloads <- ram[ram[,1]==1,]
@@ -388,12 +411,12 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 	for(i in 1:J){
 		pars[Ksum[i]:(Ksum[i] + nfact - 1)] <- lambdas[i,]		
 		lamind <- c(lamind,Ksum[i]:(Ksum[i] + nfact - 1))
-		sind <- c(sind, rep(TRUE,K[i]-1), estlam[i,])
 		if(estGuess[i]){
 			pars[Ksum[i] - 2] <- guess[i]
 			gind <- c(gind,Ksum[i] - 2)
-			sind <- c(sind,TRUE)
-		}	
+			sind <- c(sind,FALSE)
+		}
+		sind <- c(sind, rep(TRUE,K[i]-1), estlam[i,])			
 	}
 	sind <- c(sind, estgmeans, estgcov[selgcov])
 	zetaind <- parind[is.na(pars)]		
@@ -401,7 +424,8 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 	gmeansind <- (length(pars) + 1):(length(pars) + nfact)
 	gcovind <- (gmeansind[length(gmeansind)] + 1):(gmeansind[length(gmeansind)] 
 		+ nfact*(nfact+1)/2)	
-	pars <- c(pars, gmeans, gcov[selgcov])	
+	pars <- c(pars, gmeans, gcov[selgcov])
+	gpars <- c(gmeans, gcov[selgcov])	
 	npars <- length(pars)
 	ngpars <- nfact + nfact*(nfact + 1)/2
 	converge <- 1    	
@@ -414,14 +438,14 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 	#preamble for MRHM algorithm			
 	theta0 <- matrix(0,N,nfact)	    
 	cand.t.var <- 1			
-	tmp <- .05
+	tmp <- .1
 	for(i in 1:30){			
-		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,gcov)
+		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,gcov,gmeans)
 		if(i > 5){		
-			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + tmp 
+			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp 
 			else if(attr(theta0,"Proportion Accepted") > .25 && nfact > 3) cand.t.var <- cand.t.var + tmp	
 			else if(attr(theta0,"Proportion Accepted") < .2 && nfact < 4) cand.t.var <- cand.t.var - tmp
-			else if(attr(theta0,"Proportion Accepted") < .1) cand.t.var <- cand.t.var - tmp
+			else if(attr(theta0,"Proportion Accepted") < .1) cand.t.var <- cand.t.var - 2*tmp
 			if (cand.t.var < 0){
 				cand.t.var <- tmp		
 				tmp <- tmp / 2
@@ -441,7 +465,7 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 	startvalues <- pars	
 	stagecycle <- 1		
 	
-	for(cycles in 1:(ncycles + burnin + SEM.cycles))		
+	for(cycles in 1:(ncycles + burnin + SEM.cycles))			
 	{ 
 		if(cycles == burnin + 1) stagecycle <- 2			
 		if(stagecycle == 3)
@@ -459,7 +483,7 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 		zetas <- pars[zetaind]
 		guess <- rep(0,J)
 		guess[estGuess] <- pars[gind]		
-		grouplist$u <- pars[gmeansind]
+		mu <- grouplist$u <- pars[gmeansind]
 		sig <- matrix(0,nfact,nfact)	
 		tmp <- pars[gcovind]
 		loc <- 1
@@ -470,15 +494,16 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 					loc <- loc + 1
 				}
 			}
-		}		
-		sig <- sig + t(sig) - diag(diag(sig))		
+		}
+		if(nfact > 1)		
+			sig <- sig + t(sig) - diag(diag(sig))		
 		grouplist$sig <- sig			
 		
 		#Step 1. Generate m_k datasets of theta 
 		for(j in 1:4) theta0 <- draw.thetas(theta0,lambdas,zetas,guess,
-			fulldata,K,itemloc,cand.t.var,sig)	
+			fulldata,K,itemloc,cand.t.var,sig,mu)	
 		for(i in 1:k) m.thetas[[i]] <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,
-			K,itemloc,cand.t.var,sig)
+			K,itemloc,cand.t.var,sig,mu)
 		theta0 <- m.thetas[[1]]
 		
 		#Step 2. Find average of simulated data gradients and hessian 		
@@ -521,7 +546,8 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 		grad <- ave.g/k
 		ave.h <- (-1)*ave.h/k				
 		grad <- grad[parind[sind]]		
-		ave.h <- ave.h[parind[sind],parind[sind]] 		
+		ave.h <- ave.h[parind[sind],parind[sind]] 
+		if(is.na(attr(theta0,"log.lik"))) stop('Estimation halted. Model did not converge.')		
 		if(printcycles){
 			if((cycles + 1) %% 10 == 0){
 				if(cycles < burnin)
@@ -554,11 +580,9 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 			if(printcycles && (cycles + 1) %% 10 == 0){ 
 				cat(", Max Change =", sprintf("%.4f",max(abs(gamma*correction))), "\n")
 				flush.console()
-			}				
-			pars[pars[gcovind] > 1] <- parsold[pars[gcovind] > 1]
-			pars[pars[gcovind] < -1] <- parsold[pars[gcovind] < -1]			
-			pars[pars[gcovind] > 1] <- parsold[pars[gcovind] > 1]
-			pars[pars[gcovind] < -1] <- parsold[pars[gcovind] < -1]		
+			}			
+			pars[gcovind][pars[gcovind] > .95] <- parsold[gcovind][pars[gcovind] > .95]
+			pars[gcovind][pars[gcovind] < -.95] <- parsold[gcovind][pars[gcovind] < -.95]						
 			if(stagecycle == 2) SEM.stores[cycles - burnin,] <- pars
 			next
 		}	 
@@ -576,20 +600,18 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 			tmp[constlam == constvalues[i]] <- 
 				mean(tmp[constlam == constvalues[i]])
 			correct[lamind] <- tmp
-		}
-		if(all(gamma*correct < tol)) conv <- conv + 1
-			else conv <- 0		
-		if(conv == 3) break	
-		pars <- pars + gamma*correct
+		}		
 		if(printcycles && (cycles + 1) %% 10 == 0){ 
 			cat(", gam = ",sprintf("%.3f",gamma),", Max Change = ", 
 				sprintf("%.4f",max(abs(gamma*correction))), "\n", sep = '')
 			flush.console()		
 		}	
-		pars[pars[gind] < 0] <- parsold[pars[gind] < 0]
-		pars[pars[gind] > .4] <- parsold[pars[gind] > .4]
-		pars[pars[gcovind] > 1] <- parsold[pars[gcovind] > 1]
-		pars[pars[gcovind] < -1] <- parsold[pars[gcovind] < -1]
+		if(all(gamma*correct < tol)) conv <- conv + 1
+			else conv <- 0		
+		if(conv == 3) break	
+		pars <- pars + gamma*correct	
+		pars[gcovind][pars[gcovind] > .95] <- parsold[gcovind][pars[gcovind] > .95]
+		pars[gcovind][pars[gcovind] < -.95] <- parsold[gcovind][pars[gcovind] < -.95]
 		
 		#Extra: Approximate information matrix.	sqrt(diag(solve(info))) == SE 			
 		phi <- phi + gamma*(grad - phi)
@@ -636,10 +658,11 @@ confmirt <- function(data, sem.model, guess = 0, gmeans = 0, ncycles = 2000,
 				loc <- loc + 1
 			}
 		}
-	}		
-	sig <- sig + t(sig) - diag(diag(sig))
-	if(nfact > 1) SEsig <- SEsig + t(SEsig) - diag(diag(SEsig))	
-		else SEsig <- NA
+	}
+	if(nfact > 1) {	
+		sig <- sig + t(sig) - diag(diag(sig))
+		SEsig <- SEsig + t(SEsig) - diag(diag(SEsig))	
+	} else SEsig <- NA
 	tmp1 <- tmp2 <- matrix(NA,J,(max(K)-1))
 	loc <- 1
 	for(i in 1:J){
