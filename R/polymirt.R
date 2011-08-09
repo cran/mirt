@@ -397,7 +397,9 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 	burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE,
 	calcLL = TRUE, draws = 2000, debug = FALSE, technical = list(), ...)
 {		
-	Call <- match.call()   
+	Call <- match.call()
+	set.seed(12345)
+	if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
 	itemnames <- colnames(data)
 	data <- as.matrix(data)		
 	J <- ncol(data)
@@ -440,7 +442,7 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 		if (ncol(prev.cor) == nrow(prev.cor)) Rpoly <- prev.cor
 			else stop("Correlation matrix is not square.\n")
 	} 	else Rpoly <- cormod(na.omit(data),K,guess)
-	FA <- factor.minres(Rpoly,nfact,rotate = 'none', warnings= FALSE)	
+	FA <- fa(Rpoly,nfact,rotate = 'none', warnings= FALSE, fm="minres")	
 	loads <- unclass(loadings(FA))
 	u <- FA$unique
 	u[u < .001 ] <- .2
@@ -514,7 +516,7 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 	phi <- rep(0,npars)
 	Tau <- info <- h <- matrix(0,npars,npars)
 	m.list <- list()	  
-	conv <- 0
+	conv <- noninvcount <- 0
 	k <- 1	
 	gamma <- 0.25
 	startvalues <- pars
@@ -602,15 +604,19 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 			}
 		}			
 		if(stagecycle < 3){
-		    correction <- SparseM::solve(ave.h) %*% grad
-			if(any(is.na(correction))){
-				cat("\n Estimation terminated early. Last iteration parameter values are returned: \n")
-				return(list(lambdas=lambdas,zetas=zetas,guess=guess))
-			}				
+			ave.h <- as(ave.h,'sparseMatrix')
+			inv.ave.h <- try(solve(ave.h))		    
+			if(class(inv.ave.h) == 'try-error'){
+				inv.ave.h <- try(solve(ave.h + 2*diag(ncol(ave.h))))
+				noninvcount <- noninvcount + 1
+				if(noninvcount == 3) 
+					stop('\nEstimation halted during burn in stages, solution is unstable')
+			}
+			correction <- inv.ave.h %*% grad
 			parsold <- pars
 			correction[correction > .5] <- .5
 			correction[correction < -0.5] <- -0.5				
-			pars <- pars + gamma*correction
+			pars <- pars + gamma*as.vector(correction)
 			if(printcycles && (cycles + 1) %% 10 == 0){ 
 				cat(", Max Change =", sprintf("%.4f",max(abs(gamma*correction))), "\n")
 				flush.console()			
@@ -621,12 +627,16 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 		}	
 		
 		#Step 3. Update R-M step		
-		Tau <- Tau + gamma*(ave.h - Tau)		
-		correction <- SparseM::solve(Tau) %*% grad
-		if(any(is.na(correction))){
-			cat("\n Estimation terminated early. Last iteration parameter values are returned: \n")
-			return(list(lambdas=lambdas,zetas=zetas,guess=guess))
+		Tau <- Tau + gamma*(ave.h - Tau)
+		Tau <- as(Tau,'sparseMatrix')	
+		inv.Tau <- try(solve(Tau))		
+		if(class(inv.Tau) == 'try-error'){
+			inv.Tau <- try(solve(Tau + 2 * diag(ncol(Tau))))
+			noninvcount <- noninvcount + 1
+			if(noninvcount == 3) 
+				stop('\nEstimation halted during burn stage 3, solution is unstable')
 		}
+		correction <- inv.Tau %*% grad	
 		correction[correction > .5] <- .5
 		correction[correction < -0.5] <- -0.5										
 		if(printcycles && (cycles + 1) %% 10 == 0){ 
@@ -638,7 +648,7 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 			else conv <- 0	
 		if(conv == 3) break		
 		parsold <- pars
-		pars <- pars + gamma*correction	
+		pars <- pars + gamma*as.vector(correction)
 		pars[gind][pars[gind] < 0] <- parsold[gind][pars[gind] < 0]	
 		
 		#Extra: Approximate information matrix.	sqrt(diag(solve(info))) == SE		
