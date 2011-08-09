@@ -1,7 +1,8 @@
 setMethod(
 	f = "print",
 	signature = signature(x = 'polymirtClass'),
-	definition = function(x, ...){
+	definition = function(x, ...)
+	{
 		cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
 			"\n\n", sep = "")
 		cat("Full-information factor analysis with ", ncol(x@F), " factor",
@@ -27,7 +28,8 @@ setMethod(
 setMethod(
 	f = "show",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object){
+	definition = function(object)
+	{
 		cat("\nCall:\n", paste(deparse(object@Call), sep = "\n", collapse = "\n"), 
 			"\n\n", sep = "")
 		cat("Full-information factor analysis with ", ncol(object@F), " factor",
@@ -53,7 +55,8 @@ setMethod(
 setMethod(
 	f = "summary",
 	signature = 'polymirtClass',
-	definition = function(object, rotate = 'varimax', suppress = 0, digits = 3, ...){
+	definition = function(object, rotate = 'varimax', suppress = 0, digits = 3, ...)
+	{
 		nfact <- ncol(object@F)
 		if (rotate == 'none' || nfact == 1) {
 			F <- object@F
@@ -101,7 +104,8 @@ setMethod(
 setMethod(
 	f = "coef",
 	signature = 'polymirtClass',
-	definition = function(object, SE = TRUE, digits = 3, ...){  
+	definition = function(object, SE = TRUE, digits = 3, ...)
+	{  
 		nfact <- ncol(object@Theta)	
 		a <- matrix(object@pars[ ,1:nfact],ncol=nfact)
 		d <- matrix(object@pars[,(nfact+1):ncol(object@pars)],
@@ -194,7 +198,8 @@ setMethod(
 setMethod(
 	f = "residuals",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object, restype = 'LD', digits = 3, ...){ 	
+	definition = function(object, restype = 'LD', digits = 3, ...)
+	{ 	
 		fulldata <- object@fulldata	
 		data <- object@data
 		data[data==99] <- NA
@@ -249,14 +254,16 @@ setMethod(
 			}	
 			cat("LD matrix:\n\n")	
 			res <- round(res,digits)
-			print(res)
+			return(res)
 		} 
 		if(restype == 'exp'){
+			if(length(object@tabdata) == 0) stop('Expected response vectors cannot be computed because logLik() 
+				has not been run or the data contains missing responses.')
 			tabdata <- object@tabdata
 			res <- (tabdata[,J+1] - tabdata[,J+2]) / sqrt(tabdata[,J+2])
 			tabdata <- round(cbind(tabdata,res),digits)
 			colnames(tabdata) <- c(colnames(object@data), 'freq', 'exp', 'std_res')
-			tabdata
+			return(tabdata)
 		}
 	}
 )
@@ -264,7 +271,8 @@ setMethod(
 setMethod(
 	f = "logLik",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object, draws = 2000, G2 = TRUE){	
+	definition = function(object, draws = 2000, G2 = TRUE)
+	{	
 		nfact <- ncol(object@Theta)
 		N <- nrow(object@Theta)
 		J <- length(object@K)
@@ -277,9 +285,9 @@ setMethod(
 		LL <- matrix(0,N,draws)		
 		guess <- object@guess
 		guess[is.na(guess)] <- 0
-		K <- object@K
-		df <- -nfact*J - sum(K - 1) - 1
+		K <- object@K		
 		fulldata <- object@fulldata
+		estComp <- rep(FALSE,J)
 		for(i in 1:draws){
 			theta <- rmvnorm(N,mu,sigma)				
 			LL[,i] <- .Call('logLik', 					
@@ -292,7 +300,8 @@ setMethod(
 						as.integer(object@K),
 						as.integer(J),
 						as.integer(N),
-						as.integer(nfact))		
+						as.integer(nfact),
+						as.integer(estComp))		
 		}		
 		rwmeans <- rowMeans(LL)
 		logLik <- sum(log(rwmeans))		
@@ -313,7 +322,7 @@ setMethod(
 		if(sum(logr) != 0)								
 			logLik <- logLik + logN/sum(logr)		
 		SElogLik <- sqrt(var(log(rwmeans)) / draws)
-		df <- (length(r) - 1) - nfact*J - sum(K - 1) + nfact*(nfact - 1)/2
+		df <- (length(r) - 1) - nfact*J - sum(K - 1) + nfact*(nfact - 1)/2 - sum(object@estGuess)
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
 		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)
 		if(G2){				
@@ -357,7 +366,8 @@ setMethod(
 setMethod(
 	f = "anova",
 	signature = signature(object = 'polymirtClass'),
-	definition = function(object, object2, ...){
+	definition = function(object, object2, ...)
+	{
 		dots <- list(...)				
 		nitems <- length(object@K)
 		if(length(object@df) == 0 || length(object2@df) == 0) 
@@ -378,12 +388,12 @@ setMethod(
 		cat("AIC difference = ", round(AICdiff,3)," (SE = ", se,")\n", sep='')  
 		cat("BIC difference = ", round(BICdiff,3)," (SE = ", se,")\n", sep='') 
 	}		
-)
+) 
 
 ########################################
 #Main Function
 
-polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000, 
+polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, ncycles = 2000, 
 	burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE,
 	calcLL = TRUE, draws = 2000, debug = FALSE, ...)
 {		
@@ -396,7 +406,8 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 	colnames(data) <- itemnames
 	if(length(guess) > J || length(guess) < J) 
 		stop("The number of guessing parameters is incorrect.")
-	estGuess <- guess > 0					
+	if(is.null(estGuess))
+		estGuess <- guess > 0					
 	uniques <- list()
 	for(i in 1:J)
 		uniques[[i]] <- sort(unique(data[,i]))
@@ -448,29 +459,40 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 			loc <- loc + K[i] - 1	
 		}		
 	}	
-	npars <- length(c(lambdas,zetas)) + sum(estGuess) #start here
+	npars <- length(c(lambdas,zetas)) + sum(estGuess) 
 	parind <- 1:npars
 	pars <- rep(NA,npars)
-	Ksum <- cumsum(K + nfact - 1 + estGuess) - (nfact-1)
+	Ksum <- cumsum(K-1 + nfact + estGuess)
+	Ksum <- Ksum - min(Ksum) + K[1]
 	lamind	<- gind <- c()	 
 	for(i in 1:J){
 		pars[Ksum[i]:(Ksum[i] + nfact - 1)] <- lambdas[i,]
 		lamind <- c(lamind,Ksum[i]:(Ksum[i] + nfact - 1))
 		if(estGuess[i]){
-			pars[Ksum[i] - 2] <- guess[i]
-			gind <- c(gind,Ksum[i] - 2)
+			pars[Ksum[i] + nfact] <- guess[i]
+			gind <- c(gind,Ksum[i] + nfact)
 		}	
 	}	
 	zetaind <- parind[is.na(pars)]			
 	pars[is.na(pars)] <- zetas
 	diag(Rpoly) <- 1	
-	converge <- 1    	
+	converge <- 1
+	guessPrior <- list()
+	guessPriorCount <- 1
+	if(sum(estGuess) > 0){
+		for(i in 1:J){
+			if(estGuess[i]){
+				guessPrior[[guessPriorCount]] <- c(gind[i],guess[i]*20,(1-guess[i])*20)
+				guessPriorCount <- guessPriorCount + 1			
+			}
+		}	
+	}
 	if(debug){
 		print(lambdas)
 		print(zetas)
 	}	
 	
-    #preamble for MRHM algorithm			
+    #preamble for MRHM algorithm		
 	theta0 <- matrix(0,N,nfact)	
 	cand.t.var <- 1	
 	tmp <- .1
@@ -558,6 +580,14 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		}
 		grad <- ave.g/k
 		ave.h <- (-1)*ave.h/k 
+		if(length(guessPrior) > 0){
+			for(i in 1:length(guessPrior)){
+				tmp <- guessPrior[[i]]				
+				tmp2 <- betaprior(tmp[2],tmp[3],pars[tmp[1]])				
+				grad[tmp[1]] <- grad[tmp[1]] + tmp2$g
+				ave.h[tmp[1],tmp[1]] <- ave.h[tmp[1],tmp[1]] + tmp2$h
+			}		
+		}
 		if(printcycles){
 			if((cycles + 1) %% 10 == 0){
 				if(cycles < burnin)
@@ -572,19 +602,20 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 			}
 		}			
 		if(stagecycle < 3){
-		    correction <- SparseM::solve(ave.h) %*% grad					
+		    correction <- SparseM::solve(ave.h) %*% grad
+			if(any(is.na(correction))){
+				cat("\n Estimation terminated early. Last iteration parameter values are returned: \n")
+				return(list(lambdas=lambdas,zetas=zetas,guess=guess))
+			}				
 			parsold <- pars
 			correction[correction > .5] <- .5
-			correction[correction < -0.5] <- -0.5	
-			if(any(estGuess)) 
-				correction[gind] <- 0											 
+			correction[correction < -0.5] <- -0.5				
 			pars <- pars + gamma*correction
 			if(printcycles && (cycles + 1) %% 10 == 0){ 
 				cat(", Max Change =", sprintf("%.4f",max(abs(gamma*correction))), "\n")
 				flush.console()			
 			}	
-			pars[pars[gind] < 0] <- parsold[pars[gind] < 0]
-			pars[pars[gind] > .4] <- parsold[pars[gind] > .4]	
+			pars[gind][pars[gind] < 0] <- parsold[gind][pars[gind] < 0]			
 			if(stagecycle == 2) SEM.stores[cycles - burnin,] <- pars
 			next
 		}	
@@ -592,10 +623,12 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		#Step 3. Update R-M step		
 		Tau <- Tau + gamma*(ave.h - Tau)		
 		correction <- SparseM::solve(Tau) %*% grad
+		if(any(is.na(correction))){
+			cat("\n Estimation terminated early. Last iteration parameter values are returned: \n")
+			return(list(lambdas=lambdas,zetas=zetas,guess=guess))
+		}
 		correction[correction > .5] <- .5
-		correction[correction < -0.5] <- -0.5	
-		if(any(estGuess))
-			correction[gind] <- 0							
+		correction[correction < -0.5] <- -0.5										
 		if(printcycles && (cycles + 1) %% 10 == 0){ 
 			cat(", gam = ",sprintf("%.3f",gamma),", Max Change = ", 
 				sprintf("%.4f",max(abs(gamma*correction))), "\n", sep='')
@@ -606,8 +639,7 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		if(conv == 3) break		
 		parsold <- pars
 		pars <- pars + gamma*correction	
-		pars[pars[gind] < 0] <- parsold[pars[gind] < 0]
-		pars[pars[gind] > .4] <- parsold[pars[gind] > .4]
+		pars[gind][pars[gind] < 0] <- parsold[gind][pars[gind] < 0]	
 		
 		#Extra: Approximate information matrix.	sqrt(diag(solve(info))) == SE		
 		phi <- phi + gamma*(grad - phi)
@@ -654,7 +686,8 @@ polymirt <- function(data, nfact, guess = 0, prev.cor = NULL, ncycles = 2000,
 		
 	mod <- new('polymirtClass',pars=pars, guess=guess, SEpars=SEpars, 
 		cycles=cycles-SEM.cycles-burnin, Theta=theta0, fulldata=fulldata, 
-		data=data, K=K, F=F, h2=h2, itemloc=itemloc, converge = converge, Call=Call)
+		data=data, K=K, F=F, h2=h2, itemloc=itemloc, converge = converge,
+		estGuess=estGuess, Call=Call)
 	if(calcLL){
 		cat("Calculating log-likelihood...\n")
 		flush.console()

@@ -29,7 +29,8 @@ setClass(
 		cycles = 'numeric', Theta = 'matrix', fulldata = 'matrix', data = 'matrix', 
 		K = 'numeric', F = 'matrix', h2 = 'numeric', itemloc = 'numeric', AIC = 'numeric',
 		converge = 'numeric', logLik = 'numeric', SElogLik = 'numeric', df = 'integer', 
-		G2 = 'numeric', p = 'numeric', tabdata = 'matrix', BIC = 'numeric', Call = 'call'),	
+		G2 = 'numeric', p = 'numeric', tabdata = 'matrix', BIC = 'numeric', estGuess = 'logical', 
+		Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -40,7 +41,7 @@ setClass(
 		Theta = 'matrix', fulldata = 'matrix', data = 'matrix', K = 'numeric', itemloc = 'numeric',
 		h2 = 'numeric',F = 'matrix', converge = 'numeric', logLik = 'numeric',SElogLik = 'numeric',
 		df = 'integer', AIC = 'numeric', nconstvalues = 'integer', G2 = 'numeric', p = 'numeric',
-		tabdata = 'matrix', BIC = 'numeric', Call = 'call'),	
+		tabdata = 'matrix', BIC = 'numeric', estComp = 'logical', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
