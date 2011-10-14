@@ -1,5 +1,5 @@
 Package: mirt
-Version: 0.1-17
+Version: 0.1-18
 Date: 2011-08-09
 Type: Package
 Title: Multidimensional Item Response Theory
@@ -20,6 +20,6 @@ Repository: CRAN
 License: GPL (>= 2)
 URL:
 Repository/R-Forge/Project: mirt
-Repository/R-Forge/Revision: 101
-Date/Publication: 2011-10-12 07:55:55
-Packaged: 2011-10-11 21:13:09 UTC; rforge
+Repository/R-Forge/Revision: 102
+Date/Publication: 2011-10-14 06:41:59
+Packaged: 2011-10-13 21:15:14 UTC; rforge
