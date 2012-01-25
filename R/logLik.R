@@ -47,48 +47,46 @@ setMethod(
 			length(object@prodlist) + nfact, nfact)		
 		N <- nrow(object@Theta)
 		J <- length(object@K)
-		pars <- object@pars
-		lambdas <- pars[ ,1:nfactNames]
+		pars <- object@pars		
+		lambdas <- matrix(pars[ ,1:nfactNames], ncol=nfact)
 		lambdas[is.na(lambdas)] <- 0
-		zetas <- pars[,(nfactNames+1):ncol(pars)]
-		zetas <- t(zetas)[!is.na(t(zetas))]		
+		zetas <- object@parlist$zetas			
 		mu <- object@gpars$u
 		sigma <- object@gpars$sig		
 		LL <- matrix(0,N,draws)		
 		guess <- object@guess
 		guess[is.na(guess)] <- 0
 		K <- object@K	
-		fulldata <- object@fulldata	
+		fulldata <- object@fulldata			
 		for(i in 1:draws){
-			theta <- rmvnorm(N,mu,sigma)	
+			theta <- mvtnorm::rmvnorm(N,mu,sigma)	
 			if(nfact < nfactNames) 
 				theta <- prodterms(theta, object@prodlist)	
-			LL[,i] <- .Call('logLik', 					
-						as.numeric(lambdas),
-						as.numeric(zetas),
-						as.numeric(guess),
-						as.numeric(theta),
-						as.integer(fulldata),
-						as.integer(object@itemloc-1),
-						as.integer(object@K),
-						as.integer(J),
-						as.integer(N),
-						as.integer(nfactNames),
-						as.integer(object@estComp))		
+			LL[,i] <- .Call('logLik', lambdas, zetas, guess, theta,	fulldata,
+						object@itemloc-1, object@K,	as.integer(object@estComp))		
 		}		
+        LL[is.nan(LL)] <- 0 ###check this
 		rwmeans <- rowMeans(LL) 
 		logLik <- sum(log(rwmeans))				
-		pats <- apply(fulldata,1,paste,collapse = "/")
+		data <- object@data
+		pats <- apply(data,1,paste,collapse = "/")			
 		freqs <- table(pats)
 		nfreqs <- length(freqs)		
 		r <- as.vector(freqs)
-		ncolfull <- ncol(fulldata)
+		ncolfull <- ncol(data)
 		tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-		tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
-		tabdata <- cbind(tabdata,r)		 		 				
-		pats <- apply(fulldata,1,paste,collapse = "/")
-		freqs <- table(pats)			
-		r <- as.vector(freqs)
+		tabdata <- suppressWarnings(matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE))
+		tabdata <- cbind(tabdata,r)	
+		expected <- rep(0,nrow(tabdata))
+		for (j in 1:nrow(tabdata)){          
+			TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull 
+			TFvec[is.na(TFvec)] <- FALSE	
+			expected[j] <- mean(rwmeans[TFvec])			
+			rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
+		}
+		expected[is.nan(expected)] <- NA
+		tabdata <- cbind(tabdata,expected*N)
+		object@tabdata <- tabdata		
 		logN <- 0
 		logr <- rep(0,length(r))
 		for (i in 1:N) logN <- logN + log(i)
@@ -100,41 +98,25 @@ setMethod(
 		SElogLik <- sqrt(var(log(rowMeans(LL))) / draws)
 		x <- object@estpars	
 		df <- as.integer(length(r) - sum(x$estlam) - sum(x$estgcov) - 
-			sum(x$estgmeans) - length(zetas) + object@nconstvalues + 
+			sum(x$estgmeans) - sum(object@K - 1) + object@nconstvalues + 
 			nfact*(nfact - 1)/2 - sum(x$estGuess) - 1)			
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
-		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)
-		if(G2){			
-			data <- object@data
+		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)				
+		if(G2){						
 			if(any(is.na(data))){
 				object@G2 <- 0	
-				object@p <- 1					
+				object@p <- 2					
 				object@RMSEA <- 1
-			} else {			
-				pats <- apply(data,1,paste,collapse = "/")			
-				freqs <- table(pats)
-				nfreqs <- length(freqs)		
-				r <- as.vector(freqs)
-				ncolfull <- ncol(data)
-				tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-				tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
-				tabdata <- cbind(tabdata,r)	
-				expected <- rep(0,nrow(tabdata))	
-				for (j in 1:nrow(tabdata)){          
-					TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
-					expected[j] <- mean(rwmeans[TFvec])
-					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
-				}
-				tabdata <- cbind(tabdata,expected*N)
+			} else {				
 				G2 <- 2 * sum(log(1/(N*rwmeans)))
 				p <- 1 - pchisq(G2,df) 
 				object@G2 <- G2	
-				object@p <- p
-				object@tabdata <- tabdata
+				object@p <- p				
 				object@RMSEA <- ifelse((G2 - df) > 0, 
 				    sqrt(G2 - df) / sqrt(df * (N-1)), 0)
 			}	
 		}	
+		object@tabdata <- tabdata
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
 		object@AIC <- AIC
@@ -152,11 +134,9 @@ setMethod(
 	{	
 		nfact <- ncol(object@Theta)
 		N <- nrow(object@Theta)
-		J <- length(object@K)
-		pars <- object@pars
-		lambdas <- pars[,1:nfact]
-		zetas <- pars[,(nfact+1):ncol(pars)]
-		zetas <- t(zetas)[!is.na(t(zetas))]		
+		J <- length(object@K)		
+		lambdas <- object@pars$lambdas	
+		zetas <- object@pars$zetas	
 		mu <- rep(0,nfact)
 		sigma <- diag(nfact)		
 		LL <- matrix(0,N,draws)		
@@ -166,30 +146,30 @@ setMethod(
 		fulldata <- object@fulldata
 		estComp <- rep(FALSE,J)
 		for(i in 1:draws){
-			theta <- rmvnorm(N,mu,sigma)				
-			LL[,i] <- .Call('logLik', 					
-						as.numeric(lambdas),
-						as.numeric(zetas),
-						as.numeric(guess),
-						as.numeric(theta),
-						as.integer(fulldata),
-						as.integer(object@itemloc-1),
-						as.integer(object@K),
-						as.integer(J),
-						as.integer(N),
-						as.integer(nfact),
-						as.integer(estComp))		
+			theta <- mvtnorm::rmvnorm(N,mu,sigma)				
+			LL[,i] <- .Call('logLik', lambdas, zetas, guess, theta,	fulldata,
+						object@itemloc-1, object@K,	as.integer(estComp))		
 		}		
 		rwmeans <- rowMeans(LL)
 		logLik <- sum(log(rwmeans))		
-		pats <- apply(fulldata,1,paste,collapse = "/")
+		data <- object@data
+		pats <- apply(data,1,paste,collapse = "/")			
 		freqs <- table(pats)
 		nfreqs <- length(freqs)		
 		r <- as.vector(freqs)
-		ncolfull <- ncol(fulldata)
+		ncolfull <- ncol(data)
 		tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-		tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
-		tabdata <- cbind(tabdata,r)		
+		tabdata <- suppressWarnings(matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE))
+		tabdata <- cbind(tabdata,r)	
+		expected <- rep(0,nrow(tabdata))
+		for (j in 1:nrow(tabdata)){          
+			TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull 
+			TFvec[is.na(TFvec)] <- FALSE	
+			expected[j] <- mean(rwmeans[TFvec])			
+			rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
+		}
+		expected[is.nan(expected)] <- NA
+		tabdata <- cbind(tabdata,expected*N)				
 		logN <- 0
 		logr <- rep(0,length(r))
 		for (i in 1:N) logN <- logN + log(i)
@@ -201,38 +181,22 @@ setMethod(
 		SElogLik <- sqrt(var(log(rwmeans)) / draws)
 		df <- (length(r) - 1) - nfact*J - sum(K - 1) + nfact*(nfact - 1)/2 - sum(object@estGuess)
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
-		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)
-		if(G2){				
-			data <- object@data
+		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)		
+		if(G2){							
 			if(any(is.na(data))){
 				object@G2 <- 0	
-				object@p <- 1
+				object@p <- 2
                 object@RMSEA <- 1
-			} else {
-				pats <- apply(data,1,paste,collapse = "/")			
-				freqs <- table(pats)
-				nfreqs <- length(freqs)		
-				r <- as.vector(freqs)
-				ncolfull <- ncol(data)
-				tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-				tabdata <- matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE)
-				tabdata <- cbind(tabdata,r)	
-				expected <- rep(0,nrow(tabdata))	
-				for (j in 1:nrow(tabdata)){          
-					TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull        
-					expected[j] <- mean(rwmeans[TFvec])
-					rwmeans[TFvec] <- rwmeans[TFvec]/r[j]					
-				}
-				tabdata <- cbind(tabdata,expected*N)
+			} else {				
 				G2 <- 2 * sum(log(1/(N*rwmeans)))
 				p <- 1 - pchisq(G2,df) 
 				object@G2 <- G2	
-				object@p <- p
-				object@tabdata <- tabdata
+				object@p <- p				
 				object@RMSEA <- ifelse((G2 - df) > 0, 
 				    sqrt(G2 - df) / sqrt(df * (N-1)), 0)
 			}	
-		}		
+		}	
+		object@tabdata <- tabdata	
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
 		object@AIC <- AIC
