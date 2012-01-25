@@ -21,7 +21,7 @@ setClass(
 		Theta = 'matrix', fulldata = 'matrix', data = 'matrix', K = 'numeric', itemloc = 'numeric',
 		h2 = 'numeric',F = 'matrix', converge = 'numeric', logLik = 'numeric',SElogLik = 'numeric',
 		df = 'integer', AIC = 'numeric', nconstvalues = 'integer', G2 = 'numeric', p = 'numeric',
-		tabdata = 'matrix', BIC = 'numeric', estComp = 'logical', Call = 'call'),	
+		tabdata = 'matrix', BIC = 'numeric', estComp = 'logical', prodlist = 'list', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -105,7 +105,18 @@ setClass(
 #' @param SE logical; print standard errors?
 #' @param print.gmeans logical; print latent factor means?
 #' @param digits the number of significant digits to be rounded
-#' @param technical list specifying subtle parameters that can be adjusted
+#' @param technical list specifying subtle parameters that can be adjusted. These 
+#' values are 
+#' \describe{
+#'   \item{set.seed}{seed number used during estimation. Default is 12345}
+#' 	 \item{guess.prior.n}{a scalar or vector for the weighting of the beta priors for 
+#'		guessing parameters (default is 50, typical ranges are from 2 to 500). If a 
+#'      scalar is specified this is used globally, otherwise a numeric vector of size
+#' 	    \code{ncol(data)} can be used to correspond to particualr items (NA values use 
+#'      the default)} 
+#'   \item{gain}{a vector of three values specifying the numerator, exponent, and subtracted
+#'      values for the RM gain value. Default is \code{c(0.05,0.5,0.004)}}   	
+#' }
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
@@ -201,24 +212,65 @@ setClass(
 #' summary(mod3)
 #' residuals(mod3)
 #' anova(mod1,mod3)
-#' 
+#'
+#' #####
+#' #polynomial and combinations
+#' model.linear <- confmirt.model()
+#'   F = 1-8
+#'
+#' model.quad <- confmirt.model()
+#'       F = 1-8
+#'   (F*F) = 1-8
+#'
+#' model.cube <- confmirt.model()
+#'         F = 1-8
+#'     (F*F) = 1-8
+#'   (F*F*F) = 1-8
+#'
+#' model.combo <- confmirt.model()
+#'        F1 = 1-4
+#'        F2 = 5-8
+#'   (F1*F2) = 1-8
+#'
+#' mod.linear <- confmirt(dataset, model.linear)
+#' mod.quad <- confmirt(dataset, model.quad )
+#' mod.cube <- confmirt(dataset, model.cube)
+#' mod.combo <- confmirt(dataset, model.combo)
+#'
+#' anova(mod.linear,mod.quad)
+#' anova(mod.linear,mod.cube)
+#' anova(mod.linear,mod.combo)
+#' anova(mod.cube,mod.combo)
 #' }
 #' 
 confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000, 
 	burnin = 150, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, 
-	calcLL = TRUE, draws = 2000, returnindex = FALSE, debug = FALSE, technical = list(), ...)
+	calcLL = TRUE, draws = 2000, returnindex = FALSE, debug = FALSE, technical = list(), 
+	...)
 {		
 	Call <- match.call()   
-	set.seed(12345)
-	if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
-	ifelse(!is.null(technical$guess.prior.n), guess.prior.n <- technical$guess.prior.n,
-		guess.prior.n <- 20)
+	set.seed(12345)	
 	itemnames <- colnames(data)
 	keywords <- c('SLOPE','INT','COV','MEAN','PARTCOMP','PRIOR')
 	data <- as.matrix(data)		
 	colnames(data) <- itemnames	
 	J <- ncol(data)
-	N <- nrow(data)	
+	N <- nrow(data)
+	##technical
+	if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
+	guess.prior.n <- ifelse(!is.null(technical$guess.prior.n), technical$guess.prior.n,
+		rep(50,J))
+	if(length(guess.prior.n) == 1) guess.prior.n <- rep(guess.prior.n,J)	
+	if(length(guess.prior.n) != J) 
+		stop('technical$guess.prior.n does not have the same number of values as items')
+	guess.prior.n[is.na(guess.prior.n)] <- 50
+	gain <- c(0.05,0.5,0.004)
+	if(!is.null(technical$gain)) {
+		if(length(technical$gain) == 3 && is.numeric(technical$gain))
+			gain <- technical$gain
+	}
+	##
+	
 	if(length(guess) == 1) guess <- rep(guess,J)
 	if(length(guess) > J || length(guess) < J) 
 		stop("The number of guessing parameters is incorrect.")					
@@ -232,8 +284,23 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		estGuess <- guess > 0
 	itemloc <- cumsum(c(1,K))	
 	model <- matrix(model$x,ncol=2)
-	factorNames <- setdiff(model[,1],keywords) 
-	nfact <- length(factorNames)	
+	factorNames <- setdiff(model[,1],keywords)
+	nfactNames <- length(factorNames)
+	nfact <- sum(!grepl('\\(',factorNames))
+	hasProdTerms <- ifelse(nfact == nfactNames, FALSE, TRUE)
+	prodlist <- NULL
+	if(hasProdTerms){		
+		tmp <- factorNames[grepl('\\(',factorNames)]
+		tmp2 <- factorNames[!grepl('\\(',factorNames)] 
+		tmp <- gsub("\\(","",tmp)	
+		tmp <- gsub("\\)","",tmp)
+		prodlist <- strsplit(tmp,"\\*")
+		for(j in 1:length(prodlist)){
+			for(i in 1:nfact)
+				prodlist[[j]][prodlist[[j]] == tmp2[[i]]] <- i		
+			prodlist[[j]] <- as.numeric(prodlist[[j]])	
+		}		
+	}
 	index <- 1:J	
 	fulldata <- fulldata2 <- matrix(0,N,sum(K))
 	Names <- NULL
@@ -243,8 +310,8 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	for(i in 1:J){
 		ind <- index[i]
 		if(setequal(uniques[[i]], c(0,1))){
-			fulldata[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(data[,ind],abs(1-data[,ind]))
-			fulldata2[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(abs(1-data[,ind]),data[,ind])
+			fulldata[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(data[ ,ind],abs(1-data[ ,ind]))
+			fulldata2[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(abs(1-data[ ,ind]),data[ ,ind])
 			next
 		}
 		dummy <- matrix(0,N,K[ind])
@@ -256,9 +323,9 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	fulldata[is.na(fulldata)] <- fulldata2[is.na(fulldata2)] <- 0
 		
 	#slopes specification
-	estlam <- matrix(FALSE, ncol = nfact, nrow = J)	
-	for(i in 1:nfact){
-		tmp <- model[model[,1] == factorNames[i],2]
+	estlam <- matrix(FALSE, ncol = nfactNames, nrow = J)	
+	for(i in 1:nfactNames){
+		tmp <- model[model[ ,1] == factorNames[i],2]
 		if(any(regexpr(",",tmp)))
 			tmp <- strsplit(tmp,",")[[1]]
 		popout <- c()	
@@ -400,10 +467,10 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		if(estComp[i])
 			zetaind <- c(zetaind, loc1:(loc1+(length(estzetas[[i]])-1)))		
 		else zetaind <- c(zetaind,loc1:(loc1 + K[i] - 2))
-		lamind <- c(lamind,max(zetaind + 1):(max(zetaind)+nfact))		
+		lamind <- c(lamind,max(zetaind + 1):(max(zetaind) + nfactNames))		
 		guessind <- c(guessind,max(lamind + 1):max(lamind + 1 ))
 		sind <- c(sind, estzetas[[i]], estlam[i,], estGuess[i])
-		loc1 <- loc1 + nfact + sum(estzetas[[i]]) + 1	
+		loc1 <- loc1 + nfactNames + sum(estzetas[[i]]) + 1	
 	}	
 	sind <- c(sind, estgmeans, estgcov[lower.tri(estgcov,diag=TRUE)])
 	npars <- length(sind)
@@ -445,8 +512,8 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 			equalind <- equalind + 1
 		}	
 	}
-	if(any(model[,1] == 'SLOPE')){
-		tmp <- model[model[,1] == "SLOPE",2]
+	if(any(model[ ,1] == 'SLOPE')){
+		tmp <- model[model[ ,1] == "SLOPE",2]
 		if(any(regexpr(",",tmp)))
 			tmp <- strsplit(tmp,",")[[1]]
 		tmp <- gsub('\\s+','', tmp, perl = TRUE)	
@@ -520,7 +587,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	if(sum(estGuess) > 0){
 		for(i in 1:J){
 			if(estGuess[i]){
-				a <- guess[i] * guess.prior.n
+				a <- guess[i] * guess.prior.n[i]
 				b <- (1 - guess[i]) * guess.prior.n
 				parpriors[[parpriorscount]] <- c(2,guessind[i],a,b)						
 				parpriorscount <- parpriorscount + 1			
@@ -550,7 +617,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	cand.t.var <- 1			
 	tmp <- .1
 	for(i in 1:30){			
-		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,gcov,gmeans,estComp)
+		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,gcov,gmeans,estComp,prodlist)
 		if(i > 5){		
 			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp 
 			else if(attr(theta0,"Proportion Accepted") > .25 && nfact > 3) cand.t.var <- cand.t.var + tmp	
@@ -593,7 +660,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	{ 
 		if(cycles == burnin + 1) stagecycle <- 2			
 		if(stagecycle == 3)
-			gamma <- (0.05/(cycles - SEM.cycles - burnin - 1))^(0.5) - .004
+			gamma <- (gain[1]/(cycles - SEM.cycles - burnin - 1))^(gain[2]) - gain[3]
 		if(cycles == (burnin + SEM.cycles + 1)){ 
 			stagecycle <- 3		
 		    pars <- rep(0,npars)
@@ -607,7 +674,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 			gamma <- .25
 		}	
 				
-		lambdas <- matrix(pars[lamind],J,nfact,byrow=TRUE)
+		lambdas <- matrix(pars[lamind],J,nfactNames,byrow=TRUE)
 		zetas <- list()
 		ind1 <- 1
 		for(i in 1:J){ 
@@ -624,9 +691,9 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		
 		#Step 1. Generate m_k datasets of theta 
 		for(j in 1:4) theta0 <- draw.thetas(theta0,lambdas,pars[zetaind],guess,
-			fulldata,K,itemloc,cand.t.var,sig,mu,estComp)	
+			fulldata,K,itemloc,cand.t.var,sig,mu,estComp,prodlist)	
 		for(i in 1:k) m.thetas[[i]] <- draw.thetas(theta0,lambdas,pars[zetaind],guess,fulldata,
-			K,itemloc,cand.t.var,sig,mu,estComp)
+			K,itemloc,cand.t.var,sig,mu,estComp,prodlist)
 		theta0 <- m.thetas[[1]]
 		
 		#Step 2. Find average of simulated data gradients and hessian 		
@@ -635,18 +702,20 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		h <- matrix(0,npars,npars)	
 		for (j in 1:k) {
             g <- rep(NA, npars)            
+			thetatemp <- m.thetas[[j]]
+			if(!is.null(prodlist)) thetatemp <- prodterms(thetatemp,prodlist)	
             for (i in 0:(J - 1)) {			
 				if(estComp[i+1]){
 					if (estGuess[i + 1]) {
 						temp <- dpars.comp(lambdas[i + 1,][estlam[i+1,]], zetas[[i+1]], 
-							guess[i+1], fulldata[, itemloc[i + 1]], m.thetas[[j]], TRUE)
+							guess[i+1], fulldata[, itemloc[i + 1]], thetatemp, TRUE)
 						ind <- parind[is.na(g)][1]
 						ind2 <- ind + length(temp$grad) - 1
 						g[ind:ind2] <- temp$grad
 						h[ind:ind2, ind:ind2] <- temp$hess						
 					} else {
 						temp <- dpars.comp(lambdas[i + 1,][estlam[i+1,]], zetas[[i+1]], 
-							guess[i+1], fulldata[, itemloc[i + 1]], m.thetas[[j]])
+							guess[i+1], fulldata[, itemloc[i + 1]], thetatemp)
 						ind <- parind[is.na(g)][1]	
 						if(i > 0){
 							g[is.na(g)][1] <- 0
@@ -661,26 +730,26 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
                 if (estGuess[i + 1]) {
 					temp <- dpars.dich(lambdas[i + 1, ], zetas[[i+1]], 
 						guess[i + 1], fulldata[, itemloc[i + 1]], 
-						m.thetas[[j]], estGuess[i + 1])
+						thetatemp, estGuess[i + 1])
 					ind <- parind[is.na(g)][1]
-					ind2 <- ind + nfact + 1
+					ind2 <- ind + nfactNames + 1
 					g[ind:ind2] <- temp$grad
 					h[ind:ind2, ind:ind2] <- temp$hess					
 				} else {					
 					temp <- dpars.poly(lambdas[i + 1, ], zetas[[i+1]], 
-						fulldata2[, itemloc[i + 1]:(itemloc[i + 2] - 1)], m.thetas[[j]])
+						fulldata2[, itemloc[i + 1]:(itemloc[i + 2] - 1)], thetatemp)
 					ind <- parind[is.na(g)][1]
 					if(i > 0){
 						g[is.na(g)][1] <- 0
 						ind <- ind + 1
 					}						
-					ind2 <- ind + nfact + K[i + 1] - 2
+					ind2 <- ind + nfactNames + K[i + 1] - 2
 					g[ind:ind2] <- temp$grad
 					h[ind:ind2, ind:ind2] <- temp$hess					
                 }
             }
 			g[is.na(g)] <- 0
-			tmp <- d.group(grouplist,m.thetas[[j]])
+			tmp <- d.group(grouplist,as.matrix(thetatemp[ ,1:nfact]))
 			g[groupind] <- tmp$g
 			h[groupind,groupind] <- tmp$h
 			g.m[[j]] <- g
@@ -797,9 +866,8 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		if(gamma == .25) gamma <- 1	
 		phi <- phi + gamma*(grad - phi)
 		info <- info + gamma*(Tau - phi %*% t(phi) - info)		
-	} ###END BIG LOOP
+	} ###END BIG LOOP	
 	
-	if(!is.null(technical$return.verbose)) {}
 	cat("\n\n")
 	SEtmp <- diag(solve(info))		
 	if(any(SEtmp < 0)){
@@ -814,18 +882,20 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		for(i in 1:length(equalconstr))
 			SE[equalconstr[[i]]] <- mean(SE[equalconstr[[i]]])
 	estpars <- pars[sind]
-	lambdas <- matrix(pars[lamind],J,nfact,byrow=TRUE)	
+	lambdas <- matrix(pars[lamind],J,nfactNames,byrow=TRUE)	
 	lambdas[!estlam & !lambdas != 0] <- NA	
 	guess <- rep(NA,J)
-	guess[estGuess] <- pars[guessind]
+	guess <- pars[guessind]
+	guess[!estGuess] <- NA
 	guess[K == 2 & !estGuess] <- 0
 	zetas <- pars[zetaind]
 	u <- pars[meanind]	
 	sig <- matrix(0,nfact,nfact)
-	SElam <- matrix(SE[lamind],J,nfact,byrow=TRUE)
+	SElam <- matrix(SE[lamind],J,nfactNames,byrow=TRUE)
 	SEzetas <- SE[zetaind]	
 	SEg <- rep(NA,J)	
-	SEg[estGuess] <- SE[guessind]	
+	SEg <- SE[guessind]	
+	SEg[!estGuess] <- NA
 	SEu <- SE[meanind]	
 	SEsig <- matrix(0,nfact,nfact)	
 	tmp <- pars[covind]
@@ -845,8 +915,8 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		SEsig <- SEsig + t(SEsig) - diag(diag(SEsig))	
 	} else SEsig <- NA
 	if(any(estComp)){
-		if((max(K)-1) > nfact) tmp1 <- tmp2 <- matrix(NA,J,(max(K)-1))
-		else tmp1 <- tmp2 <- matrix(NA,J,nfact)
+		if((max(K)-1) > nfactNames) tmp1 <- tmp2 <- matrix(NA,J,(max(K)-1))
+		else tmp1 <- tmp2 <- matrix(NA,J,nfactNames)
 	} else tmp1 <- tmp2 <- matrix(NA,J,(max(K)-1))
 	
 	loc <- 1
@@ -858,7 +928,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 				loc <- loc + 1
 			}
 		} else {
-			for(j in 1:nfact){
+			for(j in 1:nfactNames){
 				tmp1[i,j] <- zetas[loc]
 				tmp2[i,j] <- SEzetas[loc]
 				loc <- loc + 1
@@ -874,18 +944,18 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	estpars <- list(estlam=estlam,estGuess=estGuess,estgcov=estgcov,
 		estgmeans=estgmeans)		
 		
-	if (nfact > 1) norm <- sqrt(1 + rowSums(pars[ ,1:nfact]^2,na.rm = TRUE))
+	if (nfactNames > 1) norm <- sqrt(1 + rowSums(pars[ ,1:nfactNames]^2,na.rm = TRUE))
 		else norm <- as.matrix(sqrt(1 + pars[ ,1]^2))  
-	F <- as.matrix(pars[ ,1:nfact]/norm)
+	F <- as.matrix(pars[ ,1:nfactNames]/norm)
 	F[is.na(F)] <- 0		
 	h2 <- rowSums(F^2)
-	names(h2) <- itemnames
+	names(h2) <- itemnames	
 
 	mod <- new('confmirtClass', pars=pars, guess=guess, SEpars=SEpars, SEg = SEg, 
-		gpars=gpars, SEgpars=SEgpars, estpars=estpars,cycles=cycles - SEM.cycles 
-		- burnin, Theta=theta0, fulldata=fulldata, data=data, K=K, itemloc=itemloc, 
+		gpars=gpars, SEgpars=SEgpars, estpars=estpars,cycles=cycles - SEM.cycles - 
+		burnin, Theta=theta0, fulldata=fulldata, data=data, K=K, itemloc=itemloc, 
 		h2=h2,F=F,converge = converge, nconstvalues = as.integer(nconstvalues), 
-		estComp=estComp, Call=Call)
+		estComp=estComp, prodlist=as.list(prodlist), Call=Call)
 	if(calcLL){
 		cat("Calculating log-likelihood...\n")
 		flush.console()
@@ -953,6 +1023,7 @@ setMethod(
 	definition = function(object, digits = 3, ...)
 	{
 		if(any(object@estComp)) stop('No factor metric for noncompensatory models')
+		if(length(object@prodlist) > 0) stop('No factor metric for models with product terms')
 		nfact <- ncol(object@F)
 		itemnames <- names(object@h2)	
 		F <- object@F
@@ -976,18 +1047,30 @@ setMethod(
 	signature = 'confmirtClass',
 	definition = function(object, SE = TRUE, print.gmeans = FALSE, digits = 3, ...)
 	{  
-		nfact <- ncol(object@Theta)	
+		nfact <- ncol(object@Theta)
+		nfactNames <- ifelse(length(object@prodlist) > 0, 
+			length(object@prodlist) + nfact, nfact)		
 		itemnames <- names(object@h2)
-		a <- matrix(object@pars[ ,1:nfact],ncol=nfact)
-		d <- matrix(object@pars[,(nfact+1):ncol(object@pars)],
-			ncol = ncol(object@pars)-nfact)    	
+		a <- matrix(object@pars[ ,1:nfactNames],ncol=nfactNames)
+		d <- matrix(object@pars[,(nfactNames+1):ncol(object@pars)],
+			ncol = ncol(object@pars)-nfactNames)    	
 
 		parameters <- cbind(object@pars,object@guess)
 		SEs <- cbind(object@SEpars,object@SEg)
 		rownames(parameters) <- itemnames
 		rownames(SEs) <- itemnames
-		colnames(SEs) <- colnames(parameters) <- c(paste("a_",1:nfact,sep=""),
-			paste("d_",1:(ncol(object@pars)-nfact),sep=""),"guess")					
+		colnames(SEs) <- colnames(parameters) <- c(paste("a_",1:nfactNames,sep=""),
+			paste("d_",1:(ncol(object@pars)-nfactNames),sep=""),"guess")
+		if(nfact < nfactNames){
+			tmpnames <- colnames(parameters)
+			prodlist <- object@prodlist
+			for(i in 1:length(prodlist)){
+				tmp <- deparse(prodlist[[i]])
+				tmp <- gsub(" ","",tmp)
+				tmpnames[nfact + i] <- gsub("c","a",tmp)
+			}
+			colnames(SEs) <- colnames(parameters) <- tmpnames
+		}
 		cat("\nITEM PARAMETERS: \n")
 		print(parameters, digits)
 		if(SE){
@@ -995,26 +1078,27 @@ setMethod(
 			print(SEs, digits)
 		}	
 		u <- object@gpars$u	
+		SEu <- object@SEgpars$SEu
 		sig <- object@gpars$sig
+		SEsig <- as.matrix(object@SEgpars$SEsig)
 		names(u) <- colnames(sig) <- rownames(sig) <- paste("a_",1:nfact,sep="")	
 		cat("\nGROUP PARAMETERS: \n")
 		if(print.gmeans){
 			cat("Means: \n")
 			print(u,digits)
-			cat("\nStd. Errors: \n")
-			SEu <- object@SEgpars$SEu
+			cat("\nStd. Errors: \n")			
 			names(SEu) <- names(u) 	
 			print(SEu, digits)	
 		}
 		cat("Covariance: \n")
 		print(sig,digits)
 		if(SE){
-			cat("\nStd. Errors: \n")
-			SEsig <- object@SEgpars$SEsig
+			cat("\nStd. Errors: \n")			
 			colnames(SEsig) <- rownames(SEsig) <- paste("a_",1:nfact,sep="")	
 			print(SEsig, digits)	
 		}
-		invisible(list(pars = parameters,mu = u,sigma = sig))	
+		invisible(list(pars = parameters,mu = u,sigma = sig, sigmaSE = SEsig,
+			muSE = SEu))	
 	}
 )
 
@@ -1030,12 +1114,14 @@ setMethod(
 		K <- object@K
 		J <- length(K)
 		sig <- object@gpars$sig	
-		nfact <- ncol(object@F)
+		nfact <- ncol(sig)
+		nfactNames <- ncol(object@F)
 		theta <- seq(-4,4, length.out = round(20/nfact))
 		Theta <- thetaComb(theta,nfact)		
-		lambdas <- matrix(object@pars[,1:nfact], J)
+		if(length(object@prodlist) > 0) Theta <- prodterms(Theta, object@prodlist)
+		lambdas <- matrix(object@pars[,1:nfactNames], J)
 		lambdas[is.na(lambdas)] <- 0
-		zetas <- as.vector(t(object@pars[,(nfact+1):ncol(object@pars)]))
+		zetas <- as.vector(t(object@pars[,(nfactNames+1):ncol(object@pars)]))
 		zetas <- na.omit(zetas)
 		zetalist <- list()
 		loc <- 1
@@ -1050,7 +1136,7 @@ setMethod(
 		res <- matrix(0,J,J)
 		diag(res) <- NA
 		colnames(res) <- rownames(res) <- colnames(data)
-		prior <- dmvnorm(Theta,rep(0,nfact),sig)
+		prior <- dmvnorm(Theta[,1:nfact],rep(0,nfact),sig)
 		prior <- prior/sum(prior)		
 		if(restype == 'LD'){	
 			for(i in 1:J){				
@@ -1138,27 +1224,33 @@ setMethod(
 		theta0 <- object@Theta
 		K <- object@K
 		nfact <- ncol(theta0)
-		lambdas <- matrix(object@pars[,1:nfact],ncol=nfact)
+		nfactNames <- ncol(object@F)
+		lambdas <- matrix(object@pars[,1:nfactNames],ncol=nfactNames)
 		lambdas[is.na(lambdas)] <- 0
-		zetas <- na.omit(as.numeric(t(object@pars[,(nfact+1):ncol(object@pars)])))
+		zetas <- na.omit(as.numeric(t(object@pars[,(nfactNames+1):ncol(object@pars)])))
 		guess <- object@guess
 		guess[is.na(guess)] <- 0
 		data <- cbind(object@data,object@fulldata)		
-		Names <- c(colnames(object@data[,1:length(K)]),paste("F",1:nfact,sep=''),paste("SE_F",1:nfact,sep=''))
+		Names <- c(colnames(object@data[,1:length(K)]),paste("F",1:nfact,sep=''),
+			paste("SE_F",1:nfact,sep=''))
 		tabdata <- unique(data)[,-c(1:length(K))]			
 		itemloc <- object@itemloc
 		Theta <- list()
+		prodlist <- object@prodlist
+		if(length(prodlist) == 0) prodlist <- NULL	
 		for(i in 1:nfact)
 			Theta[[i]] <- matrix(0,ncol=ndraws/thin,nrow=nrow(tabdata))		
-		theta0 <- matrix(0,nrow(tabdata),nfact)
+		theta0 <- matrix(0,nrow(tabdata),nfact)		
 		for(i in 1:30){			
-			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,cand.t.var,sig,mu,estComp)
+			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,
+				cand.t.var,sig,mu,estComp,prodlist)
 			if(attr(theta0,'Proportion Accepted') > .4) cand.t.var <- cand.t.var + .2
 			if(attr(theta0,'Proportion Accepted') < .3) cand.t.var <- cand.t.var - .2
 		}
 		ind <- 1
 		for(i in 1:ndraws){			
-			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,cand.t.var,sig,mu,estComp)
+			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,
+				cand.t.var,sig,mu,estComp,prodlist)
 			if(i %% thin == 0){
 				for(j in 1:nfact)
 					Theta[[j]][,ind] <- theta0[,j]									
