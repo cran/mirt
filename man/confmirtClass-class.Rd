@@ -21,8 +21,10 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{pars}:}{Object of class \code{"list"}, estimated parameters }
     \item{\code{parsprint}:}{Object of class \code{"matrix"}, parameters used for printing }
     \item{\code{guess}:}{Object of class \code{"numeric"}, estimated guessing parameters }
+    \item{\code{upper}:}{Object of class \code{"numeric"}, estimated upper bound parameters }
     \item{\code{SEpars}:}{Object of class \code{"matrix"},  standard errors for pars}
     \item{\code{SEg}:}{Object of class \code{"numeric"}, standard errors for guess }
+    \item{\code{SEup}:}{Object of class \code{"numeric"}, standard errors for upper }
     \item{\code{gpars}:}{Object of class \code{"list"}, group parameters }
     \item{\code{SEgpars}:}{Object of class \code{"list"}, standard errors for gpars }
     \item{\code{estpars}:}{Object of class \code{"list"}, logical indicators for gpars }
@@ -37,6 +39,7 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
     \item{\code{BIC}:}{Object of class \code{"numeric"}, Bayesian information criteria }
     \item{\code{RMSEA}:}{Object of class \code{"numeric"}, root mean-square error of approximation}
+    \item{\code{TLI}:}{Object of class \code{"numeric"}, Tucker-Lewis index}
     \item{\code{df}:}{Object of class \code{"integer"}, degrees of freedom }
     \item{\code{estComp}:}{Object of class \code{"logical"}, vector indicating which items were estimated with the partially compensatory model }
     \item{\code{h2}:}{Object of class \code{"numeric"}, commonalities }
@@ -47,6 +50,7 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{p}:}{Object of class \code{"numeric"}, p-value for G2 }
     \item{\code{tabdata}:}{Object of class \code{"matrix"}, tabulated data with expected values }
     \item{\code{prodlist}:}{Object of class \code{"list"}, list containing product combination of factors }
+    \item{\code{null.mod}:}{Object of class \code{"S4"}, null model}
     \item{\code{Call}:}{Object of class \code{"call"},  call }
   }
 }

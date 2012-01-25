@@ -21,6 +21,7 @@ Objects can be created by calls of the form \code{new("bfactorClass", ...)}.
     \item{\code{pars}:}{Object of class \code{"list"}, estimated parameters }
     \item{\code{parsSE}:}{Object of class \code{"list"}, estimated parameter standard errors  }    
     \item{\code{guess}:}{Object of class \code{"numeric"}, guessing parameters }
+    \item{\code{upper}:}{Object of class \code{"numeric"}, upper bound parameters }
     \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }    
     \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }     
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
@@ -28,6 +29,7 @@ Objects can be created by calls of the form \code{new("bfactorClass", ...)}.
     \item{\code{X2}:}{Object of class \code{"numeric"}, chi-squared value }
     \item{\code{df}:}{Object of class \code{"numeric"}, degrees of freedom }
     \item{\code{RMSEA}:}{Object of class \code{"numeric"}, root mean-square error of approximation}
+    \item{\code{TLI}:}{Object of class \code{"numeric"}, Tucker-Lewis index}
     \item{\code{logLik}:}{Object of class \code{"numeric"}, observed log-likelihood }
     \item{\code{p}:}{Object of class \code{"numeric"}, p-value for chi-squared value}
     \item{\code{F}:}{Object of class \code{"matrix"},  factor loadings}
@@ -47,6 +49,7 @@ Objects can be created by calls of the form \code{new("bfactorClass", ...)}.
     \item{\code{par.prior}:}{Object of class \code{"matrix"},  prior parameter distribution specifications}
     \item{\code{quadpts}:}{Object of class \code{"numeric"}, number for quadrature points }
     \item{\code{vcov}:}{Object of class \code{"matrix"}, covariance matrix for estimated parameters }
+    \item{\code{null.mod}:}{Object of class \code{"S4"}, null model}
     \item{\code{Call}:}{Object of class \code{"call"},  call }
   }
 }

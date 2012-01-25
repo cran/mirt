@@ -9,15 +9,17 @@
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-  mirt(data, nfact, guess = 0, SE = FALSE, rotate =
-    'varimax', prev.cor = NULL, par.prior = FALSE,
-    startvalues = NULL, quadpts = NULL, ncycles = 300, tol
-    = .001, nowarn = TRUE, debug = FALSE, ...)
+  mirt(data, nfact, guess = 0, upper = 1, SE = FALSE,
+    rotate = 'varimax', Target = NULL, prev.cor = NULL,
+    par.prior = FALSE, startvalues = NULL, quadpts = NULL,
+    verbose = FALSE, debug = FALSE, technical = list(),
+    ...)
 
-  \S4method{summary}{mirt}(object, rotate='', suppress = 0,
-    digits = 3, ...)
+  \S4method{summary}{mirt}(object, rotate = '', suppress =
+    0, digits = 3, print = FALSE, ...)
 
-  \S4method{coef}{mirt}(object, digits = 3, ...)
+  \S4method{coef}{mirt}(object, rotate = '', digits = 3,
+    ...)
 
   \S4method{anova}{mirt}(object, object2, ...)
 
@@ -26,8 +28,8 @@ Theory)}
   \S4method{plot}{mirt}(x, type = 'info', npts = 50, rot =
     list(x = -70, y = 30, z = 10), ...)
 
-  \S4method{residuals}{mirt}(object, restype = 'LD',
-    digits=3, printvalue = NULL, ...)
+  \S4method{residuals}{mirt}(object, restype = 'LD', digits
+    = 3, printvalue = NULL, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -43,6 +45,11 @@ Theory)}
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
   parameter or may be entered as a numeric vector
+  corresponding to each item}
+
+  \item{upper}{fixed upper bound parameters for 4-PL model.
+  Can be entered as a single value to assign a global
+  guessing parameter or may be entered as a numeric vector
   corresponding to each item}
 
   \item{prev.cor}{use a previously computed correlation
@@ -74,22 +81,21 @@ Theory)}
   object is ignored and the new rotation from the list is
   used instead}
 
+  \item{Target}{a dummy variable matrix indicing a target
+  rotation pattern}
+
   \item{startvalues}{user declared start values for
   parameters}
 
   \item{quadpts}{number of quadrature points per dimension}
-
-  \item{ncycles}{the number of EM iterations to be
-  performed}
-
-  \item{tol}{if the largest change in the EM cycle is less
-  than this value then the EM iteration are stopped early}
 
   \item{printvalue}{a numeric value to be specified when
   using the \code{res='exp'} option. Only prints patterns
   that have standardized residuals greater than
   \code{abs(printvalue)}. The default (NULL) prints all
   response patterns}
+
+  \item{print}{logical; print output to console?}
 
   \item{x}{an object of class \code{mirt} to be plotted or
   printed}
@@ -124,10 +130,20 @@ Theory)}
   Thissen, 1997) or \code{'exp'} for the expected values
   for the frequencies of every response pattern}
 
-  \item{nowarn}{logical; suppress warnings from dependent
-  packages?}
+  \item{verbose}{logical; print observed log-likelihood
+  value at each iteration?}
 
   \item{debug}{logical; turn on debugging features?}
+
+  \item{technical}{a list containing lower level technical
+  parameters for estimation. May be: \describe{
+  \item{MAXQUAD}{maximum number of quadratures; default
+  10000} \item{MSTEPMAXIT}{number of M-step iterations;
+  default 25} \item{TOL}{EM convergence threshold; default
+  .001} \item{NCYCLES}{maximum number of EM cycles; default
+  300} \item{NOWARN}{a logical indicating whether dependent
+  packages warnings shoudl be printed; d default
+  \code{TRUE}} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -154,15 +170,17 @@ Theory)}
   as TESTFACT (2003) and POLYFACT. The general IRT equation
   for dichotomous items is
 
-  \deqn{P(X | \theta; \bold{a}_i; d_i; g_i) = g_j + (1 -
-  g_j) / (1 + exp(-1.702(\bold{a}_j' \theta + d_j)))}
+  \deqn{P(X | \theta; \bold{a}_j; d_j; g_j, u_j) = g_j +
+  (u_j - g_j) / (1 + exp(-1.702(\bold{a}_j' \theta +
+  d_j)))}
 
   where \emph{j} is the item index, \eqn{\bold{a}_j} is the
   vector of discrimination parameters (i.e., slopes),
   \deqn{\theta} is the vector of factor scores, \eqn{d_j}
-  is the intercept, and \eqn{g_j} is the pseudo-guessing
-  parameter. To avoid estimation difficulties the
-  \eqn{g_j}'s must be specified by the user. The
+  is the intercept, \eqn{g_j} is the pseudo-guessing
+  parameter, and \eqn{u_j} is the upper bound parameter. To
+  avoid estimation difficulties the \eqn{g_j}'s and
+  \eqn{u_j}'s must be pre-specified by the user. The
   polychotomous functions has a similar form that can be
   found in Muraki and Carlson (1995).
 
@@ -189,14 +207,10 @@ Theory)}
   Factor scores are estimated assuming a normal prior
   distribution and can be appended to the input data matrix
   (\code{full.data = TRUE}) or displayed in a summary table
-  for all the unique response patterns. \code{summary}
-  allows for various rotations available from the
-  \code{GPArotation} package. These are:
-
-  \describe{ \item{orthogonal: }{\code{"varimax",
-  "quartimax", "tandemI", "tandemII", "entropy",
-  "mccammon"}} \item{oblique: }{\code{"promax", "oblimin",
-  "quartimin", "oblimax", "simplimax"}} }
+  for all the unique response patterns. \code{summary} and
+  \code{coef} allow for all the rotations available from
+  the \code{GPArotation} package as well as a
+  \code{'promax'} rotation.
 
   Using \code{plot} will plot the either the test surface
   function or the test information function for 1 and 2

@@ -21,7 +21,10 @@ Objects can be created by calls of the form \code{new("polymirtClass", ...)}.
   \describe{    
     \item{\code{pars}:}{Object of class \code{"list"}, list of parameters  }
     \item{\code{guess}:}{Object of class \code{"numeric"}, guessing parameters  }
+    \item{\code{upper}:}{Object of class \code{"numeric"}, upper bound parameters  }
     \item{\code{SEpars}:}{Object of class \code{"matrix"}, standard errors for pars }
+    \item{\code{SEg}:}{Object of class \code{"numeric"}, standard errors for guess }
+    \item{\code{SEup}:}{Object of class \code{"numeric"}, standard errors for upper }
     \item{\code{cycles}:}{Object of class \code{"numeric"}, number of MHRM cycles }
     \item{\code{Theta}:}{Object of class \code{"matrix"}, final MH draw }
     \item{\code{fulldata}:}{Object of class \code{"matrix"}, complete binary data }
@@ -34,6 +37,7 @@ Objects can be created by calls of the form \code{new("polymirtClass", ...)}.
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
     \item{\code{BIC}:}{Object of class \code{"numeric"}, Bayesian Information Criteria }
     \item{\code{RMSEA}:}{Object of class \code{"numeric"}, root mean-square error of approximation}
+    \item{\code{TLI}:}{Object of class \code{"numeric"}, Tucker-Lewis index}
     \item{\code{df}:}{Object of class \code{"integer"}, degrees of freedom }
     \item{\code{itemloc}:}{Object of class \code{"numeric"}, item locations in fulldata }
     \item{\code{converge}:}{Object of class \code{"numeric"}, convergence diagnostic }
@@ -42,6 +46,8 @@ Objects can be created by calls of the form \code{new("polymirtClass", ...)}.
     \item{\code{p}:}{Object of class \code{"numeric"}, p-value for G2 }
     \item{\code{tabdata}:}{Object of class \code{"matrix"}, tabulated data with expected values }
     \item{\code{estGuess}:}{Object of class \code{"logical"}, vector indicating which guessing parameters were estimated }
+    \item{\code{null.mod}:}{Object of class \code{"S4"}, null model}
+    \item{\code{Target}:}{Object of class \code{"numeric"}, dummy rotation matrix}
     \item{\code{Call}:}{Object of class \code{"call"}, call }
   }
 }
