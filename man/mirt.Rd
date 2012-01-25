@@ -91,11 +91,11 @@ Theory)}
   printed}
 
   \item{object}{a model estimated from \code{mirt} of class
-  \code{mirt}}
+  \code{mirtClass}}
 
   \item{object2}{a second model estimated from \code{mirt}
-  of class \code{mirt} with more estimated parameters than
-  \code{object}}
+  of class \code{mirtClass} with more estimated parameters
+  than \code{object}}
 
   \item{suppress}{a numeric value indicating which
   (possibly rotated) factor loadings should be suppressed.
@@ -131,9 +131,7 @@ Theory)}
   \code{mirt} fits an unconditional maximum likelihood
   factor analysis model to dichotomous data under the item
   response theory paradigm. Pseudo-guessing parameters may
-  be included but must be declared as constant, since the
-  estimation of these parameters often leads to
-  unacceptable solutions.
+  be included but must be declared as constant.
 }
 \details{
 
@@ -207,12 +205,12 @@ Theory)}
   to be constrained or removed entirely to allow for an
   acceptable solution. Be mindful of the item facility
   values that are printed with \code{coef} since these will
-  be helpful in determining whether a guessing parameter
-  should be removed (item facility value is too close to
-  the guessing parameter) or if an item should be
-  constrained or removed entirely (values too close to 0 or
-  1). As a general rule, items with facilities greater than
-  .95, or items that are only .05 greater than the guessing
+  be helpful in determining whether a guessing parameter is
+  causing problems (item facility value is too close to the
+  guessing parameter) or if an item should be constrained
+  or removed entirely (values too close to 0 or 1). As a
+  general rule, items with facilities greater than .95, or
+  items that are only .05 greater than the guessing
   parameter, should be considered for removal from the
   analysis or treated with prior distributions. Also,
   increasing the number of quadrature points per dimension
@@ -242,7 +240,6 @@ data(SAT12)
 fulldata <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 
-#without guessing scree(tmat) #looks like a 2 factor solution
 mod1 <- mirt(fulldata, 1)
 mod2 <- mirt(fulldata, 2)
 mod3 <- mirt(fulldata, 3)
@@ -288,7 +285,7 @@ summary(mod2g, rotate='promax')
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
   \code{\link{polymirt}}, \code{\link{confmirt}},
-  \code{\link{polymirt}}, \code{\link{itemplot}}
+  \code{\link{bfactor}}, \code{\link{itemplot}}
 }
 \keyword{models}
 

@@ -1,1 +1,8 @@
+.gitignore
+.Rbuildignore
+.Rproj.user
+.Rhistory
+.RData
+.Rprofile
 dev-mirt.R
+mirt.Rproj

@@ -20,7 +20,7 @@ setClass(
 		X2 = 'numeric', df = 'numeric', p = 'numeric', AIC = 'numeric', logLik = 'numeric',
 		F = 'matrix', h2 = 'numeric', tabdata = 'matrix', Theta = 'matrix', Pl = 'numeric',
 		fulldata = 'matrix', cormat = 'matrix', facility = 'numeric', converge = 'numeric', 
-		quadpts = 'numeric', BIC = 'numeric', vcov = 'matrix', Call = 'call'),	
+		quadpts = 'numeric', BIC = 'numeric', vcov = 'matrix', RMSEA = 'numeric', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -29,8 +29,7 @@ setClass(
 #' 
 #' \code{mirt} fits an unconditional maximum likelihood factor analysis model
 #' to dichotomous data under the item response theory paradigm. Pseudo-guessing
-#' parameters may be included but must be declared as constant, since the
-#' estimation of these parameters often leads to unacceptable solutions.
+#' parameters may be included but must be declared as constant.
 #' 
 #' 
 #' 
@@ -121,9 +120,9 @@ setClass(
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
 #' @param x an object of class \code{mirt} to be plotted or printed
-#' @param object a model estimated from \code{mirt} of class \code{mirt}
+#' @param object a model estimated from \code{mirt} of class \code{mirtClass}
 #' @param object2 a second model estimated from \code{mirt} of class
-#' \code{mirt} with more estimated parameters than \code{object}
+#' \code{mirtClass} with more estimated parameters than \code{object}
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #' loadings should be suppressed. Typical values are around .3 in most
 #' statistical software. Default is 0 for no suppression
@@ -146,7 +145,7 @@ setClass(
 #' convergence, and some items may need to be constrained or removed entirely
 #' to allow for an acceptable solution. Be mindful of the item facility values
 #' that are printed with \code{coef} since these will be helpful in determining
-#' whether a guessing parameter should be removed (item facility value is too
+#' whether a guessing parameter is causing problems (item facility value is too
 #' close to the guessing parameter) or if an item should be constrained or
 #' removed entirely (values too close to 0 or 1). As a general rule, items with
 #' facilities greater than .95, or items that are only .05 greater than the
@@ -156,7 +155,7 @@ setClass(
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
 #' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{polymirt}},
-#' \code{\link{confmirt}}, \code{\link{polymirt}}, \code{\link{itemplot}}
+#' \code{\link{confmirt}}, \code{\link{bfactor}}, \code{\link{itemplot}}
 #' @references
 #' 
 #' Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of
@@ -220,7 +219,6 @@ setClass(
 #' fulldata <- key2binary(SAT12,
 #'   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #' 
-#' #without guessing scree(tmat) #looks like a 2 factor solution
 #' mod1 <- mirt(fulldata, 1)
 #' mod2 <- mirt(fulldata, 2)
 #' mod3 <- mirt(fulldata, 3)
@@ -446,6 +444,8 @@ mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.pr
 	p <- 1 - pchisq(X2,df)  
 	AIC <- (-2) * logLik + 2 * length(pars)
 	BIC <- (-2) * logLik + length(pars)*log(N)
+	RMSEA <- ifelse((X2 - df) > 0, 
+	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
 	if(any(is.na(fulldata.original))) p <- 2	
 
 	# pars to FA loadings
@@ -457,13 +457,14 @@ mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.pr
 	L <- eigen(FF)$values[1:nfact]
 	if (nfact == 1) F <- as.matrix(V * sqrt(L))
 		else F <- V %*% sqrt(diag(L))  
-	if (sum(F[ ,1] < 0)) F <- (-1) * F  
+	if (sum(F[ ,1] < 0)) F <- (-1) * F 
+	colnames(F) <- paste("F_", 1:ncol(F),sep="")	
 	h2 <- rowSums(F^2) 
 
-	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, X2=X2, df=df, p=p,
+	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, X2=X2, df=df, p=p, 
 		AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata, Theta=Theta, Pl=Pl, 
 		fulldata=fulldata.original, cormat=Rpoly, facility=facility, converge=converge, 
-		quadpts=quadpts, vcov=vcovpar, Call=Call)	  
+		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, Call=Call)	  
 	return(mod)    
 }
 
@@ -486,12 +487,12 @@ setMethod(
 		cat("Log-likelihood =", x@logLik, "\n")
 		cat("AIC =", x@AIC, "\n")		
 		cat("BIC =", x@BIC, "\n")
-		if(x@p < 1)
+		if(x@p < 1)            
 			cat("G^2 = ", round(x@X2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4), "\n", sep="")
+				x@df, ", p = ", round(x@p,4),", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				x@df, ", p = ", NA, "\n", sep="")		
+				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )		
 	}
 )
 
@@ -514,10 +515,11 @@ setMethod(
 		cat("BIC =", object@BIC, "\n")
 		if(object@p < 1)
 			cat("G^2 = ", round(object@X2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4), "\n", sep="")
+				object@df, ", p = ", round(object@p,4),", RMSEA = ", round(object@RMSEA,3),
+                "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				object@df, ", p = ", NA, "\n", sep="")			
+				object@df, ", p = ", NA, "RMSEA = ", NA, "\n", sep="")			
 	}
 )
 
@@ -532,7 +534,7 @@ setMethod(
 			h2 <- as.matrix(object@h2)				
 			SS <- apply(F^2,2,sum)
 			colnames(h2) <- "h2"			
-			colnames(F) <- names(SS) <- paste("F_", 1:ncol(F),sep="")
+			names(SS) <- colnames(F)
 			cat("\nUnrotated factor loadings: \n\n")
 			loads <- round(cbind(F,h2),digits)
 			rownames(loads) <- rownames(object@pars)
@@ -542,8 +544,7 @@ setMethod(
 			invisible(list(F,h2))
 		} else {	
 			F <- object@F
-			h2 <- as.matrix(object@h2)			
-			colnames(F) <- paste("F_", 1:ncol(F),sep="")
+			h2 <- as.matrix(object@h2)						
 			colnames(h2) <- "h2"				
 			cat("\nRotation: ", rotate, "\n")
 			rotF <- Rotate(F,rotate)
@@ -690,7 +691,8 @@ setMethod(
 	definition = function(x, y, type = 'info', npts = 50, 
 		rot = list(xaxis = -70, yaxis = 30, zaxis = 10))
 	{  
-		if (!type %in% c('curve','info','contour','infocontour')) stop(type, " is not a valid plot type.")
+		if (!type %in% c('curve','info','contour','infocontour')) 
+            stop(type, " is not a valid plot type.")
 		rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
 		a <- as.matrix(x@pars[ ,1:(ncol(x@pars) - 1)])
 		d <- x@pars[ ,ncol(x@pars)]
@@ -736,7 +738,7 @@ setMethod(
 				plot(Theta, Ptot, type='l', main = 'Test score plot', xlab = 'Theta', ylab='Test Score')
 			if(type == 'info'){
 				I <- (P * (1 - P)) %*% a^2 
-				plot(Theta, I, type='l', main = 'Test Information', xlab = 'Theta', ylab='Information')			
+				plot(Theta, I, type='l', main = 'Test Information', xlab = 'Theta', ylab='Information')	
 			}	
 			if(type == 'contour' || type == 'infocontour') 
 				cat('No \'contour\' plots for 1-dimensional models\n')					

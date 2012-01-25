@@ -1,6 +1,6 @@
 #' Displays item surface and information plots
 #' 
-#' \code{itemplot} displays 3D surface plots if the number of factors is 2, or
+#' \code{itemplot} displays 3D surface plots if the number of factors is two, or
 #' standard 2D plots if the number of factors is equal to one.
 #' 
 #'
@@ -26,7 +26,7 @@
 #' information contour plot. Note that \code{polymirtClass} objects can only
 #' display information plots
 #' @param npts number of points to use per dimension. A higher value will make
-#' the graphs look smoother
+#' the graphs look smoother. Default is 50
 #' @param rot allows rotation of the 3D graphics. Default is \code{list(x=-70,y=30,z=10)}
 #' @param ... additional arguments to be passed
 #' @section Methods: \describe{ \item{itemplot}{\code{signature(object =
@@ -100,7 +100,7 @@ setMethod(
 			if(type == 'info'){				 
 				plt <- data.frame(cbind(I,Theta))
 				colnames(plt) <- c('I','Theta1','Theta2')
-				return(wireframe(I ~ Theta1 + Theta2, data = plt, main = paste("Item", item,"Information"), 
+				return(wireframe(I ~ Theta1 + Theta2, data = plt, main = paste("Item", item,"Information"),
 					zlab = "I", xlab = "Theta 1", ylab = "Theta 2", scales = list(arrows = FALSE),
 					screen = rot))
 			} 
@@ -115,13 +115,13 @@ setMethod(
 				plt <- data.frame(cbind(P,Theta))
 				colnames(plt) <- c('P','Theta1','Theta2')
 				contour(theta, theta, matrix(P,length(theta),length(theta)), 
-					main = paste("Item", item,"Probability Contour"), xlab = "Theta 1", ylab = "Theta 2")			
+					main = paste("Item", item,"Probability Contour"), xlab = "Theta 1", ylab = "Theta 2")
 			}
 			if(type == 'infocontour'){
 				plt <- data.frame(cbind(I,Theta))
 				colnames(plt) <- c('I','Theta1','Theta2')
 				contour(theta, theta, matrix(I,length(theta),length(theta)), 
-					main = paste("Item", item,"Information Contour"), xlab = "Theta 1", ylab = "Theta 2")		
+					main = paste("Item", item,"Information Contour"), xlab = "Theta 1", ylab = "Theta 2")
 			}
 		} else {
 			if(type == 'curve')  
@@ -132,7 +132,7 @@ setMethod(
 				plot(Theta, I, type='l',main = paste('Item', item, 'Information'), xlab = 'Theta', 
 					ylab='Information')
 			}
-			if(type == 'contour' || type == 'infocontour') cat('No \'contour\' plots for 1-dimensional models\n')
+			if(type=='contour' || type=='infocontour') cat('No \'contour\' plots for 1-dimensional models\n')
 		}  
 	}
 )
@@ -165,20 +165,20 @@ setMethod(
 		if(type == 'curve'){
 			plt <- data.frame(cbind(P,Theta))	
 			colnames(plt) <- c('P','Theta1','Theta2')		
-			return(wireframe(P ~ Theta1 + Theta2, data = plt, main = paste("Item",item, "Probability Surface"), 
+			return(wireframe(P ~ Theta1 + Theta2, data=plt, main = paste("Item",item, "Probability Surface"), 
 				zlab = "P", xlab = "General", ylab = "Specific", scales = list(arrows = FALSE)))
 		}	  
 		if(type == 'contour'){
 			plt <- data.frame(cbind(P,Theta))
 			colnames(plt) <- c('P','Theta1','Theta2')
 			contour(theta, theta, matrix(P,length(theta),length(theta)), 
-				main = paste("Item", item,"Probability Contour"), xlab = "General", ylab = "Specific")			
+				main = paste("Item", item,"Probability Contour"), xlab = "General", ylab = "Specific")	
 		}
 		if(type == 'infocontour'){
 			plt <- data.frame(cbind(I,Theta))
 			colnames(plt) <- c('I','Theta1','Theta2')
 			contour(theta, theta, matrix(I,length(theta),length(theta)), 
-				main = paste("Item", item,"Information Contour"), xlab = "General", ylab = "Specific")		
+				main = paste("Item", item,"Information Contour"), xlab = "General", ylab = "Specific")
 		}
 	}
 )
