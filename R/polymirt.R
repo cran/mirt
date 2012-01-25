@@ -21,7 +21,7 @@ setClass(
 		K = 'numeric', F = 'matrix', h2 = 'numeric', itemloc = 'numeric', AIC = 'numeric',
 		converge = 'numeric', logLik = 'numeric', SElogLik = 'numeric', df = 'integer', 
 		G2 = 'numeric', p = 'numeric', tabdata = 'matrix', BIC = 'numeric', estGuess = 'logical', 
-		RMSEA = 'numeric', Call = 'call'),	
+		RMSEA = 'numeric', rotate='character', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -78,8 +78,10 @@ setClass(
 #' estimate starting values the estimation. The input could be any correlation
 #' matrix, but it is advised to use a matrix of polychoric correlations.
 #' @param rotate type of rotation to perform after the initial orthogonal
-#' parameters have been extracted. See \code{\link{mirt}} for a list of
-#' possible rotations
+#' parameters have been extracted by using \code{summary}; default is \code{'varimax'}. 
+#' See \code{\link{mirt}} for list of possible rotations. If \code{rotate != ''} in the 
+#' \code{summary} input then the default from the object is ignored and the new rotation 
+#' from the list is used instead
 #' @param ncycles the maximum number of iterations to be performed
 #' @param burnin number of burn-in cycles to perform before beginning the SEM
 #' stage
@@ -135,11 +137,13 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' polymirt(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, ncycles = 2000, 
-#'   burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, calcLL = TRUE, 
-#'   draws = 2000, debug = FALSE, technical = list(), ...)
+#' polymirt(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, rotate = 'varimax', 
+#'    ncycles = 2000, burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, 
+#'    printcycles = TRUE,	calcLL = TRUE, draws = 2000, debug = FALSE, technical = list(), ...)
+#'  
 #' 
-#' \S4method{summary}{polymirt}(object, rotate='varimax', suppress = 0, digits = 3, ...)
+#' 
+#' \S4method{summary}{polymirt}(object, rotate='', suppress = 0, digits = 3, ...)
 #' 
 #' \S4method{coef}{polymirt}(object, SE = TRUE, digits = 3, ...)
 #' 
@@ -185,9 +189,9 @@ setClass(
 #' 
 #'      }
 #' 
-polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, ncycles = 2000, 
-	burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE,
-	calcLL = TRUE, draws = 2000, debug = FALSE, technical = list(), ...)
+polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, rotate = 'varimax', 
+    ncycles = 2000, burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001, 
+    printcycles = TRUE,	calcLL = TRUE, draws = 2000, debug = FALSE, technical = list(), ...)
 {		
 	Call <- match.call()
 	set.seed(12345)
@@ -501,7 +505,7 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 	mod <- new('polymirtClass',pars=normpars, guess=guess, SEpars=SEpars, 
 		cycles=cycles-SEM.cycles-burnin, Theta=theta0, fulldata=fulldata, 
 		data=data, K=K, F=F, h2=h2, itemloc=itemloc, converge = converge,
-		estGuess=estGuess, Call=Call)
+		estGuess=estGuess, rotate=rotate, Call=Call)
 	if(calcLL){
 		cat("Calculating log-likelihood...\n")
 		flush.console()
@@ -529,7 +533,7 @@ setMethod(
 			cat("Log-likelihood = ", x@logLik,", SE = ",round(x@SElogLik,3), "\n",sep='')			
 			cat("AIC =", x@AIC, "\n")			
 			cat("BIC =", x@BIC, "\n")
-			if(x@p <= 1)
+			if(!is.nan(x@p))
 				cat("G^2 = ", round(x@G2,2), ", df = ", 
 					x@df, ", p = ", round(x@p,4), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 			else 
@@ -556,7 +560,7 @@ setMethod(
 			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')
 			cat("AIC =", object@AIC, "\n")							
 			cat("BIC =", object@BIC, "\n")
-			if(object@p <= 1)
+			if(!is.nan(object@p))
 				cat("G^2 = ", round(object@G2,2), ", df = ", 
 					object@df, ", p = ", round(object@p,4), ", RMSEA = ", round(object@RMSEA,3), 
                     "\n", sep="")
@@ -570,7 +574,7 @@ setMethod(
 setMethod(
 	f = "summary",
 	signature = 'polymirtClass',
-	definition = function(object, rotate = 'varimax', suppress = 0, digits = 3, ...)
+	definition = function(object, rotate = '', suppress = 0, digits = 3, ...)
 	{
 		nfact <- ncol(object@F)
 		itemnames <- colnames(object@data)
@@ -591,7 +595,8 @@ setMethod(
 		} else {	
 			F <- object@F
 			h2 <- as.matrix(object@h2)		
-			colnames(h2) <- "h2"		
+			colnames(h2) <- "h2"
+			if(rotate == '') rotate <- object@rotate
 			cat("\nRotation: ", rotate, "\n")
 			rotF <- Rotate(F,rotate)
 			SS <- apply(rotF$loadings^2,2,sum)
@@ -600,7 +605,8 @@ setMethod(
 			loads <- round(cbind(L,h2),digits)
 			rownames(loads) <- itemnames			
 			cat("\nRotated factor loadings: \n\n")
-			print(loads,digits)		
+			print(loads,digits)	
+			Phi <- diag(nfact)
 			if(attr(rotF, "oblique")){
 				cat("\nFactor correlations: \n\n")
 				Phi <- rotF$Phi	  
@@ -613,7 +619,7 @@ setMethod(
 				cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
 			if(any(h2 > 1)) 
 				warning("Solution has heywood cases. Interpret with caution.") 
-			invisible(list(rotF$loadings,h2))  
+			invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))  
 		}  
 	}
 )

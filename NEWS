@@ -1,4 +1,25 @@
 ----------------------------------------------------------------
+mirt 0.2.5
+---------------------------------------------------------------
+
+* Fixed translation bug in the C++ code from bfactor() causing illegal 
+  vector length throw
+
+* Fixed fscores() bug when using polychotomous items for mirt() and 
+  bfactor()
+
+* pass rotate='rotation' from mirt and polymirt to override default 
+  default 'varimax' rotation at estimation time (suggested by 
+  Niels Waller)
+
+* RMSEA, G^2, and p set to NaN instead of internal placeholder when 
+  there are missing data
+
+* df adjusted when missing data present  
+
+* oblique rotations return invisible factor correlation matrix
+
+----------------------------------------------------------------
 mirt 0.2.4
 ---------------------------------------------------------------
 
@@ -8,7 +29,7 @@ mirt 0.2.4
 * confmirtClass reorganized to work with S4 methods, now work
   more consistently with methods. 
 
-* fixed G^2 and loglikelihood in logLik() when product terms included
+* fixed G^2 and log-likelihood in logLik() when product terms included
 
 * bugfix in drawThetas when noncompensatory items used
 
@@ -34,6 +55,9 @@ mirt 0.2.2
 
 * Ported src code into Rcpp for future tweaking. 
 
+* Added better fitted() function when missing data exist (noticed by 
+  Erin Horn)
+
 ----------------------------------------------------------------
 mirt 0.2.1
 ----------------------------------------------------------------
@@ -43,7 +67,10 @@ mirt 0.2.1
 * RMSEA statistic added for all fitted models
 
 * Nonlinear polynomial estimation specification for confmirt models, now
-  with more consistent returned lables
+  with more consistent returned labels
+
+* Provide better identification criteria for confmirt() (suggested by 
+  Hendrik Lohse)
 
 ----------------------------------------------------------------
 mirt 0.2.0
@@ -54,10 +81,22 @@ mirt 0.2.0
 * bfactor() values that are ommited are recoded to NA in summary and coef 
   for better viewing
 
-* 'technical' added for confmirt function, allowing for various tweeks and 
+* 'technical' added for confmirt function, allowing for various tweaks and 
   varying beta prior weights
 
 * product relations added for confmirt.model(). Specified by enclosing in brackets
-  and using an asterik 
+  and using an asterisk 
 
 * documentation fixes with roxygenize  
+
+----------------------------------------------------------------
+mirt 0.1.20
+----------------------------------------------------------------
+
+* allow lower bound beta priors to vary over items (suggested by James Lee)
+
+----------------------------------------------------------------
+mirt 0.1.6
+----------------------------------------------------------------
+
+* bias fix for mirt() function (noticed by Pedro Barbetta)

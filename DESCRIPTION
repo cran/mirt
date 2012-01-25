@@ -1,5 +1,5 @@
 Package: mirt
-Version: 0.2.4
+Version: 0.2.5
 Date: 2012-01-25
 Type: Package
 Title: Multidimensional Item Response Theory
@@ -27,5 +27,5 @@ Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
         'misc.R' 'logLik.R' 'fscores.R' 'mirt-package.R' 'confmirt.R'
         'mirt.R' 'polymirt.R' 'simdata.R' 'confmirt.model.R'
         'read.mirt.R'
-Packaged: 2012-05-09 21:15:09 UTC; Phil
-Date/Publication: 2012-05-09 22:44:46
+Packaged: 2012-06-06 18:57:19 UTC; phil
+Date/Publication: 2012-06-07 06:05:15
