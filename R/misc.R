@@ -20,14 +20,14 @@ start.values <- function(fulldata, guess, Rpoly, nfact=2, bfactor = FALSE, nowar
 		else if (length(guess) > ncol(fulldata) || length(guess) < ncol(fulldata)) 
 			stop("The number of guessing parameters is incorrect.")  	
 	if (bfactor){ 
-		FA <- fa(Rpoly,1, warnings= !nowarn)
+		suppressWarnings(FA <- fa(Rpoly,1, warnings= !nowarn))
 		loads <- unclass(FA$load)
 		cs <- sqrt(abs(FA$u))      
 		dstart <- qnorm(colMeans(fulldata))/cs
 		astart <- loads/cs
 		startvalues <- cbind(astart,astart/2,dstart)
 	} else {    
-		FA <- fa(Rpoly,nfact,rotate = 'none', warnings= !nowarn)	
+		suppressWarnings(FA <- fa(Rpoly,nfact,rotate = 'none', warnings= !nowarn))	
 		loads <- unclass(loadings(FA))
 		u <- FA$unique
 		u[u < .001 ] <- .2
@@ -143,7 +143,7 @@ Estep.mirt <- function(pars, tabdata, Theta, prior, guess)
 
 	itemtrace <- r1 <- r0 <- matrix(0,nrow=nitems,ncol=nrow(Theta))
 	for (i in 1:nitems) itemtrace[i, ] <- 
-	  P.mirt(a[i, ],d[i],Theta,guess[i])    
+		P.mirt(a[i, ],d[i],Theta,guess[i])    
 	  
 	retlist <- .Call("Estep",                     	
 					 as.double(itemtrace),
@@ -514,21 +514,6 @@ dpars.poly <- function(lambda,zeta,dat,Thetas)
 				as.integer(nfact),
 				as.integer(N)) 				 
 	return(ret)	
-}
-
-#special characters: @ for location, == for equalities (and const), * for covariance
-#must specify by 'type = list'
-#special types -> slope, int, cov, start, comp
-
-confmirt.model <- function(file = "")
-{
-	mod <- scan(file = file, what = list(type = "", pars = ""), 
-		sep = "=", strip.white = TRUE, comment.char = "#", fill = TRUE)
-	mod <- cbind(mod$type, mod$pars)
-	colnames(mod) <- c("Type","Parameters")	
-	mod <- list(x = mod)
-	class(mod) <- 'confmirt.model'
-	mod
 }
 
 gamma.cor <- function(x)
