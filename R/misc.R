@@ -123,7 +123,8 @@ P.mirt <- function(a, d, Theta, g)
 	return(traces)
 }
 
-P.comp <- function(a,d,thetas,c = 0){
+P.comp <- function(a,d,thetas,c = 0)
+{
 	nfact <- length(a)
 	P <- rep(1,nrow(thetas))
 	for(i in 1:nfact)
@@ -212,8 +213,7 @@ draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var
 { 			
 	N <- nrow(fulldata)
 	J <- length(K)
-	nfact <- ncol(theta0)				
-	P0 <- P1 <- matrix(0,N,J)		
+	nfact <- ncol(theta0)					
 	unif <- runif(N)
 	if(nfact > 1)		
 		theta1 <- theta0 + mvtnorm::rmvnorm(N,prior.mu, 
@@ -225,9 +225,9 @@ draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var
 	if(!is.null(prodlist)){
 		theta0 <- prodterms(theta0,prodlist)
 		theta1 <- prodterms(theta1,prodlist)	
-	}
+	}	
 	ThetaDraws <- .Call("drawThetas", unif, den0, den1, lambdas, zetas, guess,
-					theta0, theta1,	fulldata,	itemloc-1, as.numeric(estComp))
+					theta0, theta1,	fulldata, (itemloc-1), as.numeric(estComp))
 	log.lik <- ThetaDraws$cdloglik
 	accept <- as.logical(ThetaDraws$accept)				
 	theta1[!accept,] <- theta0[!accept,]	
@@ -340,8 +340,7 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 	pars <- c(zeta,lambda,g)
 	if(estg){
 		grad <- function(pars, r, thetas){
-			f <- 1
-			nfact <- ncol(thetas)
+			f <- 1			
 			d <- pars[1:nfact]	
 			a <- pars[(nfact+1):(length(pars)-1)]
 			c <- pars[length(pars)]
@@ -361,8 +360,7 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 			return(c(dd,da,dc))
 		}		
 		hess <- function(pars, r, thetas){
-			f <- 1
-			nfact <- ncol(thetas)
+			f <- 1			
 			d <- pars[1:nfact]	
 			a <- pars[(nfact+1):(length(pars)-1)]
 			c <- pars[length(pars)]
@@ -528,7 +526,8 @@ gamma.cor <- function(x)
 	gamma 
 } 
 
-betaprior <- function(a,b,g,W=20){
+betaprior <- function(a,b,g,W=20)
+{
 	a <- a + (1-g)*W
 	b <- b + g*W
 	grad <- ((a-1) * g^(a-1) * (1-g)^(b-1) - (b-1)*g^(a-1)*(1-g)^(b-1))/ 
@@ -933,7 +932,8 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   ret
 }
 
-sortPars <- function(pars, indlist, nfact, estGuess){
+sortPars <- function(pars, indlist, nfact, estGuess)
+{
 	lambdas <- matrix(pars[indlist$lamind],ncol=nfact,byrow=TRUE)	
 	J <- nrow(lambdas)		
 	zetas <- list()
@@ -945,7 +945,8 @@ sortPars <- function(pars, indlist, nfact, estGuess){
 	return(list(lambdas=lambdas, zetas=zetas, guess=guess))
 }
 
-sortParsConfmirt <- function(pars, indlist, nfact, estGuess, nfactNames){
+sortParsConfmirt <- function(pars, indlist, nfact, estGuess, nfactNames)
+{
 	J <- length(estGuess)
 	lambdas <- matrix(pars[indlist$lamind],J,nfactNames,byrow=TRUE)
 	zetas <- list()
@@ -961,7 +962,8 @@ sortParsConfmirt <- function(pars, indlist, nfact, estGuess, nfactNames){
 	return(list(lambdas=lambdas, zetas=zetas, guess=guess, mu=mu, sig=sig))
 }
 
-rateChange <- function(pars, lastpars1, lastpars2){
+rateChange <- function(pars, lastpars1, lastpars2)
+{
 	p <- unlist(pars)	
 	lp1 <- unlist(lastpars1)
 	lp2 <- unlist(lastpars2)
@@ -978,7 +980,8 @@ rateChange <- function(pars, lastpars1, lastpars2){
 	parsret
 }
 
-rebuildPars <- function(p, pars){
+rebuildPars <- function(p, pars)
+{
 	names(p) <- NULL
 	pars2 <- pars
 	pars2$lambdas <- matrix(p[1:length(pars$lambdas)], ncol=ncol(pars$lambdas), 

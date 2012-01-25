@@ -1,4 +1,18 @@
 ----------------------------------------------------------------
+mirt 0.2.4
+---------------------------------------------------------------
+
+* degrees of freedom correctly adjusted when using noncompensatory
+  items
+
+* confmirtClass reorganized to work with S4 methods, now work
+  more consistently with methods. 
+
+* fixed G^2 and loglikelihood in logLik() when product terms included
+
+* bugfix in drawThetas when noncompensatory items used
+
+---------------------------------------------------------------
 mirt 0.2.3
 ---------------------------------------------------------------
 
@@ -13,8 +27,6 @@ mirt 0.2.3
   good deal of flexibility. 
 
 * Generic plot()'s now use lattice plots extensively
-
-
 
 ----------------------------------------------------------------
 mirt 0.2.2
