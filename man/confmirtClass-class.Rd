@@ -7,6 +7,7 @@
 \alias{show,confmirtClass-method}
 \alias{summary,confmirtClass-method}
 \alias{anova,confmirtClass-method}
+\alias{fitted,confmirtClass-method}
 
 \title{Class "confmirtClass"}
 \description{
@@ -31,12 +32,12 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
     \item{\code{K}:}{Object of class \code{"numeric"},  number of item categories for each item}
     \item{\code{itemloc}:}{Object of class \code{"numeric"}, item location in fulldata }
     \item{\code{logLik}:}{Object of class \code{"numeric"}, observed log-likelihood }
-    \item{\code{SElogLik}:}{Object of class \code{"numeric"}, Monte Carlo std error for log-likelihood }
+    \item{\code{SElogLik}:}{Object of class \code{"numeric"}, Monte Carlo standard error for log-likelihood }
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
     \item{\code{BIC}:}{Object of class \code{"numeric"}, Bayesian information criteria }
     \item{\code{df}:}{Object of class \code{"integer"}, degrees of freedom }
-    \item{\code{estComp}:}{Object of class \code{"logical"}, vector indicating which items were estimated with the partially compensetory model }
-    \item{\code{h2}:}{Object of class \code{"numeric"}, communalities }
+    \item{\code{estComp}:}{Object of class \code{"logical"}, vector indicating which items were estimated with the partially compensatory model }
+    \item{\code{h2}:}{Object of class \code{"numeric"}, commonalities }
     \item{\code{F}:}{Object of class \code{"matrix"}, factor loadings }
     \item{\code{converge}:}{Object of class \code{"numeric"}, convergence diagnostic }
     \item{\code{nconstvalues}:}{Object of class \code{"integer"}, count of fixed parameters  }
@@ -48,13 +49,14 @@ Objects can be created by calls of the form \code{new("confmirtClass", ...)}.
 }
 \section{Methods}{
   \describe{
-    \item{coef}{\code{signature(object = "confmirtClass")} }
+    \item{coef}{\code{signature(object = "confmirtClass")}}
     \item{print}{\code{signature(x = "confmirtClass")} }
     \item{residuals}{\code{signature(object = "confmirtClass")}}
     \item{show}{\code{signature(object = "confmirtClass")} }
     \item{summary}{\code{signature(object = "confmirtClass")} }
     \item{logLik}{\code{signature(object = "confmirtClass")} }
     \item{anova}{\code{signature(object = "confmirtClass")} }
+	\item{fitted}{\code{signature(object = "confmirtClass")} }
 	 }
 }
 
