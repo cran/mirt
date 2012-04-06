@@ -22,7 +22,7 @@ setClass(
 		itemnames = 'character', tabdata = 'matrix', N = 'numeric', 
 		Pl = 'numeric', Theta = 'matrix', fulldata = 'matrix', 
 		logicalfact = 'matrix', facility = 'numeric', specific = 'numeric', 
-		BIC = 'numeric', cormat = 'matrix', converge = 'numeric', 
+		BIC = 'numeric', cormat = 'matrix', converge = 'numeric', RMSEA = 'numeric',
 		par.prior = 'matrix', quadpts = 'numeric', vcov = 'matrix', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
@@ -31,8 +31,7 @@ setClass(
 #' 
 #' \code{bfactor} fits a confirmatory maximum likelihood bifactor model to
 #' dichotomous data under the item response theory paradigm. Pseudo-guessing
-#' parameters may be included but must be declared as constant, since the
-#' estimation of these parameters often leads to unacceptable solutions.
+#' parameters may be included but must be declared as constant.
 #' 
 #' 
 #' 
@@ -46,7 +45,7 @@ setClass(
 #' comparison to mainstream programs such as TESTFACT 4 (2003).
 #' 
 #' Unlike TESTFACT 4 (2003) initial start values are computed by using
-#' information from the matrix of quasi-tetrachoric correlations, potentially
+#' information from a quasi-tetrachoric correlation matrix, potentially
 #' with Carroll's (1945) adjustment for chance responses. To begin, a MINRES
 #' factor analysis with one factor is extracted, and the transformed loadings
 #' and intercepts (see \link{mirt} for more details) are used as starting
@@ -56,7 +55,7 @@ setClass(
 #' incorrect for specific factors (and possibly for some of the general factor
 #' loadings) the intercepts and general factor loadings will be relatively
 #' close to the final solution. These initial values should be an improvement
-#' over the TESTFACT 4 initial starting values of 1.414 for all the general
+#' over the TESTFACT initial starting values of 1.414 for all the general
 #' factor slopes, 1 for all the specific factor slopes, and 0 for all the
 #' intercepts.
 #' 
@@ -108,8 +107,8 @@ setClass(
 #' then the number of quadrature points is set to 9
 #' @param ncycles the number of EM iterations to be performed
 #' @param EMtol if the largest change in the EM cycle is less than this value
-#' then the EM iteration are stopped early
-#' @param object a model estimated from \code{bfactor} of class \code{bfactor}
+#' then the EM iterations are stopped
+#' @param object a model estimated from \code{bfactor} of class \code{bfactorClass}
 #' @param restype type of residuals to be displayed. Can be either \code{'LD'}
 #' for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
 #' expected values for the frequencies of every response pattern
@@ -427,12 +426,16 @@ bfactor <- function(fulldata, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	df <- length(r) + nfact*(nfact - 1)/2 - 2*nitems - length(specific) - 1
 	p <- 1 - pchisq(X2,df)
 	if(any(is.na(fulldata.original))) p <- 2
+	RMSEA <- ifelse((X2 - df) > 0, 
+	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
 
 	#from last EM cycle pars to FA
 	norm <- sqrt(1 + rowSums(pars[ ,1:nfact]^2))
 	gam <- (-1)*pars[ ,nfact + 1]/norm  
 	F <- matrix(0,ncol = nfact, nrow = nitems)
-	for (i in 1:nitems) F[i,1:nfact] <- pars[i,1:nfact]/norm[i]  
+	for (i in 1:nitems) 
+		F[i,1:nfact] <- pars[i,1:nfact]/norm[i]  
+	colnames(F) <- c('G',paste("F_", 1:(ncol(F)-1),sep=""))
 	h2 <- rowSums(F^2)  
 
 	mod <- new('bfactorClass',EMiter=cycles, pars=pars, guess=guess, AIC=AIC, X2=X2, 
@@ -440,7 +443,7 @@ bfactor <- function(fulldata, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 		tabdata=tabdata, N=N, Pl=Pl, Theta=Theta, fulldata=fulldata.original, 
 		logicalfact=logicalfact, facility=facility, specific=specific,
 		cormat=Rpoly, converge=converge, par.prior=par.prior, quadpts=quadpts,
-		vcov=vcovpar, Call=Call)  
+		vcov=vcovpar, RMSEA=RMSEA, Call=Call)  
 	return(mod)  
 } 
 
@@ -465,10 +468,10 @@ setMethod(
 		cat("BIC = ", x@BIC, "\n")
 		if(x@p < 1)
 			cat("G^2 = ", round(x@X2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4), "\n", sep="")
+				x@df, ", p = ", round(x@p,4), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				x@df, ", p = ", NA, "\n", sep="")		
+				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")		
 	}
 )
 
@@ -491,10 +494,11 @@ setMethod(
 		cat("BIC = ", object@BIC, "\n")
 		if(object@p < 1)
 			cat("G^2 = ", round(object@X2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4), "\n", sep="")
+				object@df, ", p = ", round(object@p,4), ", RMSEA = ", round(object@RMSEA,3),
+                "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				object@df, ", p = ", NA, "\n", sep="")			
+				object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")			
 	}
 )
 
@@ -505,8 +509,7 @@ setMethod(
 		F <- round(object@F,digits)
 		SS <- colSums(F^2)	
 		F[!object@logicalfact] <- NA
-		h2 <- round(object@h2,digits)			
-		colnames(F) <- c('G',paste("F_", 1:(ncol(F)-1),sep=""))
+		h2 <- round(object@h2,digits)					
 		names(h2) <- "h2"		
 		loads <- round(cbind(F,h2),digits)
 		rownames(loads) <- object@itemnames  

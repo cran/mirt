@@ -21,7 +21,7 @@ setClass(
 		K = 'numeric', F = 'matrix', h2 = 'numeric', itemloc = 'numeric', AIC = 'numeric',
 		converge = 'numeric', logLik = 'numeric', SElogLik = 'numeric', df = 'integer', 
 		G2 = 'numeric', p = 'numeric', tabdata = 'matrix', BIC = 'numeric', estGuess = 'logical', 
-		Call = 'call'),	
+		RMSEA = 'numeric', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -30,7 +30,8 @@ setClass(
 #' \code{polymirt} fits an unconditional (exploratory) full-information
 #' maximum-likelihood factor analysis model to dichotomous and polychotomous
 #' data under the item response theory paradigm using Cai's (2010)
-#' Metropolis-Hastings Robbins-Monro algorithm.
+#' Metropolis-Hastings Robbins-Monro algorithm. If requested, lower asymptote
+#' parameters are estimated with a beta prior included automatically.
 #'
 #' 
 #' \code{polymirt} follows the item factor analysis strategy by a stochastic
@@ -64,8 +65,8 @@ setClass(
 #' @param data a \code{matrix} or \code{data.frame} that consists of
 #' numerically ordered data
 #' @param nfact number of factors to be extracted
-#' @param guess fixed values for the pseudo-guessing parameter. Can be entered
-#' as a single value to assign a global guessing parameter or may be entered as
+#' @param guess starting (or fixed) values for the pseudo-guessing parameter. Can be 
+#' entered as a single value to assign a global guessing parameter or may be entered as
 #' a numeric vector for each item
 #' @param estGuess a logical vector indicating which lower-asymptote parameters
 #' to be estimated (default is null, and therefore is contingent on the values
@@ -92,11 +93,11 @@ setClass(
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
-#' @param x an object of class \code{polymirt} to be plotted or printed
-#' @param object a model estimated from \code{polymirt} of class
+#' @param x an object of class \code{polymirtClass} to be plotted or printed
+#' @param object a model estimated from \code{polymirtClass} of class
 #' \code{polymirt}
 #' @param object2 a model estimated from \code{polymirt} of class
-#' \code{polymirt}
+#' \code{polymirtClass}
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #' loadings should be suppressed. Typical values are around .3 in most
 #' statistical software
@@ -481,7 +482,8 @@ polymirt <- function(data, nfact, guess = 0, estGuess = NULL, prev.cor = NULL, n
 	L <- eigen(FF)$values[1:nfact]
 	if (nfact == 1) F <- as.matrix(V * sqrt(L))
 		else F <- V %*% sqrt(diag(L))  
-	if (sum(F[ ,1] < 0)) F <- (-1) * F  
+	if (sum(F[ ,1] < 0)) F <- (-1) * F 
+	colnames(F) <- paste("F_", 1:ncol(F),sep="")	
 	h2 <- rowSums(F^2) 	
 	names(h2) <- itemnames
 		
@@ -518,10 +520,10 @@ setMethod(
 			cat("BIC =", x@BIC, "\n")
 			if(x@p < 1)
 				cat("G^2 = ", round(x@G2,2), ", df = ", 
-					x@df, ", p = ", round(x@p,4), "\n", sep="")
+					x@df, ", p = ", round(x@p,4), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 			else 
 				cat("G^2 = ", NA, ", df = ", 
-					x@df, ", p = ", NA, "\n", sep="")	
+					x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")	
 		}					
 	} 
 )
@@ -545,10 +547,11 @@ setMethod(
 			cat("BIC =", object@BIC, "\n")
 			if(object@p < 1)
 				cat("G^2 = ", round(object@G2,2), ", df = ", 
-					object@df, ", p = ", round(object@p,4), "\n", sep="")
+					object@df, ", p = ", round(object@p,4), ", RMSEA = ", round(object@RMSEA,3), 
+                    "\n", sep="")
 			else 
 				cat("G^2 = ", NA, ", df = ", 
-					object@df, ", p = ", NA, "\n", sep="")
+					object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")
 		}			
 	} 
 )
@@ -566,7 +569,7 @@ setMethod(
 			h2 <- as.matrix(object@h2)    	
 			SS <- apply(F^2,2,sum)
 			colnames(h2) <- "h2"	
-			colnames(F) <- names(SS) <- paste("F_", 1:ncol(F),sep="")
+			names(SS) <- colnames(F) 
 			cat("\nUnrotated factor loadings: \n\n")
 			loads <- round(cbind(F,h2),digits)
 			rownames(loads) <- itemnames
@@ -577,7 +580,6 @@ setMethod(
 		} else {	
 			F <- object@F
 			h2 <- as.matrix(object@h2)		
-			colnames(F) <- paste("F_", 1:ncol(F),sep="")
 			colnames(h2) <- "h2"		
 			cat("\nRotation: ", rotate, "\n")
 			rotF <- Rotate(F,rotate)
@@ -766,8 +768,8 @@ setMethod(
 			return(res)
 		} 
 		if(restype == 'exp'){
-			if(length(object@tabdata) == 0) stop('Expected response vectors cannot be computed because logLik() 
-				has not been run or the data contains missing responses.')
+			if(length(object@tabdata) == 0) stop('Expected response vectors cannot be computed because 
+                logLik() has not been run or the data contains missing responses.')
 			tabdata <- object@tabdata
 			res <- (tabdata[,J+1] - tabdata[,J+2]) / sqrt(tabdata[,J+2])
 			tabdata <- round(cbind(tabdata,res),digits)
@@ -840,12 +842,12 @@ setMethod(
 			else {					
 				colnames(plt) <- c('info','Theta1','Theta2')
 				if(type == 'info')
-					return(wireframe(info ~ Theta1 + Theta2, data = plt, main = paste("Item",item,"Information"), 
+					return(wireframe(info ~ Theta1 + Theta2, data=plt, main = paste("Item",item,"Information"),
 						zlab = "I", xlab = "Theta 1", ylab = "Theta 2", scales = list(arrows = FALSE),
 						screen = rot))				
 				if(type == 'infocontour'){										
 					contour(theta, theta, matrix(info,length(theta),length(theta)), 
-						main = paste("Item", item,"Information Contour"), xlab = "Theta 1", ylab = "Theta 2")					
+						main = paste("Item", item,"Information Contour"), xlab = "Theta 1", ylab = "Theta 2")
 				}
 			}	
 		} else {
@@ -853,71 +855,6 @@ setMethod(
 			itemplot(object,item,type,npts,rot)		 
 		}	
 	}
-)
-
-#' @rdname fscores-methods  
-setMethod(
-	f = "fscores",
-	signature = 'polymirtClass',
-	definition = function(object, full.scores = FALSE, ndraws = 3000, thin = 5, ...)
-	{ 	
-		cand.t.var <- 1
-		theta0 <- object@Theta
-		K <- object@K
-		nfact <- ncol(theta0)
-		lambdas <- matrix(object@pars[,1:nfact],ncol=nfact)
-		zetas <- na.omit(as.numeric(t(object@pars[,(nfact+1):ncol(object@pars)])))
-		guess <- object@guess
-		guess[is.na(guess)] <- 0
-		data <- cbind(object@data,object@fulldata)
-		Names <- c(colnames(object@data[,1:length(K)]),paste("F",1:nfact,sep=''),paste("SE_F",1:nfact,sep=''))
-		tabdata <- unique(data)[,-c(1:length(K))]			
-		itemloc <- object@itemloc
-		Theta <- list()
-		for(i in 1:nfact)
-			Theta[[i]] <- matrix(0,ncol=ndraws/thin,nrow=nrow(tabdata))		
-		theta0 <- matrix(0,nrow(tabdata),nfact)
-		for(i in 1:30){			
-			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,cand.t.var)
-			if(attr(theta0,'Proportion Accepted') > .4) cand.t.var <- cand.t.var + .2
-			if(attr(theta0,'Proportion Accepted') < .3) cand.t.var <- cand.t.var - .2
-		}
-		ind <- 1
-		for(i in 1:ndraws){			
-			theta0 <- draw.thetas(theta0,lambdas,zetas,guess,tabdata,K,itemloc,cand.t.var)
-			if(i %% thin == 0){
-				for(j in 1:nfact)
-					Theta[[j]][,ind] <- theta0[,j]									
-				ind <- ind + 1
-			}			
-		}
-
-		expscores <- matrix(0,ncol=nfact,nrow=nrow(tabdata))
-		sdscores <- matrix(0,ncol=nfact,nrow=nrow(tabdata))
-		for(i in 1:nfact){
-			expscores[,i] <- rowMeans(Theta[[i]])
-			sdscores[,i] <- apply(Theta[[i]],1,sd)
-		}
-				
-		ret <- cbind(unique(data)[,1:length(K)],expscores,sdscores)
-		colnames(ret) <- Names
-		
-		if(!full.scores){ 
-			ret <- ret[order(expscores[,1]),]
-			rownames(ret) <- NULL
-			return(ret)
-		} else {
-			fulldata <- object@data
-			scoremat <- matrix(0,nrow=nrow(fulldata),ncol=nfact)
-			colnames(scoremat) <- paste("F",1:nfact,sep='')
-			tmp <- unique(data)[,1:length(K)]
-			for (j in 1:nrow(tabdata)){          
-				TFvec <- colSums(ifelse(t(fulldata) == tmp[j, ],1,0)) == ncol(fulldata)        
-				scoremat[TFvec, ] <- expscores[j, ]
-			}              
-			return(cbind(object@data,scoremat))
-		}	
-	}	
 )
 
 setMethod(
