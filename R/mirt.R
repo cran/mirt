@@ -16,11 +16,11 @@
 # @keywords classes
 setClass(
 	Class = 'mirtClass',
-	representation = representation(EMiter = 'numeric', pars = 'matrix', guess = 'numeric', 
-		X2 = 'numeric', df = 'numeric', p = 'numeric', AIC = 'numeric', logLik = 'numeric',
-		F = 'matrix', h2 = 'numeric', tabdata = 'matrix', Theta = 'matrix', Pl = 'numeric',
-		fulldata = 'matrix', cormat = 'matrix', facility = 'numeric', converge = 'numeric', 
-		quadpts = 'numeric', BIC = 'numeric', vcov = 'matrix', RMSEA = 'numeric', Call = 'call'),	
+	representation = representation(EMiter='numeric', pars='list', guess='numeric', 
+		K='numeric', parsSE='list', X2='numeric', df='numeric', p='numeric', AIC='numeric', logLik='numeric',
+		F='matrix', h2='numeric', tabdata='matrix', tabdatalong='matrix', Theta='matrix', Pl='numeric',
+		data='matrix', cormat='matrix', facility='numeric', converge='numeric', itemloc = 'numeric',
+		quadpts='numeric', BIC='numeric', vcov='matrix', RMSEA='numeric', Call='call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -28,19 +28,21 @@ setClass(
 #' Theory)
 #' 
 #' \code{mirt} fits an unconditional maximum likelihood factor analysis model
-#' to dichotomous data under the item response theory paradigm. Pseudo-guessing
-#' parameters may be included but must be declared as constant.
+#' to dichotomous and polychotomous data under the item response theory paradigm. 
+#' Pseudo-guessing parameters may be included but must be declared as constant.
 #' 
 #' 
 #' 
 #' \code{mirt} follows the item factor analysis strategy by marginal maximum
-#' likelihood estimation (MML) outlined in Bock and Aiken (1981) and Bock,
-#' Gibbons and Muraki (1988). Nested models may be compared via the approximate
+#' likelihood estimation (MML) outlined in Bock and Aiken (1981), Bock,
+#' Gibbons and Muraki (1988), and Muraki and Carlson (1995). 
+#' Nested models may be compared via the approximate
 #' chi-squared difference test or by a reduction in AIC/BIC values (comparison
-#' via \code{\link{anova}}). The general equation used for dichotomous
-#' multidimensional item response theory item is a logistic form with a scaling
+#' via \code{\link{anova}}). The general equation used for 
+#' multidimensional item response theory is a logistic form with a scaling
 #' correction of 1.702. This correction is applied to allow comparison to
-#' mainstream programs such as TESTFACT (2003). The general IRT equation is
+#' mainstream programs such as TESTFACT (2003) and POLYFACT. The general IRT equation 
+#' for dichotomous items is 
 #' 
 #' \deqn{P(X | \theta; \bold{a}_i; d_i; g_i) = g_j + (1 - g_j) / (1 +
 #' exp(-1.702(\bold{a}_j' \theta + d_j)))}
@@ -49,7 +51,8 @@ setClass(
 #' discrimination parameters (i.e., slopes), \deqn{\theta} is the vector of
 #' factor scores, \eqn{d_j} is the intercept, and \eqn{g_j} is the
 #' pseudo-guessing parameter. To avoid estimation difficulties the \eqn{g_j}'s
-#' must be specified by the user.
+#' must be specified by the user. The polychotomous functions has a similar form
+#' that can be found in Muraki and Carlson (1995).
 #' 
 #' Estimation begins by computing a matrix of quasi-tetrachoric correlations,
 #' potentially with Carroll's (1945) adjustment for chance responds. A MINRES
@@ -59,7 +62,8 @@ setClass(
 #' the square root of the factor uniqueness, \eqn{\sqrt{1 - h_j^2}}. The
 #' initial intercept parameters are determined by calculating the inverse
 #' normal of the item facility (i.e., item easiness), \eqn{q_j}, to obtain
-#' \eqn{d_j = q_j / u_j}. Following these initial estimates the model is
+#' \eqn{d_j = q_j / u_j}. A similar implementation is also used for obtaining 
+#' initial values for polychotomous items. Following these initial estimates the model is
 #' iterated using the EM estimation strategy with fixed quadrature points.
 #' Implicit equation accelerations described by Ramsey (1975) are also added to
 #' facilitate parameter convergence speed, and these are adjusted every third
@@ -77,16 +81,14 @@ setClass(
 #' 
 #' Using \code{plot} will plot the either the test surface function or the test
 #' information function for 1 and 2 dimensional solutions. To examine
-#' individual item plots use \code{\link{itemplot}} (although the
-#' \code{\link[plink]{plink}} package may be more suitable for IRT graphics)
-#' which will also plot information and surface functions. Residuals are
+#' individual item plots use \code{\link{itemplot}}. Residuals are
 #' computed using the LD statistic (Chen \& Thissen, 1997) in the lower
 #' diagonal of the matrix returned by \code{residuals}, and Cramer's V above
 #' the diagonal.
 #' 
 #' @aliases mirt summary,mirt-method coef,mirt-method anova,mirt-method
 #' fitted,mirt-method plot,mirt-method residuals,mirt-method
-#' @param fulldata a \code{matrix} or \code{data.frame} that consists of only
+#' @param data a \code{matrix} or \code{data.frame} that consists of only
 #' 0, 1, and \code{NA} values to be factor analyzed. If scores have been
 #' recorded by the response pattern then they can be recoded to dichotomous
 #' format using the \code{\link{key2binary}} function
@@ -143,12 +145,8 @@ setClass(
 #' 
 #' Unrestricted full-information factor analysis is known to have problems with
 #' convergence, and some items may need to be constrained or removed entirely
-#' to allow for an acceptable solution. Be mindful of the item facility values
-#' that are printed with \code{coef} since these will be helpful in determining
-#' whether a guessing parameter is causing problems (item facility value is too
-#' close to the guessing parameter) or if an item should be constrained or
-#' removed entirely (values too close to 0 or 1). As a general rule, items with
-#' facilities greater than .95, or items that are only .05 greater than the
+#' to allow for an acceptable solution. As a general rule dichotmous items with
+#' means greater than .95, or items that are only .05 greater than the
 #' guessing parameter, should be considered for removal from the analysis or
 #' treated with prior distributions. Also, increasing the number of quadrature
 #' points per dimension may help to stabilize the estimation process.
@@ -168,6 +166,9 @@ setClass(
 #' Carroll, J. B. (1945). The effect of difficulty and chance success on
 #' correlations between items and between tests. \emph{Psychometrika, 26},
 #' 347-372.
+#'
+#' Muraki, E. & Carlson, E. B. (1995). Full-information factor analysis for polytomous 
+#' item responses. \emph{Applied Psychological Measurement, 19}, 73-90.
 #' 
 #' Ramsay, J. O. (1975). Solving implicit equations in psychometric data
 #' analysis. \emph{Psychometrika, 40}(3), 337-360.
@@ -178,7 +179,7 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' mirt(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE,
+#' mirt(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE,
 #'   startvalues = NULL, quadpts = NULL, ncycles = 300, tol = .001, nowarn = TRUE, 
 #'   debug = FALSE, ...)
 #' 
@@ -199,103 +200,142 @@ setClass(
 #' \dontrun{
 #' #load LSAT section 7 data and compute 1 and 2 factor models
 #' data(LSAT7)
-#' fulldata <- expand.table(LSAT7)
+#' data <- expand.table(LSAT7)
 #' 
-#' (mod1 <- mirt(fulldata, 1))
+#' (mod1 <- mirt(data, 1))
 #' summary(mod1)
 #' residuals(mod1)
 #' plot(mod1) #test information function
 #' 
-#' (mod2 <- mirt(fulldata, 2))
+#' (mod2 <- mirt(data, 2))
 #' summary(mod2)
 #' coef(mod2)
 #' residuals(mod2)
+#' plot(mod2)
 #' 
 #' anova(mod1, mod2) #compare the two models
 #' scores <- fscores(mod2) #save factor score table
 #' 
 #' ###########
+#' pmod1 <- mirt(Science, 1)
+#' plot(pmod1)
+#' summary(pmod1)
+#'
+#' pmod2 <- mirt(Science, 2)
+#' coef(pmod2)
+#' residuals(pmod2)
+#' plot(pmod2)
+#' itemplot(pmod2)
+#' anova(pmod1, pmod2)
+#'
+#' ###########
 #' data(SAT12)
-#' fulldata <- key2binary(SAT12,
+#' data <- key2binary(SAT12,
 #'   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #' 
-#' mod1 <- mirt(fulldata, 1)
-#' mod2 <- mirt(fulldata, 2)
-#' mod3 <- mirt(fulldata, 3)
+#' mod1 <- mirt(data, 1)
+#' mod2 <- mirt(data, 2)
+#' mod3 <- mirt(data, 3)
 #' anova(mod1,mod2)
 #' anova(mod2, mod3) #negative AIC, 2 factors probably best
 #' 
 #' #with guessing
-#' mod1g <- mirt(fulldata, 1, guess = .1)
+#' mod1g <- mirt(data, 1, guess = .1)
 #' coef(mod1g)
-#' mod2g <- mirt(fulldata, 2, guess = .1)
+#' mod2g <- mirt(data, 2, guess = .1)
 #' coef(mod2g)
 #' anova(mod1g, mod2g)
 #' summary(mod2g, rotate='promax')
 #'      }
 #' 
-mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE, 
+mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE, 
 	startvalues = NULL, quadpts = NULL, ncycles = 300, tol = .001, nowarn = TRUE, 
 	debug = FALSE, ...)
 { 
-	fn <- function(pars, r1, N, guess, Theta, prior, parprior){
-		a <- pars[1:(length(pars)-1)]
-		d <- pars[length(pars)]		
-		result <- .Call("loglik", 	                
-						as.double(a),				
-						as.double(d),
-						as.double(r1),
-						as.double(N),
-						as.double(guess),
-						as.double(as.matrix(Theta)),
-						as.integer(parprior))					
-	}    
-	gr <- function(pars, r1, N, guess, Theta, prior, parprior){
-		a <- pars[1:(length(pars)-1)]
-		d <- pars[length(pars)]			
-		result <- .Call("grad", 	                
-						as.double(a),				
-						as.double(d),
-						as.double(r1),
-						as.double(N),
-						as.double(guess),
-						as.double(as.matrix(Theta)),
-						as.double(prior),
-						as.integer(parprior))	    				
-	}  
+	fn <- function(par, rs, gues, Theta, prior, parprior){
+		nzeta <- ncol(rs) - 1
+		a <- par[1:(length(par)-nzeta)]
+		d <- par[(length(a)+1):length(par)]				
+		if(ncol(rs) == 2){
+			itemtrace <- P.mirt(a, d, Theta, gues) 
+			itemtrace <- cbind(itemtrace, 1.0 - itemtrace)
+		} else {
+			itemtrace <- P.poly(a, d, Theta, TRUE)	
+		}
+		result <- (-1) * sum(rs * log(itemtrace))		
+		if(parprior[1] > 1){
+			sigma <- 1
+			d <- sqrt(a %*% a)
+			anew <- a/d
+			sigma <- sigma - sum(anew)
+			l <- log(sigma^(parprior[1] - 1.0) / beta(parprior[1],1.0))
+			result <- result - l
+		}
+		if(parprior[3] > 0 && nzeta == 1){
+			l <- log(dnorm(d,parprior[2],parprior[3]))
+			result <- result - l
+		}
+		result
+	}    	
   
-	Call <- match.call()    
-	itemnames <- colnames(fulldata)
-	fulldata <- as.matrix(fulldata)	
-	fulldata.original <- fulldata 
-	fulldata[is.na(fulldata)] <- 9	
-	if (!any(fulldata.original %in% c(0,1,NA))) stop("Data must contain only 0, 1, or NA.")	
-	nitems <- ncol(fulldata)  
-	colnames(fulldata) <- itemnames
-	if (length(guess) == 1) guess <- rep(guess,nitems)
-		else if (length(guess) > nitems || length(guess) < nitems) 
-			stop("The number of guessing parameters is incorrect.")	
-	pats <- apply(fulldata,1,paste,collapse = "/")
+	Call <- match.call()	
+	itemnames <- colnames(data)	
+	data <- as.matrix(data)	
+	data.original <- data
+	if(!any(data %in% c(0:20,NA))) 
+		stop("Data must contain only numeric values (including NA).")	
+	J <- ncol(data)
+	N <- nrow(data)	
+	if(length(guess) == 1) guess <- rep(guess,J)
+	colnames(data) <- itemnames
+	if(length(guess) > J || length(guess) < J) 
+		stop("The number of guessing parameters is incorrect.")
+	facility <- colMeans(na.omit(data))		
+	uniques <- list()
+	for(i in 1:J)
+		uniques[[i]] <- sort(unique(data[,i]))
+	K <- rep(0,J)
+	for(i in 1:J) K[i] <- length(uniques[[i]])	
+	guess[K > 2] <- 0	
+	itemloc <- cumsum(c(1,K))
+	index <- 1:J	
+	fulldata <- matrix(0,N,sum(K))
+	Names <- NULL
+	for(i in 1:J)
+        Names <- c(Names, paste("Item.",i,"_",1:K[i],sep=""))				
+	colnames(fulldata) <- Names			
+	for(i in 1:J){
+		ind <- index[i]
+		if(setequal(uniques[[i]], c(0,1))){
+			fulldata[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(data[,ind],abs(1-data[,ind]))
+			next
+		}
+		dummy <- matrix(0,N,K[ind])
+		for (j in 0:(K[ind]-1))  
+			dummy[,j+1] <- as.integer(data[,ind] == uniques[[ind]][j+1])  		
+		fulldata[ ,itemloc[ind]:(itemloc[ind+1]-1)] <- dummy		
+	}	
+	fulldata[is.na(fulldata)] <- 0
+	pats <- apply(fulldata, 1, paste, collapse = "/") 
 	freqs <- table(pats)
 	nfreqs <- length(freqs)
-	K <- rep(2,nitems)
-	r <- as.vector(freqs)
-	N <- nrow(fulldata) 
-	tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-	tabdata <- matrix(as.numeric(tabdata),nfreqs,nitems,TRUE)
-	tabdata <- cbind(tabdata,r)    
-	if (is.null(quadpts)) quadpts <- ceiling(40/(nfact^1.5))  
-	theta <- as.matrix(seq(-4,4,length.out = quadpts))
-	if(quadpts^nfact <= 10000){
-		Theta <- thetaComb(theta,nfact)
-		prior <- dmvnorm(Theta,rep(0,nfact),diag(nfact))
-		prior <- prior/sum(prior)
-	} else stop('Greater than 10000 quadrature points, reduce number.')
-	facility <- colMeans(na.omit(fulldata.original))
-	suppressAutoPrior <- TRUE
+	r <- as.vector(freqs)	
+	tabdata <- unlist(strsplit(cbind(names(freqs)), "/"))
+	tabdata <- matrix(as.numeric(tabdata), nfreqs, sum(K), TRUE)	
+	tabdata <- cbind(tabdata,r) 
+	colnames(tabdata) <- c(Names,'Freq')
+	
+	#for return
+	pats <- apply(data, 1, paste, collapse = "/") 
+	freqs <- table(pats)		
+	tabdata2 <- unlist(strsplit(cbind(names(freqs)), "/"))
+	tabdata2 <- suppressWarnings(matrix(as.numeric(tabdata2), nfreqs, J, TRUE))	
+	tabdata2 <- cbind(tabdata2,r) 
+	colnames(tabdata2) <- c(itemnames,'Freq')	
+	
 	if(is.logical(par.prior)) 
-	if(par.prior) suppressAutoPrior <- FALSE  
-	temp <- matrix(c(1,0,0),ncol = 3, nrow=nitems, byrow=TRUE)
+	    if(par.prior) suppressAutoPrior <- FALSE  
+	        temp <- matrix(c(1,0,0),ncol = 3, nrow=J, byrow=TRUE)
 	if(!is.logical(par.prior)){
 		if(!is.null(par.prior$slope.items))
 			for(i in 1:length(par.prior$slope.items))
@@ -304,98 +344,68 @@ mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.pr
 			for(i in 1:length(par.prior$int.items))
 				temp[par.prior$int.items[i],2:3] <- par.prior$int		 
 	}  
-	par.prior <- temp    
-	if (any(class(prev.cor) == c('mirt','bmirt'))) Rpoly <- prev.cor$cormat
-		else if(!is.null(prev.cor)) {
-			if (ncol(prev.cor) == nrow(prev.cor)) Rpoly <- prev.cor
-				else stop("Correlation matrix is not square.\n")
-	} else 
-		Rpoly <- cormod(na.omit(fulldata.original),K,guess)   
-	if (is.null(startvalues)){ 
-		suppressMessages(pars <- start.values(na.omit(fulldata.original),guess,Rpoly,
-			nfact=nfact,nowarn=nowarn))
-		pars[pars > 3] <- 3
-		pars[pars < -3] <- -3	
-	} else {
-		if ((ncol(startvalues) != (nfact + 1)) || (nrow(startvalues) != nitems))
-			stop("Startvalues are declared incorrectly.")  
-		pars <- startvalues  
-	} 
-	diag(Rpoly) <- 1
-	item <- 1
-	lastpars2 <- lastpars1 <- rate <- matrix(0,nrow=nitems,ncol=ncol(pars))    
+	par.prior <- temp 
+	if(!is.null(prev.cor)){
+		if (ncol(prev.cor) == nrow(prev.cor)) Rpoly <- prev.cor
+			else stop("Correlation matrix is not square.\n")
+	} else Rpoly <- cormod(na.omit(data),K,guess)
+	if(det(Rpoly) < 1e-15) Rpoly <- cor(na.omit(data.original))
+	FA <- suppressWarnings(psych::fa(Rpoly,nfact,rotate = 'none', warnings= FALSE, fm="minres"))	
+	loads <- unclass(loadings(FA))
+	u <- FA$unique
+	u[u < .1 ] <- .25	
+	cs <- sqrt(u)
+	lambdas <- loads/cs		
+    zetas <- list()	
+    for(i in 1:J){
+        if(K[i] == 2){
+            zetas[[i]] <- qnorm(mean(fulldata[,itemloc[i]]))/cs[i]            			
+        } else {
+            temp <- table(data[,i])[1:(K[i]-1)]/N
+            temp <- cumsum(temp)			
+            zetas[[i]] <- qnorm(1 - temp)/cs[i]        			
+        }       
+    }    		
+	pars <- list(lambdas=lambdas, zetas=zetas)
+	npars <- length(unlist(pars))
+	if (is.null(quadpts)) quadpts <- ceiling(40/(nfact^1.5))  
+	theta <- as.matrix(seq(-4,4,length.out = quadpts))
+	if(quadpts^nfact <= 10000){
+		Theta <- thetaComb(theta,nfact)
+		prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
+		prior <- prior/sum(prior)
+	} else stop('Greater than 10000 quadrature points, reduce number.')	  
+	lastpars2 <- lastpars1 <- pars	    
 	startvalues <- pars
 	converge <- 1  
 	problemitems <- c()
-	index <- 1:nitems  
-	if(debug) print(startvalues)      
-
-	# EM loop
+	index <- 1:J  
+	if(debug) print(startvalues)
+	
+	# EM loop 
 	for (cycles in 1:ncycles)
 	{       
-		rlist <- Estep.mirt(pars,tabdata,Theta,prior,guess)		
-		if (debug) print(sum(r*log(rlist[[3]])))
+		rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, itemloc)						
 		lastpars2 <- lastpars1
-		lastpars1 <- pars	
-		for(i in 1:nitems){
-			if(guess[i] == 0)	
-				maxim <- try(optim(pars[i, ],fn=fn,gr=gr,r1=rlist[[1]][i, ],N=rlist[[2]][i, ],
-				guess=guess[i],Theta=Theta,prior=prior,parprior=par.prior[i, ],method="BFGS"))
-			else 
-				maxim <- try(optim(pars[i, ],fn=fn,r1=rlist[[1]][i, ],N=rlist[[2]][i, ],
-				guess=guess[i],Theta=Theta,prior=prior,parprior=par.prior[i, ],method="BFGS"))
+		lastpars1 <- pars				
+		for(i in 1:J){
+			par <- c(pars$lambdas[i, ], pars$zetas[[i]])
+			itemsel <- c(itemloc[i]:(itemloc[i+1] - 1))					
+			maxim <- try(optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], Theta=Theta, prior=prior, 
+				parprior=par.prior[i, ], control=list(maxit=25)))
 			if(class(maxim) == "try-error"){
 				problemitems <- c(problemitems, i)
 				converge <- 0
 				next
 			}		  
-			pars[i, ] <- maxim$par	  
-		}	
-		if(!suppressAutoPrior){
-			if(any(abs(pars[ ,nfact+1]) > 4)){
-				ints <- index[abs(pars[ ,nfact+1]) > 4] 	
-				par.prior[ints,3] <- 2
-				if(any(abs(pars[ ,nfact+1]) > 5.5)){
-					ints <- index[abs(pars[ ,nfact+1]) > 5.5] 	
-					par.prior[ints,3] <- 1
-				} 
-			}
-			if(nfact > 1){ 
-				norm <- sqrt(1 + rowSums(pars[ ,1:nfact]^2))
-				alp <- as.matrix(pars[ ,1:nfact]/norm)
-				FF <- alp %*% t(alp)
-				V <- eigen(FF)$vector[ ,1:nfact]
-				L <- eigen(FF)$values[1:nfact]      
-				F <- V %*% sqrt(diag(L))
-				h2 <- rowSums(F^2)
-				if(any(h2 > .95)){
-					ind <- index[h2 > .95]
-					par.prior[ind,1] <- 1.2
-					if(any(h2 > .98)){
-						ind <- index[h2 > .98]
-						par.prior[ind,1] <- 1.5
-					} 
-				}
-			}
-		}  
-		maxdif <- max(abs(lastpars1 - pars))	
-		if (maxdif < tol) break    
+			pars$lambdas[i, ] <- maxim$par[1:nfact]
+			pars$zetas[[i]] <- maxim$par[(nfact+1):length(par)]	  
+		}				
+		maxdif <- max(abs(unlist(lastpars1) - unlist(pars)))	
+		if (maxdif < tol && cycles > 5) break    
 		# rate acceleration adjusted every third cycle
-		if (cycles %% 3 == 0 & cycles > 6) 
-		{
-			d1 <- lastpars1 - pars
-			d2 <- lastpars2 - pars      
-			for (i in 1:nitems) {
-				for(j in 1:ncol(pars)){      
-				if((abs(d1[i,j]) > 0.001) & (d1[i,j]*d2[i,j] > 0.0) & (d1[i,j]/d2[i,j] < 1.0))
-					rate[i,j] <- (1 - (1 - rate[i,j]) * (d1[i,j]/d2[i,j]))
-					else rate[i,j] <- 0
-				}        
-			}      
-		}
-		rate[pars > 4] <- 0
-		rate[pars < -4] <- 0    
-		pars <- lastpars1*rate*(-2) + (1 - rate*(-2))*pars        	
+		if (cycles %% 3 == 0 & cycles > 6)		 
+			pars <- rateChange(pars, lastpars1, lastpars2)			     	
 	}  
 	if(any(par.prior[,1] != 1)) cat("Slope prior for item(s):",
 		as.character(index[par.prior[,1] > 1]), "\n")
@@ -403,55 +413,55 @@ mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.pr
 		as.character(index[par.prior[,3] > 0]), "\n")
 	if(converge == 0) 
 		warning("Parameter estimation reached unacceptable values. 
-		Model probably did not converged.")  
+			Model probably did not converged.")  
 	if(length(problemitems) > 0) warning("Problem with the M-step for item(s): ", 
 		paste(unique(problemitems), " "))	
-	lastchange <- lastpars1 - pars
+	lastchange <- unlist(lastpars1) - unlist(pars)
 	if (cycles == ncycles){
 		converge <- 0  
 		message("Estimation terminated after ", cycles, " EM loops. Maximum changes:") 
 		message("\n slopes = ", round(max(abs(lastchange[ ,1:nfact])),4), ", intercepts = ", 
 			round(max(abs(lastchange[ ,ncol(pars)])),4) ,"\n", sep="")
-	}	    
-	prior <- dmvnorm(Theta,rep(0,nfact),diag(nfact))
-	prior <- prior/sum(prior)  
-	rlist <- Estep.mirt(pars,tabdata,Theta,prior,guess)      	  
-	Pl <- rlist[[3]]  
+	}	    	 
+	rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, itemloc)      	  
+	Pl <- rlist$expected  
 	logLik <- sum(r*log(Pl))
 	vcovpar <- matrix(999)
+	parsSE <- list()
 	if(SE && nfact == 1){
-		LLfun <- function(pars,tabdata,Theta,prior,guess){
-			nfact <- ncol(Theta)
-			pars2 <- matrix(pars, ncol=nfact+1)
-			rlist <- Estep.mirt(pars2,tabdata,Theta,prior,guess)      	  
-			Pl <- rlist[[3]]  
+		LLfun <- function(p, pars, tabdata, Theta, prior, guess, itemloc){
+			pars2 <- rebuildPars(p, pars)		
+			rlist <- Estep.mirt(pars2, tabdata, Theta, prior, guess, itemloc)     	  
+			Pl <- rlist$expected
 			logLik <- sum(r*log(Pl))
 			-1*logLik		
 		}
-		fmin <- nlm(LLfun, as.numeric(pars), tabdata=tabdata,Theta=Theta,prior=prior,
-			guess=guess, hessian=TRUE, gradtol=.001)
-		vcovpar <- solve(fmin$hessian)		
+		fmin <- nlm(LLfun, unlist(pars), pars=pars,tabdata=tabdata,Theta=Theta,prior=prior,
+			guess=guess, itemloc=itemloc, hessian=TRUE, gradtol=.1)
+		vcovpar <- solve(fmin$hessian)
+		parsSE <- rebuildPars(sqrt(diag(vcovpar)), pars)	
 	}	
 	logN <- 0
-	logr <- rep(0,length(r))
+	logr <- rep(0,length(r))	
 	for (i in 1:N) logN <- logN + log(i)
 	for (i in 1:length(r)) 
 		for (j in 1:r[i]) 
-			logr[i] <- logr[i] + log(j)    
-	df <- (length(r) - 1) - nitems*(nfact + 1) + nfact*(nfact - 1)/2 
+			logr[i] <- logr[i] + log(j)    	
+	df <- (length(r) - 1) - npars + nfact*(nfact - 1)/2 
 	X2 <- 2 * sum(r * log(r/(N*Pl)))	
 	logLik <- logLik + logN/sum(logr)	
 	p <- 1 - pchisq(X2,df)  
-	AIC <- (-2) * logLik + 2 * length(pars)
-	BIC <- (-2) * logLik + length(pars)*log(N)
+	AIC <- (-2) * logLik + 2 * npars
+	BIC <- (-2) * logLik + npars*log(N)
 	RMSEA <- ifelse((X2 - df) > 0, 
 	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
-	if(any(is.na(fulldata.original))) p <- 2	
+	if(any(is.na(data.original))) p <- 2
+	guess[K > 2] <- NA	
 
 	# pars to FA loadings
-	if (nfact > 1) norm <- sqrt(1 + rowSums(pars[ ,1:nfact]^2))
-		else norm <- as.matrix(sqrt(1 + pars[ ,1]^2))  
-	alp <- as.matrix(pars[ ,1:nfact]/norm)
+	if (nfact > 1) norm <- sqrt(1 + rowSums(pars$lambdas[ ,1:nfact]^2))
+		else norm <- as.matrix(sqrt(1 + pars$lambdas[ ,1]^2))  
+	alp <- as.matrix(pars$lambdas[ ,1:nfact]/norm)
 	FF <- alp %*% t(alp)
 	V <- eigen(FF)$vector[ ,1:nfact]
 	L <- eigen(FF)$values[1:nfact]
@@ -461,15 +471,14 @@ mirt <- function(fulldata, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.pr
 	colnames(F) <- paste("F_", 1:ncol(F),sep="")	
 	h2 <- rowSums(F^2) 
 
-	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, X2=X2, df=df, p=p, 
-		AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata, Theta=Theta, Pl=Pl, 
-		fulldata=fulldata.original, cormat=Rpoly, facility=facility, converge=converge, 
-		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, Call=Call)	  
+	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, parsSE=parsSE, X2=X2, df=df, 
+		p=p, itemloc=itemloc, AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata2, 
+		Theta=Theta, Pl=Pl, data=data.original, cormat=Rpoly, facility=facility, converge=converge, 
+		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, K=K, tabdatalong=tabdata, Call=Call)	  
 	return(mod)    
 }
 
 #Methods 
-
 setMethod(
 	f = "print",
 	signature = signature(x = 'mirtClass'),
@@ -477,17 +486,17 @@ setMethod(
 		cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
 			"\n\n", sep = "")
 		cat("Full-information factor analysis with ", ncol(x@F), " factor",
-			if(ncol(x@F)>1) "s", "\n", sep="")
-			if(x@converge == 1)	
-				cat("Converged in ", x@EMiter, " iterations using ", x@quadpts,
-				" quadrature points.\n", sep="")
+		if(ncol(x@F)>1) "s", "\n", sep="")
+		if(x@converge == 1)	
+			cat("Converged in ", x@EMiter, " iterations using ", x@quadpts,
+			" quadrature points.\n", sep="")
 		else 	
 			cat("Estimation stopped after ", x@EMiter, " iterations using ", 
 				x@quadpts, " quadrature points.\n", sep="")
 		cat("Log-likelihood =", x@logLik, "\n")
 		cat("AIC =", x@AIC, "\n")		
 		cat("BIC =", x@BIC, "\n")
-		if(x@p < 1)            
+		if(x@p <= 1)            
 			cat("G^2 = ", round(x@X2,2), ", df = ", 
 				x@df, ", p = ", round(x@p,4),", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 		else 
@@ -513,13 +522,13 @@ setMethod(
 		cat("Log-likelihood =", object@logLik, "\n")
 		cat("AIC =", object@AIC, "\n")		
 		cat("BIC =", object@BIC, "\n")
-		if(object@p < 1)
+		if(object@p <= 1)
 			cat("G^2 = ", round(object@X2,2), ", df = ", 
 				object@df, ", p = ", round(object@p,4),", RMSEA = ", round(object@RMSEA,3),
                 "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				object@df, ", p = ", NA, "RMSEA = ", NA, "\n", sep="")			
+				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )			
 	}
 )
 
@@ -537,7 +546,7 @@ setMethod(
 			names(SS) <- colnames(F)
 			cat("\nUnrotated factor loadings: \n\n")
 			loads <- round(cbind(F,h2),digits)
-			rownames(loads) <- rownames(object@pars)
+			rownames(loads) <- colnames(object@data)
 			print(loads)	    	 
 			cat("\nSS loadings: ",round(SS,digits), "\n")
 			cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
@@ -552,7 +561,7 @@ setMethod(
 			L <- rotF$loadings
 			L[abs(L) < suppress] <- NA	
 			loads <- round(cbind(L,h2),digits)
-			rownames(loads) <- rownames(object@pars)			
+			rownames(loads) <- colnames(object@data)			
 			cat("\nRotated factor loadings: \n\n")
 			print(loads,digits)		
 			if(attr(rotF, "oblique")){
@@ -574,30 +583,39 @@ setMethod(
 	f = "coef",
 	signature = 'mirtClass',
 	definition = function(object, SE = TRUE, digits = 3, ...){  
-		a <- as.matrix(object@pars[ ,1:(ncol(object@pars)-1)])
-		d <- object@pars[ ,ncol(object@pars)]
+		K <- object@K
+		a <- object@pars$lambdas		
+		d <- matrix(NA, nrow(a), max(K-1))
+		zetas <- object@pars$zetas
+		for(i in 1:length(K)){
+			d[i, 1:(K[i] - 1)] <- zetas[[i]]
+		}
 		A <- sqrt(apply(a^2,1,sum))
 		B <- -d/A  
 		if (ncol(a) > 1){  
-			parameters <- cbind(object@pars,object@guess,object@facility,A,B)    
-			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),"d","guess", 
-			"facility","mvdisc","mvint")	  
+			parameters <- cbind(a,d,object@guess,A,B)    
+			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess", 
+				"mvdisc",paste("mvint_",1:max(K-1),sep=""))	
+			rownames(parameters) <- colnames(object@data)		
 			cat("\nUnrotated parameters, multivariate discrimination and intercept: \n\n")
 			print(round(parameters, digits))  	
 		} else {
-			parameters <- cbind(object@pars,object@guess,object@facility) 
-			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),"d","guess","facility")    
+			parameters <- cbind(a,d,object@guess)
+			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess") 
+			rownames(parameters) <- colnames(object@data)	
 			cat("\nParameter slopes and intercepts: \n\n")	
 			print(round(parameters, digits))	  
 		}
 		ret <- list(parameters)
-		if(ncol(object@vcov) != 1){
-			cat("\nStd. Errors: \n\n")	
-			SEs <- matrix(sqrt(diag(object@vcov)), ncol = ncol(a) + 1)
-			colnames(SEs) <- colnames(parameters)[1:(ncol(a) + 1)]
-			rownames(SEs) <- rownames(parameters)
-			print(SEs, digits)
-			ret <- list(parameters,SEs)
+		if(length(object@parsSE) > 1){
+			if(SE){
+				cat("\nStd. Errors: \n\n")	
+				SEs <- matrix(sqrt(diag(object@vcov)), ncol = ncol(a) + 1)
+				colnames(SEs) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess") 
+				rownames(SEs) <- rownames(parameters)
+				print(SEs, digits)
+				ret <- list(parameters,SEs)
+			}
 		}
 		invisible(ret)
 	}
@@ -627,55 +645,65 @@ setMethod(
 setMethod(
 	f = "residuals",
 	signature = signature(object = 'mirtClass'),
-	definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, ...){   	
+	definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, ...)
+	{   	
+		K <- object@K
 		Theta <- object@Theta
-		fulldata <- object@fulldata	
-		N <- nrow(fulldata)	
-		J <- ncol(fulldata)
+		data <- object@data	
+		N <- nrow(data)	
+		J <- ncol(data)
 		nfact <- ncol(object@F)
-		lambdas <- matrix(object@pars[,1:nfact], J)
-		zetas <- object@pars[,(nfact+1)]
-		guess <- object@guess
-		guess[is.na(guess)] <- 0		
-		if(restype == 'LD'){
-			res <- matrix(0,J,J)
-			diag(res) <- NA
-			colnames(res) <- rownames(res) <- colnames(fulldata)
-			prior <- dmvnorm(Theta,rep(0,nfact),diag(nfact))
-			prior <- prior/sum(prior)
-			for(i in 1:J){			
-				for(j in 1:J){
+		lambdas <- object@pars$lambdas
+		zetas <- object@pars$zetas
+		guess <- object@guess		
+		itemloc <- object@itemloc
+		res <- matrix(0,J,J)
+		diag(res) <- NA
+		colnames(res) <- rownames(res) <- colnames(data)
+		prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
+		prior <- prior/sum(prior)	
+		if(restype == 'LD'){	
+			for(i in 1:J){								
+				for(j in 1:J){			
 					if(i < j){
-						P1 <- P.mirt(lambdas[i,],zetas[i], Theta, guess[i])
-						P2 <- P.mirt(lambdas[j,],zetas[j], Theta, guess[j])
-						E22 <- N * sum(P1 * P2 * prior)
-						E12 <- N * sum(P1 * (1-P2) * prior)
-						E21 <- N * sum((1-P1) * P2 * prior)
-						E11 <- N * sum((1-P1) * (1-P2) * prior)
-						tab <- table(fulldata[,i],fulldata[,j])
-						Etab <- matrix(c(E11,E12,E21,E22),2)
-						s <- phi(tab) - phi(Etab)
-						if(s == 0) s <- 1
-						res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
-						res[i,j] <- sqrt( abs(res[j,i]) / N ) 					
+						if(K[i] > 2) P1 <- P.poly(lambdas[i,],zetas[[i]],Theta,itemexp=TRUE)
+						else { 
+							P1 <- P.mirt(lambdas[i,],zetas[[i]], Theta, guess[i])
+							P1 <- cbind(1 - P1, P1)
+						}	
+						if(K[j] > 2) P2 <- P.poly(lambdas[j,],zetas[[j]],Theta,itemexp=TRUE)
+						else {
+							P2 <- P.mirt(lambdas[j,],zetas[[j]], Theta, guess[j])	
+							P2 <- cbind(1 - P2, P2)
+						}
+						tab <- table(data[,i],data[,j])		
+						Etab <- matrix(0,K[i],K[j])
+						for(k in 1:K[i])
+							for(m in 1:K[j])						
+								Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)	
+						s <- gamma.cor(tab) - gamma.cor(Etab)
+						if(s == 0) s <- 1				
+						res[j,i] <- sum(((tab - Etab)^2)/Etab) /
+							((K[i] - 1) * (K[j] - 1)) * sign(s)
+						res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))	
 					}
 				}
-			}
-			cat("\nLD matrix:\n\n")			
+			}	
+			cat("LD matrix:\n\n")	
 			res <- round(res,digits)
-			return(res)		
-		}		
+			return(res)
+		} 
 		if(restype == 'exp'){	
 			r <- object@tabdata[ ,ncol(object@tabdata)]
-			res <- round((r - object@Pl * nrow(object@fulldata)) / 
-				sqrt(object@Pl * nrow(object@fulldata)),digits)
+			res <- round((r - object@Pl * nrow(object@data)) / 
+				sqrt(object@Pl * nrow(object@data)),digits)
 			expected <- round(N * object@Pl/sum(object@Pl),digits)  
 			tabdata <- object@tabdata
-			freq <- tabdata[ ,ncol(tabdata)]
-			tabdata[tabdata[ ,1:ncol(object@fulldata)] == 9] <- NA
+			freq <- tabdata[ ,ncol(tabdata)]			
+			tabdata[tabdata[ ,1:ncol(object@data)] == 99] <- NA
 			tabdata[ ,ncol(tabdata)] <- freq
 			tabdata <- cbind(tabdata,expected,res)
-			colnames(tabdata) <- c(colnames(fulldata), "freq", "exp", "std_res")
+			colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")	
 			if(!is.null(printvalue)){
 				if(!is.numeric(printvalue)) stop('printvalue is not a number.')
 				tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
@@ -691,58 +719,53 @@ setMethod(
 	definition = function(x, y, type = 'info', npts = 50, 
 		rot = list(xaxis = -70, yaxis = 30, zaxis = 10))
 	{  
-		if (!type %in% c('curve','info','contour','infocontour')) 
-            stop(type, " is not a valid plot type.")
+		if (!type %in% c('info','infocontour')) stop(type, " is not a valid plot type.")
 		rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
-		a <- as.matrix(x@pars[ ,1:(ncol(x@pars) - 1)])
-		d <- x@pars[ ,ncol(x@pars)]
-		g <- x@guess
-		A <- as.matrix(sqrt(apply(a^2,1,sum)))
-		B <- -d/A
-		if(ncol(a) > 2 ) stop("Can't plot high dimentional solutions.\n")
+		K <- x@K		
+		nfact <- ncol(x@Theta)
+		if(nfact > 2) stop("Can't plot high dimensional solutions.")
+		a <- x@pars$lambdas
+		d <- x@pars$zetas
+		guess <- x@guess
+		guess[is.na(guess)] <- 0
+		A <- as.matrix(sqrt(apply(a^2,1,sum)))	
 		theta <- seq(-4,4,length.out=npts)
-		Theta <- thetaComb(theta, ncol(a))
-		P <- matrix(0, ncol=length(g), nrow = nrow(as.matrix(Theta)))
-		for(i in 1:nrow(a)) P[ ,i] <- P.mirt(a[i, ],d[i],as.matrix(Theta),g[i])  
-		Ptot <- rowSums(P) 
-		if(ncol(a) == 2) {			
-			I <- (P * (1 - P)) %*% A^2	
-			if(type == 'curve'){
-				plt <- data.frame(cbind(Ptot,Theta))
-				colnames(plt) <- c("Ptot", "Theta1", "Theta2")
-				return(wireframe(Ptot ~ Theta1 + Theta2, data = plt, main = "Test Score Surface", 
-					zlab = "Test \nScore", xlab = "Theta 1", ylab = "Theta 2", 
-					scales = list(arrows = FALSE), screen = rot))
-			}	
-			if(type == 'contour'){
-				plt <- data.frame(cbind(Ptot,Theta))
-				colnames(plt) <- c('Ptot','Theta1','Theta2')
-				contour(theta, theta, matrix(Ptot,length(theta),length(theta)), 
-					main = "Test Scores Contour", xlab = "Theta 1", ylab = "Theta 2")			
+		Theta <- thetaComb(theta, nfact)
+		info <- rep(0,nrow(Theta))
+		for(j in 1:length(K)){
+			if(K[j] > 2){
+				P <- P.poly(a[j,], d[[j]], Theta, itemexp = FALSE)		
+				for(i in 1:K[j]){
+					w1 <- P[,i]*(1-P[,i])*A[j]
+					w2 <- P[,i+1]*(1-P[,i+1])*A[j]
+					I <- ((w1 - w2)^2) / (P[,i] - P[,i+1]) * P[,i]
+					info <- info + I
+				}
+			} else {
+				P <- P.mirt(a[j,], d[[j]], Theta, guess[j])
+				Pstar <- P.mirt(a[j,], d[[j]], Theta, 0)
+				info <- info + A[j]^2 * P * (1-P) * Pstar/P
 			}			
-			if(type == 'infocontour'){
-				plt <- data.frame(cbind(I,Theta))
-				colnames(plt) <- c('I','Theta1','Theta2')
-				contour(theta, theta, matrix(I,length(theta),length(theta)), 
-					main = "Test Information Contour", xlab = "Theta 1", ylab = "Theta 2")		
-			}				
-			if(type == 'info'){				 
-				plt <- data.frame(cbind(I,Theta))
-				colnames(plt) <- c("I", "Theta1", "Theta2")
-				return(wireframe(I ~ Theta1 + Theta2, data = plt, main = "Test Information", 
-					zlab = "I", xlab = "Theta 1", ylab = "Theta 2", 
-					scales = list(arrows = FALSE), screen = rot))
-			}
+		}		
+		plt <- data.frame(cbind(info,Theta))
+		if(nfact == 2){						
+			colnames(plt) <- c("info", "Theta1", "Theta2")			
+			if(type == 'infocontour')												
+				return(contourplot(info ~ Theta1 * Theta2, data = plt, 
+					main = paste("Test Information Contour"), xlab = expression(theta[1]), 
+					ylab = expression(theta[2])))
+			if(type == 'info')
+				return(wireframe(info ~ Theta1 + Theta2, data = plt, main = "Test Information", 
+					zlab = expression(I(theta)), xlab = expression(theta[1]), ylab = expression(theta[2]), 
+					scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE))
 		} else {
-			if(type == 'curve')  
-				plot(Theta, Ptot, type='l', main = 'Test score plot', xlab = 'Theta', ylab='Test Score')
-			if(type == 'info'){
-				I <- (P * (1 - P)) %*% a^2 
-				plot(Theta, I, type='l', main = 'Test Information', xlab = 'Theta', ylab='Information')	
-			}	
-			if(type == 'contour' || type == 'infocontour') 
-				cat('No \'contour\' plots for 1-dimensional models\n')					
-		} 			
+			colnames(plt) <- c("info", "Theta")
+			if(type == 'info')
+				return(xyplot(info~Theta, plt, type='l',main = 'Test Information', 
+					xlab = expression(theta), ylab=expression(I(theta))))				
+			if(type == 'infocontour') 
+				cat('No \'contour\' plots for 1-dimensional models\n')
+		}		
 	}		
 )	
 
@@ -750,13 +773,13 @@ setMethod(
 	f = "fitted",
 	signature = signature(object = 'mirtClass'),
 	definition = function(object, digits = 3, ...){  
-		expected <- round(nrow(object@fulldata) * object@Pl,digits)  
+		expected <- round(nrow(object@data) * object@Pl,digits)  
 		tabdata <- object@tabdata
 		freq <- tabdata[ ,ncol(tabdata)]
-		tabdata[tabdata[ ,1:ncol(object@fulldata)] == 9] <- NA
+		tabdata[tabdata[ ,1:ncol(object@data)] == 9] <- NA
 		tabdata[ ,ncol(tabdata)] <- freq
 		tabdata <- cbind(tabdata,expected)
-		colnames(tabdata) <- c(colnames(object@fulldata),"freq","exp")	
+		colnames(tabdata) <- c(colnames(object@tabdata),"freq","exp")	
 		print(tabdata)
 		invisible(tabdata)
 	}

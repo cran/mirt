@@ -2,32 +2,30 @@
 thetaComb <- function(theta, nfact)
 {
 	if (nfact == 1) Theta <- matrix(theta)
-		else if (nfact == 2) Theta <- expand.grid(theta,theta)   
-		else if (nfact == 3) Theta <- expand.grid(theta,theta,theta)  
-		else if (nfact == 4) Theta <- expand.grid(theta,theta,theta,theta)
-		else if (nfact == 5) Theta <- expand.grid(theta,theta,theta,theta,theta)        
-		else if (nfact == 6) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)        
-		else if (nfact == 7) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta)        
-		else if (nfact == 8) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta,theta) 
+	else if (nfact == 2) Theta <- expand.grid(theta,theta)   
+	else if (nfact == 3) Theta <- expand.grid(theta,theta,theta)  
+	else if (nfact == 4) Theta <- expand.grid(theta,theta,theta,theta)
+	else if (nfact == 5) Theta <- expand.grid(theta,theta,theta,theta,theta)        
+	else if (nfact == 6) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)        
+	else if (nfact == 7) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta)        
+	else if (nfact == 8) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta,theta) 
+	if(nfact > 8) stop('Are you crazy?!?!? That\'s way too many factors for this quandrature method.')
 	Theta <- as.matrix(Theta)	
 	return(Theta)     
 }
 
 # start values
 start.values <- function(fulldata, guess, Rpoly, nfact=2, bfactor = FALSE, nowarn = TRUE)
-{
-	if (length(guess) == 1) guess <- rep(guess,ncol(fulldata))
-		else if (length(guess) > ncol(fulldata) || length(guess) < ncol(fulldata)) 
-			stop("The number of guessing parameters is incorrect.")  	
+{	  	
 	if (bfactor){ 
-		suppressWarnings(FA <- fa(Rpoly,1, warnings= !nowarn))
+		suppressWarnings(FA <- psych::fa(Rpoly, 1, warnings = !nowarn))
 		loads <- unclass(FA$load)
 		cs <- sqrt(abs(FA$u))      
 		dstart <- qnorm(colMeans(fulldata))/cs
 		astart <- loads/cs
 		startvalues <- cbind(astart,astart/2,dstart)
 	} else {    
-		suppressWarnings(FA <- fa(Rpoly,nfact,rotate = 'none', warnings= !nowarn))	
+		suppressWarnings(FA <- psych::fa(Rpoly,nfact,rotate = 'none', warnings= !nowarn))	
 		loads <- unclass(loadings(FA))
 		u <- FA$unique
 		u[u < .001 ] <- .2
@@ -47,44 +45,56 @@ Rotate <- function(F, rotate)
 	if (!any(rotate %in% c(orthogonal,oblique))) stop("Unknown rotation specified.")
 	if(any(rotate %in% orthogonal)){
 		oblique <- FALSE
-		rotF <- GPForth(F, method = rotate)
+		rotF <- GPArotation::GPForth(F, method = rotate)
 	}
 	if(any(rotate %in% oblique)){
 		oblique <- TRUE
 		if(rotate == 'promax') rotF <- Promax(F) 
-			else rotF <- GPFoblq(F, method = rotate)
+			else rotF <- GPArotation::GPFoblq(F, method = rotate)
 	}
 	attr(rotF,"oblique") <- oblique 
 	return(rotF)
 }  
 
 # MAP scoring for mirt
-MAP.mirt <- function(Theta,a,d,guess,patdata,ML=FALSE)
-{
-	Theta <- t(as.matrix(Theta))
-	L <- 0
-	for (j in 1:length(patdata)){
-		if(patdata[j] == 1) L <- log(P.mirt(a[j, ],d[j],Theta,guess[j])) + L
-			else L <- log(1 - P.mirt(a[j, ],d[j],Theta,guess[j])) + L	
-	}
+MAP.mirt <- function(Theta,a,d,guess,patdata,itemloc,ML=FALSE)
+{	
+	itemtrace <- rep(0, ncol=length(patdata))
+	Theta <- matrix(Theta, 1)
+	for (i in 1:length(guess)){
+		if(length(d[[i]]) == 1){
+			itemtrace[itemloc[i]] <- P.mirt(a[i, ], d[[i]], Theta, guess[i]) 
+			itemtrace[itemloc[i] + 1] <- 1.0 - itemtrace[itemloc[i]]
+		} else {
+			itemtrace[itemloc[i]:(itemloc[i+1] - 1)] <- 
+				P.poly(a[i, ], d[[i]], Theta, TRUE)	
+		}
+	}		
+	L <- sum(log(itemtrace)[as.logical(patdata)])
 	mu <- 0
 	sigma <- 1
-  L <- ifelse(ML, -L, (-1)*(L + sum(log(exp(-0.5*((Theta - mu)/sigma)^2)))))
+    L <- ifelse(ML, -L, (-1)*(L + sum(log(exp(-0.5*((Theta - mu)/sigma)^2)))))
 	L  
 }  
 
 # MAP scoring for bfactor
-MAP.bfactor <- function(Theta,a,d,guess,patdata,logicalfact,ML=FALSE)
-{
-	Theta <- t(as.matrix(Theta))
-	L <- 0
-	for (j in 1:length(patdata)){
-		if(patdata[j] == 1) L <- log(P.bfactor(a[j, ],d[j],Theta,guess[j],logicalfact[j, ])) + L
-			else L <- log(1 - P.bfactor(a[j, ],d[j],Theta,guess[j],logicalfact[j, ])) + L	
-	}
+MAP.bfactor <- function(Theta,a,d,guess,patdata,logicalfact,itemloc,ML=FALSE)
+{	
+	itemtrace <- rep(0, ncol=length(patdata))
+	Theta <- matrix(Theta, 1)
+	for (i in 1:length(guess)){
+		if(length(d[[i]]) == 1){
+			itemtrace[itemloc[i]] <- P.mirt(a[i, logicalfact[i, ]], d[[i]], Theta, guess[i]) 
+			itemtrace[itemloc[i] + 1] <- 1.0 - itemtrace[itemloc[i]]
+		} else {
+			itemtrace[itemloc[i]:(itemloc[i+1] - 1)] <- 
+				P.poly(a[i, logicalfact[i, ]], d[[i]], Theta, TRUE)	
+		}
+	}		
+	L <- sum(log(itemtrace)[as.logical(patdata)])
 	mu <- 0
 	sigma <- 1
-	L <- ifelse(ML, -L, (-1)*(L + sum(log(exp(-0.5*((Theta - mu)/sigma)^2)))))
+    L <- ifelse(ML, -L, (-1)*(L + sum(log(exp(-0.5*((Theta - mu)/sigma)^2)))))
 	L  
 }  
 
@@ -96,11 +106,11 @@ P.poly <- function(lambda, zetas, Thetas, itemexp = FALSE)
 	Pk <- matrix(0,nrow(Thetas),ncat+1)
 	Pk[,1] <- 1	
 	for(i in 1:(ncat-1))			
-		Pk[ ,i+1] <- P.mirt(lambda,zetas[i],Thetas,0)		
+		Pk[ ,i+1] <- P.mirt(lambda, zetas[i], Thetas, 0)		
 	if(itemexp){
 		P <- matrix(0,nrow(Thetas),ncat)		
 		for(i in ncat:1)
-			P[,i] <- Pk[,i] - Pk[,i+1]						
+			P[ ,i] <- Pk[ ,i] - Pk[ ,i+1]						
 		Pk <- P
 	}	
 	return(Pk)
@@ -108,16 +118,8 @@ P.poly <- function(lambda, zetas, Thetas, itemexp = FALSE)
 
 # Trace lines for mirt models
 P.mirt <- function(a, d, Theta, g)
-{ 
-	nfact <- length(a)
-	nquad <- nrow(Theta)
-	traces <- .Call("traceLinePts",
-					as.double(a), 
-					as.double(d),
-					as.double(g),  
-					as.double(as.matrix(Theta)), 
-					as.integer(nquad), 
-					as.integer(nfact))
+{ 		
+	traces <- .Call("traceLinePts", a, d, g, Theta)
 	return(traces)
 }
 
@@ -125,86 +127,83 @@ P.comp <- function(a,d,thetas,c = 0){
 	nfact <- length(a)
 	P <- rep(1,nrow(thetas))
 	for(i in 1:nfact)
-		P <- P * P.mirt(a[i],d[i],matrix(thetas[,i]),0)
+		P <- P * P.mirt(a[i], d[i], thetas[ ,i, drop=FALSE],0)
 	P <- c + (1-c) * P
 	P	
 } 
 
 # Estep
-Estep.mirt <- function(pars, tabdata, Theta, prior, guess) 
+Estep.mirt <- function(pars, tabdata, Theta, prior, guess, itemloc) 
 {
-	a <- as.matrix(pars[ ,1:(ncol(pars) - 1)])
-	nfact <- ncol(a)
-	nitems <- nrow(a)
+	a <- pars$lambdas
+	J <- nrow(a)
+	nfact <- ncol(a)	
 	nquad <- nrow(Theta)
-	d <- pars[ ,ncol(pars)]    
+	d <- pars$zetas    
 	r <- tabdata[ ,ncol(tabdata)]
-	X <- tabdata[ ,1:(ncol(tabdata) - 1)]     
-
-	itemtrace <- r1 <- r0 <- matrix(0,nrow=nitems,ncol=nrow(Theta))
-	for (i in 1:nitems) itemtrace[i, ] <- 
-		P.mirt(a[i, ],d[i],Theta,guess[i])    
-	  
-	retlist <- .Call("Estep",                     	
-					 as.double(itemtrace),
-					 as.double(prior),
-					 as.integer(X), 
-					 as.integer(nfact),      
-					 as.integer(r))   
-
-	N <- retlist$r1 + retlist$r0    
-	empprior <- colSums(N)/sum(N)    
-	rlist <- list(retlist$r1, N, retlist$expected, empprior)
-	return(rlist)
+	X <- tabdata[ ,1:(ncol(tabdata) - 1)]	
+	itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))
+	r1 <- r0 <- matrix(0, ncol=length(guess), nrow=nrow(Theta))
+	for (i in 1:J){
+		if(length(d[[i]]) == 1){
+			itemtrace[ ,itemloc[i]] <- P.mirt(a[i, ], d[[i]], Theta, guess[i]) 
+			itemtrace[ ,itemloc[i] + 1] <- 1.0 - itemtrace[ ,itemloc[i]]
+		} else {
+			itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
+				P.poly(a[i, ], d[[i]], Theta, TRUE)	
+		}
+	}		
+    retlist <- .Call("Estep", itemtrace, prior, X, nfact, r)	    		
+	return(retlist)
 } 
 
 P.bfactor <- function(a, d, Theta, g, patload)
 { 
-	a <- a[patload]
-	nfact <- length(a)
-	nquad <- nrow(Theta)
-	traces <- .Call("traceLinePts",                    
-					as.double(a), 
-					as.double(d),
-					as.double(g),  
-					as.double(as.matrix(Theta)), 
-					as.integer(nquad), 
-					as.integer(nfact))
-	return(traces)
+	a <- a[patload]	
+	if(length(d) > 1){
+		ncat <- length(d) + 1
+		nfact <- length(a)
+		Pk <- matrix(0,nrow(Theta),ncat+1)
+		Pk[,1] <- 1	
+		for(i in 1:(ncat-1))			
+			Pk[ ,i+1] <- P.mirt(a, d[i], Theta, 0)				
+		P <- matrix(0,nrow(Theta),ncat)		
+		for(i in ncat:1)
+			P[ ,i] <- Pk[ ,i] - Pk[ ,i+1]		
+	} else P <- .Call("traceLinePts", a, d, g, Theta)		
+	return(P)
 }
 
 # Estep
-Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, logicalfact, specific, sitems) 
-{
-	a <- as.matrix(pars[ ,1:(ncol(pars) - 1)])
+Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, specific, sitems, itemloc) 
+{	
+	a <- pars$lambdas
+	logicalfact <- attr(pars, 'lamsel')
 	nfact <- ncol(a)
-	nitems <- nrow(a)
+	J <- nrow(a)
 	nquad <- nrow(Theta)	
-	d <- pars[ ,ncol(pars)]    
+	d <- pars$zetas    
 	r <- tabdata[ ,ncol(tabdata)]
-	X <- tabdata[ ,1:(ncol(tabdata) - 1)]
-	as <- rowSums(pars[,2:nfact])
-
-	itemtrace <- r1 <- r0 <- matrix(0,nrow=nitems,ncol=nrow(Theta))
-	for (i in 1:nitems) itemtrace[i, ] <- 
-	  P.bfactor(a[i, ],d[i],Theta,guess[i],logicalfact[i,])
-
-	retlist <- .Call("Estepbfactor",
-					as.double(itemtrace),
-					as.double(prior), 					
-					as.integer(X), 
-					as.integer(nfact),
-					as.integer(r),
-					as.double(sitems))      
-
-	r1 <- N <- matrix(0, nitems, nrow(Theta))
-	for (i in 1:nitems){
-	  r1[i, ] <- retlist$r1[(specific[i] - 1)*nitems + i, ]
-	  N[i, ] <- retlist$r0[(specific[i] - 1)*nitems + i, ] + r1[i, ]
-	}
+	X <- tabdata[ ,1:(ncol(tabdata) - 1)]	
+	itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))
+	r1 <- r0 <- matrix(0, ncol=length(guess), nrow=nrow(Theta))
+	for (i in 1:J){
+		atmp <- a[i, logicalfact[i, ]]
+		if(length(d[[i]]) == 1){
+			itemtrace[ ,itemloc[i]] <- P.mirt(atmp, d[[i]], Theta, guess[i]) 
+			itemtrace[ ,itemloc[i] + 1] <- 1.0 - itemtrace[ ,itemloc[i]]
+		} else {
+			itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
+				P.poly(atmp, d[[i]], Theta, TRUE) 
+		}
+	}		
+	retlist <- .Call("Estepbfactor", itemtrace, prior, X, r, sitems)
+	r1 <- matrix(0, nrow(Theta), ncol(X))	
+	for (i in 1:J)
+	    r1[ ,itemloc[i]:(itemloc[i+1]-1)] <- 		
+			retlist$r1[ ,itemloc[i]:(itemloc[i+1]-1) + (specific[i] - 1)*ncol(X) ]	    
 		
-	rlist <- list(r1, N, retlist$expected)
-	return(rlist)
+	return(list(r1=r1, expected=retlist$expected))	
 }      
 
 draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,
@@ -217,37 +216,23 @@ draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var
 	P0 <- P1 <- matrix(0,N,J)		
 	unif <- runif(N)
 	if(nfact > 1)		
-		theta1 <- theta0 + rmvnorm(N,prior.mu, 
+		theta1 <- theta0 + mvtnorm::rmvnorm(N,prior.mu, 
 			diag(rep(cand.t.var,ncol(theta0)))) 
 	else
 		theta1 <- theta0 + rnorm(N,prior.mu,sqrt(cand.t.var))							
-	den0 <- dmvnorm(theta0,prior.mu,prior.t.var)
-	den1 <- dmvnorm(theta1,prior.mu,prior.t.var)		
+	den0 <- mvtnorm::dmvnorm(theta0,prior.mu,prior.t.var)
+	den1 <- mvtnorm::dmvnorm(theta1,prior.mu,prior.t.var)		
 	if(!is.null(prodlist)){
 		theta0 <- prodterms(theta0,prodlist)
 		theta1 <- prodterms(theta1,prodlist)	
 	}
-	accept <- .Call("drawThetas",
-					as.numeric(unif),
-					as.numeric(den0),
-					as.numeric(den1),
-					as.numeric(lambdas),
-					as.numeric(zetas),
-					as.numeric(guess),
-					as.numeric(theta0),
-					as.numeric(theta1),
-					as.integer(fulldata),
-					as.integer(itemloc - 1),
-					as.integer(K),
-					as.integer(J),
-					as.integer(N),
-					as.integer(ncol(lambdas)),
-					as.integer(estComp))
-	log.lik <- accept[N+1]			
-	accept <- as.logical(accept[-(N+1)])				
+	ThetaDraws <- .Call("drawThetas", unif, den0, den1, lambdas, zetas, guess,
+					theta0, theta1,	fulldata,	itemloc-1, as.numeric(estComp))
+	log.lik <- ThetaDraws$cdloglik
+	accept <- as.logical(ThetaDraws$accept)				
 	theta1[!accept,] <- theta0[!accept,]	
 	if(!is.null(prodlist)) 
-		theta1 <- as.matrix(theta1[ ,1:(ncol(lambdas) - length(prodlist))])
+		theta1 <- theta1[ ,1:(ncol(lambdas) - length(prodlist)), drop=FALSE]
 	attr(theta1, "Proportion Accepted") <- sum(accept)/N 				
 	attr(theta1, "log.lik") <- log.lik	
 	return(theta1) 
@@ -275,11 +260,9 @@ d.group <- function(grouplist,theta)
 	sel <- 1:npars		
 	cMeans <- N*(colMeans(x) - u)
 	Zdif <- (Z - N * sig)		
-	h <- .Call("dgroup",
-				as.numeric(sig),
+	h <- .Call("dgroup",				
 				as.numeric(invSig),
-				as.numeric(cMeans),					
-				as.numeric(Z),
+				as.numeric(cMeans),				
 				as.numeric(Zdif),
 				as.integer(N),
 				as.integer(nfact),
@@ -309,8 +292,7 @@ dpars.dich <- function(lambda,zeta,g,dat,Thetas,estGuess)
 		for(i in 1:nfact){
 			da[i] <- sum(Thetas[,i]*Pstar*Qstar*(1-g)*(r/P - (f-r)/Q))
 		}
-		dL <- c(dd,da,dc)
-				
+		dL <- c(dd,da,dc)				
 		hess <- matrix(0,nfact + 2,nfact + 2)	
 		aNames <- paste("a",1:nfact,sep='_')
 		Names <- c('d',paste("a",1:nfact,sep='_'),'c')
@@ -340,14 +322,14 @@ dpars.dich <- function(lambda,zeta,g,dat,Thetas,estGuess)
 	} else {
 		PQ <- P*(1-P)
 		L1 <- sum(dat-P)
-		L2 <- colSums((dat-P)*Thetas)
+		L2 <- colSums((dat-P) * Thetas)
 		dL <- c(L1,L2)		
-		d2L <- matrix(0,nfact+1,nfact+1)						
-		L11 <- .Call("dichOuter",Thetas,PQ,nfact,nrow(Thetas))
-		if(nfact > 1) d2L[1:nfact+1,1:nfact+1] <- -L11
-			 else d2L[nfact+1,nfact+1] <- -L11 				
-		d2L[1,1] <- (-1)*sum(PQ)		
-		d2L[1,1:nfact+1] <- d2L[1:nfact+1,1] <- (-1)*colSums(PQ * Thetas)
+		d2L <- matrix(0,nfact+1, nfact+1)						
+		L11 <- .Call("dichOuter", Thetas, PQ, nrow(Thetas))
+		if(nfact > 1) d2L[1:nfact+1, 1:nfact+1] <- -L11
+			 else d2L[nfact+1, nfact+1] <- -L11 				
+		d2L[1, 1] <- (-1)*sum(PQ)		
+		d2L[1, 1:nfact+1] <- d2L[1:nfact+1, 1] <- (-1)*colSums(PQ * Thetas)
 	}	
 	list(grad = dL, hess = d2L)
 }
@@ -371,7 +353,7 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 			dd <- da <- rep(0,nfact)		
 			dc <- sum(Qstar*const1)
 			for(i in 1:nfact){
-				Pk <- P.mirt(a[i],d[i],matrix(thetas[,i]),0)
+				Pk <- P.mirt(a[i],d[i],thetas[ , i, drop=FALSE],0)
 				Qk <- 1 - Pk
 				dd[i] <- sum((1-c)*Pstar*Qk*const1)
 				da[i] <- sum((1-c)*Pstar*Qk*thetas[,i]*const1)
@@ -401,9 +383,9 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 						d2 <- strsplit(Names[c(i,j)],"_")[[2]]
 						k <- as.numeric(d1[2])
 						m <- as.numeric(d2[2])
-						Pk <- P.mirt(a[k],d[k],matrix(thetas[,k]),0)
+						Pk <- P.mirt(a[k],d[k],thetas[ , k, drop=FALSE],0)
 						Qk <- 1 - Pk	
-						Pm <- P.mirt(a[m],d[m],matrix(thetas[,m]),0)
+						Pm <- P.mirt(a[m],d[m],thetas[ , m, drop=FALSE],0)
 						Qm <- 1 - Pm									
 						if(i == j && d1[1] == 'd'){
 							hess[i,i] <- sum((1-c)*Pstar*Qk*(const1*((1-c)*Qk - Pk) - Pstar*Qk*(1-c)*const2))
@@ -456,7 +438,7 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 		Q <- 1 - P	
 		da <- dd <- rep(0,nfact)	
 		for(i in 1:nfact){
-			Pk <- P.mirt(lambda[i],zeta[i],matrix(Thetas[,i]),0)
+			Pk <- P.mirt(lambda[i],zeta[i],Thetas[ , i, drop=FALSE],0)
 			Qk <- 1 - Pk
 			const <- (1 - dat)*P/Q
 			dd[i] <- sum(Qk*(dat - const))
@@ -475,9 +457,9 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 					d2 <- strsplit(Names[c(i,j)],"_")[[2]]
 					k <- as.numeric(d1[2])
 					m <- as.numeric(d2[2])
-					Pk <- P.mirt(lambda[k],zeta[k],matrix(Thetas[,k]),0)
+					Pk <- P.mirt(lambda[k],zeta[k],Thetas[ , k, drop=FALSE],0)
 					Qk <- 1 - Pk	
-					Pm <- P.mirt(lambda[m],zeta[m],matrix(Thetas[,m]),0)
+					Pm <- P.mirt(lambda[m],zeta[m],Thetas[ , m, drop=FALSE],0)
 					Qm <- 1 - Pm									
 					if(i == j && d1[1] == 'd'){
 						hess[k,k] <- sum(-Pk*Qk*(r - (f-r)*P/Q) - Qk^2 * (f-r)*P/Q^2)
@@ -514,17 +496,9 @@ dpars.comp <- function(lambda,zeta,g,dat,Thetas,estg = FALSE)
 
 dpars.poly <- function(lambda,zeta,dat,Thetas)
 {  
-	nzeta <- length(zeta)			
-	nfact <- length(lambda)				
-	N <- nrow(Thetas)		
-	P <- P.poly(lambda,zeta,Thetas)			
-	ret <- .Call("dparsPoly",
-				as.numeric(P), 
-				as.numeric(Thetas), 
-				as.integer(dat),
-				as.integer(nzeta),
-				as.integer(nfact),
-				as.integer(N)) 				 
+	nzeta <- length(zeta)				
+	P <- P.poly(lambda,zeta,Thetas)			    	
+	ret <- .Call("dparsPoly", P, Thetas, dat, nzeta)	
 	return(ret)	
 }
 
@@ -588,7 +562,7 @@ cormod <- function(fulldata, K, guess, smooth = TRUE)
 					tabp <- round(tabp*length(fulldata[ ,i]))
 					if(any(tabp < 0)) next	
 					cormat[i,j] <- cormat[j,i] <- 
-						abs(phi(tabp,6))^(1/1.15)*sign(phi(tabp,6))          		  
+						abs(psych::phi(tabp,6))^(1/1.15)*sign(psych::phi(tabp,6))          		  
 				} 
 				if(i < j & K[i] == 2 & K[j] > 2 & guess[i]!= 0) 
 					cormat[i,j] <- cormat[j,i] <- abs(cormat[i,j])^(1/1.15) * sign(cormat[i,j])
@@ -627,7 +601,7 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
 {
   hasProdTerms <- ifelse(nfact == nfactNames, FALSE, TRUE)
   prodlist <- NULL
-  if(hasProdTerms){		
+  if(hasProdTerms){
     tmp <- factorNames[grepl('\\(',factorNames)]
     tmp2 <- factorNames[!grepl('\\(',factorNames)] 
     tmp <- gsub("\\(","",tmp)	
@@ -718,8 +692,8 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
       estzetas2 <- c(estzetas2,estzetas[[i]])
       ind1 <- ind1 + K[i] - 1
     }	
-  }		
-  
+  }
+    
   #MEANS
   find <- 1:nfact
   gmeans <- rep(0,nfact)
@@ -800,6 +774,14 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   pars[zetaind] <- zetas
   pars[guessind] <- guess
   pars[groupind] <- c(gmeans,gcov[lower.tri(gcov,diag=TRUE)])
+  parnames <- rep('',npars)
+  parnames[lamind] <- paste('lam',1:length(lamind),sep='')  
+  parnames[zetaind] <- paste('zeta',1:length(zetaind),sep='')
+  parnames[guessind] <- paste('guess',1:length(guessind),sep='')  
+  parnames[groupind] <- c(paste('gmeans',1:length(gmeans),sep=''), 
+	paste('gcov',1:length(gcov[lower.tri(gcov,diag=TRUE)]),sep=''))
+  names(pars) <- names(sind) <- parnames
+  
   parcount <- list(lam = estlam, zeta = estzetas2, guess = estGuess, cov = estgcov, mean = estgmeans)
   parind <- 1:npars
   loc1 <- 1
@@ -812,7 +794,14 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
       k <- k + 1
     }
   }
-  names(zetaind2) <- itemnames
+  
+  zetas <- list()  
+  ind1 <- 1
+  for(i in 1:J){ 
+    zetas[[i]] <- pars[zetaind][ind1:(ind1+sum(estzetas[[i]])-1)]	
+    ind1 <- ind1 + sum(estzetas[[i]])
+  }
+  names(zetas) <- names(zetaind2) <- itemnames   
   parcount$zeta <- zetaind2
   parcount$guess <- guessind
   parcount$mean <- meanind
@@ -931,17 +920,75 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
       parpriorscount <- parpriorscount + 1	
     }
   }
-  
-    
+      
   val <- list(pars=pars, lambdas=lambdas, zetas=zetas, gmeans=gmeans, gcov=gcov, 
     constvalues=constvalues)
   est <- list(estlam=estlam, estComp=estComp, estzetas=estzetas, estzetas2=estzetas2, 
     estgcov=estgcov, estgmeans=estgmeans)
   ind <- list(equalind=equalind, equalconstr=equalconstr, parpriorscount=parpriorscount, 
     prodlist=prodlist, parpriors=parpriors, sind=sind, lamind=lamind, zetaind=zetaind, 
-    guessind=guessind, groupind=groupind, meanind=meanind, covind=covind, parind=parind)
+    zetaindlist=zetaind2, guessind=guessind, groupind=groupind, meanind=meanind, covind=covind, 
+	parind=parind)
   ret <- list(val=val, est=est, ind=ind, parcount=parcount, npars=npars)
   ret
 }
 
+sortPars <- function(pars, indlist, nfact, estGuess){
+	lambdas <- matrix(pars[indlist$lamind],ncol=nfact,byrow=TRUE)	
+	J <- nrow(lambdas)		
+	zetas <- list()
+	for(i in 1:J)
+		zetas[[i]] <- pars[indlist$zetaind[[i]]]
+	guess <- rep(0,J)
+	guess[estGuess] <- pars[indlist$gind]	
+	
+	return(list(lambdas=lambdas, zetas=zetas, guess=guess))
+}
+
+sortParsConfmirt <- function(pars, indlist, nfact, estGuess, nfactNames){
+	J <- length(estGuess)
+	lambdas <- matrix(pars[indlist$lamind],J,nfactNames,byrow=TRUE)
+	zetas <- list()
+	for(i in 1:J)
+		zetas[[i]] <- pars[indlist$zetaindlist[[i]]]
+	guess <- pars[indlist$guessind]		
+	mu <- pars[indlist$meanind]
+	sig <- matrix(0, nfact, nfact)
+	sig[lower.tri(sig, diag=TRUE)] <- pars[indlist$covind]
+	if(nfact > 1)
+		sig <- sig + t(sig) - diag(diag(sig))							
+	
+	return(list(lambdas=lambdas, zetas=zetas, guess=guess, mu=mu, sig=sig))
+}
+
+rateChange <- function(pars, lastpars1, lastpars2){
+	p <- unlist(pars)	
+	lp1 <- unlist(lastpars1)
+	lp2 <- unlist(lastpars2)
+	rate <- rep(0, length(p))
+	d1 <- lp1 - p
+	d2 <- lp2 - p
+	rate <- ifelse(abs(d1) > 0.001 & (d1*d2 > 0.0) & (d1/d2 < 1.0),
+		(1 - (1 - rate) * (d1/d2)),
+		0)	    		
+	rate[p > 4] <- 0
+	rate[p < -4] <- 0    
+	p <- lp1*rate*(-2) + (1 - rate*(-2))*p
+	parsret <- rebuildPars(p, pars)	
+	parsret
+}
+
+rebuildPars <- function(p, pars){
+	names(p) <- NULL
+	pars2 <- pars
+	pars2$lambdas <- matrix(p[1:length(pars$lambdas)], ncol=ncol(pars$lambdas), 
+		nrow=nrow(pars$lambdas)) 
+	ind1 <- length(pars$lambdas) + 1
+	for(i in 1:length(pars$zetas) ){
+		ind2 <- ind1 + length(pars$zetas[[i]]) - 1
+		pars2$zetas[[i]] <- p[ind1:ind2]
+		ind1 <- ind1 + length(pars$zetas[[i]])
+	}			
+	return(pars2)
+}
 
