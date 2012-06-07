@@ -20,7 +20,7 @@ setClass(
 		K='numeric', parsSE='list', X2='numeric', df='numeric', p='numeric', AIC='numeric', logLik='numeric',
 		F='matrix', h2='numeric', tabdata='matrix', tabdatalong='matrix', Theta='matrix', Pl='numeric',
 		data='matrix', cormat='matrix', facility='numeric', converge='numeric', itemloc = 'numeric',
-		quadpts='numeric', BIC='numeric', vcov='matrix', RMSEA='numeric', Call='call'),	
+		quadpts='numeric', BIC='numeric', vcov='matrix', RMSEA='numeric', rotate='character', Call='call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -112,7 +112,10 @@ setClass(
 #' (say, greater than .95) then a possible constraint might be \code{par.prior
 #' = list(int = c(0,2), slope = 1.2, int.items = 4, slope.items = c(2,3))}
 #' @param rotate type of rotation to perform after the initial orthogonal
-#' parameters have been extracted. See below for list of possible rotations
+#' parameters have been extracted by using \code{summary}; default is \code{'varimax'}. 
+#' See below for list of possible rotations. If \code{rotate != ''} in the \code{summary} 
+#' input then the default from the object is ignored and the new rotation from the list 
+#' is used instead
 #' @param startvalues user declared start values for parameters
 #' @param quadpts number of quadrature points per dimension
 #' @param ncycles the number of EM iterations to be performed
@@ -145,7 +148,7 @@ setClass(
 #' 
 #' Unrestricted full-information factor analysis is known to have problems with
 #' convergence, and some items may need to be constrained or removed entirely
-#' to allow for an acceptable solution. As a general rule dichotmous items with
+#' to allow for an acceptable solution. As a general rule dichotomous items with
 #' means greater than .95, or items that are only .05 greater than the
 #' guessing parameter, should be considered for removal from the analysis or
 #' treated with prior distributions. Also, increasing the number of quadrature
@@ -183,11 +186,11 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' mirt(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE,
-#'   startvalues = NULL, quadpts = NULL, ncycles = 300, tol = .001, nowarn = TRUE, 
-#'   debug = FALSE, ...)
+#' mirt(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.cor = NULL,
+#'     par.prior = FALSE, startvalues = NULL, quadpts = NULL, ncycles = 300,  
+#'     tol = .001, nowarn = TRUE, debug = FALSE, ...)
 #' 
-#' \S4method{summary}{mirt}(object, rotate='varimax', suppress = 0, digits = 3, ...)
+#' \S4method{summary}{mirt}(object, rotate='', suppress = 0, digits = 3, ...)
 #' 
 #' \S4method{coef}{mirt}(object, digits = 3, ...)
 #' 
@@ -221,6 +224,7 @@ setClass(
 #' scores <- fscores(mod2) #save factor score table
 #' 
 #' ###########
+#' #data from the 'ltm' package in numeric format
 #' pmod1 <- mirt(Science, 1)
 #' plot(pmod1)
 #' summary(pmod1)
@@ -250,19 +254,19 @@ setClass(
 #' coef(mod2g)
 #' anova(mod1g, mod2g)
 #' summary(mod2g, rotate='promax')
-#'      }
+#' }
 #' 
-mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE, 
-	startvalues = NULL, quadpts = NULL, ncycles = 300, tol = .001, nowarn = TRUE, 
-	debug = FALSE, ...)
+mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.cor = NULL, 
+    par.prior = FALSE, startvalues = NULL, quadpts = NULL, ncycles = 300, 
+    tol = .001, nowarn = TRUE, debug = FALSE, ...)
 { 
 	fn <- function(par, rs, gues, Theta, prior, parprior){
 		nzeta <- ncol(rs) - 1
 		a <- par[1:(length(par)-nzeta)]
-		d <- par[(length(a)+1):length(par)]				
+		d <- par[(length(a)+1):length(par)]
 		if(ncol(rs) == 2){
 			itemtrace <- P.mirt(a, d, Theta, gues) 
-			itemtrace <- cbind(itemtrace, 1.0 - itemtrace)
+			itemtrace <- cbind(1.0 - itemtrace, itemtrace)
 		} else {
 			itemtrace <- P.poly(a, d, Theta, TRUE)	
 		}
@@ -309,11 +313,7 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
         Names <- c(Names, paste("Item.",i,"_",1:K[i],sep=""))				
 	colnames(fulldata) <- Names			
 	for(i in 1:J){
-		ind <- index[i]
-		if(setequal(uniques[[i]], c(0,1))){
-			fulldata[ ,itemloc[ind]:(itemloc[ind]+1)] <- cbind(data[,ind],abs(1-data[,ind]))
-			next
-		}
+		ind <- index[i]		
 		dummy <- matrix(0,N,K[ind])
 		for (j in 0:(K[ind]-1))  
 			dummy[,j+1] <- as.integer(data[,ind] == uniques[[ind]][j+1])  		
@@ -321,22 +321,36 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 	}	
 	fulldata[is.na(fulldata)] <- 0
 	pats <- apply(fulldata, 1, paste, collapse = "/") 
-	freqs <- table(pats)
+	freqs <- rev(table(pats))
 	nfreqs <- length(freqs)
 	r <- as.vector(freqs)	
 	tabdata <- unlist(strsplit(cbind(names(freqs)), "/"))
 	tabdata <- matrix(as.numeric(tabdata), nfreqs, sum(K), TRUE)	
+	tabdata2 <- matrix(NA, nfreqs, J)
+	tmp <- c()
+	for(i in 1:J){ 
+		if(K[i] == 2) tmp <- c(tmp,0,1)
+		else tmp <- c(tmp, 1:K[i])
+	}
+	for(i in 1:nfreqs){
+		if(sum(tabdata[i, ]) < J){
+			tmp2 <- rep(NA,J)
+			ind <- tmp[as.logical(tabdata[i, ])]
+			logicalind <- as.logical(tabdata[i, ])
+			k <- 1
+			for(j in 1:J){
+				if(sum(logicalind[itemloc[j]:(itemloc[j+1]-1)]) != 0){
+					tmp2[j] <- ind[k]
+					k <- k + 1
+				}
+			}
+			tabdata2[i, ] <- tmp2
+		} else tabdata2[i, ] <- tmp[as.logical(tabdata[i, ])]
+	}		
 	tabdata <- cbind(tabdata,r) 
-	colnames(tabdata) <- c(Names,'Freq')
-	
-	#for return
-	pats <- apply(data, 1, paste, collapse = "/") 
-	freqs <- table(pats)		
-	tabdata2 <- unlist(strsplit(cbind(names(freqs)), "/"))
-	tabdata2 <- suppressWarnings(matrix(as.numeric(tabdata2), nfreqs, J, TRUE))	
 	tabdata2 <- cbind(tabdata2,r) 
-	colnames(tabdata2) <- c(itemnames,'Freq')	
-	
+	colnames(tabdata) <- c(Names, 'Freq')
+	colnames(tabdata2) <- c(itemnames, 'Freq')	
 	if(is.logical(par.prior)) 
 	    if(par.prior) suppressAutoPrior <- FALSE  
 	        temp <- matrix(c(1,0,0),ncol = 3, nrow=J, byrow=TRUE)
@@ -349,10 +363,11 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 				temp[par.prior$int.items[i],2:3] <- par.prior$int		 
 	}  
 	par.prior <- temp 
+	Rpoly <- cormod(na.omit(data),K,guess)
 	if(!is.null(prev.cor)){
 		if (ncol(prev.cor) == nrow(prev.cor)) Rpoly <- prev.cor
 			else stop("Correlation matrix is not square.\n")
-	} else Rpoly <- cormod(na.omit(data),K,guess)
+	} 
 	if(det(Rpoly) < 1e-15) Rpoly <- cor(na.omit(data.original))
 	FA <- suppressWarnings(psych::fa(Rpoly,nfact,rotate = 'none', warnings= FALSE, fm="minres"))	
 	loads <- unclass(loadings(FA))
@@ -361,14 +376,10 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 	cs <- sqrt(u)
 	lambdas <- loads/cs		
     zetas <- list()	
-    for(i in 1:J){
-        if(K[i] == 2){
-            zetas[[i]] <- qnorm(mean(fulldata[,itemloc[i]]))/cs[i]            			
-        } else {
-            temp <- table(data[,i])[1:(K[i]-1)]/N
-            temp <- cumsum(temp)			
-            zetas[[i]] <- qnorm(1 - temp)/cs[i]        			
-        }       
+    for(i in 1:J){        
+        temp <- table(data[,i])[1:(K[i]-1)]/N
+        temp <- cumsum(temp)			
+        zetas[[i]] <- qnorm(1 - temp)/cs[i]        			        
     }    		
 	pars <- list(lambdas=lambdas, zetas=zetas)
 	npars <- length(unlist(pars))
@@ -446,12 +457,13 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 		parsSE <- rebuildPars(sqrt(diag(vcovpar)), pars)	
 	}	
 	logN <- 0
+	npatmissing <- sum(is.na(rowSums(tabdata2)))
 	logr <- rep(0,length(r))	
 	for (i in 1:N) logN <- logN + log(i)
 	for (i in 1:length(r)) 
 		for (j in 1:r[i]) 
 			logr[i] <- logr[i] + log(j)    	
-	df <- (length(r) - 1) - npars + nfact*(nfact - 1)/2 
+	df <- (length(r) - 1) - npars + nfact*(nfact - 1)/2  - npatmissing
 	X2 <- 2 * sum(r * log(r/(N*Pl)))	
 	logLik <- logLik + logN/sum(logr)	
 	p <- 1 - pchisq(X2,df)  
@@ -459,7 +471,7 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 	BIC <- (-2) * logLik + npars*log(N)
 	RMSEA <- ifelse((X2 - df) > 0, 
 	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
-	if(any(is.na(data.original))) p <- 2
+	if(any(is.na(data.original))) p <- RMSEA <- X2 <- NaN		
 	guess[K > 2] <- NA	
 
 	# pars to FA loadings
@@ -478,7 +490,7 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL, par.prior 
 	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, parsSE=parsSE, X2=X2, df=df, 
 		p=p, itemloc=itemloc, AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata2, 
 		Theta=Theta, Pl=Pl, data=data.original, cormat=Rpoly, facility=facility, converge=converge, 
-		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, K=K, tabdatalong=tabdata, Call=Call)	  
+		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, K=K, tabdatalong=tabdata, rotate=rotate, Call=Call)	  
 	return(mod)    
 }
 
@@ -500,7 +512,7 @@ setMethod(
 		cat("Log-likelihood =", x@logLik, "\n")
 		cat("AIC =", x@AIC, "\n")		
 		cat("BIC =", x@BIC, "\n")
-		if(x@p <= 1)            
+		if(!is.nan(x@p))            
 			cat("G^2 = ", round(x@X2,2), ", df = ", 
 				x@df, ", p = ", round(x@p,4),", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 		else 
@@ -526,20 +538,20 @@ setMethod(
 		cat("Log-likelihood =", object@logLik, "\n")
 		cat("AIC =", object@AIC, "\n")		
 		cat("BIC =", object@BIC, "\n")
-		if(object@p <= 1)
+		if(!is.nan(object@p))
 			cat("G^2 = ", round(object@X2,2), ", df = ", 
 				object@df, ", p = ", round(object@p,4),", RMSEA = ", round(object@RMSEA,3),
                 "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
-				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )			
+				object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )			
 	}
 )
 
 setMethod(
 	f = "summary",
 	signature = 'mirtClass',
-	definition = function(object, rotate = 'varimax', suppress = 0, digits = 3, ...){
+	definition = function(object, rotate = '', suppress = 0, digits = 3, ...){
 		nfact <- ncol(object@F)
 		if (rotate == 'none' || nfact == 1) {
 			F <- object@F
@@ -557,8 +569,9 @@ setMethod(
 			invisible(list(F,h2))
 		} else {	
 			F <- object@F
-			h2 <- as.matrix(object@h2)						
-			colnames(h2) <- "h2"				
+			h2 <- as.matrix(object@h2)
+			colnames(h2) <- "h2"
+            if(rotate == '') rotate <- object@rotate
 			cat("\nRotation: ", rotate, "\n")
 			rotF <- Rotate(F,rotate)
 			SS <- apply(rotF$loadings^2,2,sum)
@@ -567,7 +580,8 @@ setMethod(
 			loads <- round(cbind(L,h2),digits)
 			rownames(loads) <- colnames(object@data)			
 			cat("\nRotated factor loadings: \n\n")
-			print(loads,digits)		
+			print(loads,digits)
+            Phi <- diag(ncol(F))
 			if(attr(rotF, "oblique")){
 				cat("\nFactor correlations: \n\n")
 				Phi <- rotF$Phi	  
@@ -578,7 +592,7 @@ setMethod(
 			cat("\nRotated SS loadings: ",round(SS,digits), "\n")		
 			if(any(h2 > 1)) 
 				warning("Solution has heywood cases. Interpret with caution.") 
-			invisible(list(rotF$loadings,h2))  
+			invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))  
 		}  
 	}
 )
@@ -703,10 +717,9 @@ setMethod(
 				sqrt(object@Pl * nrow(object@data)),digits)
 			expected <- round(N * object@Pl/sum(object@Pl),digits)  
 			tabdata <- object@tabdata
-			freq <- tabdata[ ,ncol(tabdata)]			
-			tabdata[tabdata[ ,1:ncol(object@data)] == 99] <- NA
-			tabdata[ ,ncol(tabdata)] <- freq
-			tabdata <- cbind(tabdata,expected,res)
+			ISNA <- is.na(rowSums(tabdata))
+			expected[ISNA] <- res[ISNA] <- NA
+			tabdata <- data.frame(tabdata,expected,res)
 			colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")	
 			if(!is.null(printvalue)){
 				if(!is.numeric(printvalue)) stop('printvalue is not a number.')
@@ -777,13 +790,10 @@ setMethod(
 	f = "fitted",
 	signature = signature(object = 'mirtClass'),
 	definition = function(object, digits = 3, ...){  
-		expected <- round(nrow(object@data) * object@Pl,digits)  
+		Exp <- round(nrow(object@data) * object@Pl,digits)  
 		tabdata <- object@tabdata
-		freq <- tabdata[ ,ncol(tabdata)]
-		tabdata[tabdata[ ,1:ncol(object@data)] == 9] <- NA
-		tabdata[ ,ncol(tabdata)] <- freq
-		tabdata <- cbind(tabdata,expected)
-		colnames(tabdata) <- c(colnames(object@tabdata),"freq","exp")	
+		Exp[is.na(rowSums(tabdata))] <- NA				
+		tabdata <- cbind(tabdata,Exp)			
 		print(tabdata)
 		invisible(tabdata)
 	}

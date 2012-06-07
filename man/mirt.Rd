@@ -9,13 +9,13 @@
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-  mirt(data, nfact, guess = 0, SE = FALSE, prev.cor = NULL,
-    par.prior = FALSE, startvalues = NULL, quadpts = NULL,
-    ncycles = 300, tol = .001, nowarn = TRUE, debug =
-    FALSE, ...)
+  mirt(data, nfact, guess = 0, SE = FALSE, rotate =
+    'varimax', prev.cor = NULL, par.prior = FALSE,
+    startvalues = NULL, quadpts = NULL, ncycles = 300, tol
+    = .001, nowarn = TRUE, debug = FALSE, ...)
 
-  \S4method{summary}{mirt}(object, rotate='varimax',
-    suppress = 0, digits = 3, ...)
+  \S4method{summary}{mirt}(object, rotate='', suppress = 0,
+    digits = 3, ...)
 
   \S4method{coef}{mirt}(object, digits = 3, ...)
 
@@ -67,8 +67,12 @@ Theory)}
   slope = 1.2, int.items = 4, slope.items = c(2,3))}}
 
   \item{rotate}{type of rotation to perform after the
-  initial orthogonal parameters have been extracted. See
-  below for list of possible rotations}
+  initial orthogonal parameters have been extracted by
+  using \code{summary}; default is \code{'varimax'}. See
+  below for list of possible rotations. If \code{rotate !=
+  ''} in the \code{summary} input then the default from the
+  object is ignored and the new rotation from the list is
+  used instead}
 
   \item{startvalues}{user declared start values for
   parameters}
@@ -206,7 +210,7 @@ Theory)}
   Unrestricted full-information factor analysis is known to
   have problems with convergence, and some items may need
   to be constrained or removed entirely to allow for an
-  acceptable solution. As a general rule dichotmous items
+  acceptable solution. As a general rule dichotomous items
   with means greater than .95, or items that are only .05
   greater than the guessing parameter, should be considered
   for removal from the analysis or treated with prior
@@ -235,6 +239,7 @@ anova(mod1, mod2) #compare the two models
 scores <- fscores(mod2) #save factor score table
 
 ###########
+#data from the 'ltm' package in numeric format
 pmod1 <- mirt(Science, 1)
 plot(pmod1)
 summary(pmod1)
@@ -264,7 +269,7 @@ mod2g <- mirt(data, 2, guess = .1)
 coef(mod2g)
 anova(mod1g, mod2g)
 summary(mod2g, rotate='promax')
-     }
+}
 }
 \author{
   Phil Chalmers \email{rphilip.chalmers@gmail.com}

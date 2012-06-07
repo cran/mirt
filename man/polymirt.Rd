@@ -9,13 +9,13 @@
 \title{Full-Information Item Factor Analysis for Mixed Data Formats}
 \usage{
   polymirt(data, nfact, guess = 0, estGuess = NULL,
-    prev.cor = NULL, ncycles = 2000, burnin = 100,
-    SEM.cycles = 50, kdraws = 1, tol = .001, printcycles =
-    TRUE, calcLL = TRUE, draws = 2000, debug = FALSE,
-    technical = list(), ...)
+    prev.cor = NULL, rotate = 'varimax', ncycles = 2000,
+    burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001,
+    printcycles = TRUE, calcLL = TRUE, draws = 2000, debug
+    = FALSE, technical = list(), ...)
 
-  \S4method{summary}{polymirt}(object, rotate='varimax',
-    suppress = 0, digits = 3, ...)
+  \S4method{summary}{polymirt}(object, rotate='', suppress
+    = 0, digits = 3, ...)
 
   \S4method{coef}{polymirt}(object, SE = TRUE, digits = 3,
     ...)
@@ -57,8 +57,12 @@
   correlations.}
 
   \item{rotate}{type of rotation to perform after the
-  initial orthogonal parameters have been extracted. See
-  \code{\link{mirt}} for a list of possible rotations}
+  initial orthogonal parameters have been extracted by
+  using \code{summary}; default is \code{'varimax'}. See
+  \code{\link{mirt}} for list of possible rotations. If
+  \code{rotate != ''} in the \code{summary} input then the
+  default from the object is ignored and the new rotation
+  from the list is used instead}
 
   \item{ncycles}{the maximum number of iterations to be
   performed}
