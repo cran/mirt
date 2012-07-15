@@ -6,10 +6,8 @@ thetaComb <- function(theta, nfact)
 	else if (nfact == 3) Theta <- expand.grid(theta,theta,theta)  
 	else if (nfact == 4) Theta <- expand.grid(theta,theta,theta,theta)
 	else if (nfact == 5) Theta <- expand.grid(theta,theta,theta,theta,theta)        
-	else if (nfact == 6) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)        
-	else if (nfact == 7) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta)        
-	else if (nfact == 8) Theta <- expand.grid(theta,theta,theta,theta,theta,theta,theta,theta) 
-	if(nfact > 8) stop('Are you crazy?!?!? That\'s way too many factors for this quandrature method.')
+	else if (nfact == 6) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)        	
+	if(nfact > 6) stop('Are you crazy?!?!? That\'s way too many factors for this quandrature method.')
 	Theta <- as.matrix(Theta)	
 	return(Theta)     
 }
@@ -38,32 +36,47 @@ start.values <- function(fulldata, guess, Rpoly, nfact=2, bfactor = FALSE, nowar
 }
 
 # Rotation function
-Rotate <- function(F, rotate)
-{
-	orthogonal <- c("varimax", "quartimax", "tandemI", "tandemII", "entropy", "mccammon")
-	oblique <- c("promax", "oblimin", "quartimin", "oblimax", "simplimax")
-	if (!any(rotate %in% c(orthogonal,oblique))) stop("Unknown rotation specified.")
-	if(any(rotate %in% orthogonal)){
-		oblique <- FALSE
-		rotF <- GPArotation::GPForth(F, method = rotate)
+Rotate <- function(F, rotate, Target = NULL, ...)
+{	
+	if(rotate == 'promax'){
+        rotF <- psych::Promax(F)
+        rotF$orthogonal <- FALSE
 	}
-	if(any(rotate %in% oblique)){
-		oblique <- TRUE
-		if(rotate == 'promax') rotF <- psych::Promax(F) 
-			else rotF <- GPArotation::GPFoblq(F, method = rotate)
-	}
-	attr(rotF,"oblique") <- oblique 
-	return(rotF)
+    if(rotate == 'oblimin') rotF <- GPArotation::oblimin(F, ...)     
+	if(rotate == 'quartimin') rotF <- GPArotation::quartimin(F, ...)
+	if(rotate == 'targetT') rotF <- GPArotation::targetT(F, Target = Target, ...)
+	if(rotate == 'targetQ') rotF <- GPArotation::targetQ(F, Target = Target, ...)
+	if(rotate == 'pstT') rotF <- GPArotation::pstT(F, Target = Target, ...)
+	if(rotate == 'pstQ') rotF <- GPArotation::pstQ(F, Target = Target, ...)
+	if(rotate == 'oblimax') rotF <- GPArotation::oblimax(F, ...)
+	if(rotate == 'entropy') rotF <- GPArotation::entropy(F, ...)
+	if(rotate == 'quartimax') rotF <- GPArotation::quartimax(F, ...)
+	if(rotate == 'varimax') rotF <- GPArotation::Varimax(F, ...)
+	if(rotate == 'simplimax') rotF <- GPArotation::simplimax(F, ...)
+	if(rotate == 'bentlerT') rotF <- GPArotation::bentlerT(F, ...)
+	if(rotate == 'bentlerQ') rotF <- GPArotation::bentlerQ(F, ...)
+	if(rotate == 'tandemI') rotF <- GPArotation::tandemI(F, ...)
+	if(rotate == 'tandemII') rotF <- GPArotation::tandemII(F, ...)
+	if(rotate == 'geominT') rotF <- GPArotation::geominT(F, ...)
+	if(rotate == 'geominQ') rotF <- GPArotation::geominQ(F, ...)
+	if(rotate == 'cfT') rotF <- GPArotation::cfT(F, ...)
+	if(rotate == 'cfQ') rotF <- GPArotation::cfQ(F, ...)
+	if(rotate == 'infomaxT') rotF <- GPArotation::infomaxT(F, ...)
+	if(rotate == 'infomaxQ') rotF <- GPArotation::infomaxQ(F, ...)
+	if(rotate == 'mccammon') rotF <- GPArotation::mccammon(F, ...)
+	if(rotate == 'bifactorT') rotF <- GPArotation::bifactorT(F, ...)
+	if(rotate == 'bifactorQ') rotF <- GPArotation::bifactorQ(F, ...)    		
+	return(unclass(rotF))
 }  
 
 # MAP scoring for mirt
-MAP.mirt <- function(Theta,a,d,guess,patdata,itemloc,ML=FALSE)
+MAP.mirt <- function(Theta, a, d, guess, upper, patdata, itemloc, ML=FALSE)
 {	
 	itemtrace <- rep(0, ncol=length(patdata))
 	Theta <- matrix(Theta, 1)
 	for (i in 1:length(guess)){
 		if(length(d[[i]]) == 1){
-			itemtrace[itemloc[i]] <- P.mirt(a[i, ], d[[i]], Theta, guess[i]) 
+			itemtrace[itemloc[i]] <- P.mirt(a[i, ], d[[i]], Theta, guess[i], upper[i]) 
 			itemtrace[itemloc[i] + 1] <- 1.0 - itemtrace[itemloc[i]]
 		} else {
 			itemtrace[itemloc[i]:(itemloc[i+1] - 1)] <- 
@@ -78,13 +91,13 @@ MAP.mirt <- function(Theta,a,d,guess,patdata,itemloc,ML=FALSE)
 }  
 
 # MAP scoring for bfactor
-MAP.bfactor <- function(Theta,a,d,guess,patdata,logicalfact,itemloc,ML=FALSE)
+MAP.bfactor <- function(Theta, a, d, guess, upper, patdata, logicalfact, itemloc, ML=FALSE)
 {	
 	itemtrace <- rep(0, ncol=length(patdata))
 	Theta <- matrix(Theta, 1)
 	for (i in 1:length(guess)){
 		if(length(d[[i]]) == 1){
-			itemtrace[itemloc[i]] <- P.mirt(a[i, logicalfact[i, ]], d[[i]], Theta, guess[i]) 
+			itemtrace[itemloc[i]] <- P.mirt(a[i, logicalfact[i, ]], d[[i]], Theta, guess[i], upper[i]) 
 			itemtrace[itemloc[i] + 1] <- 1.0 - itemtrace[itemloc[i]]
 		} else {
 			itemtrace[itemloc[i]:(itemloc[i+1] - 1)] <- 
@@ -117,24 +130,24 @@ P.poly <- function(lambda, zetas, Thetas, itemexp = FALSE)
 }
 
 # Trace lines for mirt models
-P.mirt <- function(a, d, Theta, g)
+P.mirt <- function(a, d, Theta, g, u = 1)
 { 		
-	traces <- .Call("traceLinePts", a, d, g, Theta)
+	traces <- .Call("traceLinePts", a, d, g, u, Theta)
 	return(traces)
 }
 
-P.comp <- function(a,d,thetas,c = 0)
+P.comp <- function(a, d, thetas, c = 0, u = 1)
 {
 	nfact <- length(a)
 	P <- rep(1,nrow(thetas))
 	for(i in 1:nfact)
 		P <- P * P.mirt(a[i], d[i], thetas[ ,i, drop=FALSE],0)
-	P <- c + (1-c) * P
+	P <- c + (u - c) * P
 	P	
 } 
 
 # Estep
-Estep.mirt <- function(pars, tabdata, Theta, prior, guess, itemloc) 
+Estep.mirt <- function(pars, tabdata, Theta, prior, guess, upper, itemloc) 
 {
 	a <- pars$lambdas
 	J <- nrow(a)
@@ -147,7 +160,7 @@ Estep.mirt <- function(pars, tabdata, Theta, prior, guess, itemloc)
 	r1 <- r0 <- matrix(0, ncol=length(guess), nrow=nrow(Theta))
 	for (i in 1:J){
 		if(length(d[[i]]) == 1){
-			itemtrace[ ,itemloc[i] + 1] <- P.mirt(a[i, ], d[[i]], Theta, guess[i]) 
+			itemtrace[ ,itemloc[i] + 1] <- P.mirt(a[i, ], d[[i]], Theta, guess[i], upper[i]) 
 			itemtrace[ ,itemloc[i]] <- 1.0 - itemtrace[ ,itemloc[i] + 1]
 		} else {
 			itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
@@ -158,7 +171,7 @@ Estep.mirt <- function(pars, tabdata, Theta, prior, guess, itemloc)
 	return(retlist)
 } 
 
-P.bfactor <- function(a, d, Theta, g, patload)
+P.bfactor <- function(a, d, Theta, g, u, patload)
 { 
 	a <- a[patload]	
 	if(length(d) > 1){
@@ -171,12 +184,12 @@ P.bfactor <- function(a, d, Theta, g, patload)
 		P <- matrix(0,nrow(Theta),ncat)		
 		for(i in ncat:1)
 			P[ ,i] <- Pk[ ,i] - Pk[ ,i+1]		
-	} else P <- .Call("traceLinePts", a, d, g, Theta)		
+	} else P <- .Call("traceLinePts", a, d, g, u, Theta)		
 	return(P)
 }
 
 # Estep
-Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, specific, sitems, itemloc) 
+Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, upper, specific, sitems, itemloc) 
 {	
 	a <- pars$lambdas
 	logicalfact <- attr(pars, 'lamsel')
@@ -191,7 +204,7 @@ Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, specific, sitems, 
 	for (i in 1:J){
 		atmp <- a[i, logicalfact[i, ]]
 		if(length(d[[i]]) == 1){
-			itemtrace[ ,itemloc[i] + 1] <- P.mirt(atmp, d[[i]], Theta, guess[i]) 
+			itemtrace[ ,itemloc[i] + 1] <- P.mirt(atmp, d[[i]], Theta, guess[i], upper[i]) 
 			itemtrace[ ,itemloc[i]] <- 1.0 - itemtrace[ ,itemloc[i] + 1]
 		} else {
 			itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
@@ -207,7 +220,7 @@ Estep.bfactor <- function(pars, tabdata, Theta, prior, guess, specific, sitems, 
 	return(list(r1=r1, expected=retlist$expected))	
 }      
 
-draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,
+draw.thetas <- function(theta0,lambdas,zetas,guess,upper = rep(1,length(K)),fulldata,K,itemloc,cand.t.var,
 	prior.t.var = diag(ncol(theta0)), prior.mu = rep(0,ncol(theta0)), estComp = rep(FALSE,length(K)),
 	prodlist = NULL) 
 { 			
@@ -226,7 +239,7 @@ draw.thetas <- function(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var
 		theta0 <- prodterms(theta0,prodlist)
 		theta1 <- prodterms(theta1,prodlist)	
 	}	
-	ThetaDraws <- .Call("drawThetas", unif, den0, den1, lambdas, zetas, guess,
+	ThetaDraws <- .Call("drawThetas", unif, den0, den1, lambdas, zetas, guess, upper,
 					theta0, theta1,	fulldata, (itemloc-1), as.numeric(estComp))
 	log.lik <- ThetaDraws$cdloglik
 	accept <- as.logical(ThetaDraws$accept)				
@@ -272,10 +285,10 @@ d.group <- function(grouplist,theta)
 	list(h=h,g=g) 
 }
 
-dpars.dich <- function(lambda,zeta,g,dat,Thetas,estGuess)
+dpars.dich <- function(lambda, zeta, g, u, dat, Thetas, estGuess)
 {
 	nfact <- length(lambda)
-	P <- P.mirt(lambda, zeta, Thetas, g)						
+	P <- P.mirt(lambda, zeta, Thetas, g, u)						
 	if(estGuess){ 
 		r <- dat
 		f <- 1		
@@ -596,8 +609,8 @@ prodterms <- function(theta0, prodlist)
 }
 
 model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata, itemloc, data, N,
-  estGuess, guess, guess.prior.n, itemnames)
-{
+  estGuess, guess, upper, estUpper, guess.prior.n, itemnames, exploratory)
+{    
   hasProdTerms <- ifelse(nfact == nfactNames, FALSE, TRUE)
   prodlist <- NULL
   if(hasProdTerms){
@@ -605,6 +618,7 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
     tmp2 <- factorNames[!grepl('\\(',factorNames)] 
     tmp <- gsub("\\(","",tmp)	
     tmp <- gsub("\\)","",tmp)
+    tmp <- gsub(" ","",tmp)
     prodlist <- strsplit(tmp,"\\*")
     for(j in 1:length(prodlist)){
       for(i in 1:nfact)
@@ -753,15 +767,16 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   
   #Housework
   loc1 <- 1
-  lamind <- zetaind <- guessind <- sind <- c()	
+  lamind <- zetaind <- guessind <- upperind <- sind <- c()	
   for(i in 1:J){
     if(estComp[i])
       zetaind <- c(zetaind, loc1:(loc1+(length(estzetas[[i]])-1)))		
     else zetaind <- c(zetaind,loc1:(loc1 + K[i] - 2))
     lamind <- c(lamind,max(zetaind + 1):(max(zetaind) + nfactNames))		
     guessind <- c(guessind,max(lamind + 1):max(lamind + 1 ))
-    sind <- c(sind, estzetas[[i]], estlam[i,], estGuess[i])
-    loc1 <- loc1 + nfactNames + sum(estzetas[[i]]) + 1	
+    upperind <- c(upperind,max(lamind + 2):max(lamind + 2 ))
+    sind <- c(sind, estzetas[[i]], estlam[i,], estGuess[i], estUpper[i])
+    loc1 <- loc1 + nfactNames + sum(estzetas[[i]]) + 2	
   }	
   sind <- c(sind, estgmeans, estgcov[lower.tri(estgcov,diag=TRUE)])
   npars <- length(sind)
@@ -772,16 +787,18 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   pars[lamind] <- t(lambdas)
   pars[zetaind] <- zetas
   pars[guessind] <- guess
+  pars[upperind] <- upper
   pars[groupind] <- c(gmeans,gcov[lower.tri(gcov,diag=TRUE)])
   parnames <- rep('',npars)
   parnames[lamind] <- paste('lam',1:length(lamind),sep='')  
   parnames[zetaind] <- paste('zeta',1:length(zetaind),sep='')
   parnames[guessind] <- paste('guess',1:length(guessind),sep='')  
+  parnames[upperind] <- paste('upper',1:length(upperind),sep='')
   parnames[groupind] <- c(paste('gmeans',1:length(gmeans),sep=''), 
 	paste('gcov',1:length(gcov[lower.tri(gcov,diag=TRUE)]),sep=''))
   names(pars) <- names(sind) <- parnames
   
-  parcount <- list(lam = estlam, zeta = estzetas2, guess = estGuess, cov = estgcov, mean = estgmeans)
+  parcount <- list(lam=estlam, zeta=estzetas2, guess=estGuess, upper=estUpper, cov=estgcov, mean=estgmeans)
   parind <- 1:npars
   loc1 <- 1
   parcount$lam <- matrix(lamind,J,byrow=TRUE)	
@@ -803,6 +820,7 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   names(zetas) <- names(zetaind2) <- itemnames   
   parcount$zeta <- zetaind2
   parcount$guess <- guessind
+  parcount$upper <- upperind
   parcount$mean <- meanind
   parcount$cov <- matrix(0,nfact,nfact)
   parcount$cov[selgcov] <- covind		
@@ -887,8 +905,8 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
     }
   }
   if(!all(sort(abs(colSums(estlam[ ,1:nfact,drop=FALSE]) - J)) >= 0:(nfact-1)) && 
-    length(equalconstr) == 0) stop('Slope parameters are not uniquely identified.')
-  if(!all(sort(abs(colSums(estlam[ ,1:nfact,drop=FALSE]) - J)) >= 0:(nfact-1)))
+    length(equalconstr) == 0 && !exploratory) stop('Slope parameters are not uniquely identified.')
+  if(!all(sort(abs(colSums(estlam[ ,1:nfact,drop=FALSE]) - J)) >= 0:(nfact-1)) && !exploratory)
     warning('Slope parameters may not be uniquely identified.')	
   
   #PRIOR, 1 == norm, 2== beta
@@ -921,13 +939,13 @@ model.elements <- function(model, factorNames, nfactNames, nfact, J, K, fulldata
   }
       
   val <- list(pars=pars, lambdas=lambdas, zetas=zetas, gmeans=gmeans, gcov=gcov, 
-    constvalues=constvalues)
+    guess=guess, upper=upper, constvalues=constvalues)
   est <- list(estlam=estlam, estComp=estComp, estzetas=estzetas, estzetas2=estzetas2, 
-    estgcov=estgcov, estgmeans=estgmeans)
+    estgcov=estgcov, estgmeans=estgmeans, estGuess=estGuess, estUpper=estUpper)
   ind <- list(equalind=equalind, equalconstr=equalconstr, parpriorscount=parpriorscount, 
     prodlist=prodlist, parpriors=parpriors, sind=sind, lamind=lamind, zetaind=zetaind, 
-    zetaindlist=zetaind2, guessind=guessind, groupind=groupind, meanind=meanind, covind=covind, 
-	parind=parind)
+    zetaindlist=zetaind2, guessind=guessind, upperind=upperind, groupind=groupind, 
+    meanind=meanind, covind=covind, parind=parind)
   ret <- list(val=val, est=est, ind=ind, parcount=parcount, npars=npars)
   ret
 }
@@ -939,8 +957,8 @@ sortPars <- function(pars, indlist, nfact, estGuess)
 	zetas <- list()
 	for(i in 1:J)
 		zetas[[i]] <- pars[indlist$zetaind[[i]]]
-	guess <- rep(0,J)
-	guess[estGuess] <- pars[indlist$gind]	
+	guess <- upper <- rep(0,J)
+	guess[estGuess] <- pars[indlist$gind]		
 	
 	return(list(lambdas=lambdas, zetas=zetas, guess=guess))
 }
@@ -952,14 +970,15 @@ sortParsConfmirt <- function(pars, indlist, nfact, estGuess, nfactNames)
 	zetas <- list()
 	for(i in 1:J)
 		zetas[[i]] <- pars[indlist$zetaindlist[[i]]]
-	guess <- pars[indlist$guessind]		
+	guess <- pars[indlist$guessind]
+    upper <- pars[indlist$upperind]
 	mu <- pars[indlist$meanind]
 	sig <- matrix(0, nfact, nfact)
 	sig[lower.tri(sig, diag=TRUE)] <- pars[indlist$covind]
 	if(nfact > 1)
 		sig <- sig + t(sig) - diag(diag(sig))							
 	
-	return(list(lambdas=lambdas, zetas=zetas, guess=guess, mu=mu, sig=sig))
+	return(list(lambdas=lambdas, zetas=zetas, guess=guess, upper=upper, mu=mu, sig=sig))
 }
 
 rateChange <- function(pars, lastpars1, lastpars2)
@@ -993,5 +1012,13 @@ rebuildPars <- function(p, pars)
 		ind1 <- ind1 + length(pars$zetas[[i]])
 	}			
 	return(pars2)
+}
+
+rotateLambdas <- function(so){
+    F <- so$rotF %*% t(chol(so$fcor))
+    h2 <- so$h2
+    h <- matrix(rep(sqrt(1 - h2), ncol(F)), ncol = ncol(F))
+    a <- F / h
+    a    
 }
 

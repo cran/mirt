@@ -8,17 +8,17 @@
 \alias{summary,polymirt-method}
 \title{Full-Information Item Factor Analysis for Mixed Data Formats}
 \usage{
-  polymirt(data, nfact, guess = 0, estGuess = NULL,
-    prev.cor = NULL, rotate = 'varimax', ncycles = 2000,
-    burnin = 100, SEM.cycles = 50, kdraws = 1, tol = .001,
-    printcycles = TRUE, calcLL = TRUE, draws = 2000, debug
-    = FALSE, technical = list(), ...)
+  polymirt(data, nfact, guess = 0, upper = 1, estGuess =
+    NULL, estUpper = NULL, prev.cor = NULL, rotate =
+    'varimax', Target = NULL, verbose = TRUE, calcLL =
+    TRUE, draws = 2000, debug = FALSE, technical = list(),
+    ...)
 
   \S4method{summary}{polymirt}(object, rotate='', suppress
-    = 0, digits = 3, ...)
+    = 0, digits = 3, print = FALSE, ...)
 
-  \S4method{coef}{polymirt}(object, SE = TRUE, digits = 3,
-    ...)
+  \S4method{coef}{polymirt}(object, rotate = '', SE = TRUE,
+    digits = 3, ...)
 
   \S4method{plot}{polymirt}(x, npts = 50, type = 'info',
     rot = list(x = -70, y = 30, z = 10), ...)
@@ -41,6 +41,11 @@
   value to assign a global guessing parameter or may be
   entered as a numeric vector for each item}
 
+  \item{upper}{initial (or fixed) upper bound parameters
+  for 4-PL model. Can be entered as a single value to
+  assign a global upper bound parameter or may be entered
+  as a numeric vector corresponding to each item}
+
   \item{estGuess}{a logical vector indicating which
   lower-asymptote parameters to be estimated (default is
   null, and therefore is contingent on the values in
@@ -49,6 +54,9 @@
   value is set to \code{TRUE}. Additionally, beta priors
   are automatically imposed for estimated parameters that
   correspond to the input guessing value.}
+
+  \item{estUpper}{same function as \code{estGuess}, but for
+  upper bound parameters}
 
   \item{prev.cor}{use a previously computed correlation
   matrix to be used to estimate starting values the
@@ -64,21 +72,6 @@
   default from the object is ignored and the new rotation
   from the list is used instead}
 
-  \item{ncycles}{the maximum number of iterations to be
-  performed}
-
-  \item{burnin}{number of burn-in cycles to perform before
-  beginning the SEM stage}
-
-  \item{SEM.cycles}{number of stochastic EM cycles to
-  perform before beginning the MH-RM algorithm}
-
-  \item{kdraws}{number of Metropolis-Hastings imputations
-  of the factor scores at each iteration. Default is 1}
-
-  \item{tol}{tolerance that will terminate the model
-  estimation; must occur in 3 consecutive iterations}
-
   \item{SE}{logical; display the standard errors?}
 
   \item{printvalue}{a numeric value to be specified when
@@ -86,6 +79,8 @@
   that have standardized residuals greater than
   \code{abs(printvalue)}. The default (NULL) prints all
   response patterns}
+
+  \item{print}{logical; print output to console?}
 
   \item{x}{an object of class \code{polymirtClass} to be
   plotted or printed}
@@ -110,8 +105,8 @@
 
   \item{rot}{allows rotation of the 3D graphics}
 
-  \item{printcycles}{logical; display iteration history
-  during estimation?}
+  \item{verbose}{logical; display iteration history during
+  estimation?}
 
   \item{calcLL}{logical; calculate the log-likelihood?}
 
@@ -126,12 +121,23 @@
   \item{type}{either \code{'info'} or \code{'infocontour'}
   to plot test information plots}
 
+  \item{Target}{a dummy variable matrix indicing a target
+  rotation pattern}
+
   \item{debug}{logical; turn on debugging features?}
 
   \item{technical}{list specifying subtle parameters that
-  can be adjusted}
+  can be adjusted. Can be \describe{ \item{NCYCLES}{max
+  number of MH-RM cycles; default 2000}
+  \item{BURNIN}{number of burn in cycles (stage 1); default
+  150} \item{SEMCYCLES}{number of SEM cycles (stage 2);
+  default 50} \item{KDRAWS}{number of paralell MH sets to
+  be drawn; default 1} \item{TOL}{minimum threshold
+  tolerance for convergence of MH-RM, must occur on three
+  consecutive occations; default .001} }}
 
-  \item{...}{additional arguments to be passed}
+  \item{...}{additional arguments to be passed to the
+  \code{\link{confmirt}} estimation engine}
 }
 \description{
   \code{polymirt} fits an unconditional (exploratory)

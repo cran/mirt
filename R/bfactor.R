@@ -16,14 +16,15 @@
 # @keywords classes
 setClass(
 	Class = 'bfactorClass',
-	representation = representation(EMiter = 'numeric', pars = 'list', 
+	representation = representation(EMiter = 'numeric', pars = 'list', upper='numeric',
 		guess = 'numeric', parsSE='list', AIC = 'numeric', X2 = 'numeric', df = 'numeric', 
 		logLik = 'numeric', p = 'numeric', F = 'matrix', h2 = 'numeric', 
 		itemnames = 'character', tabdata = 'matrix', N = 'numeric', K='numeric',
 		Pl = 'numeric', Theta = 'matrix', data = 'matrix', itemloc = 'numeric',
 		logicalfact = 'matrix', facility = 'numeric', specific = 'numeric', tabdatalong='matrix',
 		BIC = 'numeric', cormat = 'matrix', converge = 'numeric', RMSEA = 'numeric',
-		par.prior = 'matrix', quadpts = 'numeric', vcov = 'matrix', Call = 'call'),	
+		par.prior = 'matrix', quadpts = 'numeric', vcov = 'matrix', null.mod = 'S4', 
+        TLI = 'numeric', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -87,6 +88,9 @@ setClass(
 #' @param guess fixed pseudo-guessing parameter. Can be entered as a single
 #' value to assign a global value or may be entered as a numeric vector for
 #' each item of length \code{ncol(data)}.
+#' @param upper fixed upper bound parameters for 4-PL model. Can be entered as a single
+#' value to assign a global guessing parameter or may be entered as a numeric
+#' vector corresponding to each item
 #' @param SE logical; estimate parameter standard errors?
 #' @param prev.cor uses a previously computed correlation matrix to be used to
 #' estimate starting values for the EM estimation
@@ -104,16 +108,22 @@ setClass(
 #' = list(int = c(0,2), slope = 1.2, int.items = 4, slope.items = c(2,3))}
 #' @param startvalues user declared start values for parameters
 #' @param quadpts number of quadrature points per dimension. 
-#' @param ncycles the number of EM iterations to be performed
-#' @param tol if the largest change in the EM cycle is less than this value
-#' then the EM iterations are stopped
 #' @param object a model estimated from \code{bfactor} of class \code{bfactorClass}
 #' @param restype type of residuals to be displayed. Can be either \code{'LD'}
 #' for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
 #' expected values for the frequencies of every response pattern
 #' @param digits number of significant digits to be rounded
-#' @param nowarn logical; suppress warnings from dependent packages?
+#' @param verbose logical; print observed log-likelihood value at each iteration?
 #' @param debug logical; turn on debugging features?
+#' @param technical a list containing lower level technical parameters for estimation
+#' \describe{ 
+#' \item{MAXQUAD}{maximum number of quadratures; default 10000}
+#' \item{MSTEPMAXIT}{number of M-step iterations; default 25}
+#' \item{TOL}{EM convergence threshold; default .001}
+#' \item{NCYCLES}{maximum number of EM cycles; default 300}
+#' \item{NOWARN}{a logical indicating whether dependent packages warnings shoudl be printed; d
+#' default \code{TRUE}}
+#' }
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
@@ -143,9 +153,9 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage
-#' bfactor(data, specific, guess = 0, SE = FALSE, prev.cor = NULL, par.prior = FALSE, 
-#'   startvalues = NULL,  quadpts = 15, ncycles = 300, tol = .001, nowarn = TRUE, 
-#'   debug = FALSE, ...)
+#' bfactor(data, specific, guess = 0, upper = 1, SE = FALSE, prev.cor = NULL, 
+#' par.prior = FALSE, startvalues = NULL, quadpts = 15, verbose = FALSE, debug = FALSE, 
+#' technical = list(), ...)
 #' 
 #' \S4method{summary}{bfactor}(object, digits = 3, ...)
 #' 
@@ -218,17 +228,17 @@ setClass(
 #'
 #'     }
 #' 
-bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL, 
-	par.prior = FALSE, startvalues = NULL, quadpts = 15, ncycles = 300, 
-	tol = .001, nowarn = TRUE, debug = FALSE, ...)
+bfactor <- function(data, specific, guess = 0, upper = 1, SE = FALSE, prev.cor = NULL, 
+	par.prior = FALSE, startvalues = NULL, quadpts = 15, verbose = FALSE, debug = FALSE, 
+    technical = list(), ...)
 { 
 	#local functions	
-	fn <- function(par, rs, gues, Theta, Prior, parprior, nzeta){		
+	fn <- function(par, rs, gues, up, Theta, Prior, parprior, nzeta){		
 		a <- par[1:(length(par)-nzeta)]
 		d <- par[(length(a)+1):length(par)]	
 		rs <- rs * Prior
 		if(ncol(rs) == 2){
-			itemtrace <- P.mirt(a, d, Theta, gues) 
+			itemtrace <- P.mirt(a, d, Theta, gues, up) 
 			itemtrace <- cbind(1.0 - itemtrace, itemtrace)
 		} else {
 			itemtrace <- P.poly(a, d, Theta, TRUE)	
@@ -248,9 +258,15 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 		}
 		result
 	}   
-	
-	#Main
+		
 	Call <- match.call()		
+	##technical
+	MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
+	MSTEPMAXIT <- ifelse(is.null(technical$MSTEPMAXIT), 25, technical$MSTEPMAXIT)
+	TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)
+	NCYCLES <- ifelse(is.null(technical$NCYCLES), 300, technical$NCYCLES)	
+	NOWARN <- ifelse(is.null(technical$NOWARN), TRUE, technical$NOWARN)
+	##
 	itemnames <- colnames(data)
 	data <- as.matrix(data)
 	data.original <- data		
@@ -259,9 +275,12 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	J <- ncol(data)
 	N <- nrow(data)	
 	if(length(guess) == 1) guess <- rep(guess,J)
+	if(length(upper) == 1) upper <- rep(upper,J)
 	colnames(data) <- itemnames
 	if(length(guess) > J || length(guess) < J) 
 		stop("The number of guessing parameters is incorrect.")
+	if(length(upper) > J || length(upper) < J) 
+	    stop("The number of upper bound parameters is incorrect.")
 	facility <- colMeans(na.omit(data))		
 	uniques <- list()
 	for(i in 1:J)
@@ -269,6 +288,7 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	K <- rep(0,J)
 	for(i in 1:J) K[i] <- length(uniques[[i]])	
 	guess[K > 2] <- 0	
+	upper[K > 2] <- 1
 	itemloc <- cumsum(c(1,K))
 	index <- 1:J	
 	fulldata <- matrix(0,N,sum(K))
@@ -379,21 +399,25 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 			ind <- ind + 1
 		}		
 	}		
-	if(debug) print(startvalues)			 		
+	if(debug) print(startvalues)			 		    
 	
 	#EM  loop  
-	for (cycles in 1:ncycles) 
+	for (cycles in 1:NCYCLES) 
 	{    
-		rlist <- Estep.bfactor(pars, tabdata, Theta, prior, guess, 
+		rlist <- Estep.bfactor(pars, tabdata, Theta, prior, guess, upper,
 			specific, sitems, itemloc)
-		if(debug) print(sum(r * log(rlist$expected)))			
+		if(verbose){
+            print(sum(r * log(rlist$expected)))			
+            flush.console()
+		}
 		lastpars2 <- lastpars1
 		lastpars1 <- pars			
 		for(i in 1:J){ 
 			par <- c(pars$lambdas[i, logicalfact[i, ]], pars$zetas[[i]])
 			itemsel <- c(itemloc[i]:(itemloc[i+1] - 1))							
-			maxim <- try(optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], Theta=Theta, 
-				Prior=Prior, parprior=par.prior[i, ], nzeta=K[i]-1, control=list(maxit=25)))			
+			maxim <- try(optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], up = upper[i], 
+                Theta=Theta, Prior=Prior, parprior=par.prior[i, ], nzeta=K[i]-1, 
+                control=list(maxit=MSTEPMAXIT)))			
 			if(class(maxim) == "try-error") {
 				problemitems <- c(problemitems, i)	  
 				converge <- 0
@@ -403,12 +427,11 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 			pars$zetas[[i]] <- maxim$par[3:length(par)]	  
 		}
 		maxdif <- max(abs(unlist(lastpars1) - unlist(pars)))	
-		if (maxdif < tol && cycles > 5) break 	
+		if (maxdif < TOL && cycles > 5) break 	
 		# apply rate acceleration every third cycle    
 		if (cycles %% 3 == 0 & cycles > 6)		 
 			pars <- rateChange(pars, lastpars1, lastpars2)       
-	}
-	
+	} #End EM	
 	if(any(par.prior[,1] != 1)) cat("Slope prior for item(s):",
 		as.character(index[par.prior[,1] > 1]), "\n")
 	if(any(par.prior[,3] != 0)) cat("Intercept prior for item(s):",
@@ -419,32 +442,36 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	if(length(problemitems) > 0) warning("Problem with the M-step for item(s): ", 
 		paste(unique(problemitems), " "))	
 	lastchange <- unlist(lastpars1) - unlist(pars)
-	if (cycles == ncycles){ 
+	if (cycles == NCYCLES){ 
 		converge <- 0
 		message("Estimation terminated after ", cycles, " EM loops. Maximum changes: 
 			\n slopes = ", round(max(abs(lastchange[,1:nfact])),4), ", intercepts = ", 
 			round(max(abs(lastchange[,ncol(pars)])),4) ,"\n")
 	}	
-	rlist <- Estep.bfactor(pars, tabdata, Theta, prior, guess, 
+	rlist <- Estep.bfactor(pars, tabdata, Theta, prior, guess, upper, 
 			specific, sitems, itemloc)
 	Pl <- rlist$expected	
 	logLik <- sum(r * log(Pl))
 	vcovpar <- matrix(999)
 	parsSE <- list()
 	if(SE){		
-		LLfun <- function(p, pars, tabdata, Theta, prior, guess, specific, sitems, itemloc){
+		LLfun <- function(p, pars, tabdata, Theta, prior, guess, upper, 
+                          specific, sitems, itemloc){
 			pars2 <- rebuildPars(p, pars)		
-			rlist <- Estep.bfactor(pars2, tabdata, Theta, prior, guess, 
+			rlist <- Estep.bfactor(pars2, tabdata, Theta, prior, guess, upper,  
 				specific, sitems, itemloc)    	  
 			Pl <- rlist$expected
 			logLik <- sum(r*log(Pl))
 			-1*logLik		
 		}
 		fmin <- nlm(LLfun, unlist(pars), pars=pars,tabdata=tabdata,Theta=Theta,prior=prior,
-			guess=guess, specific=specific, sitems=sitems, itemloc=itemloc, hessian=TRUE, gradtol=.1)		
+			guess=guess, upper=upper, specific=specific, sitems=sitems, itemloc=itemloc, 
+            hessian=TRUE, gradTOL=.1)		
 		vcovpar <- solve(fmin$hessian)
 		parsSE <- rebuildPars(sqrt(diag(vcovpar)), pars)	
 	}
+    guess[K > 2] <- NA
+	upper[K > 2] <- NA
 	logN <- 0	
 	npatmissing <- sum(is.na(rowSums(tabdata2)))
 	logr <- rep(0,length(r))
@@ -460,7 +487,9 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	p <- 1 - pchisq(X2,df)	
 	RMSEA <- ifelse((X2 - df) > 0, 
 	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
-	if(any(is.na(data.original))) p <- RMSEA <- X2 <- NaN
+	if(any(is.na(data.original))) p <- RMSEA <- X2 <- TLI <- NaN
+	null.mod <- unclass(mirt(data, 0))
+	if(!is.nan(X2)) TLI <- (null.mod@X2 / null.mod@df - X2/df) / (null.mod@X2 / null.mod@df - 1)
 
 	#from last EM cycle pars to FA
 	norm <- sqrt(1 + rowSums(pars$lambdas[ ,1:nfact]^2))	 
@@ -468,14 +497,14 @@ bfactor <- function(data, specific, guess = 0, SE = FALSE, prev.cor = NULL,
 	for (i in 1:J) 
 		F[i,1:nfact] <- pars$lambdas[i,1:nfact]/norm[i]  
 	colnames(F) <- c('G',paste("F_", 1:(ncol(F)-1),sep=""))
-	h2 <- rowSums(F^2)  
+	h2 <- rowSums(F^2)  	
 
-	mod <- new('bfactorClass',EMiter=cycles, pars=pars, guess=guess, AIC=AIC, X2=X2, 
+	mod <- new('bfactorClass',EMiter=cycles, pars=pars, guess=guess, upper=upper, AIC=AIC, X2=X2, 
 		parsSE=parsSE, df=df, logLik=logLik, p=p, F=F, h2=h2, itemnames=itemnames, BIC=BIC,
 		tabdata=tabdata2, N=N, Pl=Pl, Theta=Theta, data=data.original, tabdatalong=tabdata, 
 		logicalfact=logicalfact, facility=facility, specific=specific, itemloc=itemloc,
 		cormat=Rpoly, converge=converge, par.prior=par.prior, quadpts=quadpts,
-		vcov=vcovpar, RMSEA=RMSEA, K=K, Call=Call)  
+		vcov=vcovpar, RMSEA=RMSEA, K=K, null.mod=null.mod, TLI=TLI, Call=Call)  
 	return(mod)  
 } 
 
@@ -499,8 +528,8 @@ setMethod(
 		cat("AIC = ", x@AIC, "\n")		
 		cat("BIC = ", x@BIC, "\n")
 		if(!is.nan(x@p))
-			cat("G^2 = ", round(x@X2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
+			cat("G^2 = ", round(x@X2,2), ", df = ", x@df, ", p = ", round(x@p,4), 
+                "\nTLI = ", round(x@TLI,3), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
 				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")		
@@ -525,9 +554,8 @@ setMethod(
 		cat("AIC = ", object@AIC, "\n")		
 		cat("BIC = ", object@BIC, "\n")
 		if(!is.nan(object@p))
-			cat("G^2 = ", round(object@X2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4), ", RMSEA = ", round(object@RMSEA,3),
-                "\n", sep="")
+			cat("G^2 = ", round(object@X2,2), ", df = ", object@df, ", p = ", round(object@p,4), 
+                "\nTLI = ", round(object@TLI,3), ", RMSEA = ", round(object@RMSEA,3), "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
 				object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")			
@@ -568,9 +596,10 @@ setMethod(
 		A <- sqrt(apply(a^2,1,sum))
 		B <- -d/A 
 		a[!attr(object@pars,'lamsel')] <- NA	
-		parameters <- round(cbind(a,d,object@guess,A,B),digits)
+		parameters <- round(cbind(a,d,object@guess,object@upper,A,B),digits)
 		colnames(parameters) <- c('a_G',paste("a_", 1:(ncol(object@F)-1),sep=""),
-			paste("d_", 1:(max(K)-1),sep=""), "guess", "mvdisc", paste("mvint_", 1:(max(K)-1),sep=""))  
+			paste("d_", 1:(max(K)-1),sep=""), "guess", "upper", "mvdisc", 
+            paste("mvint_", 1:(max(K)-1),sep=""))  
 		rownames(parameters) <- colnames(object@data)	
 		cat("\nParameters with multivariate discrimination and intercept: \n\n")		
 		print(parameters)
@@ -594,7 +623,7 @@ setMethod(
 	}
 )
 
-setMethod(
+setMethod( 
 	f = "residuals",
 	signature = signature(object = 'bfactorClass'),
 	definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, ...)
@@ -608,7 +637,9 @@ setMethod(
 		lambdas <- object@pars$lambdas
 		zetas <- object@pars$zetas
 		guess <- object@guess
+        upper <- object@upper
 		guess[is.na(guess)] <- 0
+		upper[is.na(upper)] <- 1
 		itemloc <- object@itemloc
 		res <- matrix(0,J,J)
 		diag(res) <- NA
@@ -619,8 +650,8 @@ setMethod(
 			for(i in 1:J){								
 				for(j in 1:J){			
 					if(i < j){
-						P1 <- P.bfactor(lambdas[i, ], zetas[[i]], Theta, guess[i], lf[i, ])
-						P2 <- P.bfactor(lambdas[j, ], zetas[[j]], Theta, guess[j], lf[j, ])
+						P1 <- P.bfactor(lambdas[i, ], zetas[[i]], Theta, guess[i], upper[i], lf[i, ])
+						P2 <- P.bfactor(lambdas[j, ], zetas[[j]], Theta, guess[j], upper[j], lf[j, ])
 						if(K[i] == 2) P1 <- cbind(1-P1, P1)
 						if(K[j] == 2) P2 <- cbind(1-P2, P2)						
 						tab <- table(data[,i],data[,j])		

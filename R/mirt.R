@@ -16,11 +16,12 @@
 # @keywords classes
 setClass(
 	Class = 'mirtClass',
-	representation = representation(EMiter='numeric', pars='list', guess='numeric', 
-		K='numeric', parsSE='list', X2='numeric', df='numeric', p='numeric', AIC='numeric', logLik='numeric',
+	representation = representation(EMiter='numeric', pars='list', guess='numeric', upper='numeric',
+		K='numeric', parsSE='list', X2='numeric', df='numeric', p='numeric', AIC='numeric', 
 		F='matrix', h2='numeric', tabdata='matrix', tabdatalong='matrix', Theta='matrix', Pl='numeric',
 		data='matrix', cormat='matrix', facility='numeric', converge='numeric', itemloc = 'numeric',
-		quadpts='numeric', BIC='numeric', vcov='matrix', RMSEA='numeric', rotate='character', Call='call'),	
+		quadpts='numeric', BIC='numeric', vcov='matrix', RMSEA='numeric', rotate='character', 
+        null.mod = 'S4', TLI = 'numeric', Target='numeric', logLik='numeric', Call='call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -44,14 +45,15 @@ setClass(
 #' mainstream programs such as TESTFACT (2003) and POLYFACT. The general IRT equation 
 #' for dichotomous items is 
 #' 
-#' \deqn{P(X | \theta; \bold{a}_i; d_i; g_i) = g_j + (1 - g_j) / (1 +
+#' \deqn{P(X | \theta; \bold{a}_j; d_j; g_j, u_j) = g_j + (u_j - g_j) / (1 +
 #' exp(-1.702(\bold{a}_j' \theta + d_j)))}
 #' 
 #' where \emph{j} is the item index, \eqn{\bold{a}_j} is the vector of
 #' discrimination parameters (i.e., slopes), \deqn{\theta} is the vector of
-#' factor scores, \eqn{d_j} is the intercept, and \eqn{g_j} is the
-#' pseudo-guessing parameter. To avoid estimation difficulties the \eqn{g_j}'s
-#' must be specified by the user. The polychotomous functions has a similar form
+#' factor scores, \eqn{d_j} is the intercept, \eqn{g_j} is the
+#' pseudo-guessing parameter, and \eqn{u_j} is the upper bound parameter. 
+#' To avoid estimation difficulties the \eqn{g_j}'s and \eqn{u_j}'s
+#' must be pre-specified by the user. The polychotomous functions has a similar form
 #' that can be found in Muraki and Carlson (1995).
 #' 
 #' Estimation begins by computing a matrix of quasi-tetrachoric correlations,
@@ -71,13 +73,9 @@ setClass(
 #' 
 #' Factor scores are estimated assuming a normal prior distribution and can be
 #' appended to the input data matrix (\code{full.data = TRUE}) or displayed in
-#' a summary table for all the unique response patterns. \code{summary} allows
-#' for various rotations available from the \code{GPArotation} package. These
-#' are:
-#' 
-#' \describe{ \item{orthogonal: }{\code{"varimax", "quartimax", "tandemI",
-#' "tandemII", "entropy", "mccammon"}} \item{oblique: }{\code{"promax",
-#' "oblimin", "quartimin", "oblimax", "simplimax"}} }
+#' a summary table for all the unique response patterns. \code{summary} and \code{coef} allow
+#' for all the rotations available from the \code{GPArotation} package as well as a \code{'promax'}
+#' rotation. 
 #' 
 #' Using \code{plot} will plot the either the test surface function or the test
 #' information function for 1 and 2 dimensional solutions. To examine
@@ -95,6 +93,9 @@ setClass(
 #' @param nfact number of factors to be extracted
 #' @param SE logical, estimate the standard errors?
 #' @param guess fixed pseudo-guessing parameters. Can be entered as a single
+#' value to assign a global guessing parameter or may be entered as a numeric
+#' vector corresponding to each item
+#' @param upper fixed upper bound parameters for 4-PL model. Can be entered as a single
 #' value to assign a global guessing parameter or may be entered as a numeric
 #' vector corresponding to each item
 #' @param prev.cor use a previously computed correlation matrix to be used to
@@ -116,14 +117,13 @@ setClass(
 #' See below for list of possible rotations. If \code{rotate != ''} in the \code{summary} 
 #' input then the default from the object is ignored and the new rotation from the list 
 #' is used instead
+#' @param Target a dummy variable matrix indicing a target rotation pattern
 #' @param startvalues user declared start values for parameters
 #' @param quadpts number of quadrature points per dimension
-#' @param ncycles the number of EM iterations to be performed
-#' @param tol if the largest change in the EM cycle is less than this value
-#' then the EM iteration are stopped early
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
+#' @param print logical; print output to console?
 #' @param x an object of class \code{mirt} to be plotted or printed
 #' @param object a model estimated from \code{mirt} of class \code{mirtClass}
 #' @param object2 a second model estimated from \code{mirt} of class
@@ -141,8 +141,17 @@ setClass(
 #' @param restype type of residuals to be displayed. Can be either \code{'LD'}
 #' for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
 #' expected values for the frequencies of every response pattern
-#' @param nowarn logical; suppress warnings from dependent packages?
+#' @param verbose logical; print observed log-likelihood value at each iteration?
 #' @param debug logical; turn on debugging features?
+#' @param technical a list containing lower level technical parameters for estimation. May be:
+#' \describe{ 
+#' \item{MAXQUAD}{maximum number of quadratures; default 10000}
+#' \item{MSTEPMAXIT}{number of M-step iterations; default 25}
+#' \item{TOL}{EM convergence threshold; default .001}
+#' \item{NCYCLES}{maximum number of EM cycles; default 300}
+#' \item{NOWARN}{a logical indicating whether dependent packages warnings shoudl be printed; d
+#' default \code{TRUE}}
+#' }
 #' @param ... additional arguments to be passed
 #' @section Convergence:
 #' 
@@ -186,13 +195,13 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' mirt(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.cor = NULL,
-#'     par.prior = FALSE, startvalues = NULL, quadpts = NULL, ncycles = 300,  
-#'     tol = .001, nowarn = TRUE, debug = FALSE, ...)
+#' mirt(data, nfact, guess = 0, upper = 1, SE = FALSE, rotate = 'varimax', 
+#' Target = NULL, prev.cor = NULL, par.prior = FALSE, startvalues = NULL, quadpts = NULL, 
+#' verbose = FALSE, debug = FALSE, technical = list(), ...)
 #' 
-#' \S4method{summary}{mirt}(object, rotate='', suppress = 0, digits = 3, ...)
+#' \S4method{summary}{mirt}(object, rotate = '', suppress = 0, digits = 3, print = FALSE, ...)
 #' 
-#' \S4method{coef}{mirt}(object, digits = 3, ...)
+#' \S4method{coef}{mirt}(object, rotate = '', digits = 3, ...)
 #' 
 #' \S4method{anova}{mirt}(object, object2, ...)
 #' 
@@ -200,7 +209,7 @@ setClass(
 #' 
 #' \S4method{plot}{mirt}(x, type = 'info', npts = 50, rot = list(x = -70, y = 30, z = 10), ...)
 #' 
-#' \S4method{residuals}{mirt}(object, restype = 'LD', digits=3, printvalue = NULL, ...)
+#' \S4method{residuals}{mirt}(object, restype = 'LD', digits = 3, printvalue = NULL, ...)
 #' @export mirt
 #' @examples
 #' 
@@ -256,16 +265,21 @@ setClass(
 #' summary(mod2g, rotate='promax')
 #' }
 #' 
-mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.cor = NULL, 
-    par.prior = FALSE, startvalues = NULL, quadpts = NULL, ncycles = 300, 
-    tol = .001, nowarn = TRUE, debug = FALSE, ...)
+mirt <- function(data, nfact, guess = 0, upper = 1, SE = FALSE, rotate = 'varimax', 
+    Target = NULL, prev.cor = NULL, par.prior = FALSE, startvalues = NULL, quadpts = NULL, 
+    verbose = FALSE, debug = FALSE, technical = list(), ...)
 { 
-	fn <- function(par, rs, gues, Theta, prior, parprior){
-		nzeta <- ncol(rs) - 1
-		a <- par[1:(length(par)-nzeta)]
-		d <- par[(length(a)+1):length(par)]
+	fn <- function(par, rs, gues, up, Theta, prior, parprior, null.model){        
+        if(null.model){
+            a <- 0
+            d <- par
+        } else {
+    		nzeta <- ncol(rs) - 1
+    		a <- par[1:(length(par)-nzeta)]
+    		d <- par[(length(a)+1):length(par)]
+        }
 		if(ncol(rs) == 2){
-			itemtrace <- P.mirt(a, d, Theta, gues) 
+			itemtrace <- P.mirt(a, d, Theta, gues, up) 
 			itemtrace <- cbind(1.0 - itemtrace, itemtrace)
 		} else {
 			itemtrace <- P.poly(a, d, Theta, TRUE)	
@@ -286,7 +300,17 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 		result
 	}    	
   
-	Call <- match.call()	
+	Call <- match.call()            
+    ##technical
+    MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
+    MSTEPMAXIT <- ifelse(is.null(technical$MSTEPMAXIT), 25, technical$MSTEPMAXIT)
+	TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)
+	NCYCLES <- ifelse(is.null(technical$NCYCLES), 300, technical$NCYCLES)
+    NOWARN <- ifelse(is.null(technical$NOWARN), TRUE, technical$NOWARN)
+    ##       
+    Target <- ifelse(is.null(Target), NaN, Target)
+    null.model <- ifelse(nfact == 0, TRUE, FALSE)
+	nfact <- ifelse(nfact == 0, 1, nfact) #for null model
 	itemnames <- colnames(data)	
 	data <- as.matrix(data)	
 	data.original <- data
@@ -295,9 +319,12 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 	J <- ncol(data)
 	N <- nrow(data)	
 	if(length(guess) == 1) guess <- rep(guess,J)
+	if(length(upper) == 1) upper <- rep(upper,J)
 	colnames(data) <- itemnames
 	if(length(guess) > J || length(guess) < J) 
 		stop("The number of guessing parameters is incorrect.")
+	if(length(upper) > J || length(upper) < J) 
+	    stop("The number of upper bound parameters is incorrect.")
 	facility <- colMeans(na.omit(data))		
 	uniques <- list()
 	for(i in 1:J)
@@ -305,6 +332,7 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 	K <- rep(0,J)
 	for(i in 1:J) K[i] <- length(uniques[[i]])	
 	guess[K > 2] <- 0	
+	upper[K > 2] <- 1
 	itemloc <- cumsum(c(1,K))
 	index <- 1:J	
 	fulldata <- matrix(0,N,sum(K))
@@ -369,7 +397,7 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 			else stop("Correlation matrix is not square.\n")
 	} 
 	if(det(Rpoly) < 1e-15) Rpoly <- cor(na.omit(data.original))
-	FA <- suppressWarnings(psych::fa(Rpoly,nfact,rotate = 'none', warnings= FALSE, fm="minres"))	
+	FA <- suppressWarnings(psych::fa(Rpoly, nfact, rotate = 'none', warnings= FALSE, fm="minres"))	
 	loads <- unclass(loadings(FA))
 	u <- FA$unique
 	u[u < .1 ] <- .25	
@@ -385,29 +413,53 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 	npars <- length(unlist(pars))
 	if (is.null(quadpts)) quadpts <- ceiling(40/(nfact^1.5))  
 	theta <- as.matrix(seq(-4,4,length.out = quadpts))
-	if(quadpts^nfact <= 10000){
+	if(quadpts^nfact <= MAXQUAD){
 		Theta <- thetaComb(theta,nfact)
 		prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
 		prior <- prior/sum(prior)
-	} else stop('Greater than 10000 quadrature points, reduce number.')	  
+	} else stop('Greater than ', MAXQUAD, ' quadrature points.')	  
 	lastpars2 <- lastpars1 <- pars	    
 	startvalues <- pars
 	converge <- 1  
 	problemitems <- c()
-	index <- 1:J  
-	if(debug) print(startvalues)
-	
+	index <- 1:J 
+    if(null.model) {
+        pars$lambdas <- matrix(0,nrow(lambdas))
+        method = 'Brent'
+    }
+	if(debug) print(startvalues)     
+    
 	# EM loop 
-	for (cycles in 1:ncycles)
+	for (cycles in 1:NCYCLES)
 	{       
-		rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, itemloc)						
+		rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, upper, itemloc)
+        if(verbose){
+            print(Pl <- sum(r*log(rlist$expected)))                            
+            flush.console()
+        }
 		lastpars2 <- lastpars1
 		lastpars1 <- pars				
 		for(i in 1:J){
 			par <- c(pars$lambdas[i, ], pars$zetas[[i]])
-			itemsel <- c(itemloc[i]:(itemloc[i+1] - 1))					
-			maxim <- try(optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], Theta=Theta, prior=prior, 
-				parprior=par.prior[i, ], control=list(maxit=25)))
+			itemsel <- c(itemloc[i]:(itemloc[i+1] - 1))
+            if(null.model){
+                par <- par[2:length(par)]
+                if(length(par) == 1){
+                    maxim <- optimize(fn, interval=c(-10, 10), rs=rlist$r1[, itemsel],gues = 0, 
+                                      up = 1, Theta=Theta, prior=prior, parprior=par.prior[i, ],
+                                      null.model=null.model)
+                    pars$zetas[[i]] <- maxim$minimum
+                } else {
+                    maxim <- optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], up=upper[i], 
+                          Theta=Theta, prior=prior, parprior=par.prior[i, ], null.model=null.model,
+                          control=list(maxit=MSTEPMAXIT))
+                    pars$zetas[[i]] <- maxim$par                    
+                }                    
+                next
+            }			
+			maxim <- try(optim(par, fn=fn, rs=rlist$r1[, itemsel], gues=guess[i], up=upper[i], 
+                        Theta=Theta, prior=prior, parprior=par.prior[i, ], null.model=null.model,
+                        control=list(maxit=MSTEPMAXIT)))
 			if(class(maxim) == "try-error"){
 				problemitems <- c(problemitems, i)
 				converge <- 0
@@ -417,11 +469,12 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 			pars$zetas[[i]] <- maxim$par[(nfact+1):length(par)]	  
 		}				
 		maxdif <- max(abs(unlist(lastpars1) - unlist(pars)))	
-		if (maxdif < tol && cycles > 5) break    
+		if (maxdif < TOL && cycles > 5) break    
 		# rate acceleration adjusted every third cycle
 		if (cycles %% 3 == 0 & cycles > 6)		 
 			pars <- rateChange(pars, lastpars1, lastpars2)			     	
-	}  
+	}###END EM
+    
 	if(any(par.prior[,1] != 1)) cat("Slope prior for item(s):",
 		as.character(index[par.prior[,1] > 1]), "\n")
 	if(any(par.prior[,3] != 0)) cat("Intercept prior for item(s):",
@@ -432,27 +485,27 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 	if(length(problemitems) > 0) warning("Problem with the M-step for item(s): ", 
 		paste(unique(problemitems), " "))	
 	lastchange <- unlist(lastpars1) - unlist(pars)
-	if (cycles == ncycles){
+	if (cycles == NCYCLES){
 		converge <- 0  
 		message("Estimation terminated after ", cycles, " EM loops. Maximum changes:") 
 		message("\n slopes = ", round(max(abs(lastchange[ ,1:nfact])),4), ", intercepts = ", 
 			round(max(abs(lastchange[ ,ncol(pars)])),4) ,"\n", sep="")
 	}	    	 
-	rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, itemloc)      	  
+	rlist <- Estep.mirt(pars, tabdata, Theta, prior, guess, upper, itemloc)      	  
 	Pl <- rlist$expected  
 	logLik <- sum(r*log(Pl))
 	vcovpar <- matrix(999)
 	parsSE <- list()
 	if(SE && nfact == 1){
-		LLfun <- function(p, pars, tabdata, Theta, prior, guess, itemloc){
+		LLfun <- function(p, pars, tabdata, Theta, prior, guess, upper, itemloc){
 			pars2 <- rebuildPars(p, pars)		
-			rlist <- Estep.mirt(pars2, tabdata, Theta, prior, guess, itemloc)     	  
+			rlist <- Estep.mirt(pars2, tabdata, Theta, prior, guess, upper, itemloc)     	  
 			Pl <- rlist$expected
 			logLik <- sum(r*log(Pl))
 			-1*logLik		
 		}
-		fmin <- nlm(LLfun, unlist(pars), pars=pars,tabdata=tabdata,Theta=Theta,prior=prior,
-			guess=guess, itemloc=itemloc, hessian=TRUE, gradtol=.1)
+		fmin <- nlm(LLfun, unlist(pars), pars=pars, tabdata=tabdata, Theta=Theta, prior=prior,
+			guess=guess, upper=upper, itemloc=itemloc, hessian=TRUE, gradTOL=.1)
 		vcovpar <- solve(fmin$hessian)
 		parsSE <- rebuildPars(sqrt(diag(vcovpar)), pars)	
 	}	
@@ -464,15 +517,21 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 		for (j in 1:r[i]) 
 			logr[i] <- logr[i] + log(j)    	
 	df <- (length(r) - 1) - npars + nfact*(nfact - 1)/2  - npatmissing
+    if(null.model) df <- (length(r) - 1) - npars - npatmissing + J
 	X2 <- 2 * sum(r * log(r/(N*Pl)))	
 	logLik <- logLik + logN/sum(logr)	
 	p <- 1 - pchisq(X2,df)  
 	AIC <- (-2) * logLik + 2 * npars
 	BIC <- (-2) * logLik + npars*log(N)
 	RMSEA <- ifelse((X2 - df) > 0, 
-	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)
-	if(any(is.na(data.original))) p <- RMSEA <- X2 <- NaN		
-	guess[K > 2] <- NA	
+	    sqrt(X2 - df) / sqrt(df * (N-1)), 0)	
+	guess[K > 2] <- upper[K > 2] <- NA	
+	null.mod <- unclass(new('mirtClass'))
+	if(!null.model) null.mod <- unclass(mirt(data, 0))
+    TLI <- NaN    
+	if(!null.model)
+        TLI <- (null.mod@X2 / null.mod@df - X2/df) / (null.mod@X2 / null.mod@df - 1)
+	if(any(is.na(data.original))) p <- RMSEA <- X2 <- TLI <- NaN
 
 	# pars to FA loadings
 	if (nfact > 1) norm <- sqrt(1 + rowSums(pars$lambdas[ ,1:nfact]^2))
@@ -485,12 +544,13 @@ mirt <- function(data, nfact, guess = 0, SE = FALSE, rotate = 'varimax', prev.co
 		else F <- V %*% sqrt(diag(L))  
 	if (sum(F[ ,1] < 0)) F <- (-1) * F 
 	colnames(F) <- paste("F_", 1:ncol(F),sep="")	
-	h2 <- rowSums(F^2) 
+	h2 <- rowSums(F^2)         
 
-	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, parsSE=parsSE, X2=X2, df=df, 
-		p=p, itemloc=itemloc, AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata2, 
+	mod <- new('mirtClass', EMiter=cycles, pars=pars, guess=guess, upper=upper, parsSE=parsSE, X2=X2, 
+        df=df, p=p, itemloc=itemloc, AIC=AIC, BIC=BIC, logLik=logLik, F=F, h2=h2, tabdata=tabdata2, 
 		Theta=Theta, Pl=Pl, data=data.original, cormat=Rpoly, facility=facility, converge=converge, 
-		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, K=K, tabdatalong=tabdata, rotate=rotate, Call=Call)	  
+		quadpts=quadpts, vcov=vcovpar, RMSEA=RMSEA, K=K, tabdatalong=tabdata, rotate=rotate, 
+        null.mod=null.mod, TLI=TLI, Target=Target, Call=Call)	  
 	return(mod)    
 }
 
@@ -512,10 +572,10 @@ setMethod(
 		cat("Log-likelihood =", x@logLik, "\n")
 		cat("AIC =", x@AIC, "\n")		
 		cat("BIC =", x@BIC, "\n")
-		if(!is.nan(x@p))            
-			cat("G^2 = ", round(x@X2,2), ", df = ", 
-				x@df, ", p = ", round(x@p,4),", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
-		else 
+		if(!is.nan(x@p))            		    
+			cat("G^2 = ", round(x@X2,2), ", df = ", x@df, ", p = ", round(x@p,4),
+                "\nTLI = ", round(x@TLI,3), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
+		else             
 			cat("G^2 = ", NA, ", df = ", 
 				x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )		
 	}
@@ -539,9 +599,8 @@ setMethod(
 		cat("AIC =", object@AIC, "\n")		
 		cat("BIC =", object@BIC, "\n")
 		if(!is.nan(object@p))
-			cat("G^2 = ", round(object@X2,2), ", df = ", 
-				object@df, ", p = ", round(object@p,4),", RMSEA = ", round(object@RMSEA,3),
-                "\n", sep="")
+			cat("G^2 = ", round(object@X2,2), ", df = ", object@df, ", p = ", round(object@p,4),
+			    "\nTLI = ", round(object@TLI,3), ", RMSEA = ", round(object@RMSEA,3), "\n", sep="")
 		else 
 			cat("G^2 = ", NA, ", df = ", 
 				object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )			
@@ -551,7 +610,8 @@ setMethod(
 setMethod(
 	f = "summary",
 	signature = 'mirtClass',
-	definition = function(object, rotate = '', suppress = 0, digits = 3, ...){
+	definition = function(object, rotate = '', Target = NULL, suppress = 0, digits = 3, 
+        print = TRUE, ...){
 		nfact <- ncol(object@F)
 		if (rotate == 'none' || nfact == 1) {
 			F <- object@F
@@ -560,36 +620,45 @@ setMethod(
 			SS <- apply(F^2,2,sum)
 			colnames(h2) <- "h2"			
 			names(SS) <- colnames(F)
-			cat("\nUnrotated factor loadings: \n\n")
 			loads <- round(cbind(F,h2),digits)
 			rownames(loads) <- colnames(object@data)
-			print(loads)	    	 
-			cat("\nSS loadings: ",round(SS,digits), "\n")
-			cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
+			if(print){
+			    cat("\nUnrotated factor loadings: \n\n")
+			    print(loads)	    	 
+			    cat("\nSS loadings: ",round(SS,digits), "\n")
+			    cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
+            }
 			invisible(list(F,h2))
 		} else {	
 			F <- object@F
 			h2 <- as.matrix(object@h2)
 			colnames(h2) <- "h2"
-            if(rotate == '') rotate <- object@rotate
-			cat("\nRotation: ", rotate, "\n")
-			rotF <- Rotate(F,rotate)
+            if(rotate == ''){
+                rotate <- object@rotate
+                Target <- object@Target
+            }
+			rotF <- Rotate(F, rotate, Target = Target, ...)            
 			SS <- apply(rotF$loadings^2,2,sum)
 			L <- rotF$loadings
 			L[abs(L) < suppress] <- NA	
 			loads <- round(cbind(L,h2),digits)
 			rownames(loads) <- colnames(object@data)			
-			cat("\nRotated factor loadings: \n\n")
-			print(loads,digits)
-            Phi <- diag(ncol(F))
-			if(attr(rotF, "oblique")){
-				cat("\nFactor correlations: \n\n")
+            Phi <- diag(ncol(F))			
+			if(!rotF$orthogonal){
 				Phi <- rotF$Phi	  
 				Phi <- round(Phi, digits)
 				colnames(Phi) <- rownames(Phi) <- colnames(F)
-				print(Phi)            
-			}	
-			cat("\nRotated SS loadings: ",round(SS,digits), "\n")		
+				if(print){
+					cat("\nFactor correlations: \n\n")
+				    print(Phi)            
+                }
+			}			
+			if(print){
+			    cat("\nRotation: ", rotate, "\n")
+			    cat("\nRotated factor loadings: \n\n")
+			    print(loads,digits)
+			    cat("\nRotated SS loadings: ",round(SS,digits), "\n")		
+			}
 			if(any(h2 > 1)) 
 				warning("Solution has heywood cases. Interpret with caution.") 
 			invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))  
@@ -600,7 +669,7 @@ setMethod(
 setMethod(
 	f = "coef",
 	signature = 'mirtClass',
-	definition = function(object, SE = TRUE, digits = 3, ...){  
+	definition = function(object, rotate = '', Target = NULL, SE = TRUE, digits = 3, ...){  
 		K <- object@K
 		a <- object@pars$lambdas		
 		d <- matrix(NA, nrow(a), max(K-1))
@@ -610,16 +679,21 @@ setMethod(
 		}
 		A <- sqrt(apply(a^2,1,sum))
 		B <- -d/A  
-		if (ncol(a) > 1){  
-			parameters <- cbind(a,d,object@guess,A,B)    
-			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess", 
-				"mvdisc",paste("mvint_",1:max(K-1),sep=""))	
+		if (ncol(a) > 1){ 
+		    rotname <- ifelse(rotate == '', object@rotate, rotate)
+            so <- summary(object, rotate = rotate, Target = Target, print = FALSE, ...)             
+            a <- rotateLambdas(so)
+			parameters <- cbind(a,d,object@guess,object@upper,A,B)    
+			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),
+                                      "guess", "upper","mvdisc",paste("mvint_",1:max(K-1),sep=""))	
 			rownames(parameters) <- colnames(object@data)		
-			cat("\nUnrotated parameters, multivariate discrimination and intercept: \n\n")
+			cat("\nParameters with", rotname, "rotation, multivariate discrimination and 
+                intercept: \n\n")
 			print(round(parameters, digits))  	
 		} else {
-			parameters <- cbind(a,d,object@guess)
-			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess") 
+			parameters <- cbind(a,d,object@guess, object@upper)
+			colnames(parameters) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),
+                                      "guess", "upper") 
 			rownames(parameters) <- colnames(object@data)	
 			cat("\nParameter slopes and intercepts: \n\n")	
 			print(round(parameters, digits))	  
@@ -629,7 +703,8 @@ setMethod(
 			if(SE){
 				cat("\nStd. Errors: \n\n")	
 				SEs <- matrix(sqrt(diag(object@vcov)), ncol = ncol(a) + 1)
-				colnames(SEs) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),"guess") 
+				colnames(SEs) <- c(paste("a_",1:ncol(a),sep=""),paste("d_",1:max(K-1),sep=""),
+                                   "guess", "upper") 
 				rownames(SEs) <- rownames(parameters)
 				print(SEs, digits)
 				ret <- list(parameters,SEs)
@@ -674,6 +749,7 @@ setMethod(
 		lambdas <- object@pars$lambdas
 		zetas <- object@pars$zetas
 		guess <- object@guess		
+		upper <- object@upper
 		itemloc <- object@itemloc
 		res <- matrix(0,J,J)
 		diag(res) <- NA
@@ -686,12 +762,12 @@ setMethod(
 					if(i < j){
 						if(K[i] > 2) P1 <- P.poly(lambdas[i,],zetas[[i]],Theta,itemexp=TRUE)
 						else { 
-							P1 <- P.mirt(lambdas[i,],zetas[[i]], Theta, guess[i])
+							P1 <- P.mirt(lambdas[i,],zetas[[i]], Theta, guess[i], upper[i])
 							P1 <- cbind(1 - P1, P1)
 						}	
 						if(K[j] > 2) P2 <- P.poly(lambdas[j,],zetas[[j]],Theta,itemexp=TRUE)
 						else {
-							P2 <- P.mirt(lambdas[j,],zetas[[j]], Theta, guess[j])	
+							P2 <- P.mirt(lambdas[j,],zetas[[j]], Theta, guess[j], upper[j])	
 							P2 <- cbind(1 - P2, P2)
 						}
 						tab <- table(data[,i],data[,j])		
@@ -744,7 +820,9 @@ setMethod(
 		a <- x@pars$lambdas
 		d <- x@pars$zetas
 		guess <- x@guess
+		upper <- x@upper
 		guess[is.na(guess)] <- 0
+		upper[is.na(upper)] <- 1
 		A <- as.matrix(sqrt(apply(a^2,1,sum)))	
 		theta <- seq(-4,4,length.out=npts)
 		Theta <- thetaComb(theta, nfact)
@@ -759,9 +837,9 @@ setMethod(
 					info <- info + I
 				}
 			} else {
-				P <- P.mirt(a[j,], d[[j]], Theta, guess[j])
+				P <- P.mirt(a[j,], d[[j]], Theta, guess[j], upper[j])
 				Pstar <- P.mirt(a[j,], d[[j]], Theta, 0)
-				info <- info + A[j]^2 * P * (1-P) * Pstar/P
+				info <- info + A[j]^2 * P * (1-P) * Pstar/P ###FIXME: might need new 4PL info
 			}			
 		}		
 		plt <- data.frame(cbind(info,Theta))
@@ -773,7 +851,7 @@ setMethod(
 					ylab = expression(theta[2])))
 			if(type == 'info')
 				return(wireframe(info ~ Theta1 + Theta2, data = plt, main = "Test Information", 
-					zlab = expression(I(theta)), xlab = expression(theta[1]), ylab = expression(theta[2]), 
+					zlab=expression(I(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]), 
 					scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE))
 		} else {
 			colnames(plt) <- c("info", "Theta")
@@ -798,7 +876,4 @@ setMethod(
 		invisible(tabdata)
 	}
 )
-    
-
-
 

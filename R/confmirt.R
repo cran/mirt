@@ -16,13 +16,14 @@
 # @keywords classes
 setClass(
 	Class = 'confmirtClass',
-	representation = representation(pars = 'list', parsprint = 'matrix', guess = 'numeric', SEpars = 'matrix', 
-		SEg = 'numeric', gpars = 'list', SEgpars = 'list', estpars = 'list',cycles = 'numeric', 
-		Theta = 'matrix', fulldata = 'matrix', data = 'matrix', K = 'numeric', itemloc = 'numeric',
-		h2 = 'numeric',F = 'matrix', converge = 'numeric', logLik = 'numeric',SElogLik = 'numeric',
-		df = 'integer', AIC = 'numeric', nconstvalues = 'integer', G2 = 'numeric', p = 'numeric',
+	representation = representation(pars = 'list', parsprint = 'matrix', guess = 'numeric', 
+        SEpars = 'matrix', SEup='numeric',SEg='numeric', gpars = 'list', SEgpars = 'list', 
+        estpars = 'list',cycles = 'numeric', Theta = 'matrix', fulldata = 'matrix', 
+        data = 'matrix', K = 'numeric', itemloc = 'numeric', h2 = 'numeric',F = 'matrix', 
+        converge = 'numeric', logLik = 'numeric',SElogLik = 'numeric', df = 'integer', 
+        AIC = 'numeric', nconstvalues = 'integer', G2 = 'numeric', p = 'numeric',
 		tabdata = 'matrix', BIC = 'numeric', estComp = 'logical', prodlist = 'list', 
-        RMSEA = 'numeric', Call = 'call'),	
+        upper = 'numeric', RMSEA = 'numeric', null.mod = 'S4', TLI = 'numeric', Call = 'call'),	
 	validity = function(object) return(TRUE)
 )	
 
@@ -67,31 +68,26 @@ setClass(
 #' @param data a \code{matrix} or \code{data.frame} that consists of
 #' numerically ordered data
 #' @param model an object returned from \code{confmirt.model()} declarating how
-#' the factor model is to be estimated. See \code{\link{confmirt.model}} for
+#' the factor model is to be estimated, or a single numeric value indicating the number 
+#' of exploratory factors to estimate. See \code{\link{confmirt.model}} for
 #' more details
 #' @param guess initial (or fixed) values for the pseudo-guessing parameter. Can be 
 #' entered as a single value to assign a global guessing parameter or may be entered as
 #' a numeric vector for each item
+#' @param upper initial (or fixed) upper bound parameters for 4-PL model. Can be 
+#' entered as a single value to assign a global upper bound parameter or may be entered as a 
+#' numeric vector corresponding to each item
 #' @param estGuess a logical vector indicating which lower-asymptote parameters
 #' to be estimated (default is null, and therefore is contingent on the values
 #' in \code{guess}). By default, if any value in \code{guess} is greater than 0
 #' then its respective \code{estGuess} value is set to \code{TRUE}.
 #' Additionally, beta priors are automatically imposed for estimated parameters
 #' which correspond to the input guessing values.
-#' @param ncycles the maximum number of MH-RM iterations to be performed. Default is 
-#' 2000
+#' @param estUpper same function as \code{estGuess}, but for upper bound parameters
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
-#' @param burnin number of burn-in cycles to perform before beginning the SEM
-#' stage. Default is 150
-#' @param SEM.cycles number of stochastic EM cycles to perform and average over
-#' before beginning the MH-RM algorithm. Default is 50
-#' @param kdraws number of Metropolis-Hastings imputations of the factor scores
-#' at each iteration. Default is 1
-#' @param tol tolerance that can be reached to terminate the model estimation;
-#' must be achieved on 3 consecutive iterations
-#' @param printcycles logical; display iteration history during estimation?
+#' @param verbose logical; display iteration history during estimation?
 #' @param calcLL logical; calculate the log-likelihood via Monte Carlo
 #' integration?
 #' @param draws the number of Monte Carlo draws to estimate the log-likelihood
@@ -106,9 +102,18 @@ setClass(
 #' @param SE logical; print standard errors?
 #' @param print.gmeans logical; print latent factor means?
 #' @param digits the number of significant digits to be rounded
+#' @param rotate if \code{model} is numeric (indicating an exploratory item FA) then this 
+#' rotation is used. Default is \code{'varimax'}
+#' @param Target a dummy variable matrix indicing a target rotation pattern
 #' @param technical list specifying subtle parameters that can be adjusted. These 
 #' values are 
 #' \describe{
+#' \item{NCYCLES}{max number of MH-RM cycles; default 2000}
+#' \item{BURNIN}{number of burn in cycles (stage 1); default 150}
+#' \item{SEMCYCLES}{number of SEM cycles (stage 2); default 50}
+#' \item{KDRAWS}{number of paralell MH sets to be drawn; default 1}
+#' \item{TOL}{minimum threshold tolerance for convergence of MH-RM, must occur on three consecutive
+#' occations; default .001} 
 #'   \item{set.seed}{seed number used during estimation. Default is 12345}
 #' 	 \item{guess.prior.n}{a scalar or vector for the weighting of the beta priors for 
 #'		guessing parameters (default is 50, typical ranges are from 2 to 500). If a 
@@ -139,9 +144,9 @@ setClass(
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' confmirt(data, model, guess = 0, estGuess = NULL, ncycles = 2000, burnin = 150, 
-#'   SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, calcLL = TRUE, 
-#'   draws = 2000, returnindex = FALSE, debug = FALSE, technical = list(), ...)
+#' confmirt(data, model, guess = 0, upper = 1, estGuess = NULL, estUpper = NULL, 
+#' verbose = TRUE, calcLL = TRUE, draws = 2000, returnindex = FALSE, debug = FALSE, 
+#' rotate = 'varimax', Target = NULL, technical = list(),  ...)
 #' 
 #' \S4method{coef}{confmirt}(object, SE = TRUE, print.gmeans = FALSE, digits = 3, ...)
 #' 
@@ -255,12 +260,14 @@ setClass(
 #' anova(mod.cube,mod.combo)
 #' }
 #' 
-confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000, 
-	burnin = 150, SEM.cycles = 50, kdraws = 1, tol = .001, printcycles = TRUE, 
-	calcLL = TRUE, draws = 2000, returnindex = FALSE, debug = FALSE, technical = list(), 
-	...)
+confmirt <- function(data, model, guess = 0, upper = 1, estGuess = NULL, estUpper = NULL, 
+    verbose = TRUE, calcLL = TRUE, draws = 2000, returnindex = FALSE, debug = FALSE, 
+    rotate = 'varimax', Target = NULL, technical = list(),  ...)
 {		
-	Call <- match.call()   
+	Call <- match.call()       
+    ##########
+    if(any(upper < 1)) stop('Upper bound estimation is not currently available.')
+    ##########
 	set.seed(12345)	
 	itemnames <- colnames(data)
 	keywords <- c('SLOPE','INT','COV','MEAN','PARTCOMP','PRIOR')
@@ -268,7 +275,21 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	colnames(data) <- itemnames	
 	J <- ncol(data)
 	N <- nrow(data)
+	exploratory <- FALSE
+    if(is(model, 'numeric')){
+        tmp <- tempfile('tempfile')
+        cat(paste('F',1:model,' = 1-', J, "\n", sep=''), file=tmp)
+        model <- confmirt.model(tmp, quiet = TRUE)
+        exploratory <- TRUE
+        unlink(tmp)
+    }
+    
 	##technical
+	NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
+    BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
+    SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
+    KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1, technical$KDRAWS)
+    TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)        
 	if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
 	guess.prior.n <- ifelse(!is.null(technical$guess.prior.n), technical$guess.prior.n,
 		rep(50,J))
@@ -282,18 +303,24 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 			gain <- technical$gain
 	}
 	##
-	
+	Target <- ifelse(is.null(Target), NaN, Target)
 	if(length(guess) == 1) guess <- rep(guess,J)
 	if(length(guess) > J || length(guess) < J) 
 		stop("The number of guessing parameters is incorrect.")					
+	if(length(upper) == 1) upper <- rep(upper,J)
+	if(length(upper) > J || length(upper) < J) 
+	    stop("The number of upper bound parameters is incorrect.")
 	uniques <- list()
 	for(i in 1:J)
 		uniques[[i]] <- sort(unique(data[,i]))
 	K <- rep(0,J)
 	for(i in 1:J) K[i] <- length(uniques[[i]])	
 	guess[K > 2] <- 0
+	upper[K > 2] <- 1
 	if(is.null(estGuess))
 		estGuess <- guess > 0
+	if(is.null(estUpper))
+	    estUpper <- upper < 1
 	itemloc <- cumsum(c(1,K))	
 	model <- matrix(model$x,ncol=2)
 	factorNames <- setdiff(model[,1],keywords)
@@ -318,26 +345,28 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	}	
 	fulldata[is.na(fulldata)] <- 0
   
-	mod <- model.elements(model, factorNames, nfactNames, nfact, J, K, fulldata, itemloc, data, N, 
-		estGuess, guess, guess.prior.n, itemnames)
+	mod <- model.elements(model=model, factorNames=factorNames, nfactNames=nfactNames, nfact=nfact, 
+                          J=J, K=K, fulldata=fulldata, itemloc=itemloc, data=data, N=N, 
+                          estGuess=estGuess, guess=guess, upper=upper, estUpper=estUpper, 
+                          guess.prior.n=guess.prior.n, itemnames=itemnames, exploratory=exploratory)
 	parcount <- mod$parcount
 	npars <- mod$npars
 	if(returnindex) return(parcount)
-	if(debug) print(mod)
-  
+	if(debug) print(mod)  
+    
 	#pars
 	pars <- mod$val$pars
 	lambdas <- mod$val$lambdas
 	zetas <- mod$val$zetas
 	gmeans <- mod$val$gmeans
 	gcov <- mod$val$gcov
-	constvalues <- mod$val$constvalues
+	constvalues <- mod$val$constvalues      
 
 	#est
 	estlam <- mod$est$estlam
 	estComp <- mod$est$estComp		
 	estgcov <- mod$est$estgcov
-	estgmeans <- mod$est$estgmeans
+	estgmeans <- mod$est$estgmeans	
   
 	#ind
 	parind <- mod$ind$parind	
@@ -348,6 +377,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	lamind <- mod$ind$lamind
 	zetaind <- mod$ind$zetaindlist
 	guessind <- mod$ind$guessind
+	upperind <- mod$ind$upperind
 	groupind <- mod$ind$groupind
 	meanind <- mod$ind$meanind
 	covind <- mod$ind$covind    
@@ -357,6 +387,17 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		stop('Item(s) ', paste(tmp,''), 'have no factor loadings specified.')
 	}
 	indlist <- mod$ind 
+    
+	if(exploratory){
+	    Rpoly <- cormod(na.omit(data),K,guess)
+	    FA <- psych::fa(Rpoly,nfact,rotate = 'none', warnings= FALSE, fm="minres")    
+	    loads <- unclass(loadings(FA))
+	    u <- FA$unique
+	    u[u < .001 ] <- .2
+	    cs <- sqrt(u)
+	    lambdas <- mod$val$lambdas <- loads/cs        
+        pars[lamind] <- t(lambdas)
+	}
 	
 	#Preamble for MRHM algorithm
 	pars[constvalues[,1] == 1] <- constvalues[constvalues[,1] == 1,2]
@@ -364,13 +405,17 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	cand.t.var <- 1			
 	tmp <- .1
 	for(i in 1:30){			
-		theta0 <- draw.thetas(theta0,lambdas,zetas,guess,fulldata,K,itemloc,cand.t.var,gcov,gmeans,
-            estComp,prodlist)
+		theta0 <- draw.thetas(theta0=theta0, lambdas=lambdas, zetas=zetas, guess=guess, upper=upper,
+                              fulldata=fulldata, K=K, itemloc=itemloc, cand.t.var=cand.t.var, 
+		                      prior.t.var=gcov, prior.mu=gmeans, estComp=estComp, prodlist=prodlist)
 		if(i > 5){		
 			if(attr(theta0,"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp 
-			else if(attr(theta0,"Proportion Accepted") > .25 && nfact > 3) cand.t.var <- cand.t.var + tmp
-			else if(attr(theta0,"Proportion Accepted") < .2 && nfact < 4) cand.t.var <- cand.t.var - tmp
-			else if(attr(theta0,"Proportion Accepted") < .1) cand.t.var <- cand.t.var - 2*tmp
+			else if(attr(theta0,"Proportion Accepted") > .25 && nfact > 3) 
+                cand.t.var <- cand.t.var + tmp
+			else if(attr(theta0,"Proportion Accepted") < .2 && nfact < 4) 
+                cand.t.var <- cand.t.var - tmp
+			else if(attr(theta0,"Proportion Accepted") < .1) 
+                cand.t.var <- cand.t.var - 2*tmp
 			if (cand.t.var < 0){
 				cand.t.var <- tmp		
 				tmp <- tmp / 2
@@ -378,7 +423,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		}
 	}	
 	m.thetas <- grouplist <- list()		
-	SEM.stores <- matrix(0,SEM.cycles,npars)
+	SEM.stores <- matrix(0,SEMCYCLES,npars)
 	SEM.stores2 <- list()
 	phi <- rep(0,sum(sind))	
 	h <- matrix(0,npars,npars)		
@@ -397,21 +442,21 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 			nconstvalues <- nconstvalues + length(equalconstr[[i]]) - 1			
 			
 	####Big MHRM loop 
-	for(cycles in 1:(ncycles + burnin + SEM.cycles))								
+	for(cycles in 1:(NCYCLES + BURNIN + SEMCYCLES))								
 	{ 
-		if(cycles == burnin + 1) stagecycle <- 2			
+		if(cycles == BURNIN + 1) stagecycle <- 2			
 		if(stagecycle == 3)
-			gamma <- (gain[1]/(cycles - SEM.cycles - burnin - 1))^(gain[2]) - gain[3]
-		if(cycles == (burnin + SEM.cycles + 1)){ 
+			gamma <- (gain[1]/(cycles - SEMCYCLES - BURNIN - 1))^(gain[2]) - gain[3]
+		if(cycles == (BURNIN + SEMCYCLES + 1)){ 
 			stagecycle <- 3		
 		    pars <- rep(0,npars)
-			for(i in 1:SEM.cycles){
+			for(i in 1:SEMCYCLES){
 				pars <- pars + SEM.stores[i,]
 				Tau <- Tau + SEM.stores2[[i]]
 			}	
-			pars <- pars/SEM.cycles	
-			Tau <- Tau/SEM.cycles	
-			k <- kdraws	
+			pars <- pars/SEMCYCLES	
+			Tau <- Tau/SEMCYCLES	
+			k <- KDRAWS	
 			gamma <- .25
 		}	
 				
@@ -419,16 +464,23 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		lambdas <- normpars$lambdas
 		zetas <- normpars$zetas
 		guess <- normpars$guess	
+        upper <- normpars$upper
 		grouplist$u <- mu <- normpars$mu					
 		grouplist$sig <- sig <- normpars$sig			
 		
 		#Step 1. Generate m_k datasets of theta 
-		for(j in 1:4) theta0 <- draw.thetas(theta0, lambdas, zetas, guess,
-			fulldata, K, itemloc, cand.t.var, sig, mu, estComp, prodlist)	
-		for(i in 1:k) m.thetas[[i]] <- draw.thetas(theta0, lambdas, zetas, guess,
-			fulldata, K, itemloc, cand.t.var, sig, mu, estComp, prodlist)
+		for(j in 1:4) 
+            theta0 <- draw.thetas(theta0=theta0, lambdas=lambdas, zetas=zetas, guess=guess, 
+                            upper=upper, fulldata=fulldata, K=K, itemloc=itemloc, 
+                            cand.t.var=cand.t.var, prior.t.var=sig, prior.mu=mu, estComp=estComp, 
+                            prodlist=prodlist)
+		for(i in 1:k) m.thetas[[i]] <- 
+            draw.thetas(theta0=theta0, lambdas=lambdas, zetas=zetas, guess=guess, 
+                                upper=upper, fulldata=fulldata, K=K, itemloc=itemloc, 
+                                cand.t.var=cand.t.var, prior.t.var=sig, prior.mu=mu, 
+                                estComp=estComp, prodlist=prodlist)
 		theta0 <- m.thetas[[1]]
-				
+		        
 		#Step 2. Find average of simulated data gradients and hessian 		
 		g.m <- h.m <- group.m <- list()
 		g <- rep(0, npars)
@@ -458,11 +510,12 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 					next
 				}
                 if(K[i] == 2){
-					temp <- dpars.dich(lambdas[i, ], zetas[[i]],guess[i],
-						fulldata[ ,itemloc[i]],thetatemp,estGuess[i])
+					temp <- dpars.dich(lambda=lambdas[i, ], zeta=zetas[[i]], g=guess[i], u=upper[i],
+						dat=fulldata[ ,itemloc[i]], Thetas=thetatemp, estGuess=estGuess[i])
 					ind <- parind[is.na(g)][1]					
 					ind2 <- ind + length(temp$g) - 1		
 					if(!estGuess[i]) g[ind2 + 1] <- 0
+					if(!estUpper[i]) g[ind2 + 2] <- 0
 					g[ind:ind2] <- temp$grad
 					h[ind:ind2,ind:ind2] <- temp$hess						
 				} else {						
@@ -472,7 +525,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 					ind2 <- ind + length(temp$g) - 1		
 					g[ind:ind2] <- temp$grad
 					h[ind:ind2,ind:ind2] <- temp$hess
-					g[ind2 + 1] <- 0	
+					g[ind2 + 1] <- g[ind2 + 2] <- 0	#zeros for guess + upper
 				}
             }
 			g[is.na(g)] <- 0
@@ -507,16 +560,16 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		grad <- grad[parind[sind]]		
 		ave.h <- ave.h[parind[sind],parind[sind]] 
 		if(is.na(attr(theta0,"log.lik"))) stop('Estimation halted. Model did not converge.')		
-		if(printcycles){
+		if(verbose){
 			if((cycles + 1) %% 10 == 0){
-				if(cycles < burnin)
+				if(cycles < BURNIN)
 					cat("Stage 1: Cycle = ", cycles + 1, ", Log-Lik = ", 
 						sprintf("%.1f",attr(theta0,"log.lik")), sep="")
-				if(cycles > burnin && cycles < burnin + SEM.cycles)
-					cat("Stage 2: Cycle = ", cycles-burnin+1, ", Log-Lik = ",
+				if(cycles > BURNIN && cycles < BURNIN + SEMCYCLES)
+					cat("Stage 2: Cycle = ", cycles-BURNIN+1, ", Log-Lik = ",
 						sprintf("%.1f",attr(theta0,"log.lik")), sep="")
-				if(cycles > burnin + SEM.cycles)
-					cat("Stage 3: Cycle = ", cycles-burnin-SEM.cycles+1, 
+				if(cycles > BURNIN + SEMCYCLES)
+					cat("Stage 3: Cycle = ", cycles-BURNIN-SEMCYCLES+1, 
 						", Log-Lik = ", sprintf("%.1f",attr(theta0,"log.lik")), sep="")					
 			}
 		}			
@@ -541,17 +594,20 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 					correct[equalconstr[[i]]] <- mean(correct[equalconstr[[i]]])			
 			correct[correct[guessind] > .05] <- .05		
 			correct[correct[guessind] < -.05] <- -.05
+			correct[correct[upperind] > .05] <- .05    	
+			correct[correct[upperind] < -.05] <- -.05
 			pars <- pars + gamma*correct
-			if(printcycles && (cycles + 1) %% 10 == 0){ 
+			if(verbose && (cycles + 1) %% 10 == 0){ 
 				cat(", Max Change =", sprintf("%.4f",max(abs(gamma*correction))), "\n")
 				flush.console()
 			}			
 			pars[covind][pars[covind] > .95] <- parsold[covind][pars[covind] > .95]
 			pars[covind][pars[covind] < -.95] <- parsold[covind][pars[covind] < -.95]
 			pars[guessind][pars[guessind] < 0] <- parsold[guessind][pars[guessind] < 0]
+			pars[upperind][pars[upperind] > 1] <- parsold[upperind][pars[upperind] > 1]
 			if(stagecycle == 2){
-				SEM.stores[cycles - burnin,] <- pars
-				SEM.stores2[[cycles - burnin]] <- ave.h
+				SEM.stores[cycles - BURNIN,] <- pars
+				SEM.stores2[[cycles - BURNIN]] <- ave.h
 			}	
 			next
 		}	 
@@ -574,20 +630,23 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 		if(length(equalconstr) > 0)		
 			for(i in 1:length(equalconstr))
 				correct[equalconstr[[i]]] <- mean(correct[equalconstr[[i]]])	
-		if(printcycles && (cycles + 1) %% 10 == 0){ 
+		if(verbose && (cycles + 1) %% 10 == 0){ 
 			cat(", gam = ",sprintf("%.3f",gamma),", Max Change = ", 
 				sprintf("%.4f",max(abs(gamma*correction))), "\n", sep = '')
 			flush.console()		
 		}	
-		if(all(gamma*correct < tol)) conv <- conv + 1
+		if(all(gamma*correct < TOL)) conv <- conv + 1
 			else conv <- 0		
 		if(conv == 3) break
 		correct[correct[guessind] > .025] <- .025		
 		correct[correct[guessind] < -.025] <- -.025	
+		correct[correct[upperind] > .025] <- .025    	
+		correct[correct[upperind] < -.025] <- -.025
 		pars <- pars + gamma*correct	
 		pars[covind][pars[covind] > .95] <- parsold[covind][pars[covind] > .95]
 		pars[covind][pars[covind] < -.95] <- parsold[covind][pars[covind] < -.95]
 		pars[guessind][pars[guessind] < 0] <- parsold[guessind][pars[guessind] < 0]
+		pars[upperind][pars[upperind] > 1] <- parsold[upperind][pars[upperind] > 1]
 		
 		#Extra: Approximate information matrix.	sqrt(diag(solve(info))) == SE
 		if(gamma == .25) gamma <- 1	
@@ -616,6 +675,10 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	guess <- pars[guessind]
 	guess[!estGuess] <- NA
 	guess[K == 2 & !estGuess] <- 0
+	upper <- rep(NA,J)
+	upper <- pars[upperind]
+	upper[!estUpper] <- NA
+	upper[K == 2 & !estUpper] <- 1
 	zetas <- pars[indlist$zetaind]
 	u <- pars[meanind]	
 	sig <- matrix(0,nfact,nfact)
@@ -623,7 +686,9 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	SEzetas <- SE[indlist$zetaind]	
 	SEg <- rep(NA,J)	
 	SEg <- SE[guessind]	
+	SEup <- SE[upperind]
 	SEg[!estGuess] <- NA
+	SEup[!estUpper] <- NA
 	SEu <- SE[meanind]	
 	SEsig <- matrix(0,nfact,nfact)	
 	tmp <- pars[covind]
@@ -669,7 +734,7 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	SEpars <- cbind(SElam,SEzetas)
 	gpars <- list(u = u, sig = sig)	
 	SEgpars <- list(SEu = SEu, SEsig = SEsig)
-	estpars <- list(estlam=estlam,estGuess=estGuess,estgcov=estgcov,
+	estpars <- list(estlam=estlam,estGuess=estGuess,estUpper=estUpper, estgcov=estgcov,
 		estgmeans=estgmeans,estComp=estComp)		
 		
 	if (nfactNames > 1) norm <- sqrt(1 + rowSums(lambdas[ ,1:nfactNames]^2,na.rm = TRUE))
@@ -678,17 +743,27 @@ confmirt <- function(data, model, guess = 0, estGuess = NULL, ncycles = 2000,
 	F[is.na(F)] <- 0		
 	h2 <- rowSums(F^2)
 	colnames(F) <- factorNames
-	names(h2) <- itemnames	
-
-	mod <- new('confmirtClass', pars=normpars, parsprint=parsprint, guess=guess, SEpars=SEpars, 
-		SEg=SEg, gpars=gpars, SEgpars=SEgpars, estpars=estpars,cycles=cycles - SEM.cycles - 
-		burnin, Theta=theta0, fulldata=fulldata, data=data, K=K, itemloc=itemloc, 
-		h2=h2,F=F,converge = converge, nconstvalues = as.integer(nconstvalues), 
-		estComp=estComp, prodlist=as.list(prodlist), Call=Call)
+	names(h2) <- itemnames    
+	null.mod <- unclass(mirt(data, 0))
+    
+    if(exploratory){
+        mod <- new('polymirtClass',pars=normpars, guess=guess, SEpars=SEpars, SEg=SEg,
+                   upper=upper, SEup=SEup, cycles=cycles-SEMCYCLES-BURNIN, Theta=theta0, 
+                   fulldata=fulldata, data=data, K=K, F=F, h2=h2, itemloc=itemloc, 
+                   converge=converge, estGuess=estGuess, rotate=rotate, null.mod=null.mod, 
+                   Target=Target, Call=Call)
+    } else {
+    	mod <- new('confmirtClass', pars=normpars, parsprint=parsprint, guess=guess, upper=upper, 
+                   SEg=SEg, SEup=SEup, gpars=gpars, SEgpars=SEgpars, estpars=estpars,K=K, 
+                   itemloc=itemloc, cycles=cycles - SEMCYCLES - BURNIN, Theta=theta0, 
+                   fulldata=fulldata, data=data, h2=h2,F=F,converge=converge, 
+                   nconstvalues=as.integer(nconstvalues), SEpars=SEpars, estComp=estComp, 
+                   prodlist=as.list(prodlist), null.mod=null.mod, Call=Call)
+    }
 	if(calcLL){
-		cat("Calculating log-likelihood...\n")
+		if(verbose) cat("Calculating log-likelihood...\n")
 		flush.console()
-		mod <- logLik(mod,draws)		
+		mod <- logLik(mod,draws)		        
 	}	
 	return(mod)
 }
@@ -702,21 +777,23 @@ setMethod(
 		cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
 			"\n\n", sep = "")
 		cat("Full-information item factor analysis with ", ncol(x@Theta), " factors \n", sep="")
+		if(x@converge == 1)    
+		    cat("Converged in ", x@cycles, " iterations.\n", sep="")
+        else 	
+		    cat("Estimation stopped after ", x@cycles, " iterations.\n", sep="")
+		
 		if(length(x@logLik) > 0){
 			cat("Log-likelihood = ", x@logLik,", SE = ",round(x@SElogLik,3), "\n",sep='')			
 			cat("AIC =", x@AIC, "\n")			
 			cat("BIC =", x@BIC, "\n")
 			if(!is.nan(x@p))
 				cat("G^2 = ", round(x@G2,2), ", df = ", 
-					x@df, ", p = ", round(x@p,4), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
+					x@df, ", p = ", round(x@p,4), "\nTLI = ", round(x@TLI,3),
+                    ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
 			else 
 				cat("G^2 = ", NA, ", df = ", 
 					x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")		
-		}
-		if(x@converge == 1)	
-			cat("Converged in ", x@cycles, " iterations.\n", sep="")
-		else 	
-			cat("Estimation stopped after ", x@cycles, " iterations.\n", sep="")	
+		}		
 	} 
 )
 
@@ -727,23 +804,26 @@ setMethod(
 	{
 		cat("\nCall:\n", paste(deparse(object@Call), sep = "\n", collapse = "\n"), 
 			"\n\n", sep = "")
-		cat("Full-information item factor analysis with ", ncol(object@Theta), " factors \n", sep="")
+		cat("Full-information item factor analysis with ", ncol(object@Theta), " factors \n", 
+		    sep="")
+		if(object@converge == 1)    
+		    cat("Converged in ", object@cycles, " iterations.\n", sep="")
+		else 	
+		    cat("Estimation stopped after ", object@cycles, " iterations.\n", sep="")
 		if(length(object@logLik) > 0){
 			cat("Log-likelihood = ", object@logLik,", SE = ",round(object@SElogLik,3), "\n",sep='')
 			cat("AIC =", object@AIC, "\n")			
 			cat("BIC =", object@BIC, "\n")
 			if(!is.nan(object@p))	
 				cat("G^2 = ", round(object@G2,2), ", df = ", 
-					object@df, ", p = ", round(object@p,4), ", RMSEA = ", round(object@RMSEA,3), 
+					object@df, ", p = ", round(object@p,4), "\nTLI = ", round(object@TLI,3),
+                    ", RMSEA = ", round(object@RMSEA,3), 
                     "\n", sep="")
 			else 
 				cat("G^2 = ", NA, ", df = ", 
-					object@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")
-		}
-		if(object@converge == 1)	
-			cat("Converged in ", object@cycles, " iterations.\n", sep="")
-		else 	
-			cat("Estimation stopped after ", object@cycles, " iterations.\n", sep="")	
+					object@df, ", p = ", NA, "\nTLI = ", round(object@TLI,3),
+                    ", RMSEA = ", NA, "\n", sep="")
+		}		
 	} 
 )
 
@@ -784,12 +864,12 @@ setMethod(
 		a <- matrix(object@parsprint[ ,1:nfactNames], ncol=nfactNames)
 		d <- matrix(object@parsprint[ ,(nfactNames+1):ncol(object@parsprint)],
 			ncol = ncol(object@parsprint)-nfactNames)    	
-		parameters <- cbind(object@parsprint,object@guess)
-		SEs <- cbind(object@SEpars,object@SEg)
+		parameters <- cbind(object@parsprint,object@guess,object@upper)
+		SEs <- cbind(object@SEpars,object@SEg,object@SEup)
 		rownames(parameters) <- itemnames
 		rownames(SEs) <- itemnames
 		colnames(SEs) <- colnames(parameters) <- c(paste("a_",factorNames[1:nfactNames],sep=""),
-            paste("d_",1:(ncol(object@parsprint)-nfactNames),sep=""),"guess")
+            paste("d_",1:(ncol(object@parsprint)-nfactNames),sep=""),"guess",'upper')
 		factorNames2 <- factorNames	
 		if(nfact < nfactNames)
 		  factorNames2 <- factorNames[!grepl("\\(",factorNames)]			
@@ -845,6 +925,8 @@ setMethod(
 		zetas <- object@pars$zetas
 		guess <- object@guess
 		guess[is.na(guess)] <- 0	
+		upper <- object@upper
+		upper[is.na(upper)] <- 1
 		Ksums <- cumsum(K) - 1	
 		itemloc <- object@itemloc
 		res <- matrix(0,J,J)
@@ -858,12 +940,12 @@ setMethod(
 					if(i < j){
 						if(K[i] > 2) P1 <- P.poly(lambdas[i,],zetas[[i]],Theta,itemexp=TRUE)
 						else { 
-							P1 <- P.mirt(lambdas[i,],zetas[[i]], Theta, guess[i])
+							P1 <- P.mirt(lambdas[i,],zetas[[i]], Theta, guess[i], upper[i])
 							P1 <- cbind(1 - P1, P1)
 						}	
 						if(K[j] > 2) P2 <- P.poly(lambdas[j,],zetas[[j]],Theta,itemexp=TRUE)
 						else {
-							P2 <- P.mirt(lambdas[j,],zetas[[j]], Theta, guess[j])	
+							P2 <- P.mirt(lambdas[j,],zetas[[j]], Theta, guess[j], upper[j])	
 							P2 <- cbind(1 - P2, P2)
 						}
 						tab <- table(data[,i],data[,j])		
@@ -878,13 +960,13 @@ setMethod(
 					}					
 				}
 			}		
-			cat("LD matrix:\n\n")	
+			if(is.null(printvalue)) cat("LD matrix:\n\n")	
 			res <- round(res,digits)    	
 			return(res)
 		}
 		if(restype == 'exp'){
-			if(length(object@tabdata) == 0) stop('Expected response vectors cannot be computed because 
-                logLik() has not been run or the data contains missing responses.')
+			if(length(object@tabdata) == 0) stop('Expected response vectors cannot be computed 
+                because logLik() has not been run or the data contains missing responses.')
 			tabdata <- object@tabdata
 			res <- (tabdata[,J+1] - tabdata[,J+2]) / sqrt(tabdata[,J+2])
 			tabdata <- round(cbind(tabdata,res),digits)

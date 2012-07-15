@@ -7,11 +7,11 @@
 \alias{summary,confmirt-method}
 \title{Confirmatory Full-Information Item Factor Analysis for Mixed Data Formats}
 \usage{
-  confmirt(data, model, guess = 0, estGuess = NULL, ncycles
-    = 2000, burnin = 150, SEM.cycles = 50, kdraws = 1, tol
-    = .001, printcycles = TRUE, calcLL = TRUE, draws =
-    2000, returnindex = FALSE, debug = FALSE, technical =
-    list(), ...)
+  confmirt(data, model, guess = 0, upper = 1, estGuess =
+    NULL, estUpper = NULL, verbose = TRUE, calcLL = TRUE,
+    draws = 2000, returnindex = FALSE, debug = FALSE,
+    rotate = 'varimax', Target = NULL, technical = list(),
+    ...)
 
   \S4method{coef}{confmirt}(object, SE = TRUE, print.gmeans
     = FALSE, digits = 3, ...)
@@ -31,13 +31,19 @@
 
   \item{model}{an object returned from
   \code{confmirt.model()} declarating how the factor model
-  is to be estimated. See \code{\link{confmirt.model}} for
-  more details}
+  is to be estimated, or a single numeric value indicating
+  the number of exploratory factors to estimate. See
+  \code{\link{confmirt.model}} for more details}
 
   \item{guess}{initial (or fixed) values for the
   pseudo-guessing parameter. Can be entered as a single
   value to assign a global guessing parameter or may be
   entered as a numeric vector for each item}
+
+  \item{upper}{initial (or fixed) upper bound parameters
+  for 4-PL model. Can be entered as a single value to
+  assign a global upper bound parameter or may be entered
+  as a numeric vector corresponding to each item}
 
   \item{estGuess}{a logical vector indicating which
   lower-asymptote parameters to be estimated (default is
@@ -48,8 +54,8 @@
   are automatically imposed for estimated parameters which
   correspond to the input guessing values.}
 
-  \item{ncycles}{the maximum number of MH-RM iterations to
-  be performed. Default is 2000}
+  \item{estUpper}{same function as \code{estGuess}, but for
+  upper bound parameters}
 
   \item{printvalue}{a numeric value to be specified when
   using the \code{res='exp'} option. Only prints patterns
@@ -57,22 +63,8 @@
   \code{abs(printvalue)}. The default (NULL) prints all
   response patterns}
 
-  \item{burnin}{number of burn-in cycles to perform before
-  beginning the SEM stage. Default is 150}
-
-  \item{SEM.cycles}{number of stochastic EM cycles to
-  perform and average over before beginning the MH-RM
-  algorithm. Default is 50}
-
-  \item{kdraws}{number of Metropolis-Hastings imputations
-  of the factor scores at each iteration. Default is 1}
-
-  \item{tol}{tolerance that can be reached to terminate the
-  model estimation; must be achieved on 3 consecutive
-  iterations}
-
-  \item{printcycles}{logical; display iteration history
-  during estimation?}
+  \item{verbose}{logical; display iteration history during
+  estimation?}
 
   \item{calcLL}{logical; calculate the log-likelihood via
   Monte Carlo integration?}
@@ -102,19 +94,32 @@
   \item{digits}{the number of significant digits to be
   rounded}
 
+  \item{rotate}{if \code{model} is numeric (indicating an
+  exploratory item FA) then this rotation is used. Default
+  is \code{'varimax'}}
+
+  \item{Target}{a dummy variable matrix indicing a target
+  rotation pattern}
+
   \item{technical}{list specifying subtle parameters that
   can be adjusted. These values are \describe{
-  \item{set.seed}{seed number used during estimation.
-  Default is 12345} \item{guess.prior.n}{a scalar or vector
-  for the weighting of the beta priors for guessing
-  parameters (default is 50, typical ranges are from 2 to
-  500). If a scalar is specified this is used globally,
-  otherwise a numeric vector of size \code{ncol(data)} can
-  be used to correspond to particualr items (NA values use
-  the default)} \item{gain}{a vector of three values
-  specifying the numerator, exponent, and subtracted values
-  for the RM gain value. Default is
-  \code{c(0.05,0.5,0.004)}} }}
+  \item{NCYCLES}{max number of MH-RM cycles; default 2000}
+  \item{BURNIN}{number of burn in cycles (stage 1); default
+  150} \item{SEMCYCLES}{number of SEM cycles (stage 2);
+  default 50} \item{KDRAWS}{number of paralell MH sets to
+  be drawn; default 1} \item{TOL}{minimum threshold
+  tolerance for convergence of MH-RM, must occur on three
+  consecutive occations; default .001} \item{set.seed}{seed
+  number used during estimation. Default is 12345}
+  \item{guess.prior.n}{a scalar or vector for the weighting
+  of the beta priors for guessing parameters (default is
+  50, typical ranges are from 2 to 500). If a scalar is
+  specified this is used globally, otherwise a numeric
+  vector of size \code{ncol(data)} can be used to
+  correspond to particualr items (NA values use the
+  default)} \item{gain}{a vector of three values specifying
+  the numerator, exponent, and subtracted values for the RM
+  gain value. Default is \code{c(0.05,0.5,0.004)}} }}
 
   \item{...}{additional arguments to be passed}
 }
