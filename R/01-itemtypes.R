@@ -8,6 +8,9 @@ setClass("GroupPars",
                         nfact='numeric',
                         gradient='numeric',
                         hessian='matrix',
+                        method='character',
+                        lbound='numeric',
+                        ubound='numeric',
                         n.prior.mu='numeric',
                         n.prior.sd='numeric',
                         b.prior.alpha='numeric',
@@ -60,14 +63,14 @@ setClass("mcm", contains = 'AllItemsClass',
 
 setGeneric('ProbTrace', function(x, Theta, ...) standardGeneric("ProbTrace"))
 
-setGeneric('LogLik', function(x, Theta) standardGeneric("LogLik"))
+setGeneric('LogLik', function(x, Theta, ...) standardGeneric("LogLik"))
 
 setGeneric('ExtractLambdas', function(x) standardGeneric("ExtractLambdas"))
 
 setGeneric('ExtractZetas', function(x) standardGeneric("ExtractZetas"))
 
-setGeneric('Deriv', function(x, Theta) standardGeneric("Deriv"))
+setGeneric('Deriv', function(x, Theta, ...) standardGeneric("Deriv"))
 
 setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))         
 
-setGeneric('ItemInfo', function(x, A, Theta) standardGeneric("ItemInfo"))
+setGeneric('ItemInfo', function(x, Theta, cosangle) standardGeneric("ItemInfo"))

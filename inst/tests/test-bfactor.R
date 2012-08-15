@@ -5,20 +5,27 @@ test_that('dich data', {
     data <- key2binary(SAT12,
                        key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
     specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
-    mod1 <- bfactor(data, specific)
-    mod2 <- bfactor(data, specific, itemtype = c(rep('2PL', 29), '3PL', rep('2PL',2)),
-                    parprior = list(c(209, 'beta',10,40)))    
-    expect_is(mod1, 'bfactorClass')              
-    expect_is(mod2, 'bfactorClass')
+    mod1 <- bfactor(data, specific)    
+    expect_is(mod1, 'ConfirmatoryClass')                  
     fs <- fscores(mod1, verbose = FALSE)
-    fs <- fscores(mod2, full.scores = TRUE, verbose = FALSE)
-    expect_is(fs, 'matrix')
+    expect_is(fs, 'matrix')        
+    cof <- coef(mod1, verbose = FALSE)
+    expect_is(cof, 'list')
+    sum <- summary(mod1, verbose = FALSE)
+    expect_is(sum, 'list')    
+    pfit1 <- personfit(mod1)
+    expect_is(pfit1, 'data.frame')
+    pfit2 <- personfit(mod1, full.scores = TRUE)    
+    expect_is(pfit2, 'data.frame')
+    ifit <- itemfit(mod1)
+    expect_is(ifit, 'data.frame')
 })
 
 
 
 test_that('mix data', {
     #simulate data
+    set.seed(1234)
     a <- matrix(c(
         1,0.5,NA,
         1,0.5,NA,
@@ -61,7 +68,14 @@ test_that('mix data', {
     specific <- c(rep(1,7),rep(2,7))
     items[items == 'dich'] <- '2PL'
     simmod <- bfactor(dataset, specific, itemtype = items)
-    expect_is(simmod, 'bfactorClass')              
+    expect_is(simmod, 'ConfirmatoryClass')              
     fs <- fscores(simmod, verbose = FALSE)
     expect_is(fs, 'matrix')
+    
+    res <- residuals(simmod, verbose = FALSE)
+    expect_is(res, 'matrix')
+    fit <- fitted(simmod)
+    expect_is(fit, 'matrix')  
+    sum <- summary(simmod, verbose = FALSE)
+    expect_is(sum, 'list')
 })

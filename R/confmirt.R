@@ -17,7 +17,7 @@
 #' full-information). Residuals are computed using the LD statistic (Chen &
 #' Thissen, 1997) in the lower diagonal of the matrix returned by
 #' \code{residuals}, and Cramer's V above the diagonal. For computing the
-#' log-likelihood more accurately see \code{\link{logLik}}.
+#' log-likelihood more accurately see \code{\link{calcLogLik}}.
 #' 
 #' \code{coef} displays the item parameters with their associated standard
 #' errors, while use of \code{summary} transforms the slopes into a factor
@@ -38,14 +38,16 @@
 #' 
 #' Specifying a number as the second input to confmirt an exploratory IRT model is estimated and 
 #' can be viewed as a stochastic analogue of \code{mirt}, with much of the same behaviour and 
-#' specifications. Rotation and target matrix options will be used in this subroutine and will be
+#' specifications. 
+#' Rotation and target matrix options will be used in this subroutine and will be
 #' passed to the returned object for use in generic functions such as \code{summary()} and 
 #' \code{fscores}. Again, factor means and variances are fixed to ensure proper identification. See
 #' \code{\link{mirt}} for more details.
 #' 
 #' 
-#' @aliases confmirt coef,confmirt-method summary,confmirt-method
-#' residuals,confmirt-method anova,confmirt-method fitted,confmirt-method
+#' @aliases confmirt coef,ConfirmatoryClass-method summary,ConfirmatoryClass-method
+#' residuals,ConfirmatoryClass-method anova,ConfirmatoryClass-method fitted,ConfirmatoryClass-method
+#' plot,ConfirmatoryClass-method
 #' @param data a \code{matrix} or \code{data.frame} that consists of
 #' numerically ordered data, with missing data coded as \code{NA}
 #' @param model an object returned from \code{confmirt.model()} declaring how
@@ -58,6 +60,13 @@
 #' @param upper initial (or fixed) upper bound parameters for 4-PL model. Can be 
 #' entered as a single value to assign a global upper bound parameter or may be entered as a 
 #' numeric vector corresponding to each item
+#' @param free.start a list containing the start value and logical indicating whether a given parameter 
+#' is to be freely estimated. Each element of the list consists of three components, the parameter
+#' number, the starting (or fixed) value, and a logical to indicate whether the parameter is free. For
+#' example, \code{free.start = list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter 20 to 0 while
+#' parameter 10 would be freely estimated with a starting value of 1.5. Note that this will override 
+#' the values specified by a user defined \code{startvalues} or \code{freepars} input for the specified
+#' parameters
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
@@ -72,11 +81,10 @@
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
 #' which will be repeated globally. The NULL default assumes that the items are ordinal or 2PL,
 #' however they may be changed to the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu', 
-#' '4PL', 'graded', 'gpcm', 'nominal',  'mcm', 'PC2PL' and 'PC3PL', for the Rasch/partial credit, 1 and 2 parameter logistic, 
+#' '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and 'partcomp', for the Rasch/partial credit, 1 and 2 parameter logistic, 
 #' 3 parameter logistic (lower asymptote and upper), 4 parameter logistic, graded response model, 
-#' generalized partial credit model, nominal model, multiple choice model, and 2 and 3PL partially-compensatory models,
-#' respectively. Note that specifying a '1PL' or 'Rasch' model should be of length 1 
-#' (since there is only 1 slope parameter estimated).
+#' generalized partial credit model, nominal model, multiple choice model, and partially compensatory model,
+#' respectively. The default assumes that items follow a '2PL' or 'graded' format
 #' If \code{NULL} the default assumes that the data follow a '2PL' or 'graded' format
 #' @param constrain a list of user declared equality constraints. To see how to define the
 #' parameters correctly use \code{constrain = 'index'} initially to see how the parameters are labeled.
@@ -101,14 +109,28 @@
 #' \code{startavlues=newstartvalues}. Note that user input values must match what the default structure 
 #' would have been
 #' @param debug logical; turn on debugging features?
-#' @param object an object of class \code{confmirtClass}
-#' @param object2 an object of class \code{confmirtClass}
+#' @param object an object of class \code{ConfirmatoryClass}
+#' @param object2 an object of class \code{ConfirmatoryClass}
 #' @param digits the number of significant digits to be rounded
 #' @param rotate if \code{model} is numeric (indicating an exploratory item FA) then this 
 #' rotation is used. Default is \code{'varimax'}
 #' @param Target a dummy variable matrix indicting a target rotation pattern
+#' @param suppress a numeric value indicating which factor
+#' loadings should be suppressed. Typical values are around .3 in most
+#' statistical software. Default is 0 for no suppression
 #' @param technical list specifying subtle parameters that can be adjusted. These 
 #' values are 
+#' @param x an object of class \code{mirt} to be plotted or printed
+#' @param y an unused variable to be ignored
+#' @param type type of plot to view; can be \code{'curve'} for the total test
+#' score as a function of two dimensions, or \code{'info'} to show the test
+#' information function for two dimensions
+#' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}. If a vector is 
+#' used then a bubble plot is created with the summed information across the angles specified 
+#' (e.g., \code{theta_angle = seq(0, 90, by=10)})
+#' @param npts number of quadrature points to be used for plotting features.
+#' Larger values make plots look smoother
+#' @param rot allows rotation of the 3D graphics
 #' \describe{
 #' \item{NCYCLES}{max number of MH-RM cycles; default 2000}
 #' \item{BURNIN}{number of burn in cycles (stage 1); default 150}
@@ -116,12 +138,7 @@
 #' \item{KDRAWS}{number of parallel MH sets to be drawn; default 1}
 #' \item{TOL}{minimum threshold tolerance for convergence of MH-RM, must occur on three consecutive
 #' occations; default .001} 
-#'   \item{set.seed}{seed number used during estimation. Default is 12345}
-#' 	 \item{guess.prior.n}{a scalar or vector for the weighting of the beta priors for 
-#'		guessing parameters (default is 50, typical ranges are from 2 to 500). If a 
-#'      scalar is specified this is used globally, otherwise a numeric vector of size
-#' 	    \code{ncol(data)} can be used to correspond to particular items (NA values use 
-#'      the default)} 
+#'   \item{set.seed}{seed number used during estimation. Default is 12345} 	 
 #'   \item{gain}{a vector of three values specifying the numerator, exponent, and subtracted
 #'      values for the RM gain value. Default is \code{c(0.05,0.5,0.004)}}   	
 #' }
@@ -129,7 +146,8 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
 #' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{simdata}},
-#' \code{\link{fscores}}, \code{\link{confmirt.model}}
+#' \code{\link{fscores}}, \code{\link{confmirt.model}}, \code{\link{wald}}, 
+#' \code{\link{multipleGroup}}, \code{\link{itemplot}}
 #' @references
 #' 
 #' Cai, L. (2010a). High-Dimensional exploratory item factor analysis by a
@@ -150,20 +168,24 @@
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, startvalues = NULL, 
+#' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, free.start = NULL, startvalues = NULL, 
 #' constrain = NULL, freepars = NULL, parprior = NULL, verbose = TRUE, calcLL = TRUE, 
 #' draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, 
 #' technical = list(),  ...)
 #' 
-#' \S4method{coef}{confmirt}(object, rotate = '', Target = NULL, allpars = FALSE, digits = 3, ...)
+#' \S4method{summary}{ConfirmatoryClass}(object, suppress = 0, digits = 3, verbose = TRUE, ...)
 #' 
-#' \S4method{summary}{confmirt}(object, digits = 3, ...)
+#' \S4method{coef}{ConfirmatoryClass}(object, allpars = FALSE, digits = 3, verbose = TRUE, ...)
 #' 
-#' \S4method{residuals}{confmirt}(object, restype = 'LD', digits = 3, printvalue = NULL, ...)
+#' \S4method{anova}{ConfirmatoryClass}(object, object2)
 #' 
-#' \S4method{anova}{confmirt}(object, object2, ...)
-#'
-#' \S4method{fitted}{confmirt}(object, digits = 3, ...)
+#' \S4method{fitted}{ConfirmatoryClass}(object, digits = 3, ...)
+#' 
+#' \S4method{plot}{ConfirmatoryClass}(x, y, type = 'info', npts = 50, theta_angle = 45, 
+#' rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
+#' 
+#' \S4method{residuals}{ConfirmatoryClass}(object, restype = 'LD', digits = 3, printvalue = NULL, 
+#' verbose = TRUE, ...)
 #'
 #' @export confmirt
 #' @examples
@@ -253,149 +275,83 @@
 #' 
 #' }
 #' 
-confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, startvalues = NULL, 
+confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, free.start = NULL,
+                     startvalues = NULL, 
                      constrain = NULL, freepars = NULL, parprior = NULL, verbose = TRUE, calcLL = TRUE, 
                      draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, 
                      technical = list(),  ...)
-{
+{    
     if(debug == 'Main') browser()
+    ##technical
 	Call <- match.call()               
-	set.seed(12345)	
-	itemnames <- colnames(data)
-	keywords <- c('COV')
-	data <- as.matrix(data)		
-	colnames(data) <- itemnames	
-	J <- ncol(data)
-	N <- nrow(data)
-	exploratory <- FALSE
-    if(is(model, 'numeric')){
-        tmp <- tempfile('tempfile')
-        cat(paste('F',1:model,' = 1-', J, "\n", sep=''), file=tmp)
-        model <- confmirt.model(tmp, quiet = TRUE)
-        exploratory <- TRUE
-        unlink(tmp)
-    }    
-	##technical
-	NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
+	set.seed(12345)	    
+    RETURN <- ifelse(any('index' == c(startvalues, freepars, parprior, constrain)), TRUE, FALSE)
+    NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
     BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
     SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
     KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1, technical$KDRAWS)
-    TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)        
-	if(!is.null(technical$set.seed)) set.seed(technical$set.seed)	
-	gain <- c(0.05,0.5,0.004)
-	if(!is.null(technical$gain)) {
-		if(length(technical$gain) == 3 && is.numeric(technical$gain))
-			gain <- technical$gain
-	}
-	##
-	Target <- ifelse(is.null(Target), NaN, Target)
-	if(length(guess) == 1) guess <- rep(guess,J)
-	if(length(guess) > J || length(guess) < J) 
-		stop("The number of guessing parameters is incorrect.")					
-	if(length(upper) == 1) upper <- rep(upper,J)
-	if(length(upper) > J || length(upper) < J) 
-	    stop("The number of upper bound parameters is incorrect.")
-	uniques <- list()
-	for(i in 1:J)
-		uniques[[i]] <- sort(unique(data[,i]))
-	K <- rep(0,J)
-	for(i in 1:J) K[i] <- length(uniques[[i]])	
-	guess[K > 2] <- 0
-	upper[K > 2] <- 1		
-	if(is.null(itemtype)) {
-	    itemtype <- rep('', J)
-	    for(i in 1:J){
-	        if(K[i] > 2) itemtype[i] <- 'graded'
-	        if(K[i] == 2) itemtype[i] <- '2PL'                            
-	    }        
-	} 
-	if(length(itemtype) != J) stop('itemtype specification is not the correct length')
-	if(length(itemtype) == 1) itemtype <- rep(itemtype, J)
-	itemloc <- cumsum(c(1,K))	
-	model <- matrix(model$x,ncol=2)
-	factorNames <- setdiff(model[,1],keywords)
-	nfactNames <- length(factorNames)
-	nfact <- sum(!grepl('\\(',factorNames))
-	index <- 1:J	
-    fulldata <- matrix(0,N,sum(K))
-	Names <- NULL
-	for(i in 1:J)
-	    Names <- c(Names, paste("Item.",i,"_",1:K[i],sep=""))				
-	colnames(fulldata) <- Names			
-	for(i in 1:J){
-	    ind <- index[i]		
-	    dummy <- matrix(0,N,K[ind])
-	    for (j in 0:(K[ind]-1))  
-	        dummy[,j+1] <- as.integer(data[,ind] == uniques[[ind]][j+1])  		
-	    fulldata[ ,itemloc[ind]:(itemloc[ind+1]-1)] <- dummy		
-	}	
-	fulldata[is.na(fulldata)] <- 0    
-    parnumber <- 1 #to be used later when looping over more than 1 group       
-	pars <- model.elements(model=model, itemtype=itemtype, factorNames=factorNames, 
-                           nfactNames=nfactNames, nfact=nfact, J=J, K=K, fulldata=fulldata, 
-                           itemloc=itemloc, data=data, N=N, guess=guess, upper=upper,  
-                           itemnames=itemnames, exploratory=exploratory, constrain=constrain,
-                           startvalues=startvalues, freepars=freepars, parprior=parprior, 
-                           parnumber=parnumber, debug=debug)   
-    prodlist <- attr(pars, 'prodlist')
-	if(is(pars[[1]], 'numeric') || is(pars[[1]], 'logical')){
-        names(pars) <- c(itemnames, 'Group_Parameters')
-        attr(pars, 'parnumber') <- NULL
-        return(pars)  
-    }
-	if(!is.null(constrain) || !is.null(parprior)){
-	    if(any(constrain == 'index', parprior == 'index')){
-	        returnedlist <- list()                        
-	        for(i in 1:length(pars))
-	            returnedlist[[i]] <- pars[[i]]@parnum 
-	        names(returnedlist) <- c(itemnames, 'Group_Parameters')            
-	        return(returnedlist)
-	    }
-	}   
-    onePLconstraint <- c()
-    if(itemtype[1] == '1PL'){
-        constrain <- list()
-        for(i in 1:J)
-            onePLconstraint <- c(onePLconstraint, pars[[i]]@parnum[1])    
-        constrain[[length(constrain) + 1]] <- onePLconstraint
-        pars <- model.elements(model=model, itemtype=itemtype, factorNames=factorNames, 
-                               nfactNames=nfactNames, nfact=nfact, J=J, K=K, fulldata=fulldata, 
-                               itemloc=itemloc, data=data, N=N, guess=guess, upper=upper,  
-                               itemnames=itemnames, exploratory=exploratory, constrain=constrain,
-                               startvalues=startvalues, freepars=freepars, parprior=parprior, 
-                               parnumber=parnumber, debug=debug)
-    }
-    npars <- 0
-    for(i in 1:length(pars))
-        npars <- npars + sum(pars[[i]]@est)	        	    
- 	ESTIMATE <- MHRM(pars=pars, list=list(NCYCLES=NCYCLES, BURNIN=BURNIN, SEMCYCLES=SEMCYCLES, 
- 	                                       KDRAWS=KDRAWS, TOL=TOL, gain=gain, nfactNames=nfactNames, 
-                                           itemloc=itemloc, fulldata=fulldata, nfact=nfact, 
-                                           npars=npars, constrain=constrain, verbose=verbose), debug=debug) 
-    pars <- ESTIMATE$pars
-	if(verbose) cat("\n\n")    
-	lambdas <- Lambdas(pars)
-	if (nfactNames > 1){
-        norm <- sqrt(1 + rowSums(lambdas[ ,1:nfactNames]^2,na.rm = TRUE))
-	} else norm <- as.matrix(sqrt(1 + lambdas[ ,1]^2))  
-	F <- as.matrix(lambdas[ ,1:nfactNames]/norm)
-	F[is.na(F)] <- 0		
-	h2 <- rowSums(F^2)
-	colnames(F) <- factorNames
-	names(h2) <- itemnames  
-	null.mod <- unclass(new('mirtClass'))
-    if(!any(is.na(data))) null.mod <- unclass(mirt(data, 0, itemtype = 'NullModel'))
-    if(is.null(constrain)) constrain <- list()
-    if(is.null(prodlist)) prodlist <- list()
-    
-    ret <- new('confmirtClass', pars=pars, K=K, itemloc=itemloc, cycles=ESTIMATE$cycles,                
-               fulldata=fulldata, data=data, h2=h2, F=F, converge=ESTIMATE$converge,                 
-               null.mod=null.mod, constrain=constrain, nfact=nfact, exploratory=exploratory,
-               factorNames=factorNames, rotate=rotate, prodlist=prodlist, Call=Call)    
+    TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)  
+    EMSE <- ifelse(is.null(technical$EMSE), FALSE, technical$EMSE)
+    if(!is.null(technical$set.seed)) set.seed(technical$set.seed)	
+    gain <- c(0.05,0.5,0.004)
+    if(!is.null(technical$gain)) {
+        if(length(technical$gain) == 3 && is.numeric(technical$gain))
+            gain <- technical$gain
+    }	
+    ##	
+    Target <- ifelse(is.null(Target), NaN, Target)
+    data <- as.matrix(data)
+    parnumber <- 1
+	PrepList <- PrepData(data=data, model=model, itemtype=itemtype, guess=guess, upper=upper, 
+                         startvalues=startvalues, constrain=constrain, freepars=freepars, 
+	                     parprior=parprior, verbose=verbose, debug=debug, free.start=free.start,
+                         technical=technical, parnumber=parnumber)           
+    if(RETURN) return(PrepList)
+ 	ESTIMATE <- MHRM(pars=PrepList$pars, 
+                      list=list(NCYCLES=NCYCLES, BURNIN=BURNIN, SEMCYCLES=SEMCYCLES, 
+                                KDRAWS=KDRAWS, TOL=TOL, gain=gain, nfactNames=PrepList$nfactNames, 
+                                itemloc=PrepList$itemloc, fulldata=PrepList$fulldata, 
+                                nfact=PrepList$nfact, npars=PrepList$npars, 
+                                constrain=PrepList$constrain, verbose=verbose), 
+                      debug=debug, startvalues=startvalues, EMSE=EMSE) 
+    if(EMSE) return(ESTIMATE)
+    null.mod <- unclass(mirt(data,1,itemtype='NullModel', SE = FALSE))
+    # pars to FA loadings    
+    pars <- ESTIMATE$pars    
+    nfact <- pars[[1]]@nfact
+    lambdas <- Lambdas(pars)
+    if (nfact > 1) norm <- sqrt(1 + rowSums(lambdas[ ,1:nfact]^2))
+    else norm <- as.matrix(sqrt(1 + lambdas[ ,1]^2))  
+    alp <- as.matrix(lambdas[ ,1:nfact]/norm)
+    if(PrepList$exploratory){
+        FF <- alp %*% t(alp)
+        V <- eigen(FF)$vector[ ,1:nfact]
+        L <- eigen(FF)$values[1:nfact]
+        if (nfact == 1) F <- as.matrix(V * sqrt(L))
+        else F <- V %*% sqrt(diag(L))  
+        if (sum(F[ ,1] < 0)) F <- (-1) * F 
+        colnames(F) <- paste("F_", 1:ncol(F),sep="")    
+        h2 <- rowSums(F^2)
+        mod <- new('ExploratoryClass', iter=ESTIMATE$cycles, pars=ESTIMATE$pars, itemloc=PrepList$itemloc, 
+                   F=F, h2=h2, tabdata=PrepList$tabdata2, data=data, converge=ESTIMATE$converge, esttype='MHRM',                
+                   K=PrepList$K, tabdatalong=PrepList$tabdata, nfact=nfact, constrain=PrepList$constrain,
+                   rotate=rotate, null.mod=null.mod, Target=Target, factorNames=PrepList$factorNames,
+                   fulldata=PrepList$fulldata, information=ESTIMATE$info, longpars=ESTIMATE$longpars, 
+                   Call=Call)
+    } else {
+        F <- alp
+        colnames(F) <- PrepList$factorNames
+        h2 <- rowSums(F^2)       
+        mod <- new('ConfirmatoryClass', iter=ESTIMATE$cycles, pars=ESTIMATE$pars, itemloc=PrepList$itemloc, 
+                   F=F, h2=h2, tabdata=PrepList$tabdata2, data=data, converge=ESTIMATE$converge, esttype='MHRM',                
+                   K=PrepList$K, tabdatalong=PrepList$tabdata, nfact=nfact, constrain=PrepList$constrain,
+                   fulldata=PrepList$fulldata, null.mod=null.mod, factorNames=PrepList$factorNames, 
+                   information=ESTIMATE$info, longpars=ESTIMATE$longpars, Call=Call)
+    }        
 	if(calcLL){
-		if(verbose) cat("Calculating log-likelihood...\n")
+		if(verbose) cat("\nCalculating log-likelihood...\n")
 		flush.console()
-		ret <- calcLogLik(ret, draws)		        
+		mod <- calcLogLik(mod, draws)
 	}	
-	return(ret)
+	return(mod)
 }

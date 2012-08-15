@@ -1,29 +1,37 @@
 \name{confmirt}
-\alias{anova,confmirt-method}
-\alias{coef,confmirt-method}
+\alias{anova,ConfirmatoryClass-method}
+\alias{coef,ConfirmatoryClass-method}
 \alias{confmirt}
-\alias{fitted,confmirt-method}
-\alias{residuals,confmirt-method}
-\alias{summary,confmirt-method}
+\alias{fitted,ConfirmatoryClass-method}
+\alias{plot,ConfirmatoryClass-method}
+\alias{residuals,ConfirmatoryClass-method}
+\alias{summary,ConfirmatoryClass-method}
 \title{Confirmatory Full-Information Item Factor Analysis}
 \usage{
   confmirt(data, model, itemtype = NULL, guess = 0, upper =
-    1, startvalues = NULL, constrain = NULL, freepars =
-    NULL, parprior = NULL, verbose = TRUE, calcLL = TRUE,
-    draws = 2000, debug = FALSE, rotate = 'varimax', Target
-    = NULL, technical = list(), ...)
+    1, free.start = NULL, startvalues = NULL, constrain =
+    NULL, freepars = NULL, parprior = NULL, verbose = TRUE,
+    calcLL = TRUE, draws = 2000, debug = FALSE, rotate =
+    'varimax', Target = NULL, technical = list(), ...)
 
-  \S4method{coef}{confmirt}(object, rotate = '', Target =
-    NULL, allpars = FALSE, digits = 3, ...)
+  \S4method{summary}{ConfirmatoryClass}(object, suppress =
+    0, digits = 3, verbose = TRUE, ...)
 
-  \S4method{summary}{confmirt}(object, digits = 3, ...)
+  \S4method{coef}{ConfirmatoryClass}(object, allpars =
+    FALSE, digits = 3, verbose = TRUE, ...)
 
-  \S4method{residuals}{confmirt}(object, restype = 'LD',
-    digits = 3, printvalue = NULL, ...)
+  \S4method{anova}{ConfirmatoryClass}(object, object2)
 
-  \S4method{anova}{confmirt}(object, object2, ...)
+  \S4method{fitted}{ConfirmatoryClass}(object, digits = 3,
+    ...)
 
-  \S4method{fitted}{confmirt}(object, digits = 3, ...)
+  \S4method{plot}{ConfirmatoryClass}(x, y, type = 'info',
+    npts = 50, theta_angle = 45, rot = list(xaxis = -70,
+    yaxis = 30, zaxis = 10), ...)
+
+  \S4method{residuals}{ConfirmatoryClass}(object, restype =
+    'LD', digits = 3, printvalue = NULL, verbose = TRUE,
+    ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -45,6 +53,18 @@
   for 4-PL model. Can be entered as a single value to
   assign a global upper bound parameter or may be entered
   as a numeric vector corresponding to each item}
+
+  \item{free.start}{a list containing the start value and
+  logical indicating whether a given parameter is to be
+  freely estimated. Each element of the list consists of
+  three components, the parameter number, the starting (or
+  fixed) value, and a logical to indicate whether the
+  parameter is free. For example, \code{free.start =
+  list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter
+  20 to 0 while parameter 10 would be freely estimated with
+  a starting value of 1.5. Note that this will override the
+  values specified by a user defined \code{startvalues} or
+  \code{freepars} input for the specified parameters}
 
   \item{printvalue}{a numeric value to be specified when
   using the \code{res='exp'} option. Only prints patterns
@@ -74,15 +94,14 @@
   repeated globally. The NULL default assumes that the
   items are ordinal or 2PL, however they may be changed to
   the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
-  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', 'PC2PL' and
-  'PC3PL', for the Rasch/partial credit, 1 and 2 parameter
-  logistic, 3 parameter logistic (lower asymptote and
-  upper), 4 parameter logistic, graded response model,
+  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
+  'partcomp', for the Rasch/partial credit, 1 and 2
+  parameter logistic, 3 parameter logistic (lower asymptote
+  and upper), 4 parameter logistic, graded response model,
   generalized partial credit model, nominal model, multiple
-  choice model, and 2 and 3PL partially-compensatory
-  models, respectively. Note that specifying a '1PL' or
-  'Rasch' model should be of length 1 (since there is only
-  1 slope parameter estimated). If \code{NULL} the default
+  choice model, and partially compensatory model,
+  respectively. The default assumes that items follow a
+  '2PL' or 'graded' format If \code{NULL} the default
   assumes that the data follow a '2PL' or 'graded' format}
 
   \item{constrain}{a list of user declared equality
@@ -128,9 +147,11 @@
 
   \item{debug}{logical; turn on debugging features?}
 
-  \item{object}{an object of class \code{confmirtClass}}
+  \item{object}{an object of class
+  \code{ConfirmatoryClass}}
 
-  \item{object2}{an object of class \code{confmirtClass}}
+  \item{object2}{an object of class
+  \code{ConfirmatoryClass}}
 
   \item{digits}{the number of significant digits to be
   rounded}
@@ -142,8 +163,35 @@
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
 
+  \item{suppress}{a numeric value indicating which factor
+  loadings should be suppressed. Typical values are around
+  .3 in most statistical software. Default is 0 for no
+  suppression}
+
   \item{technical}{list specifying subtle parameters that
-  can be adjusted. These values are \describe{
+  can be adjusted. These values are}
+
+  \item{x}{an object of class \code{mirt} to be plotted or
+  printed}
+
+  \item{y}{an unused variable to be ignored}
+
+  \item{type}{type of plot to view; can be \code{'curve'}
+  for the total test score as a function of two dimensions,
+  or \code{'info'} to show the test information function
+  for two dimensions}
+
+  \item{theta_angle}{numeric values ranging from 0 to 90
+  used in \code{plot}. If a vector is used then a bubble
+  plot is created with the summed information across the
+  angles specified (e.g., \code{theta_angle = seq(0, 90,
+  by=10)})}
+
+  \item{npts}{number of quadrature points to be used for
+  plotting features. Larger values make plots look
+  smoother}
+
+  \item{rot}{allows rotation of the 3D graphics \describe{
   \item{NCYCLES}{max number of MH-RM cycles; default 2000}
   \item{BURNIN}{number of burn in cycles (stage 1); default
   150} \item{SEMCYCLES}{number of SEM cycles (stage 2);
@@ -152,14 +200,8 @@
   tolerance for convergence of MH-RM, must occur on three
   consecutive occations; default .001} \item{set.seed}{seed
   number used during estimation. Default is 12345}
-  \item{guess.prior.n}{a scalar or vector for the weighting
-  of the beta priors for guessing parameters (default is
-  50, typical ranges are from 2 to 500). If a scalar is
-  specified this is used globally, otherwise a numeric
-  vector of size \code{ncol(data)} can be used to
-  correspond to particular items (NA values use the
-  default)} \item{gain}{a vector of three values specifying
-  the numerator, exponent, and subtracted values for the RM
+  \item{gain}{a vector of three values specifying the
+  numerator, exponent, and subtracted values for the RM
   gain value. Default is \code{c(0.05,0.5,0.004)}} }}
 
   \item{...}{additional arguments to be passed}
@@ -190,7 +232,7 @@
   statistic (Chen & Thissen, 1997) in the lower diagonal of
   the matrix returned by \code{residuals}, and Cramer's V
   above the diagonal. For computing the log-likelihood more
-  accurately see \code{\link{logLik}}.
+  accurately see \code{\link{calcLogLik}}.
 
   \code{coef} displays the item parameters with their
   associated standard errors, while use of \code{summary}
@@ -335,7 +377,8 @@ anova(mod.quad, mod.combo)
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
   \code{\link{simdata}}, \code{\link{fscores}},
-  \code{\link{confmirt.model}}
+  \code{\link{confmirt.model}}, \code{\link{wald}},
+  \code{\link{multipleGroup}}, \code{\link{itemplot}}
 }
 \keyword{models}
 

@@ -1,6 +1,6 @@
 #' Simulate response patterns 
 #' 
-#' Simulates response patterns for compensetory and noncompensatory MIRT models
+#' Simulates response patterns for compensatory and noncompensatory MIRT models
 #' from multivariate normally distributed factor (\eqn{\theta}) scores, or from
 #' a user input matrix of \eqn{\theta}'s.
 #' 
@@ -20,7 +20,7 @@
 #' however to parameterized them for meaningful interpretation the first category intercept should 
 #' equal 0 for both models
 #' @param nominal a matrix of specific item category slopes for nominal models.
-#' Should be the dimensions as the intecept specification with one less column, with \code{NA}
+#' Should be the dimensions as the intercept specification with one less column, with \code{NA}
 #' in locations where not applicable. Note that during estimation the first slope will be constrained
 #' to 0 and the last will be constrained to the number of categories minus 1, 
 #' so it is best to set these as the values for the first and last categories as well
@@ -135,7 +135,7 @@
 #' 
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0, 
 	upper = 1, nominal = NULL, Theta = NULL)
-{    
+{     
 	nfact <- ncol(a)
 	nitems <- nrow(a)		
 	K <- rep(0,nitems)	
@@ -145,6 +145,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	if(length(upper) != nitems) stop("Upper bound parameter is incorrect")
     for(i in 1:length(K)){
         K[i] <- length(na.omit(d[i, ])) + 1
+        if(itemtype[i] =='partcomp') K[i] <- 2
         if(any(itemtype[i] == c('gpcm', 'nominal'))) K[i] <- K[i] - 1
     }
     guess[K > 2] <- upper[K > 2] <- NA	
@@ -165,7 +166,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         P <- ProbTrace(obj, Theta)
 		for (j in 1:N) 
             data[j,i] <- sample(1:ncol(P), 1, prob = P[j,])        
-        if(any(itemtype[i] == c('dich', 'gpcm'))) data[ ,i] <- data[ ,i] - 1 
+        if(any(itemtype[i] == c('dich', 'gpcm', 'partcomp'))) data[ ,i] <- data[ ,i] - 1 
 	}
 	colnames(data) <- paste("Item_", 1:nitems, sep="") 
 	return(data)
