@@ -9,36 +9,50 @@
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-  mirt(data, nfact, guess = 0, upper = 1, SE = FALSE,
-    rotate = 'varimax', Target = NULL, prev.cor = NULL,
-    par.prior = FALSE, startvalues = NULL, quadpts = NULL,
-    verbose = FALSE, debug = FALSE, technical = list(),
-    ...)
+  mirt(data, nfact, itemtype = NULL, guess = 0, upper = 1,
+    SE = FALSE, startvalues = NULL, constrain = NULL,
+    freepars = NULL, parprior = NULL, rotate = 'varimax',
+    Target = NULL, prev.cor = NULL, quadpts = NULL, verbose
+    = FALSE, debug = FALSE, technical = list(), ...)
 
-  \S4method{summary}{mirt}(object, rotate = '', suppress =
-    0, digits = 3, print = FALSE, ...)
+  \S4method{summary}{mirt}(object, rotate = '', Target =
+    NULL, suppress = 0, digits = 3, print = TRUE, ...)
 
-  \S4method{coef}{mirt}(object, rotate = '', digits = 3,
-    ...)
+  \S4method{coef}{mirt}(object, rotate = '', Target = NULL,
+    allpars = FALSE, digits = 3, ...)
 
   \S4method{anova}{mirt}(object, object2, ...)
 
   \S4method{fitted}{mirt}(object, digits = 3, ...)
 
-  \S4method{plot}{mirt}(x, type = 'info', npts = 50, rot =
-    list(x = -70, y = 30, z = 10), ...)
+  \S4method{plot}{mirt}(x, type = 'info', npts = 50,
+    theta_angle = 45, rot = list(x = -70, y = 30, z = 10),
+    ...)
 
   \S4method{residuals}{mirt}(object, restype = 'LD', digits
     = 3, printvalue = NULL, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
-  consists of only 0, 1, and \code{NA} values to be factor
-  analyzed. If scores have been recorded by the response
-  pattern then they can be recoded to dichotomous format
-  using the \code{\link{key2binary}} function}
+  consists of numerically ordered data, with missing data
+  coded as \code{NA}}
 
   \item{nfact}{number of factors to be extracted}
+
+  \item{itemtype}{type of items to be modeled, declared as
+  a vector for each item or a single value which will be
+  repeated globally. The NULL default assumes that the
+  items are ordinal or 2PL, however they may be changed to
+  the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
+  '4PL', 'graded', 'gpcm', 'nominal', and 'mcm', for the
+  Rasch/partial credit, 1 and 2 parameter logistic, 3
+  parameter logistic (lower asymptote and upper), 4
+  parameter logistic, graded response model, generalized
+  partial credit model, nominal model, and multiple choice
+  model, respectively. Note that specifying a '1PL' or
+  'Rasch' model should be of length 1 (since there is only
+  1 slope parameter estimated). If \code{NULL} the default
+  assumes that the data follow a '2PL' or 'graded' format}
 
   \item{SE}{logical, estimate the standard errors?}
 
@@ -56,23 +70,6 @@ Theory)}
   matrix to be used to estimate starting values for the EM
   estimation? Default in \code{NULL}}
 
-  \item{par.prior}{a list declaring which items should have
-  assumed priors distributions, and what these prior
-  weights are. Elements are \code{slope} and \code{int} to
-  specify the coefficients beta prior for the slopes and
-  normal prior for the intercepts, and \code{slope.items}
-  and \code{int.items} to specify which items to constrain.
-  The value in \code{slope} is the \emph{p} meta-parameter
-  for the beta distribution (where \emph{p} > 1 constrains
-  the slopes), and the two values in \code{int} are the
-  normal distribution intercept and variance. Larger values
-  of the variance have less impact on the solution. For
-  example, if items 2 and 3 were Heywood cases with no
-  extreme item facilities, and item 4 had a very large item
-  facility (say, greater than .95) then a possible
-  constraint might be \code{par.prior = list(int = c(0,2),
-  slope = 1.2, int.items = 4, slope.items = c(2,3))}}
-
   \item{rotate}{type of rotation to perform after the
   initial orthogonal parameters have been extracted by
   using \code{summary}; default is \code{'varimax'}. See
@@ -81,11 +78,52 @@ Theory)}
   object is ignored and the new rotation from the list is
   used instead}
 
-  \item{Target}{a dummy variable matrix indicing a target
+  \item{allpars}{logical; print all the item parameters
+  instead of just the slopes?}
+
+  \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
 
-  \item{startvalues}{user declared start values for
-  parameters}
+  \item{constrain}{a list of user declared equality
+  constraints. To see how to define the parameters
+  correctly use \code{constrain = 'index'} initially to see
+  how the parameters are labeled. To constrain parameters
+  to be equal create a list with separate concatenated
+  vectors signifying which parameters to constrain. For
+  example, to set parameters 1 and 5 equal, and also set
+  parameters 2, 6, and 10 equal use \code{constrain =
+  list(c(1,5), c(2,6,10))}}
+
+  \item{parprior}{a list of user declared prior item
+  probabilities. To see how to define the parameters
+  correctly use \code{parprior = 'index'} initially to see
+  how the parameters are labeled. Can define either normal
+  (normally for slopes and intercepts) or beta (for
+  guessing and upper bounds) prior probabilities. Note that
+  for upper bounds the value used in the prior is 1 - u so
+  that the lower and upper bounds can function the same. To
+  specify a prior the form is c('priortype', ...), where
+  normal priors are \code{parprior = list(c(parnumber,
+  'norm', mean, sd))} and betas are \code{parprior =
+  list(c(parnumber, 'beta', alpha, beta))}.}
+
+  \item{freepars}{a list of user declared logical values
+  indicating which parameters to estimate. To see how to
+  define the parameters correctly use \code{freepars =
+  'index'} initially to see how the parameters are labeled.
+  These values may be modified and input back into the
+  function by using \code{freepars=newfreepars}. Note that
+  user input values must match what the default structure
+  would have been}
+
+  \item{startvalues}{a list of user declared start values
+  for parameters. To see how to define the parameters
+  correctly use \code{startvalues = 'index'} initially to
+  see what the defaults would noramlly be. These values may
+  be modified and input back into the function by using
+  \code{startavlues=newstartvalues}. Note that user input
+  values must match what the default structure would have
+  been}
 
   \item{quadpts}{number of quadrature points per dimension}
 
@@ -119,6 +157,12 @@ Theory)}
   or \code{'info'} to show the test information function
   for two dimensions}
 
+  \item{theta_angle}{numeric values ranging from 0 to 90
+  used in \code{plot}. If a vector is used then a bubble
+  plot is created with the summed information across the
+  angles specified (e.g., \code{theta_angle = seq(0, 90,
+  by=10)})}
+
   \item{npts}{number of quadrature points to be used for
   plotting features. Larger values make plots look
   smoother}
@@ -142,21 +186,20 @@ Theory)}
   default 25} \item{TOL}{EM convergence threshold; default
   .001} \item{NCYCLES}{maximum number of EM cycles; default
   300} \item{NOWARN}{a logical indicating whether dependent
-  packages warnings shoudl be printed; d default
-  \code{TRUE}} }}
+  packages warnings should be printed; default \code{TRUE}}
+  }}
 
   \item{...}{additional arguments to be passed}
 }
 \description{
   \code{mirt} fits an unconditional maximum likelihood
-  factor analysis model to dichotomous and polychotomous
-  data under the item response theory paradigm.
-  Pseudo-guessing parameters may be included but must be
-  declared as constant.
+  factor analysis model to dichotomous and polytomous data
+  under the item response theory paradigm. Fits univariate
+  and multivariate Rasch, 1-4PL, graded, (generalized)
+  partial credit, nominal, and multiple choice models using
+  the EM algorithm.
 }
 \details{
-
-
   \code{mirt} follows the item factor analysis strategy by
   marginal maximum likelihood estimation (MML) outlined in
   Bock and Aiken (1981), Bock, Gibbons and Muraki (1988),
@@ -167,24 +210,9 @@ Theory)}
   multidimensional item response theory is a logistic form
   with a scaling correction of 1.702. This correction is
   applied to allow comparison to mainstream programs such
-  as TESTFACT (2003) and POLYFACT. The general IRT equation
-  for dichotomous items is
+  as TESTFACT (2003) and POLYFACT.
 
-  \deqn{P(X | \theta; \bold{a}_j; d_j; g_j, u_j) = g_j +
-  (u_j - g_j) / (1 + exp(-1.702(\bold{a}_j' \theta +
-  d_j)))}
-
-  where \emph{j} is the item index, \eqn{\bold{a}_j} is the
-  vector of discrimination parameters (i.e., slopes),
-  \deqn{\theta} is the vector of factor scores, \eqn{d_j}
-  is the intercept, \eqn{g_j} is the pseudo-guessing
-  parameter, and \eqn{u_j} is the upper bound parameter. To
-  avoid estimation difficulties the \eqn{g_j}'s and
-  \eqn{u_j}'s must be pre-specified by the user. The
-  polychotomous functions has a similar form that can be
-  found in Muraki and Carlson (1995).
-
-  Estimation begins by computing a matrix of
+  Estimation often begins by computing a matrix of
   quasi-tetrachoric correlations, potentially with
   Carroll's (1945) adjustment for chance responds. A MINRES
   factor analysis with \code{nfact} is then extracted and
@@ -209,14 +237,14 @@ Theory)}
   (\code{full.data = TRUE}) or displayed in a summary table
   for all the unique response patterns. \code{summary} and
   \code{coef} allow for all the rotations available from
-  the \code{GPArotation} package as well as a
-  \code{'promax'} rotation.
+  the \code{GPArotation} package (e.g., \code{rotate =
+  'oblimin'}) as well as a \code{'promax'} rotation.
 
   Using \code{plot} will plot the either the test surface
   function or the test information function for 1 and 2
   dimensional solutions. To examine individual item plots
   use \code{\link{itemplot}}. Residuals are computed using
-  the LD statistic (Chen \& Thissen, 1997) in the lower
+  the LD statistic (Chen & Thissen, 1997) in the lower
   diagonal of the matrix returned by \code{residuals}, and
   Cramer's V above the diagonal.
 }
@@ -228,9 +256,10 @@ Theory)}
   with means greater than .95, or items that are only .05
   greater than the guessing parameter, should be considered
   for removal from the analysis or treated with prior
-  distributions. Also, increasing the number of quadrature
-  points per dimension may help to stabilize the estimation
-  process.
+  distributions. The same type of reasoning is applicable
+  when including upper bound parameters as well. Also,
+  increasing the number of quadrature points per dimension
+  may help to stabilize the estimation process.
 }
 \examples{
 \dontrun{
@@ -242,6 +271,10 @@ data <- expand.table(LSAT7)
 summary(mod1)
 residuals(mod1)
 plot(mod1) #test information function
+
+#estimated 3PL model for item 5 only
+(mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
+coef(mod1.3PL, allpars = TRUE)
 
 (mod2 <- mirt(data, 2))
 summary(mod2)
@@ -258,12 +291,19 @@ pmod1 <- mirt(Science, 1)
 plot(pmod1)
 summary(pmod1)
 
+#Constrain all slopes to be equal
+#first obtain parameter index
+mirt(Science,1, constrain = 'index') #note that slopes are numbered 1,5,9,13
+(pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
+coef(pmod1_equalslopes)
+
 pmod2 <- mirt(Science, 2)
 coef(pmod2)
 residuals(pmod2)
-plot(pmod2)
-itemplot(pmod2)
+plot(pmod2, theta_angle = seq(0,90, by = 5)) #sum across angles of theta 1
+itemplot(pmod2, 1)
 anova(pmod1, pmod2)
+
 
 ###########
 data(SAT12)
@@ -276,7 +316,7 @@ mod3 <- mirt(data, 3)
 anova(mod1,mod2)
 anova(mod2, mod3) #negative AIC, 2 factors probably best
 
-#with guessing
+#with fixed guessing parameters
 mod1g <- mirt(data, 1, guess = .1)
 coef(mod1g)
 mod2g <- mirt(data, 2, guess = .1)
