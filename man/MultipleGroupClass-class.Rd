@@ -1,29 +1,24 @@
-\name{mirtClass-class}
+\name{MultipleGroupClass-class}
 \docType{class}
-\alias{mirtClass-class}
-\alias{anova,mirtClass-method}
-\alias{coef,mirtClass-method}
-\alias{fitted,mirtClass-method}
-\alias{plot,mirtClass,missing-method}
-\alias{print,mirtClass-method}
-\alias{residuals,mirtClass-method}
-\alias{show,mirtClass-method}
-\alias{summary,mirtClass-method}
+\alias{MultipleGroupClass-class}
+\alias{print,MultipleGroupClass-method}
+\alias{show,MultipleGroupClass-method}
 
-\title{Class "mirtClass"}
+
+\title{Class "MultipleGroupClass"}
 \description{
-Defines the object returned from \code{\link{mirt}}. 
+Defines the object returned from \code{\link{multipleGroup}}.
 }
 \section{Objects from the Class}{
-Objects can be created by calls of the form \code{new("mirtClass", ...).}.
+Objects can be created by calls of the form \code{new("MultipleGroupClass", ...)}.
 }
 \section{Slots}{
   \describe{
-    \item{\code{EMiter}:}{Object of class \code{"numeric"}, number of iterations  }
+    \item{\code{iter}:}{Object of class \code{"numeric"}, number of iterations  }
     \item{\code{pars}:}{Object of class \code{"list"}, estimated parameter objects list }    
     \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }
     \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }        
-    \item{\code{X2}:}{Object of class \code{"numeric"}, Chi-squared  }
+    \item{\code{G2}:}{Object of class \code{"numeric"}, G squared stat }
     \item{\code{df}:}{Object of class \code{"numeric"}, degrees of freedom for X2 }
     \item{\code{p}:}{Object of class \code{"numeric"}, p-value for X2  }
     \item{\code{AIC}:}{Object of class \code{"numeric"}, Akaike's information criteria }
@@ -31,33 +26,34 @@ Objects can be created by calls of the form \code{new("mirtClass", ...).}.
     \item{\code{RMSEA}:}{Object of class \code{"numeric"}, root mean-square error of approximation}
     \item{\code{TLI}:}{Object of class \code{"numeric"}, Tucker-Lewis index}
     \item{\code{logLik}:}{Object of class \code{"numeric"}, observed log-likelihood }
+    \item{\code{SElogLik}:}{Object of class \code{"numeric"}, Monte Carlo standard error for log-likelihood }
     \item{\code{F}:}{Object of class \code{"matrix"}, unrotated factor loadings }
     \item{\code{h2}:}{Object of class \code{"numeric"}, commonalities }
     \item{\code{tabdata}:}{Object of class \code{"matrix"}, tabulated data }
-    \item{\code{tabdatalong}:}{Object of class \code{"matrix"}, dichotomous version of tabulated data }	
+    \item{\code{tabdatalong}:}{Object of class \code{"matrix"}, dichotomous version of tabulated data }    
     \item{\code{Theta}:}{Object of class \code{"matrix"}, ability grid }
     \item{\code{Pl}:}{Object of class \code{"numeric"}, normed likelihoods for tabulated response}
-    \item{\code{data}:}{Object of class \code{"matrix"}, complete data }
-    \item{\code{cormat}:}{Object of class \code{"matrix"}, quasi-correlation matrix }    
-    \item{\code{rotate}:}{Object of class \code{"character"}, type of rotation to be used in \code{summary}}
+    \item{\code{prodlist}:}{Object of class \code{"list"}, list containing product combination of factors }
+    \item{\code{data}:}{Object of class \code{"matrix"}, complete data }          
     \item{\code{converge}:}{Object of class \code{"numeric"}, convergence diagnostic }
     \item{\code{quadpts}:}{Object of class \code{"numeric"}, number of quadrature points }
+    \item{\code{esttype}:}{Object of class \code{"character"}, indicates whether estimation was 'EM' or 'MHRM'}
     %\item{\code{vcov}:}{Object of class \code{"matrix"}, covariance matrix for estimated parameters } 
-    \item{\code{null.mod}:}{Object of class \code{"mirtClass"}, null model}    
-    \item{\code{Target}:}{Object of class \code{"numeric"}, dummy rotation matrix}
+    \item{\code{constrain}:}{Object of class \code{"list"}, list of constraints}
+    \item{\code{invariance}:}{Object of class \code{"character"}, invariance input}
+    \item{\code{null.mod}:}{Object of class \code{"ExploratoryClass"}, null model}             
+    \item{\code{group}:}{Object of class \code{"factor"}, group membership}
+    \item{\code{groupNames}:}{Object of class \code{"character"}, names of groups}
+    \item{\code{cmods}:}{Object of class \code{"list"}, a list containing estimated ConfirmatoryClass models }
     \item{\code{Call}:}{Object of class \code{"call"}, call }
   }
 }
 \section{Methods}{
   \describe{
-    \item{anova}{\code{signature(object = "mirtClass")}}
-    \item{coef}{\code{signature(object = "mirtClass")}}
-    \item{fitted}{\code{signature(object = "mirtClass")}}
-    \item{plot}{\code{signature(x = "mirtClass", y = "missing")}}
-    \item{print}{\code{signature(x = "mirtClass")} }
-    \item{residuals}{\code{signature(object = "mirtClass")}}
-    \item{show}{\code{signature(object = "mirtClass")} }
-    \item{summary}{\code{signature(object = "mirtClass")}}
+    \item{coef}{\code{signature(object = "MultipleGroupClass")}}
+    \item{print}{\code{signature(x = "MultipleGroupClass")} }    
+    \item{show}{\code{signature(object = "MultipleGroupClass")} }    
+    \item{anova}{\code{signature(object = "MultipleGroupClass")} }	
 	 }
 }
 

@@ -1,11 +1,6 @@
-context('confmirt')
+context('confmirtTwo')
 
-test_that('all mods', {
-    data(LSAT7)
-    fulldata <- expand.table(LSAT7)
-    explor <- confmirt(fulldata, 1, verbose = FALSE)
-    expect_is(explor, 'confmirtClass')
-    
+test_that('confirmatory mods', {
     set.seed(1234)
     a <- matrix(c(
         1.5,NA,
@@ -40,29 +35,33 @@ test_that('all mods', {
     model.combo <- confmirt.model('confmods/modelcombo', quiet = TRUE)    
     
     mod1 <- confmirt(dataset,model.1, verbose = FALSE)    
-    expect_is(mod1, 'confmirtClass')
-
-    mod2 <- confmirt(dataset,model.1, constrain = list(c(1,5)), parprior = list(c(2, 'norm', 0, 1)),
-                     verbose = FALSE)
-    expect_is(mod2, 'confmirtClass')
+    expect_is(mod1, 'ConfirmatoryClass')    
     
     mod3 <- confmirt(dataset,model.1, itemtype = c(rep('2PL',3), '3PL', rep('graded',3), '2PL'), 
                      verbose = FALSE)
-    expect_is(mod3, 'confmirtClass')
+    expect_is(mod3, 'ConfirmatoryClass')
 
     mod.quad <- confmirt(dataset, model.quad, verbose = FALSE)
-    expect_is(mod.quad, 'confmirtClass')
+    expect_is(mod.quad, 'ConfirmatoryClass')
     
     mod.combo <- confmirt(dataset, model.combo, verbose = FALSE)
-    expect_is(mod.combo, 'confmirtClass')
+    expect_is(mod.combo, 'ConfirmatoryClass')
         
-    fs1 <- fscores(mod1)
-    expect_is(fs1, 'matrix')
-    fs2 <- fscores(mod2)
-    expect_is(fs2, 'matrix')
-    fs3 <- fscores(mod.quad)
+    fs1 <- fscores(mod1, verbose = FALSE)
+    expect_is(fs1, 'matrix')    
+    fs3 <- fscores(mod.quad, full.scores=TRUE, verbose = FALSE)
     expect_is(fs3, 'matrix')
-    fs4 <- fscores(mod.combo)
-    expect_is(fs4, 'matrix')    
+    fs4 <- fscores(mod.combo, verbose = FALSE)
+    expect_is(fs4, 'matrix')
+    
+    TI <- plot(mod1)
+    expect_is(TI, 'trellis')
+    fit <- fitted(mod1)
+    expect_is(fit, 'matrix')
+    res <- residuals(mod1, verbose = FALSE)
+    expect_is(res, 'matrix')
+    IP <- itemplot(mod1, 1)
+    expect_is(IP, 'trellis')
+    
 })
  

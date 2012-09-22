@@ -1,27 +1,33 @@
 #' Monte Carlo Log-Likelihood Calculation
 #' 
 #' Calculates a new object that contain the Monte Carlo estimated observed
-#' log-likelihood values for \code{polymirt} and \code{confmirt} objects
+#' log-likelihood values for mirt objects estimated with the MH-RM algorithm
 #' 
 #' @name calcLogLik
 #' @usage 
 #' calcLogLik(object, ...)
 #'
-#' \S4method{calcLogLik}{confmirtClass}(object,
+#' \S4method{calcLogLik}{ExploratoryClass}(object,
 #'    draws = 2000, G2 = TRUE)
-#' @aliases calcLogLik-method calcLogLik,confmirtClass-method
-#' @param object a model of class \code{confmirtClass}
+#' \S4method{calcLogLik}{ConfirmatoryClass}(object,
+#'    draws = 2000, G2 = TRUE)
+#' @aliases calcLogLik-method calcLogLik,ExploratoryClass-method
+#' calcLogLik,ConfirmatoryClass-method
+#' @param object a model of class \code{ConfirmatoryClass} or \code{ExploratoryClass}
 #' @param draws the number of Monte Carlo draws
 #' @param G2 logical; estimate the G2 model fit statistic?
 #' @param ... parameters that are passed
-#' @section Methods: \describe{ \item{calcLogLik}{\code{signature(object = "confmirtClass")}} }
-#' @return Returns an object of class \code{confmirtClass} with the log-likelihood, standard error,
-#' and (possibly) the G^2 model fit statistic if there is no missing data.
+#' @section Methods: 
+#' \describe{ \item{calcLogLik}{\code{signature(object = "ConfirmatoryClass")}, 
+#' \code{signature(object = "ExploratoryClass")} }
+#' } 
+#' @return Returns an object with the log-likelihood, standard errors, information matrix, 
+#' and (possibly) the G^2 and other model fit statistic if there is no missing data.
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @docType methods
 #' @rdname calcLogLik-methods  
 #' @seealso
-#' \code{\link{confmirt}}
+#' \code{\link{confmirt}}, \code{\link{multipleGroup}}
 #' @keywords calcLogLik
 #' @examples
 #' 
@@ -33,7 +39,7 @@
 #'
 setMethod(
 	f = "calcLogLik",
-	signature = signature(object = 'confmirtClass'),
+	signature = signature(object = 'ExploratoryClass'),
 	definition = function(object, draws = 2000, G2 = TRUE)
 	{	        
         pars <- object@pars
@@ -63,6 +69,8 @@ setMethod(
         LL[is.nan(LL)] <- 0 
         rwmeans <- rowMeans(LL) 
         logLik <- sum(log(rwmeans))
+        SElogLik <- sqrt(var(log(rowMeans(LL))) / draws) 
+        if(G2 == 'return') return(c(logLik, SElogLik))
 		data <- object@data
 		pats <- apply(data,1,paste,collapse = "/")			
 		freqs <- table(pats)
@@ -80,8 +88,7 @@ setMethod(
 			rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
 		}
 		expected[is.nan(expected)] <- NA
-		tabdata <- cbind(tabdata,expected*N)
-		object@tabdata <- tabdata		
+		tabdata <- cbind(tabdata,expected*N)        
 		logN <- 0
 		logr <- rep(0,length(r))
 		for (i in 1:N) logN <- logN + log(i)
@@ -89,16 +96,16 @@ setMethod(
 			for (j in 1:r[i]) 
 				logr[i] <- logr[i] + log(j)    		
 		if(sum(logr) != 0)		
-			logLik <- logLik + logN/sum(logr)			
-		SElogLik <- sqrt(var(log(rowMeans(LL))) / draws)		
+			logLik <- logLik + logN/sum(logr)							
         nestpars <- nconstr <- 0
         for(i in 1:length(pars))
             nestpars <- nestpars + sum(pars[[i]]@est)
         if(length(object@constrain) > 0)
             for(i in 1:length(object@constrain))
                 nconstr <- nconstr + length(object@constrain[[i]]) - 1 
-        nfact <- object@nfact
-        df <- length(r) - nestpars + nconstr + nfact*(nfact - 1)/2 - 1 #-nmissingtabdata					
+        nfact <- object@nfact - length(prodlist)        
+        nmissingtabdata <- sum(is.na(rowSums(object@tabdata)))
+        df <- length(r) - nestpars + nconstr + nfact*(nfact - 1)/2 - 1 - nmissingtabdata	
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
 		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)				
 		if(G2){						
@@ -112,10 +119,9 @@ setMethod(
 				object@RMSEA <- ifelse((G2 - df) > 0, 
 				    sqrt(G2 - df) / sqrt(df * (N-1)), 0)
 				null.mod <- object@null.mod
-				object@TLI <- (null.mod@X2 / null.mod@df - G2/df) / (null.mod@X2 / null.mod@df - 1)
+				object@TLI <- (null.mod@G2 / null.mod@df - G2/df) / (null.mod@G2 / null.mod@df - 1)
 			}	            
-		}        
-		object@tabdata <- tabdata
+		}        		
 		object@logLik <- logLik
 		object@SElogLik <- SElogLik		
 		object@AIC <- AIC
@@ -124,3 +130,16 @@ setMethod(
 		return(object)
 	} 	
 )
+
+setMethod(
+    f = "calcLogLik",
+    signature = signature(object = 'ConfirmatoryClass'),
+    definition = function(object, draws = 2000, G2 = TRUE)
+    {	        
+        class(object) <- 'ExploratoryClass'
+        ret <- calcLogLik(object, draws=draws, G2=G2)
+        class(ret) <- 'ConfirmatoryClass'
+        return(ret)
+    } 	
+)
+

@@ -1,3 +1,101 @@
+#----------------------------------------------------------------------------
+setMethod(
+    f = "print",
+    signature = signature(x = 'dich'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'graded'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'gpcm'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'nominal'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'partcomp'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'mcm'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'dich'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'graded'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'gpcm'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'nominal'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'partcomp'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'mcm'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+#----------------------------------------------------------------------------
 #Probability Traces
 setMethod(
     f = "ProbTrace",
@@ -62,7 +160,7 @@ setMethod(
         if(x@bfactor) a <- a[x@est[1:nfact]]
         if(x@bfactor) d <- d[x@est[(nfact+1):(nfact*2)]]        
         P <- P.comp(a=a, d=d, Theta=Theta, g=g, u=u)
-        return(P)
+        return(cbind(1.0 - P, P))
     }
 )
 
@@ -259,6 +357,23 @@ setMethod(
     }
 )
 
+setMethod(
+    f = "LogLik",
+    signature = signature(x = 'GroupPars', Theta = 'matrix'),
+    definition = function(x, Theta, pars, tabdata, itemloc){
+        r <- tabdata[, ncol(tabdata)]
+        gpars <- ExtractGroupPars(x)
+        mu <- gpars$gmeans
+        sigma <- gpars$gcov
+        prior <- mvtnorm::dmvnorm(Theta, mean=mu, sigma=sigma)
+        prior <- prior/sum(prior)
+        rlist <- Estep.mirt(pars=pars, tabdata=tabdata, Theta=Theta, prior=prior, itemloc=itemloc, 
+                            debug='')
+        LL <- (-1)*sum(r*log(rlist$expected))                 
+        return(LL)        
+    }
+)
+
 #----------------------------------------------------------------------------
 setMethod(
     f = "ExtractLambdas",
@@ -384,25 +499,29 @@ setMethod(
 #----------------------------------------------------------------------------
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'dich', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){          
+    signature = signature(x = 'dich', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){          
         P <- ProbTrace(x, Theta)[,2]
         nfact <- ncol(Theta)
+        a <- ExtractLambdas(x)
+        A <- sum((a * cosangle)^2)
         Pstar <- P.mirt(x@par[1:nfact], x@par[nfact + 1], Theta, 0, 1)
-        info <- A^2 * P * (1-P) * Pstar/P 
+        info <- A * P * (1-P) * Pstar/P 
         info    
     }
 )
 
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'graded', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){          
-        P <- ProbTrace(x, Theta, itemexp = FALSE)  
+    signature = signature(x = 'graded', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){
+        P <- ProbTrace(x, Theta, itemexp = FALSE) 
+        a <- ExtractLambdas(x)
+        A <- sum((a * cosangle)^2)
         info <- 0
         for(i in 1:(ncol(P)-1)){
-            w1 <- P[,i]*(1-P[,i])*A
-            w2 <- P[,i+1]*(1-P[,i+1])*A
+            w1 <- P[,i]*(1-P[,i]) * A
+            w2 <- P[,i+1]*(1-P[,i+1]) * A
             info <- info + ((w1 - w2)^2) / (P[,i] - P[,i+1])             
         }    
         info
@@ -411,40 +530,40 @@ setMethod(
 
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'gpcm', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){
+    signature = signature(x = 'gpcm', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){
         a <- ExtractLambdas(x)
         d <- ExtractZetas(x)
         ak <- seq(0, x@ncat-1, by = 1)
-        info <- Info.nominal(Theta=Theta, a=a, ak=ak, A=A, d=d)
+        info <- Info.nominal(Theta=Theta, a=a, ak=ak, d=d, cosangle=cosangle)
         info
     }
 )
 
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'nominal', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){          
+    signature = signature(x = 'nominal', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){
         a <- ExtractLambdas(x)
         d <- ExtractZetas(x)
         ak <- x@par[(length(a)+1):(length(a) + length(d))]
-        info <- Info.nominal(Theta=Theta, a=a, ak=ak, A=A, d=d)
+        info <- Info.nominal(Theta=Theta, a=a, ak=ak, d=d, cosangle=cosangle)
         info
     }
 )
 
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'partcomp', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){          
+    signature = signature(x = 'partcomp', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){
         stop('Information functions not yet written for ', class(x))
     }
 )
 
 setMethod(
     f = "ItemInfo",
-    signature = signature(x = 'mcm', A = 'numeric', Theta = 'matrix'),
-    definition = function(x, A, Theta){          
+    signature = signature(x = 'mcm', Theta = 'matrix', cosangle = 'numeric'),
+    definition = function(x, Theta, cosangle = 1){
         stop('Information functions not yet written for ', class(x))
     }
 )
@@ -453,7 +572,13 @@ setMethod(
 setMethod(
     f = "Deriv",
     signature = signature(x = 'dich', Theta = 'matrix'),
-    definition = function(x, Theta){                  
+    definition = function(x, Theta, EM = FALSE){        
+        f <- 1
+        dat <- x@dat[ ,2]
+        if(EM){
+            dat <- x@rs[,2]
+            f <- rowSums(x@rs)
+        }
         nfact <- x@nfact
         parlength <- length(x@par)
         u <- x@par[parlength]
@@ -461,20 +586,9 @@ setMethod(
         d <- x@par[parlength - 2]
         a <- x@par[1:nfact]        
         P <- P.mirt(a, d, Theta, g, u)
-        Q <- 1 - P
-        dat <- x@dat[,2] 
+        Q <- 1 - P        
         hess <- matrix(0,nfact+3, nfact+3)						
-        if(!x@est[parlength] && !x@est[parlength-1]){ #'2PL'
-            PQ <- P*Q
-            L1 <- colSums((dat-P) * Theta)
-            L2 <- sum(dat-P)
-            grad <- c(L1,L2,0,0)    	
-            L11 <- .Call("dichOuter", Theta, PQ, nrow(Theta))
-            hess[1:nfact, 1:nfact] <- -L11
-            hess[nfact+1, nfact+1] <- (-1)*sum(PQ)		
-            hess[nfact+1, 1:nfact] <- hess[1:nfact, nfact+1] <- (-1)*colSums(PQ * Theta)
-        } else if(!x@est[parlength] && x@est[parlength-1]){ #'3PL'
-            f <- 1		
+        if(x@par[parlength] == 1){ #'3PL'            	
             Pstar <- P.mirt(a,d,Theta,0,1)		
             Qstar <- 1 - Pstar
             da <- rep(0,nfact)	
@@ -505,9 +619,13 @@ setMethod(
                             (const1 - (1-g)*Pstar*Qstar*const2))					
                 }
             }	
-        }        
+        } else { #4PL            
+            grad <- numDeriv::grad(L, x@par, obj=x, Theta=Theta)
+            hess <- numDeriv::hessian(L, x@par, obj=x, Theta=Theta)            
+            return(list(grad=grad, hess=hess))
+        }       
         if(any(!is.nan(x@n.prior.mu))){
-            ind <- !is.nan(x@n.prior.mu)            
+            ind <- !is.na(x@n.prior.mu)            
             val <- x@par[ind]
             mu <- x@n.prior.mu[ind]
             s <- x@n.prior.sd[ind]
@@ -521,7 +639,7 @@ setMethod(
             else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h           
         }
         if(any(!is.nan(x@b.prior.alpha))){
-            ind <- !is.nan(x@b.prior.alpha)
+            ind <- !is.na(x@b.prior.alpha)
             val <- x@par[ind]
             a <- x@b.prior.alpha[ind]
             b <- x@b.prior.beta[ind]
@@ -533,7 +651,7 @@ setMethod(
             }
             if(length(val) == 1) hess[ind, ind] <- hess[ind, ind] + bpgrad
             else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + bphess                
-        }
+        }        
         return(list(grad = grad, hess = hess))
     }
 )
@@ -541,13 +659,15 @@ setMethod(
 setMethod(
     f = "Deriv",
     signature = signature(x = 'graded', Theta = 'matrix'),
-    definition = function(x, Theta){        
+    definition = function(x, Theta, EM = FALSE){ 
+        dat <- x@dat
+        if(EM) dat <- x@rs                    
         nfact <- x@nfact
         a <- x@par[1:nfact]
         d <- x@par[-(1:nfact)]
         nd <- length(d)    			
         P <- P.poly(a, d,Theta)			    	
-        ret <- .Call("dparsPoly", P, Theta, x@dat, nd) #switch the order
+        ret <- .Call("dparsPoly", P, Theta, dat, nd) #switch the order
         grad <- c(ret$grad[-(1:nd)], ret$grad[1:nd])
         hess <- matrix(0,nfact+nd,nfact+nd)
         hess[1:nfact,1:nfact] <- ret$hess[-(1:nd),-(1:nd)]
@@ -555,7 +675,7 @@ setMethod(
         hess[1:nfact, (nfact+1):ncol(hess)] <- hess[(nfact+1):ncol(hess), 1:nfact] <- 
             ret$hess[(nd+1):ncol(hess), 1:nd]
         if(any(!is.nan(x@n.prior.mu))){
-            ind <- !is.nan(x@n.prior.mu)            
+            ind <- !is.na(x@n.prior.mu)            
             val <- x@par[ind]
             mu <- x@n.prior.mu[ind]
             s <- x@n.prior.sd[ind]
@@ -569,7 +689,7 @@ setMethod(
             else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h           
         }
         if(any(!is.nan(x@b.prior.alpha))){
-            ind <- !is.nan(x@b.prior.alpha)
+            ind <- !is.na(x@b.prior.alpha)
             val <- x@par[ind]
             a <- x@b.prior.alpha[ind]
             b <- x@b.prior.beta[ind]
@@ -589,15 +709,20 @@ setMethod(
 setMethod(
     f = "Deriv",
     signature = signature(x = 'partcomp', Theta = 'matrix'),
-    definition = function(x, Theta){
+    definition = function(x, Theta, EM = FALSE){
+        f <- 1
+        r <- x@dat
+        if(EM){       
+            r <- x@rs[,2]
+            f <- rowSums(x@rs)            
+        }
         nfact <- x@nfact
         a <- x@par[1:nfact]
         d <- x@par[(nfact+1):(nfact*2)]
-        g <- x@par(length(x@par)-1)
-        u <- x@par(length(x@par))
-        if(x@est[nfact*2 + 1] && !x@est[nfact*2+2]){
-            grad <- function(a, d, g, u, r, Theta){
-                f <- 1			
+        g <- x@par[length(x@par)-1]
+        u <- x@par[length(x@par)]
+        if(TRUE){#3PL
+            grad <- function(a, d, g, u, r, f, Theta){                			
                 P <- P.comp(a,d,Theta,g,1)		
                 Pstar <- P.comp(a,d,Theta,0)		
                 Qstar <- 1 - Pstar
@@ -613,10 +738,9 @@ setMethod(
                 }
                 return(c(da,dd,dg,0))
             }		
-            hess <- function(a, d, g, u, r, Theta){ 
+            hess <- function(a, d, g, u, r, f, Theta){ 
                 nfact <- length(a)
-                hess <- matrix(0, nfact*2 + 2, nfact*2 + 2)
-                f <- 1			
+                hess <- matrix(0, nfact*2 + 2, nfact*2 + 2)                		
                 P <- P.comp(a,d,Theta,g, 1)		
                 Pstar <- P.comp(a,d,Theta,0, 1)		
                 Qstar <- 1 - Pstar
@@ -680,68 +804,11 @@ setMethod(
                 }	
                 return(hess)
             }		
-            grad <- grad(a, d, g, u, x@dat, Theta)
-            hess <- hess(a, d, g, u, x@dat, Theta)
-        }
-        if(!x@est[nfact*2 + 1] && !x@est[nfact*2+2]){
-            hess <- matrix(0, nfact*2 + 2, nfact*2 + 2)
-            P <- P.comp(a,d,Theta)	
-            Q <- 1 - P	
-            da <- dd <- rep(0,nfact)	
-            for(i in 1:nfact){
-                Pk <- P.mirt(a[i],d[i],Theta[ , i, drop=FALSE],0, 1)
-                Qk <- 1 - Pk
-                const <- (1 - dat)*P/Q
-                dd[i] <- sum(Qk*(dat - const))
-                da[i] <- sum(Theta[,i]*Qk*(dat - const))
-            }
-            grad <- c(da,dd,0,0)
-            Names <- c(paste("a",1:nfact,sep='_'),paste("d",1:nfact,sep='_'))
-            f <- 1
-            r <- dat
-            for(i in 1:(nfact*2)){		
-                for(j in 1:(nfact*2)){
-                    if(i <= j){
-                        d1 <- strsplit(Names[c(i,j)],"_")[[1]]
-                        d2 <- strsplit(Names[c(i,j)],"_")[[2]]
-                        k <- as.numeric(d1[2])
-                        m <- as.numeric(d2[2])
-                        Pk <- P.mirt(a[k],d[k],Theta[ , k, drop=FALSE],0)
-                        Qk <- 1 - Pk	
-                        Pm <- P.mirt(a[m],d[m],Theta[ , m, drop=FALSE],0)
-                        Qm <- 1 - Pm									
-                        if(i == j && d1[1] == 'd'){
-                            hess[k,k] <- sum(-Pk*Qk*(r - (f-r)*P/Q) - Qk^2 * (f-r)*P/Q^2)
-                            next
-                        }
-                        if(i == j && d1[1] == 'a'){
-                            hess[k+nfact,k+nfact] <- sum(Theta[,k]^2 *
-                                (-Pk*Qk*(r - (f-r)*P/Q) - Qk^2 * (f-r)*P/Q^2))
-                            next		
-                        }				
-                        if(d1[1] == 'a' && d2[1] == 'a'){
-                            hess[i,j] <- hess[j,i] <- -sum(Theta[,k]*Theta[,m]*Qk*Qm*(f-r)*P/Q^2) 
-                            next
-                        }
-                        if(d1[1] == 'd' && d2[1] == 'd'){
-                            hess[i,j] <- hess[j,i] <- -sum(Qk*Qm*(f-r)*P/Q^2)
-                            next
-                        }	
-                        if(d1[1] == 'd' && d2[1] == 'a' && d1[2] == d2[2]){
-                            hess[i,j] <- hess[j,i] <- sum(Theta[,k]*Qk*(-Pk*(r - (f-r)*P/Q) - 
-                                Qk*(f-r)*P/Q^2))
-                            next	
-                        }
-                        if(d1[1] == 'd' && d2[1] == 'a' && d1[2] != d2[2]){
-                            hess[i,j] <- hess[j,i] <- -sum(Qk*Qm*Theta[,m]*(f-r)*P/Q^2)
-                            next
-                        }						
-                    }
-                }
-            }                        
-        }	
+            grad <- grad(a=a, d=d, g=g, u=u, r=r, f=f, Theta=Theta)
+            hess <- hess(a=a, d=d, g=g, u=u, r=r, f=f, Theta=Theta)
+        }        
         if(any(!is.nan(x@n.prior.mu))){
-            ind <- !is.nan(x@n.prior.mu)            
+            ind <- !is.na(x@n.prior.mu)            
             val <- x@par[ind]
             mu <- x@n.prior.mu[ind]
             s <- x@n.prior.sd[ind]
@@ -755,7 +822,7 @@ setMethod(
             else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h           
         }
         if(any(!is.nan(x@b.prior.alpha))){
-            ind <- !is.nan(x@b.prior.alpha)
+            ind <- !is.na(x@b.prior.alpha)
             val <- x@par[ind]
             a <- x@b.prior.alpha[ind]
             b <- x@b.prior.beta[ind]
@@ -775,47 +842,88 @@ setMethod(
 setMethod(
     f = "Deriv",
     signature = signature(x = 'gpcm', Theta = 'matrix'),
-    definition = function(x, Theta){
-        stop('Derivatives have not be written for generalized partial credit models yet')
+    definition = function(x, Theta, EM = FALSE){
+        if(EM){                
+            grad <- numDeriv::grad(EML, x@par, obj=x, Theta=Theta)
+            hess <- numDeriv::hessian(EML, x@par, obj=x, Theta=Theta)       
+            return(list(grad = grad, hess = hess))            
+        }
+        grad <- rep(0, length(x@par))
+        hess <- matrix(0, length(x@par), length(x@par))
+        grad[x@est] <- numDeriv::grad(L, x@par[x@est], obj=x, Theta=Theta)
+        hess[x@est, x@est] <- numDeriv::hessian(L, x@par[x@est], obj=x, Theta=Theta)        
+        return(list(grad = grad, hess = hess))
     }
 )
 
 setMethod(
     f = "Deriv",
     signature = signature(x = 'nominal', Theta = 'matrix'),
-    definition = function(x, Theta){
-        stop('Derivatives have not be written for nominal models yet')
+    definition = function(x, Theta, EM = FALSE){
+        if(EM){                
+            grad <- numDeriv::grad(EML, x@par, obj=x, Theta=Theta)
+            hess <- numDeriv::hessian(EML, x@par, obj=x, Theta=Theta)       
+            return(list(grad = grad, hess = hess))            
+        }
+        grad <- rep(0, length(x@par))
+        hess <- matrix(0, length(x@par), length(x@par))
+        grad[x@est] <- numDeriv::grad(L, x@par[x@est], obj=x, Theta=Theta)
+        hess[x@est, x@est] <- numDeriv::hessian(L, x@par[x@est], obj=x, Theta=Theta)        
+        return(list(grad = grad, hess = hess))
     }
 )
 
 setMethod(
     f = "Deriv",
     signature = signature(x = 'mcm', Theta = 'matrix'),
-    definition = function(x, Theta){
-        stop('Derivatives have not be written for multiple choice models yet')
+    definition = function(x, Theta, EM = FALSE){
+        if(EM){                
+            grad <- numDeriv::grad(EML, x@par, obj=x, Theta=Theta)
+            hess <- numDeriv::hessian(EML, x@par, obj=x, Theta=Theta)     
+            return(list(grad = grad, hess = hess))            
+        }
+        grad <- rep(0, length(x@par))
+        hess <- matrix(0, length(x@par), length(x@par))
+        grad[x@est] <- numDeriv::grad(L, x@par[x@est], obj=x, Theta=Theta)
+        hess[x@est, x@est] <- numDeriv::hessian(L, x@par[x@est], obj=x, Theta=Theta)
+        return(list(grad = grad, hess = hess))
     }
 )
 
 setMethod(
     f = "Deriv",
     signature = signature(x = 'GroupPars', Theta = 'matrix'),
-    definition = function(x, Theta){
-        tr <- function(y) sum(diag(y))
+    definition = function(x, Theta, EM = FALSE, pars = NULL, itemloc = NULL, tabdata = NULL){
+        if(EM){        
+            grad <- rep(0, length(x@par))
+            hess <- matrix(0, length(x@par), length(x@par))            
+            if(any(x@est)){
+                grad[x@est] <- numDeriv::grad(EML, x@par[x@est], obj=x, Theta=Theta, pars=pars, tabdata=tabdata,
+                                       itemloc=itemloc)
+                hess[x@est,x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x, Theta=Theta, pars=pars, tabdata=tabdata,
+                                          itemloc=itemloc)                  
+            }            
+            return(list(grad = grad, hess = hess))            
+        }
+        tr <- function(y) sum(diag(y))         
         nfact <- x@nfact
         N <- nrow(Theta)
         u <- x@par[1:nfact]
+        MU <- matrix(rep(u, N), N, byrow = TRUE)
         siglong <- x@par[-(1:nfact)]
         sig <- matrix(0,nfact,nfact)
         selcov <- lower.tri(sig, diag=TRUE) 
         sig[selcov] <- siglong
-        sig <- sig + t(sig) - diag(diag(sig))
-        npars <- length(sig) + nfact	
-        grad <- rep(0,nfact + nfact*(nfact+1)/2)	
+        if(nfact != 1)
+            sig <- sig + t(sig) - diag(diag(sig))
+        npars <- length(sig) + nfact	        
         invSig <- solve(sig)	
-        Z <- t(Theta-u) %*% (Theta-u)
-        grad[1:nfact] <- N * invSig %*% (colMeans(Theta) - u) 		
-        tmp <- .5 * invSig %*% (Z - N * sig) %*% invSig  
-        grad[(nfact+1):length(grad)] <- tmp[selcov]        
+        Z <- t(Theta-MU) %*% (Theta-MU)
+        g1 <- N * invSig %*% (colMeans(Theta) - u) 		
+        tmp <- invSig %*% (Z - N * sig) %*% invSig         
+        diag(tmp) <- diag(tmp)/2 #correct for symmetry
+        g2 <- tmp[selcov]        
+        grad <- c(g1, g2)
         sel <- 1:npars		
         cMeans <- N*(colMeans(Theta) - u)
         Zdif <- (Z - N * sig)		
@@ -828,8 +936,8 @@ setMethod(
                    as.integer(npars))				
         sel <- sel[c(rep(TRUE,nfact),as.logical(selcov))]	
         hess <- hess[sel,sel] 
-        if(any(!is.nan(x@n.prior.mu))){
-            ind <- !is.nan(x@n.prior.mu)            
+        if(any(!is.nan(x@n.prior.mu))){            
+            ind <- !is.na(x@n.prior.mu)            
             val <- x@par[ind]
             mu <- x@n.prior.mu[ind]
             s <- x@n.prior.sd[ind]
@@ -843,7 +951,7 @@ setMethod(
             else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h           
         }
         if(any(!is.nan(x@b.prior.alpha))){
-            ind <- !is.nan(x@b.prior.alpha)
+            ind <- !is.na(x@b.prior.alpha)
             val <- x@par[ind]
             a <- x@b.prior.alpha[ind]
             b <- x@b.prior.beta[ind]
@@ -958,20 +1066,59 @@ P.mcm <- function(a, ak, d, t, Theta){
     return(P)   
 }
 
-#nominal/gpcm item info
-Info.nominal <- function(Theta, a, ak, A, d){
-    P <- P.nominal(a, ak, d, Theta)    
+#nominal and gpcm
+Info.nominal <- function(Theta, a, ak, d, cosangle = 1){
+    P <- P.nominal(a, ak, d, Theta)
+    A <- a * cosangle
+    nfact <- ncol(Theta)
     AK <- matrix(ak, nrow(Theta), length(ak), byrow = TRUE)
     M <- AK * P
     M2 <- AK^2 * P
     d2P <- dP <- matrix(0,nrow(AK), ncol(AK))
-    for(i in 1:ncol(dP))        
-        dP[,i] <- A * P[,i] * (ak[i] - rowSums(M)) 
-    for(i in 1:ncol(dP))        
-        d2P[,i] <- ak[i]^2 * A^2 * P[,i] - 
-            2 * ak[i] * A^2 * P[,i] * rowSums(M) + 
-            2 * A^2 * P[,i] * rowSums(M^2) - 
-            A^2 * P[,i] * rowSums(M2)
-    info <- rowSums((dP)^2 / P - d2P)    
+    info <- 0
+    for(n in 1:nfact){
+        for(i in 1:ncol(dP))        
+            dP[,i] <- A[n] * P[,i] * (ak[i] - rowSums(M)) 
+        for(i in 1:ncol(dP))        
+            d2P[,i] <- ak[i]^2 * A[n]^2 * P[,i] - 
+                2 * ak[i] * A[n]^2 * P[,i] * rowSums(M) + 
+                2 * A[n]^2 * P[,i] * rowSums(M^2) - 
+                A[n]^2 * P[,i] * rowSums(M2)
+        info <- info + rowSums((dP)^2 / P - d2P)    
+    }
     info
+}
+
+#TEMPORARY, until i calculate the analytical derivatives sometime
+L <- function(par, obj, Theta){
+    obj@par[obj@est] <- par
+    P <- ProbTrace(obj, Theta)
+    LL <- obj@dat * P
+    LL[LL < 1e-8] <- 1
+    LL <- sum(log(LL))
+    if(any(!is.nan(obj@n.prior.mu))){
+        ind <- !is.nan(obj@n.prior.mu)
+        val <- obj@par[ind]
+        u <- obj@n.prior.mu[ind]
+        s <- obj@n.prior.sd[ind]
+        for(i in 1:length(val))            
+            LL <- LL + log(dnorm(val[i], u[i], s[i]))
+    }
+    if(any(!is.nan(obj@b.prior.alpha))){
+        ind <- !is.nan(obj@b.prior.alpha)
+        val <- obj@par[ind]
+        a <- obj@b.prior.alpha[ind]
+        b <- obj@b.prior.beta[ind]
+        for(i in 1:length(val)){            
+            tmp <- dbeta(val[i], a[i], b[i])
+            LL <- LL + log(ifelse(tmp == 0, 1, tmp))
+        }
+    }    
+    return(LL)
+}
+
+EML <- function(par, obj, Theta, ...){
+    obj@par[obj@est] <- par
+    L <- (-1)*LogLik(x=obj, Theta=Theta, ...)
+    return(L)
 }

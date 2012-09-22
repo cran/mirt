@@ -1,23 +1,23 @@
 #Methods 
 setMethod(
     f = "print",
-    signature = signature(x = 'mirtClass'),
+    signature = signature(x = 'ExploratoryClass'),
     definition = function(x){  
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
             "\n\n", sep = "")
         cat("Full-information factor analysis with ", ncol(x@F), " factor",
             if(ncol(x@F)>1) "s", "\n", sep="")
         if(x@converge == 1)	
-            cat("Converged in ", x@EMiter, " iterations using ", x@quadpts,
+            cat("Converged in ", x@iter, " iterations using ", x@quadpts,
                 " quadrature points.\n", sep="")
         else 	
-            cat("Estimation stopped after ", x@EMiter, " iterations using ", 
+            cat("Estimation stopped after ", x@iter, " iterations using ", 
                 x@quadpts, " quadrature points.\n", sep="")
         cat("Log-likelihood =", x@logLik, "\n")
         cat("AIC =", x@AIC, "\n")		
         cat("BIC =", x@BIC, "\n")
         if(!is.nan(x@p))            		    
-            cat("G^2 = ", round(x@X2,2), ", df = ", x@df, ", p = ", round(x@p,4),
+            cat("G^2 = ", round(x@G2,2), ", df = ", x@df, ", p = ", round(x@p,4),
                 "\nTLI = ", round(x@TLI,3), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
         else             
             cat("G^2 = ", NA, ", df = ", 
@@ -27,7 +27,7 @@ setMethod(
 
 setMethod(
     f = "show",
-    signature = signature(object = 'mirtClass'),
+    signature = signature(object = 'ExploratoryClass'),
     definition = function(object){  
         print(object)
     }
@@ -35,9 +35,9 @@ setMethod(
 
 setMethod(
     f = "summary",
-    signature = 'mirtClass',
+    signature = 'ExploratoryClass',
     definition = function(object, rotate = '', Target = NULL, suppress = 0, digits = 3, 
-                          print = TRUE, ...){        
+                          verbose = TRUE, ...){        
         nfact <- ncol(object@F)
         if (rotate == 'none' || nfact == 1) {
             F <- object@F
@@ -48,7 +48,7 @@ setMethod(
             names(SS) <- colnames(F)
             loads <- round(cbind(F,h2),digits)
             rownames(loads) <- colnames(object@data)
-            if(print){
+            if(verbose){
                 cat("\nUnrotated factor loadings: \n\n")
                 print(loads)	    	 
                 cat("\nSS loadings: ",round(SS,digits), "\n")
@@ -73,13 +73,11 @@ setMethod(
             if(!rotF$orthogonal){
                 Phi <- rotF$Phi	  
                 Phi <- round(Phi, digits)
-                colnames(Phi) <- rownames(Phi) <- colnames(F)
-                if(print){
-                    cat("\nFactor correlations: \n\n")
-                    print(Phi)            
-                }
+                colnames(Phi) <- rownames(Phi) <- colnames(F)                
             }			
-            if(print){
+            if(verbose){
+                cat("\nFactor correlations: \n\n")
+                print(Phi)
                 cat("\nRotation: ", rotate, "\n")
                 cat("\nRotated factor loadings: \n\n")
                 print(loads,digits)
@@ -94,8 +92,9 @@ setMethod(
 
 setMethod(
     f = "coef",
-    signature = 'mirtClass',
-    definition = function(object, rotate = '', Target = NULL, allpars = FALSE, digits = 3, ...){  
+    signature = 'ExploratoryClass',
+    definition = function(object, rotate = '', Target = NULL, allpars = FALSE, digits = 3, 
+                          verbose = TRUE, ...){         
         K <- object@K
         J <- length(K)
         nfact <- ncol(object@F)
@@ -105,7 +104,7 @@ setMethod(
         A <- sqrt(apply(a^2,1,sum))                        
         if (ncol(a) > 1){ 
             rotname <- ifelse(rotate == '', object@rotate, rotate)
-            so <- summary(object, rotate = rotate, Target = Target, print = FALSE, ...)             
+            so <- summary(object, rotate = rotate, Target = Target, verbose = FALSE, ...)             
             a <- rotateLambdas(so)
         }   
         rownames(a) <- colnames(object@data)
@@ -116,30 +115,40 @@ setMethod(
             a <- round(a, digits)
             colnames(a) <- paste('a', 1:nfact, sep='')
         }
-        allPars <- list()
+        allPars <- list()        
         if(allpars){
             if(length(object@pars[[1]]@SEpar) > 0){
-                for(i in 1:J){
+                for(i in 1:(J+1)){
                     allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar), 
                                                  2, byrow = TRUE), digits)
                     rownames(allPars[[i]]) <- c('pars', 'SE')
                     colnames(allPars[[i]]) <- names(object@pars[[i]]@parnum)
                 } 
             } else {
-                for(i in 1:J)
-                    allPars[[i]] <- round(object@pars[[i]]@par, digits)                
-            }       
-            names(allPars) <- rownames(a)
+                for(i in 1:(J+1))
+                    allPars[[i]] <- round(object@pars[[i]]@par, digits)
+            }                  
+            names(allPars) <- c(rownames(a), 'GroupPars')
         }        
-        ret <- if(allpars) allPars else a
-        if(nfact > 1) cat('\nRotation:', rotname, '\n\n')
-        ret
+        ret <- if(allpars) return(allPars) else a
+        if(nfact > 1 && verbose) cat('\nRotation:', rotname, '\n\n')
+        fcor <- 1
+        if (ncol(a) > 1 && !allpars){
+            fcor <- so$fcor
+            colnames(fcor) <- rownames(fcor) <- paste('F', 1:nfact, sep='')            
+            if(verbose) {
+                print(round(fcor, 3))
+                cat('\n')
+            }
+        }
+        if(verbose) print(ret)        
+        return(invisible(list(ret, fcor)))
     }
 )
 
 setMethod(
     f = "anova",
-    signature = signature(object = 'mirtClass'),
+    signature = signature(object = 'ExploratoryClass'),
     definition = function(object, object2){        
         df <- object@df - object2@df  
         if(df < 0){
@@ -159,8 +168,8 @@ setMethod(
 
 setMethod(
     f = "residuals",
-    signature = signature(object = 'mirtClass'),
-    definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, ...)
+    signature = signature(object = 'ExploratoryClass'),
+    definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, verbose = TRUE, ...)
     {   	
         K <- object@K        
         data <- object@data	
@@ -193,7 +202,7 @@ setMethod(
                     }
                 }
             }	
-            cat("LD matrix:\n\n")	
+            if(verbose) cat("LD matrix:\n\n")	
             res <- round(res,digits)
             return(res)
         } 
@@ -218,7 +227,7 @@ setMethod(
 
 setMethod(
     f = "plot",
-    signature = signature(x = 'mirtClass', y = 'missing'),
+    signature = signature(x = 'ExploratoryClass', y = 'missing'),
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45, 
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
     {           
@@ -226,28 +235,20 @@ setMethod(
         if (any(theta_angle > 90 | theta_angle < 0)) 
             stop('Improper angle specifed. Must be between 0 and 90.')
         if(length(theta_angle) > 1) type = 'infoangle'
-        rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
-        K <- x@K		
-        nfact <- ncol(x@Theta)
+        rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])       
+        nfact <- x@pars[[1]]@nfact
         if(nfact > 2) stop("Can't plot high dimensional solutions.")
-        J <- length(x@pars)
-        a <- coef(x, ...)  
-        A <- list()
-        if(nfact == 2){
-            a <- a[,1:2]
-            theta_angle2 <- c(90 - theta_angle)
-            angles <- rbind(theta_angle, theta_angle2)
-            cosalpha <- cos(d2r(angles))            
-            if(length(theta_angle) == 1)
-                A[[1]] <- as.matrix(sqrt(rowSums((a * matrix(cosalpha[ ,1], nrow(a), 2, TRUE))^2)))
-            else                 
-                for(i in 1:ncol(cosalpha))
-                    A[[i]] <- as.matrix(sqrt(rowSums((a * matrix(cosalpha[ ,i], nrow(a), 2, TRUE))^2)))                                
-        } else A <- list(a)  
-        theta <- if(length(theta_angle) == 1) seq(-4,4,length.out=npts) 
-            else seq(-4,4,length.out=9)
+        if(nfact == 1) theta_angle <- 0        
+        J <- length(x@pars) - 1        
+        theta <- seq(-4,4,length.out=npts)             
         Theta <- thetaComb(theta, nfact)        
-        info <- test_info(pars=x@pars, Theta=Theta, Alist=A, K=K)         
+        info <- 0        
+        for(l in 1:length(theta_angle)){
+            ta <- theta_angle[l]
+            if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
+            for(i in 1:J)
+                info <- info + iteminfo(x=x@pars[[i]], Theta=Theta, degrees=ta)            
+        }
         plt <- data.frame(cbind(info,Theta))
         if(nfact == 2){						
             colnames(plt) <- c("info", "Theta1", "Theta2")			
@@ -276,13 +277,12 @@ setMethod(
 
 setMethod(
     f = "fitted",
-    signature = signature(object = 'mirtClass'),
+    signature = signature(object = 'ExploratoryClass'),
     definition = function(object, digits = 3, ...){  
         Exp <- round(nrow(object@data) * object@Pl,digits)  
         tabdata <- object@tabdata
         Exp[is.na(rowSums(tabdata))] <- NA				
         tabdata <- cbind(tabdata,Exp)			
-        print(tabdata)
-        invisible(tabdata)
+        return(tabdata)        
     }
 )

@@ -1,26 +1,12 @@
 \name{bfactor}
 \alias{bfactor}
-\alias{coef,bfactor-method}
-\alias{fitted,bfactor-method}
-\alias{residuals,bfactor-method}
-\alias{summary,bfactor-method}
 \title{Full-Information Item Bi-factor Analysis}
 \usage{
   bfactor(data, specific, itemtype = NULL, guess = 0, upper
-    = 1, SE = FALSE, startvalues = NULL, constrain = NULL,
-    freepars = NULL, parprior = NULL, prev.cor = NULL,
-    quadpts = 20, verbose = FALSE, debug = FALSE, technical
-    = list(), ...)
-
-  \S4method{summary}{bfactor}(object, digits = 3, ...)
-
-  \S4method{coef}{bfactor}(object, allpars = FALSE, digits
-    = 3)
-
-  \S4method{fitted}{bfactor}(object, digits = 3, ...)
-
-  \S4method{residuals}{bfactor}(object, restype = 'LD',
-    digits = 3, printvalue = NULL, ...)
+    = 1, SE = FALSE, free.start = NULL, startvalues = NULL,
+    constrain = NULL, freepars = NULL, parprior = NULL,
+    prev.cor = NULL, quadpts = 20, verbose = FALSE, debug =
+    FALSE, technical = list(), ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -38,20 +24,15 @@
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
   items are ordinal or 2PL, however they may be changed to
-  the following: '2PL', '3PL', '3PLu', '4PL', 'graded',
-  'gpcm', 'nominal', and 'mcm', for the 2 parameter
-  logistic, 3 parameter logistic (lower asymptote and
-  upper), 4 parameter logistic, graded response model,
-  generalized partial credit model, nominal model, and
-  multiple choice models, respectively. If \code{NULL} the
-  default assumes that the data follow a '2PL' or 'graded'
-  format}
-
-  \item{printvalue}{a numeric value to be specified when
-  using the \code{res='exp'} option. Only prints patterns
-  that have standardized residuals greater than
-  \code{abs(printvalue)}. The default (NULL) prints all
-  response patterns}
+  the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
+  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
+  'partcomp', for the Rasch/partial credit, 1 and 2
+  parameter logistic, 3 parameter logistic (lower asymptote
+  and upper), 4 parameter logistic, graded response model,
+  generalized partial credit model, nominal model, multiple
+  choice model, and partially compensatory model,
+  respectively. The default assumes that items follow a
+  '2PL' or 'graded' format}
 
   \item{guess}{fixed pseudo-guessing parameter. Can be
   entered as a single value to assign a global value or may
@@ -63,10 +44,20 @@
   guessing parameter or may be entered as a numeric vector
   corresponding to each item}
 
-  \item{SE}{logical; estimate parameter standard errors?}
+  \item{free.start}{a list containing the start value and
+  logical indicating whether a given parameter is to be
+  freely estimated. Each element of the list consists of
+  three components, the parameter number, the starting (or
+  fixed) value, and a logical to indicate whether the
+  parameter is free. For example, \code{free.start =
+  list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter
+  20 to 0 while parameter 10 would be freely estimated with
+  a starting value of 1.5. Note that this will override the
+  values specified by a user defined \code{startvalues} or
+  \code{freepars} input for the specified parameters}
 
-  \item{allpars}{logical; print all the item parameters
-  instead of just the slopes?}
+  \item{SE}{logical, estimate the standard errors? Calls
+  the MHRM subroutine for a stochastic approximation}
 
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
@@ -116,16 +107,6 @@
   \item{quadpts}{number of quadrature points per
   dimension.}
 
-  \item{object}{a model estimated from \code{bfactor} of
-  class \code{bfactorClass}}
-
-  \item{restype}{type of residuals to be displayed. Can be
-  either \code{'LD'} for a local dependence matrix (Chen &
-  Thissen, 1997) or \code{'exp'} for the expected values
-  for the frequencies of every response pattern}
-
-  \item{digits}{number of significant digits to be rounded}
-
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
 
@@ -137,9 +118,7 @@
   10000} \item{MSTEPMAXIT}{number of M-step iterations;
   default 25} \item{TOL}{EM convergence threshold; default
   .001} \item{NCYCLES}{maximum number of EM cycles; default
-  300} \item{NOWARN}{a logical indicating whether dependent
-  packages warnings should be printed; default \code{TRUE}}
-  }}
+  300} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -148,58 +127,22 @@
   bi-factor model to dichotomous and polytomous data under
   the item response theory paradigm. Fits univariate and
   multivariate 1-4PL, graded, (generalized) partial credit,
-  nominal, and multiple choice models using a dimensional
-  reduction EM algorithm so that regardless of the number
-  of specific factors estimated the model only uses a
-  two-dimensional quadrature grid for integration.
+  nominal, multiple choice, and partially compensatory
+  models using a dimensional reduction EM algorithm so that
+  regardless of the number of specific factors estimated
+  the model only uses a two-dimensional quadrature grid for
+  integration. See \code{\link{confmirt}} for appropriate
+  methods to be used on the objects returned from the
+  estimation.
 }
 \details{
-
-
   \code{bfactor} follows the item factor analysis strategy
   explicated by Gibbons and Hedeker (1992) and Gibbons et
   al. (2007). Nested models may be compared via an
   approximate chi-squared difference test or by a reduction
-  in AIC or BIC (accessible via \code{\link{anova}}); note
-  that this only makes sense when comparing class
-  \code{bfactorClass} models to class \code{mirtClass} or
-  \code{polymirtClass}. The general equation used for item
-  bi-factor analysis in this package is in the logistic
-  form with a scaling correction of 1.702. This correction
-  is applied to allow comparison to mainstream programs
-  such as TESTFACT 4 (2003) and POLYFACT.
-
-  Unlike TESTFACT 4 (2003) initial start values are
-  computed by using information from a quasi-tetrachoric
-  correlation matrix, potentially with Carroll's (1945)
-  adjustment for chance responses. To begin, a MINRES
-  factor analysis with one factor is extracted, and the
-  transformed loadings and intercepts (see \link{mirt} for
-  more details) are used as starting values for the general
-  factor loadings and item intercepts. Values for the
-  specific factor loadings are taken to be half the
-  magnitude of the extracted general factor loadings. Note
-  that while the sign of the loading may be incorrect for
-  specific factors (and possibly for some of the general
-  factor loadings) the intercepts and general factor
-  loadings will be relatively close to the final solution.
-  These initial values should be an improvement over the
-  TESTFACT initial starting values of 1.414 for all the
-  general factor slopes, 1 for all the specific factor
-  slopes, and 0 for all the intercepts.
-
-  Factor scores are estimated assuming a normal prior
-  distribution and can be appended to the input data matrix
-  (\code{full.scores = TRUE}) or displayed in a summary
-  table for all the unique response patterns. Fitted and
-  residual values can be observed by using the
-  \code{fitted} and \code{residuals} functions. To examine
-  individuals item plots use \code{\link{itemplot}} which
-  will also plot information and surface functions.
-  Residuals are computed using the LD statistic (Chen &
-  Thissen, 1997) in the lower diagonal of the matrix
-  returned by \code{residuals}, and Cramer's V above the
-  diagonal.
+  in AIC or BIC (accessible via \code{\link{anova}}). See
+  \code{\link{mirt}} for more details regarding the IRT
+  estimation approach used in this package.
 }
 \examples{
 \dontrun{
@@ -280,21 +223,11 @@ coef(simmod)
   Full-Information item bifactor analysis of graded
   response data. \emph{Applied Psychological Measurement,
   31}, 4-19
-
-  Carroll, J. B. (1945). The effect of difficulty and
-  chance success on correlations between items and between
-  tests. \emph{Psychometrika, 26}, 347-372.
-
-  Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S.
-  G., Muraki, E., & Bock, R. D. (2003). TESTFACT 4 for
-  Windows: Test Scoring, Item Statistics, and
-  Full-information Item Factor Analysis [Computer
-  software]. Lincolnwood, IL: Scientific Software
-  International.
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt}}, \code{\link{fscores}}
+  \code{\link{confmirt}}, \code{\link{fscores}},
+  \code{\link{multipleGroup}}, \code{\link{wald}}
 }
 \keyword{models}
 

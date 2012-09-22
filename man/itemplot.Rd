@@ -1,13 +1,12 @@
-\docType{methods}
 \name{itemplot}
 \alias{itemplot}
-\alias{itemplot,bfactorClass-method}
-\alias{itemplot,mirtClass-method}
-\alias{itemplot-method}
 \title{Displays item surface and information plots}
+\usage{
+  itemplot(object, item, type = "trace", degrees = 45, ...)
+}
 \arguments{
-  \item{object}{a computed model of class
-  \code{bfactorClass} or \code{mirtClass}}
+  \item{object}{a computed model object of class
+  \code{ExploratoryClass} or \code{ConfirmatoryClass}}
 
   \item{item}{a single numeric value indicating which item
   to plot}
@@ -16,6 +15,10 @@
   (\code{'info'}), information contours
   \code{('infocontour')}, or item trace lines
   (\code{'trace'})}
+
+  \item{degrees}{the degrees argument to be used if there
+  are exactly two factors. See \code{\link{iteminfo}} for
+  more detail}
 
   \item{...}{additional arguments to be passed to lattice}
 }
@@ -34,10 +37,6 @@ itemplot(mod1, 2)
 }
 \author{
   Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
-\seealso{
-  \code{\link{plot}}, \code{\link{mirt}},
-  \code{\link{bfactor}}, \code{\link{polymirt}}
 }
 \keyword{plot}
 

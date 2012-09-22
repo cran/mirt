@@ -1,6 +1,6 @@
 #MHRM optimimization algorithm for confmirt
 
-MHRM <- function(pars, list, debug)
+MHRM <- function(pars, list, debug, startvalues = NULL, EMSE = FALSE)
     {           
         if(debug == 'MHRM') browser()        
         verbose <- list$verbose
@@ -70,7 +70,7 @@ MHRM <- function(pars, list, debug)
         estindex <- index[estpars]
         L <- diag(as.numeric(L))
         redun_constr <- rep(FALSE, length(estpars)) 
-        if(!is.null(constrain)){
+        if(length(constrain) > 0){
             for(i in 1:length(constrain)){            
                 L[constrain[[i]], constrain[[i]]] <- 1/length(constrain[[i]]) 
                 for(j in 2:length(constrain[[i]]))
@@ -87,6 +87,7 @@ MHRM <- function(pars, list, debug)
         ####Big MHRM loop 
         for(cycles in 1:(NCYCLES + BURNIN + SEMCYCLES))								
         { 
+            if(is.list(debug)) print(longpars[debug[[1]]])
             if(cycles == BURNIN + 1) stagecycle <- 2			
             if(stagecycle == 3)
                 gamma <- (gain[1] / (cycles - SEMCYCLES - BURNIN - 1))^(gain[2]) - gain[3]
@@ -102,7 +103,8 @@ MHRM <- function(pars, list, debug)
                 Tau <- Tau/SEMCYCLES	
                 k <- KDRAWS	
                 gamma <- .25
-            }            
+            }  
+            #Reload pars list
             ind1 <- 1
             for(i in 1:length(pars)){
                 ind2 <- ind1 + length(pars[[i]]@par) - 1
@@ -114,7 +116,18 @@ MHRM <- function(pars, list, debug)
                     if(pars[[i]]@par[length(pars[[i]]@par)-1] < 0) 
                         pars[[i]]@par[length(pars[[i]]@par)-1] <- 0
                 }
+                #apply sum(t) == 1 constraint for mcm
+                if(is(pars[[i]], 'mcm')){
+                    tmp <- pars[[i]]@par
+                    tmp[length(tmp) - pars[[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
+                        pars[[i]]@ncat + 2)])
+                    pars[[i]]@par <- tmp
+                }
             }        
+            if(EMSE){ #for calculating EM standard errors
+                for(i in 1:length(pars))                    
+                    pars[[i]]@par <- startvalues[[i]]
+            }
             structgrouppars <- ExtractGroupPars(pars[[length(pars)]])
             
             #Step 1. Generate m_k datasets of theta 
@@ -135,7 +148,7 @@ MHRM <- function(pars, list, debug)
             for (j in 1:k) { 
                 ind1 <- 1
                 thetatemp <- m.thetas[[j]]
-                if(!is.null(prodlist)) thetatemp <- prodterms(thetatemp,prodlist)	
+                if(length(prodlist) > 0) thetatemp <- prodterms(thetatemp,prodlist)	
                 for (i in 1:(length(pars)-1)){	
                     deriv <- Deriv(x=pars[[i]], Theta=thetatemp)
                     ind2 <- ind1 + length(deriv$grad) - 1
@@ -190,7 +203,7 @@ MHRM <- function(pars, list, debug)
                 correction[correction > .5] <- 1
                 correction[correction < -.5] <- -1
                 longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction           
-                if(!is.null(constrain))
+                if(length(constrain) > 0)
                     for(i in 1:length(constrain))
                         longpars[index %in% constrain[[i]][-1]] <- longpars[constrain[[i]][1]]           
                 if(verbose && (cycles + 1) %% 10 == 0){ 
@@ -216,7 +229,7 @@ MHRM <- function(pars, list, debug)
             }		
             correction <-  as.numeric(inv.Tau %*% grad)
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction           
-            if(!is.null(constrain))
+            if(length(constrain) > 0)
                 for(i in 1:length(constrain))
                     longpars[index %in% constrain[[i]][-1]] <- longpars[constrain[[i]][1]]
             if(verbose && (cycles + 1) %% 10 == 0){ 
@@ -239,7 +252,7 @@ MHRM <- function(pars, list, debug)
         } ###END BIG LOOP   
         
         ind1 <- 1 #reload final pars
-        for(i in 1:length(pars)){
+        for(i in 1:length(pars)){            
             ind2 <- ind1 + length(pars[[i]]@par) - 1
             pars[[i]]@par <- longpars[ind1:ind2]
             ind1 <- ind2 + 1       
@@ -249,15 +262,27 @@ MHRM <- function(pars, list, debug)
                 if(pars[[i]]@par[length(pars[[i]]@par)-1] < 0) 
                     pars[[i]]@par[length(pars[[i]]@par)-1] <- 0
             }
-        }         
+            #apply sum(t) == 1 constraint for mcm
+            if(is(pars[[i]], 'mcm')){
+                tmp <- pars[[i]]@par
+                tmp[length(tmp) - pars[[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
+                    pars[[i]]@ncat + 2)])
+                pars[[i]]@par <- tmp
+            }
+        }  
+        
+        if(EMSE){ #for calculating EM standard errors
+            for(i in 1:length(pars))                    
+                pars[[i]]@par <- startvalues[[i]]
+        }
         SEtmp <- diag(solve(info))    	
         if(any(SEtmp < 0)){
-            warning("Information matrix is not positive definite, negative SEs set to 'NA'.\n")
-            SEtmp <- rep(NA, length(SEtmp))
+            warning("Information matrix is not positive definite, negative SEs set to 0.\n")
+            SEtmp <- rep(0, length(SEtmp))
         } else SEtmp <- sqrt(SEtmp)
         SE <- rep(NA, length(longpars))
         SE[estindex_unique] <- SEtmp
-        if(!is.null(constrain))
+        if(length(constrain) > 0)
             for(i in 1:length(constrain))
                 SE[index %in% constrain[[i]][-1]] <- SE[constrain[[i]][1]]
         ind1 <- 1
@@ -265,8 +290,9 @@ MHRM <- function(pars, list, debug)
             ind2 <- ind1 + length(pars[[i]]@par) - 1
             pars[[i]]@SEpar <- SE[ind1:ind2]
             ind1 <- ind2 + 1            
-        }    
-        ret <- list(pars=pars, cycles = cycles - BURNIN - SEMCYCLES, info=info, converge=converge)
+        }         
+        ret <- list(pars=pars, cycles = cycles - BURNIN - SEMCYCLES, info=as.matrix(info), 
+                    longpars=longpars, converge=converge)
         ret        
 }
 

@@ -6,7 +6,7 @@ thetaComb <- function(theta, nfact)
 	else if (nfact == 3) Theta <- expand.grid(theta,theta,theta)  
 	else if (nfact == 4) Theta <- expand.grid(theta,theta,theta,theta)
 	else if (nfact == 5) Theta <- expand.grid(theta,theta,theta,theta,theta)        	
-	else if (nfact == 5) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)
+	else if (nfact == 6) Theta <- expand.grid(theta,theta,theta,theta,theta,theta)
 	if(nfact > 6) stop('Are you crazy?!?!? That\'s way too many factors for this quandrature method.
                        Try using confmirt() instead for better accuracy')
 	Theta <- as.matrix(Theta)	
@@ -43,7 +43,7 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
         theta1 <- theta0 + rnorm(N,prior.mu,sqrt(cand.t.var))							
     log_den0 <- mvtnorm::dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
     log_den1 <- mvtnorm::dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)		
-    if(!is.null(prodlist)){
+    if(length(prodlist) > 0){
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)	
     }	
@@ -71,33 +71,11 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     return(theta1) 
 }
 
-# start values
-start.values <- function(fulldata, guess, Rpoly, nfact=2, bfactor = FALSE, nowarn = TRUE)
-{	  	
-	if (bfactor){ 
-		suppressWarnings(FA <- psych::fa(Rpoly, 1, warnings = !nowarn))
-		loads <- unclass(FA$load)
-		cs <- sqrt(abs(FA$u))      
-		dstart <- qnorm(colMeans(fulldata))/cs
-		astart <- loads/cs
-		startvalues <- cbind(astart,astart/2,dstart)
-	} else {    
-		suppressWarnings(FA <- psych::fa(Rpoly,nfact,rotate = 'none', warnings= !nowarn))	
-		loads <- unclass(loadings(FA))
-		u <- FA$unique
-		u[u < .001 ] <- .2
-		cs <- sqrt(u)
-		dstart <- qnorm(colMeans(fulldata))/cs
-		astart <- loads/cs
-		startvalues <- cbind(astart,dstart)
-	}  	
-	startvalues
-}
-
 # Rotation function
 Rotate <- function(F, rotate, Target = NULL, ...)
 {	
-    if(ncol(F) == 1) rotF <- list()
+    if(ncol(F) == 1) rotF <- list()    
+    if(rotate == 'none') rotF <- list(loadings=F, Phi=diag(ncol(F)), orthogonal=TRUE)            
 	if(rotate == 'promax'){
         rotF <- psych::Promax(F)
         rotF$orthogonal <- FALSE
@@ -127,21 +105,6 @@ Rotate <- function(F, rotate, Target = NULL, ...)
 	if(rotate == 'bifactorT') rotF <- GPArotation::bifactorT(F, ...)
 	if(rotate == 'bifactorQ') rotF <- GPArotation::bifactorQ(F, ...)
 	return(unclass(rotF))
-}  
-
-# MAP scoring for mirt
-MAP.mirt <- function(Theta, pars, patdata, itemloc, ML=FALSE)
-{	
-	itemtrace <- rep(0, ncol=length(patdata))
-	Theta <- matrix(Theta, 1)    
-	itemtrace <- matrix(0, ncol=length(patdata), nrow=nrow(Theta))        
-	for (i in 1:(length(pars)))
-	    itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)		
-	L <- sum(log(itemtrace)[as.logical(patdata)])
-	mu <- 0
-	sigma <- 1
-    L <- ifelse(ML, -L, (-1)*(L + sum(log(exp(-0.5*((Theta - mu)/sigma)^2)))))
-	L  
 }  
 
 # Gamma correlation, mainly for obtaining a sign
@@ -253,7 +216,7 @@ rateChange <- function(pars, listpars, lastpars1, lastpars2)
 
 # Rotate lambda coefficients
 rotateLambdas <- function(so){    
-    F <- so$rotF %*% t(chol(so$fcor))
+    F <- so$rotF
     h2 <- so$h2
     h <- matrix(rep(sqrt(1 - h2), ncol(F)), ncol = ncol(F))
     a <- F / h
@@ -280,7 +243,7 @@ test_info <- function(pars, Theta, Alist, K){
     info
 }
 
-Lambdas <- function(pars){
+Lambdas <- function(pars){    
     lambdas <- list()
     J <- ifelse(is(pars[[length(pars)]], 'GroupPars'), length(pars)-1, length(pars))
     for(i in 1:J)    
@@ -292,12 +255,12 @@ Lambdas <- function(pars){
 #change long pars for groups into mean in sigma
 ExtractGroupPars <- function(x){
     nfact <- x@nfact
-    gmeans <- x@par[1:nfact]
-    gmeans <- x@par[1:nfact]
-    tmp <- x@par[-(1:nfact)]
+    gmeans <- x@par[1:nfact]    
+    tmp <- x@par[-(1:nfact)]    
     gcov <- matrix(0, nfact, nfact)
     gcov[lower.tri(gcov, diag=TRUE)] <- tmp
-    gcov <- gcov + t(gcov) - diag(diag(gcov))
+    if(nfact != 1)
+        gcov <- gcov + t(gcov) - diag(diag(gcov))
     return(list(gmeans=gmeans, gcov=gcov))    
 }
 
@@ -317,103 +280,98 @@ reloadConstr <- function(par, constr, obj){
     return(obj)
 }
 
-# Extract model matricies and values for user specified confmirt.model()
-model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K, fulldata, 
-                           itemloc, data, N, guess, upper, itemnames, exploratory, constrain, 
-                           startvalues, freepars, parprior, parnumber, debug)
-{       
-    if(debug == 'model.elements') browser()
-    hasProdTerms <- ifelse(nfact == nfactNames, FALSE, TRUE)
-    prodlist <- NULL
-    if(hasProdTerms){
-        tmp <- factorNames[grepl('\\(',factorNames)]
-        tmp2 <- factorNames[!grepl('\\(',factorNames)] 
-        tmp <- gsub("\\(","",tmp)    
-        tmp <- gsub("\\)","",tmp)
-        tmp <- gsub(" ","",tmp)
-        prodlist <- strsplit(tmp,"\\*")
-        for(j in 1:length(prodlist)){
-            for(i in 1:nfact)
-                prodlist[[j]][prodlist[[j]] == tmp2[[i]]] <- i		
-            prodlist[[j]] <- as.numeric(prodlist[[j]])	
-        }		
-    }  
-    #slopes specification
-    estlam <- matrix(FALSE, ncol = nfactNames, nrow = J)	
-    for(i in 1:nfactNames){
-        tmp <- model[model[ ,1] == factorNames[i],2]
-        if(any(regexpr(",",tmp)))
-            tmp <- strsplit(tmp,",")[[1]]
-        popout <- c()	
-        for(j in 1:length(tmp)){
-            if(regexpr("-",tmp[j]) > 1){
-                popout <- c(popout,j)
-                tmp2 <- as.numeric(strsplit(tmp[j],"-")[[1]])
-                tmp2 <- as.character(tmp2[1]:tmp2[2])
-                tmp <- c(tmp,tmp2)
+calcEMSE <- function(object, data, model, constrain, parprior, verbose){  
+    startvalues <- list()
+    for(i in 1:(ncol(data)+1))
+        startvalues[[i]] <- object@pars[[i]]@par
+    if(is(model, 'numeric') && length(model) > 1){
+        J <- ncol(data)
+        tmp <- tempfile('tempfile')
+        unique <- unique(model)
+        index <- 1:J
+        tmp2 <- sprintf(c('G =', paste('1-', J, sep='')))
+        for(i in 1:length(unique)){
+            ind <- index[model == unique[i]]
+            comma <- rep(',', 2*length(ind))
+            TF <- rep(c(TRUE,FALSE), length(ind))
+            comma[TF] <- ind
+            comma[length(comma)] <- ""
+            tmp2 <- c(tmp2, c(paste('\nF', i, ' =', sep=''), comma))
+        }
+        cat(tmp2, file=tmp)
+        model <- confmirt.model(tmp, quiet = TRUE)        
+        unlink(tmp)
+    }
+    pars <- confmirt(data, model, startvalues=startvalues, constrain=constrain, parprior=parprior, 
+                    technical = list(BURNIN = 1, SEMCYCLES = 5, TOL = .01, 
+                                    EMSE = TRUE), verbose = verbose)    
+    for(i in 1:length(pars$pars))
+        object@pars[[i]]@SEpar <- pars$pars[[i]]@SEpar                            
+    object@information <- pars$info
+    object@longpars <- pars$longpars
+    return(object)
+}
+
+UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups){
+    if('covariances' %in% invariance){ #Fix covariance accross groups (only makes sense with vars = 1)
+        tmpmat <- matrix(NA, nfact, nfact)
+        low_tri <- lower.tri(tmpmat)
+        tmp <- c()                
+        tmpmats <- tmpestmats <- matrix(NA, ngroups, nfact*(nfact+1)/2)
+        for(g in 1:ngroups){
+            tmpmats[g,] <- pars[[g]][[J + 1]]@parnum[(nfact+1):length(pars[[g]][[J + 1]]@parnum)] 
+            tmpestmats[g,] <- pars[[g]][[J + 1]]@est[(nfact+1):length(pars[[g]][[J + 1]]@est)]
+        }
+        select <- colSums(tmpestmats) == ngroups
+        for(i in 1:length(select))
+            if(select[i])
+                constrain[[length(constrain) + 1]] <- tmpmats[1:ngroups, i]
+        
+    }    
+    if('slopes' %in% invariance){ #Equal factor loadings
+        tmpmats <- tmpests <- list()
+        for(g in 1:ngroups)
+            tmpmats[[g]] <- tmpests[[g]] <- matrix(NA, J, nLambdas)                
+        for(g in 1:ngroups){            
+            for(i in 1:J){
+                tmpmats[[g]][i,] <- pars[[g]][[i]]@parnum[1:nLambdas]
+                tmpests[[g]][i,] <- pars[[g]][[i]]@est[1:nLambdas]
             }
         }
-        if(length(popout != 0))	
-            estlam[as.numeric(tmp[-popout]),i] <- TRUE
-        else 
-            estlam[as.numeric(tmp),i] <- TRUE
+        for(i in 1:J){
+            for(j in 1:nLambdas){
+                tmp <- c()
+                for(g in 1:ngroups){                    
+                    if(tmpests[[1]][[i, j]])
+                        tmp <- c(tmp, tmpmats[[g]][i,j])
+                }
+                constrain[[length(constrain) + 1]] <- tmp
+            }
+        }        
     }
-    lambdas <- ifelse(estlam, .5, 0)	  
-    #INT
-    cs <- sqrt(abs(1-rowSums(lambdas^2)))	
-    zetas <- list()
-    loc <- 1	
-    for(i in 1:J){        
-        if(K[i] == 2){
-            div <- ifelse(cs[i] > .25, cs[i], .25)		
-            zetas[[i]] <- qnorm(mean(fulldata[,itemloc[i]]))/div            
-        } else {			
-            temp <- table(data[,i])[1:(K[i]-1)]/N
-            temp <- cumsum(temp)
-            div <- ifelse(cs[i] > .25, cs[i], .25)		
-            zetas[[i]] <- qnorm(1 - temp)/div	            
-        }		
-    }    
-    estzetas <- list()        
-    for(i in 1:J)
-        estzetas[[i]] <- length(zetas[[i]])                
-    #COV
-    find <- 1:nfact
-    estgcov <- matrix(FALSE,nfact,nfact)    
-    if(any(model[,1] == 'COV')){
-        tmp <- model[model[,1] == 'COV',2]		
-        tmp <- strsplit(tmp,",")[[1]]
-        tmp <- gsub(" ","",tmp)
-        for(i in 1:length(tmp)){            
-            tmp2 <- strsplit(tmp[i],"*",fixed=TRUE)[[1]]				
-            ind1 <- find[tmp2[1] == factorNames]
-            ind2 <- find[tmp2[2] == factorNames]
-            estgcov[ind2,ind1] <- TRUE            	
+    if('intercepts' %in% invariance){ #Equal item intercepts (and all other item pars)
+        tmpmats <- tmpests <- list()
+        for(g in 1:ngroups)
+            tmpmats[[g]] <- tmpests[[g]] <- list() 
+        for(g in 1:ngroups){            
+            for(i in 1:J){
+                ind <- (nLambdas+1):length(pars[[g]][[i]]@parnum)
+                if(is(pars[[g]][[i]], 'dich')) ind <- ind[1:(length(ind)-2)]
+                if(is(pars[[g]][[i]], 'partcomp')) ind <- ind[1:(length(ind)-1)]
+                tmpmats[[g]][[i]] <- pars[[g]][[i]]@parnum[ind]
+                tmpests[[g]][[i]] <- pars[[g]][[i]]@est[ind]
+            }
+        }
+        for(i in 1:J){
+            for(j in 1:length(tmpmats[[1]][[i]])){
+                tmp <- c()
+                for(g in 1:ngroups){                    
+                    if(tmpests[[1]][[i]][j])
+                        tmp <- c(tmp, tmpmats[[g]][[i]][j])
+                }
+                constrain[[length(constrain) + 1]] <- tmp
+            }
         }
     }
-    gcov <- ifelse(estgcov,.25,0) 
-    diag(gcov) <- 1	  
-    #MEAN
-    gmeans <- rep(0, nfact)
-    estgmeans <- rep(FALSE, nfact)
-    
-    if(exploratory){        
-        Rpoly <- cormod(na.omit(data),K,guess)
-        FA <- psych::fa(Rpoly, nfact, rotate = 'none', warnings= FALSE, fm="minres")    
-        loads <- unclass(loadings(FA))
-        u <- FA$unique
-        u[u < .001 ] <- .2
-        cs <- sqrt(u)
-        lambdas <- loads/cs                
-    }
-    ret <- LoadPars(itemtype=itemtype, itemloc=itemloc, lambdas=lambdas, zetas=zetas, guess=guess, upper=upper,
-                    fulldata=fulldata, J=J, K=K, nfact=nfact, constrain=constrain, nfactNames=nfactNames,
-                    startvalues=startvalues, freepars=freepars, parprior=parprior, parnumber=parnumber,
-                    estLambdas=estlam, debug=debug)      
-    ret[[length(ret) + 1]] <- LoadGroupPars(gmeans=gmeans, gcov=gcov, estgmeans=estgmeans, 
-                                            estgcov=estgcov, parnumber=attr(ret, 'parnumber')+1,
-                                            startvalues=startvalues, freepars=freepars, parprior=parprior,
-                                            constrain=constrain, debug=debug)
-    attr(ret, 'prodlist') <- prodlist     
-    return(ret)    
+    return(constrain)
 }

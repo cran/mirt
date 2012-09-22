@@ -1,60 +1,69 @@
 \name{mirt}
-\alias{anova,mirt-method}
-\alias{coef,mirt-method}
-\alias{fitted,mirt-method}
+\alias{anova,ExploratoryClass-method}
+\alias{coef,ExploratoryClass-method}
+\alias{fitted,ExploratoryClass-method}
 \alias{mirt}
-\alias{plot,mirt-method}
-\alias{residuals,mirt-method}
-\alias{summary,mirt-method}
+\alias{plot,ExploratoryClass-method}
+\alias{residuals,ExploratoryClass-method}
+\alias{summary,ExploratoryClass-method}
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-  mirt(data, nfact, itemtype = NULL, guess = 0, upper = 1,
-    SE = FALSE, startvalues = NULL, constrain = NULL,
-    freepars = NULL, parprior = NULL, rotate = 'varimax',
-    Target = NULL, prev.cor = NULL, quadpts = NULL, verbose
-    = FALSE, debug = FALSE, technical = list(), ...)
+  mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
+    SE = TRUE, free.start = NULL, startvalues = NULL,
+    constrain = NULL, freepars = NULL, parprior = NULL,
+    rotate = 'varimax', Target = NULL, prev.cor = NULL,
+    quadpts = NULL, verbose = FALSE, debug = FALSE,
+    technical = list(), ...)
 
-  \S4method{summary}{mirt}(object, rotate = '', Target =
-    NULL, suppress = 0, digits = 3, print = TRUE, ...)
+  \S4method{summary}{ExploratoryClass}(object, rotate = '',
+    Target = NULL, suppress = 0, digits = 3, verbose =
+    TRUE, ...)
 
-  \S4method{coef}{mirt}(object, rotate = '', Target = NULL,
-    allpars = FALSE, digits = 3, ...)
+  \S4method{coef}{ExploratoryClass}(object, rotate = '',
+    Target = NULL, allpars = FALSE, digits = 3, verbose =
+    TRUE, ...)
 
-  \S4method{anova}{mirt}(object, object2, ...)
+  \S4method{anova}{ExploratoryClass}(object, object2)
 
-  \S4method{fitted}{mirt}(object, digits = 3, ...)
-
-  \S4method{plot}{mirt}(x, type = 'info', npts = 50,
-    theta_angle = 45, rot = list(x = -70, y = 30, z = 10),
+  \S4method{fitted}{ExploratoryClass}(object, digits = 3,
     ...)
 
-  \S4method{residuals}{mirt}(object, restype = 'LD', digits
-    = 3, printvalue = NULL, ...)
+  \S4method{plot}{ExploratoryClass}(x, y, type = 'info',
+    npts = 50, theta_angle = 45, rot = list(xaxis = -70,
+    yaxis = 30, zaxis = 10), ...)
+
+  \S4method{residuals}{ExploratoryClass}(object, restype =
+    'LD', digits = 3, printvalue = NULL, verbose = TRUE,
+    ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
   consists of numerically ordered data, with missing data
   coded as \code{NA}}
 
-  \item{nfact}{number of factors to be extracted}
+  \item{model}{an object returned from
+  \code{confmirt.model()} declaring how the factor model is
+  to be estimated, or a single numeric value indicating the
+  number of exploratory factors to estimate. See
+  \code{\link{confmirt.model}} for more details}
 
   \item{itemtype}{type of items to be modeled, declared as
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
   items are ordinal or 2PL, however they may be changed to
   the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
-  '4PL', 'graded', 'gpcm', 'nominal', and 'mcm', for the
-  Rasch/partial credit, 1 and 2 parameter logistic, 3
-  parameter logistic (lower asymptote and upper), 4
-  parameter logistic, graded response model, generalized
-  partial credit model, nominal model, and multiple choice
-  model, respectively. Note that specifying a '1PL' or
-  'Rasch' model should be of length 1 (since there is only
-  1 slope parameter estimated). If \code{NULL} the default
-  assumes that the data follow a '2PL' or 'graded' format}
+  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
+  'partcomp', for the Rasch/partial credit, 1 and 2
+  parameter logistic, 3 parameter logistic (lower asymptote
+  and upper), 4 parameter logistic, graded response model,
+  generalized partial credit model, nominal model, multiple
+  choice model, and partially compensatory model,
+  respectively. If \code{NULL} the default assumes that the
+  data follow a '2PL' or 'graded' format}
 
-  \item{SE}{logical, estimate the standard errors?}
+  \item{SE}{logical, estimate the standard errors? Calls
+  the MHRM subroutine for a stochastic approximation}
 
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
@@ -65,6 +74,18 @@ Theory)}
   Can be entered as a single value to assign a global
   guessing parameter or may be entered as a numeric vector
   corresponding to each item}
+
+  \item{free.start}{a list containing the start value and
+  logical indicating whether a given parameter is to be
+  freely estimated. Each element of the list consists of
+  three components, the parameter number, the starting (or
+  fixed) value, and a logical to indicate whether the
+  parameter is free. For example, \code{free.start =
+  list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter
+  20 to 0 while parameter 10 would be freely estimated with
+  a starting value of 1.5. Note that this will override the
+  values specified by a user defined \code{startvalues} or
+  \code{freepars} input for the specified parameters}
 
   \item{prev.cor}{use a previously computed correlation
   matrix to be used to estimate starting values for the EM
@@ -133,17 +154,17 @@ Theory)}
   \code{abs(printvalue)}. The default (NULL) prints all
   response patterns}
 
-  \item{print}{logical; print output to console?}
-
   \item{x}{an object of class \code{mirt} to be plotted or
   printed}
 
-  \item{object}{a model estimated from \code{mirt} of class
-  \code{mirtClass}}
+  \item{y}{an unused variable to be ignored}
 
-  \item{object2}{a second model estimated from \code{mirt}
-  of class \code{mirtClass} with more estimated parameters
-  than \code{object}}
+  \item{object}{a model estimated from \code{mirt} of class
+  \code{ExploratoryClass} or \code{ConfirmatoryClass}}
+
+  \item{object2}{a second model estimated from any of the
+  mirt package estimation methods \code{ExploratoryClass}
+  with more estimated parameters than \code{object}}
 
   \item{suppress}{a numeric value indicating which
   (possibly rotated) factor loadings should be suppressed.
@@ -185,9 +206,7 @@ Theory)}
   10000} \item{MSTEPMAXIT}{number of M-step iterations;
   default 25} \item{TOL}{EM convergence threshold; default
   .001} \item{NCYCLES}{maximum number of EM cycles; default
-  300} \item{NOWARN}{a logical indicating whether dependent
-  packages warnings should be printed; default \code{TRUE}}
-  }}
+  300} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -196,8 +215,8 @@ Theory)}
   factor analysis model to dichotomous and polytomous data
   under the item response theory paradigm. Fits univariate
   and multivariate Rasch, 1-4PL, graded, (generalized)
-  partial credit, nominal, and multiple choice models using
-  the EM algorithm.
+  partial credit, nominal, multiple choice, and partially
+  compenatory models using the EM algorithm.
 }
 \details{
   \code{mirt} follows the item factor analysis strategy by
@@ -211,6 +230,46 @@ Theory)}
   with a scaling correction of 1.702. This correction is
   applied to allow comparison to mainstream programs such
   as TESTFACT (2003) and POLYFACT.
+
+  Factor scores are estimated assuming a normal prior
+  distribution and can be appended to the input data matrix
+  (\code{full.data = TRUE}) or displayed in a summary table
+  for all the unique response patterns. \code{summary} and
+  \code{coef} allow for all the rotations available from
+  the \code{GPArotation} package (e.g., \code{rotate =
+  'oblimin'}) as well as a \code{'promax'} rotation.
+
+  Using \code{plot} will plot the either the test surface
+  function or the test information function for 1 and 2
+  dimensional solutions. To examine individual item plots
+  use \code{\link{itemplot}}. Residuals are computed using
+  the LD statistic (Chen & Thissen, 1997) in the lower
+  diagonal of the matrix returned by \code{residuals}, and
+  Cramer's V above the diagonal.
+}
+\section{Confirmatory IRT}{
+  Specification of the confirmatory item factor analysis
+  model follows many of the rules in the SEM framework for
+  confirmatory factor analysis. The variances of the latent
+  factors are automatically fixed to 1 to help facilitate
+  model identification. All parameters may be fixed to
+  constant values or set equal to other parameters using
+  the appropriate declarations. If the model is
+  confirmatory then the returned class will be
+  'ConfirmatoryClass'.
+}
+
+\section{Exploratory IRT}{
+  Specifying a number as the second input to confmirt an
+  exploratory IRT model is estimated and can be viewed as a
+  stochastic analogue of \code{mirt}, with much of the same
+  behaviour and specifications. Rotation and target matrix
+  options will be used in this subroutine and will be
+  passed to the returned object for use in generic
+  functions such as \code{summary()} and \code{fscores}.
+  Again, factor means and variances are fixed to ensure
+  proper identification. If the model is confirmatory then
+  the returned class will be 'ExploratoryClass'.
 
   Estimation often begins by computing a matrix of
   quasi-tetrachoric correlations, potentially with
@@ -231,23 +290,8 @@ Theory)}
   described by Ramsey (1975) are also added to facilitate
   parameter convergence speed, and these are adjusted every
   third cycle.
-
-  Factor scores are estimated assuming a normal prior
-  distribution and can be appended to the input data matrix
-  (\code{full.data = TRUE}) or displayed in a summary table
-  for all the unique response patterns. \code{summary} and
-  \code{coef} allow for all the rotations available from
-  the \code{GPArotation} package (e.g., \code{rotate =
-  'oblimin'}) as well as a \code{'promax'} rotation.
-
-  Using \code{plot} will plot the either the test surface
-  function or the test information function for 1 and 2
-  dimensional solutions. To examine individual item plots
-  use \code{\link{itemplot}}. Residuals are computed using
-  the LD statistic (Chen & Thissen, 1997) in the lower
-  diagonal of the matrix returned by \code{residuals}, and
-  Cramer's V above the diagonal.
 }
+
 \section{Convergence}{
   Unrestricted full-information factor analysis is known to
   have problems with convergence, and some items may need
@@ -260,6 +304,46 @@ Theory)}
   when including upper bound parameters as well. Also,
   increasing the number of quadrature points per dimension
   may help to stabilize the estimation process.
+}
+
+\section{IRT Models}{
+  The parameter labels use follow the convention, here
+  using two factors and \eqn{k} as the number of
+  categories:
+
+  \describe{ \item{Rasch}{ Only one intercept estimated.
+  Note the 1.702 constant. \deqn{P(x = 1|\theta, d) =
+  \frac{1}{1 + exp(-1.702 * (\theta + d}))} } \item{1-4PL}{
+  Depending on the model \eqn{u} may be equal to 1 and
+  \eqn{g} may be equal to 0. \deqn{P(x = 1|\theta, \psi) =
+  g + \frac{(u - g)}{1 + exp(-1.702 * (a_1 * \theta_1 + a_2
+  * \theta_2 + d}))} } \item{graded}{ The graded model
+  consists of sequential 2PL models, and here \eqn{k} is
+  the predicted category. \deqn{P(x = k | \theta, \psi) =
+  P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
+  \phi)} } \item{gpcm/nominal}{For the gpcm the \eqn{d_k}
+  values are treated as fixed and orderd values from
+  0:(k-1) (in the nominal model \eqn{d_0} is also set to
+  0). Additionally, for identification in the nominal model
+  \eqn{ak_0 = 1}, \eqn{ak_k = (k - 1)}. \deqn{P(x = k |
+  \theta, \psi) = \frac{exp(-1.702 * ak_k * (a_1 * \theta_1
+  + a_2 * \theta_2) + d_k)} {\sum_i^k exp(-1.702 * ak_k *
+  (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
+  \item{mcm}{For identification \eqn{ak_0 = d_0 = 0} and
+  \eqn{\sum_0^k t_k = 1}. \deqn{P(x = k | \theta, \psi) =
+  C_0 (\theta) * t_k + (1 - C_0 (\theta)) *
+  \frac{exp(-1.702 * ak_k * (a_1 * \theta_1 + a_2 *
+  \theta_2) + d_k} {\sum_i^k exp(-1.702 * ak_k * (a_1 *
+  \theta_1 + a_2 * \theta_2) + d_k)}}
+
+  where \eqn{C_0 (\theta) = \frac{exp(-1.702 * ak_0 * (a_1
+  * \theta_1 + a_2 * \theta_2) + d_0} {\sum_i^k exp(-1.702
+  * ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
+  \item{partcomp}{Partially compensatory models consist of
+  the products of 2PL probability curves. \deqn{P(x = 1 |
+  \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-1.702 *
+  (a_1 * \theta_1 + d_1} * \frac{1}{1 + exp(-1.702 * (a_2 *
+  \theta_2 + d_2}))} } }
 }
 \examples{
 \dontrun{
@@ -277,7 +361,7 @@ plot(mod1) #test information function
 coef(mod1.3PL, allpars = TRUE)
 
 (mod2 <- mirt(data, 2))
-summary(mod2)
+summary(mod2, rotate = 'oblimin')
 coef(mod2)
 residuals(mod2)
 plot(mod2)
@@ -285,9 +369,19 @@ plot(mod2)
 anova(mod1, mod2) #compare the two models
 scores <- fscores(mod2) #save factor score table
 
+#confirmatory
+cmodel <- confmirt.model()
+   F1 = 1,4,5
+   F2 = 2,3
+
+
+cmod <- mirt(data, cmodel)
+coef(cmod)
+anova(cmod, mod2)
+
 ###########
 #data from the 'ltm' package in numeric format
-pmod1 <- mirt(Science, 1)
+pmod1 <- mirt(Science, 1, SE = FALSE)
 plot(pmod1)
 summary(pmod1)
 
@@ -296,6 +390,8 @@ summary(pmod1)
 mirt(Science,1, constrain = 'index') #note that slopes are numbered 1,5,9,13
 (pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
 coef(pmod1_equalslopes)
+#manually fix the first slope to .6
+(pmod1_fixedslope <- mirt(Science, 1, free.start = list(c(1, .6, FALSE))))
 
 pmod2 <- mirt(Science, 2)
 coef(pmod2)
@@ -362,8 +458,9 @@ summary(mod2g, rotate='promax')
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{polymirt}}, \code{\link{confmirt}},
-  \code{\link{bfactor}}, \code{\link{itemplot}}
+  \code{\link{confmirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{wald}}
+  \code{\link{itemplot}}, \code{\link{fscores}}
 }
 \keyword{models}
 
