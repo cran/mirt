@@ -1,4 +1,40 @@
 ----------------------------------------------------------------
+mirt 0.4.1
+----------------------------------------------------------------
+
+* relative efficiency plots added to itemplot(). Works directly for multipleGroup analysis
+  and for comparing different item types (e.g., 1PL vs 2PL) can be wrapped into a named list
+
+* infit and outfit statistics added to personfit() and itemfit()
+
+* empirical reliability printed for each dimension when fscores(..., fulldata = FALSE) called
+
+* better system to specify fixed/free parameters and starting values using
+  pars = 'values'. Should allow for much better simulation based work 
+
+* graded model type rating scale added (Muraki, 1990) with optional estimation 'blocks'. Use 
+  itemtype = 'grsm', and the grsm.block option
+
+* for multipleGroup(), optional input added to change the current freely estimated parameters 
+  to values of a previously computed model. This will save needless iterations in the EM and MHRM
+  since these parameters should be much closer to the new ML estimates 
+
+* itemplot() supports multipleGroup objects now
+
+* analytical derivatives much more stable, although some are not yet optimized
+
+* estimation bug fix in bfactor(), and slight bias fix in mirt() estimation (introduced in version
+  0.4.0 when multipleGroup() added) 
+
+* updated documentation and beamer slide show included for some background on MIRT and some 
+  of the packages capabilities
+
+* labels added to coef() when standard errors not computed. Also allpars = TRUE is now the default
+
+* kernel estimation moved entirely to one method. Much easier to maintain and guarantees consistency
+  across methods (i.e., no more quasi-Newton algorithms used)
+
+----------------------------------------------------------------
 mirt 0.4.0
 ----------------------------------------------------------------
 

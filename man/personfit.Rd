@@ -2,26 +2,23 @@
 \alias{personfit}
 \title{Person fit statistics}
 \usage{
-  personfit(x, full.scores = FALSE)
+  personfit(x, degrees = NULL)
 }
 \arguments{
   \item{x}{a computed model object of class
   \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
   \code{MultipleGroupClass}}
 
-  \item{full.scores}{if \code{FALSE} (default) then a
-  summary table with the Zh and p-values is returned,
-  otherwise the original data matrix is returned with
-  values appended to the rightmost column}
+  \item{degrees}{the degrees angle to be passed to the
+  \code{\link{iteminfo}} function}
 }
 \description{
   \code{personfit} calculates the Zh values from Drasgow,
   Levine and Williams (1985) for unidimensional and
-  multidimensional models. The returned values approximate
-  a standard normal distribution and therefore p-values are
-  also returned. The returned object is a \code{data.frame}
+  multidimensional models, as well as infit and outfit
+  statistics. The returned object is a \code{data.frame}
   consisting either of the tabulated data or full data with
-  the Zh and p-values appended to the last columns.
+  the statistics appended to the last columns.
 }
 \examples{
 \dontrun{
@@ -33,9 +30,9 @@ d <- matrix(rnorm(20),ncol=1)
 items <- rep('dich', 20)
 data <- simdata(a,d, 2000, items)
 
-x <- mirt(data, 1, SE = FALSE)
-tabdatafit <- personfit(x)
-head(tabdatafit)
+x <- mirt(data, 1)
+fit <- personfit(x)
+head(fit)
 
   }
 }
@@ -47,6 +44,10 @@ head(tabdatafit)
   Appropriateness measurement with polychotomous item
   response models and standardized indices. \emph{Journal
   of Mathematical and Statistical Psychology, 38}, 67-86.
+
+  Reise, S. P. (1990). A comparison of item- and person-fit
+  methods of assessing model-data fit in IRT. \emph{Applied
+  Psychological Measurement, 14}, 127-137.
 }
 \seealso{
   \code{\link{itemfit}}

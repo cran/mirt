@@ -37,53 +37,54 @@
 #' @param upper initial (or fixed) upper bound parameters for 4-PL model. Can be 
 #' entered as a single value to assign a global upper bound parameter or may be entered as a 
 #' numeric vector corresponding to each item
-#' @param free.start a list containing the start value and logical indicating whether a given parameter 
-#' is to be freely estimated. Each element of the list consists of three components, the parameter
-#' number, the starting (or fixed) value, and a logical to indicate whether the parameter is free. For
-#' example, \code{free.start = list(c(20,0.0,FALSE), c(10,1.5,TRUE))} would fix parameter 20 to 0.0 while
-#' parameter 10 would be freely estimated from a starting value of 1.5. Note that this will override 
-#' the values specified by a user defined \code{startvalues} or \code{freepars} input for the specified
-#' parameters, and this may conflict with the \code{invariance} input (e.g., freeing slopes manually
-#' while specifying \code{invariance = 'slopes'} is ambiguous and should be avoided). 
+#' @param SE logical, estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation.
+#' Only applicable when \code{method = 'EM'} since the MHRM method calculates them automatically
+#' @param SEtol tollerance value used to stop the MHRM estimation when \code{SE = TRUE}. Lower values
+#' will take longer but may be more stable for computing the information matrix
 #' @param verbose logical; display iteration history during estimation?
 #' @param draws the number of Monte Carlo draws to estimate the log-likelihood
 #' @param quadpts the number of quadratures to be used per dimensions when \code{method = 'EM'}
+#' @param prev.mod an optional input object of class \code{'MultipleGroupClass'} to quickly 
+#' change the starting values of the current estimation.
+#' If a parameter in the current model is being freely estimated then it's value will be set to whatever the 
+#' corresponding value was in this input object. This is useful when testing nested models since the starting 
+#' values should be much closer to the new ML values. Note that this method requires that all the \code{itemtype}
+#' values be identical between models
 #' @param method a character indicating whether to use the EM (\code{'EM'}) or the MH-RM 
 #' (\code{'MHRM'}) algorithm
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
-#' which will be repeated globally. The NULL default assumes that the items are ordinal or 2PL,
+#' which will be repeated globally. The NULL default assumes that the items follow a graded or 2PL structure,
 #' however they may be changed to the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu', 
-#' '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and 'partcomp', for the Rasch/partial credit, 1 and 2 parameter logistic, 
+#' '4PL', 'graded', 'grsm', 'gpcm', 'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the Rasch/partial credit, 1 and 2 parameter logistic, 
 #' 3 parameter logistic (lower asymptote and upper), 4 parameter logistic, graded response model, 
-#' generalized partial credit model, nominal model, multiple choice model, and partially compensatory model,
-#' respectively. The default assumes that items follow a '2PL' or 'graded' format
-#' If \code{NULL} the default assumes that the data follow a '2PL' or 'graded' format
+#' rating scale graded response model, generalized partial credit model, nominal model, 
+#' multiple choice model, and 2-3PL partially compensatory model, respectively
 #' @param constrain a list of user declared equality constraints. To see how to define the
-#' parameters correctly use \code{constrain = 'index'} initially to see how the parameters are labeled.
+#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' To constrain parameters to be equal create a list with separate concatenated vectors signifying which
 #' parameters to constrain. For example, to set parameters 1 and 5 equal, and also set parameters 2, 6, and 10 equal
 #' use \code{constrain = list(c(1,5), c(2,6,10))}
+#' @param grsm.block an optional numeric vector indicating where the blocking should occur when using 
+#' the grsm, NA represents items that do not belong to the grsm block (other items that may be estimated
+#' in the test data). For example, to specify two blocks of 3 with a 2PL item for the last item:
+#' \code{grsm.block = c(rep(1,3), rep(2,3), NA)}. If NULL the all items are assumed to be within the same 
+#' group and therefore have the same number of item categories
 #' @param parprior a list of user declared prior item probabilities. To see how to define the
-#' parameters correctly use \code{parprior = 'index'} initially to see how the parameters are labeled.
+#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' Can define either normal (normally for slopes and intercepts) or beta (for guessing and upper bounds) prior
 #' probabilities. Note that for upper bounds the value used in the prior is 1 - u so that the lower and upper 
 #' bounds can function the same. To specify a prior the form is c('priortype', ...), where normal priors 
 #' are \code{parprior = list(c(parnumber, 'norm', mean, sd))} and betas are 
 #' \code{parprior = list(c(parnumber, 'beta', alpha, beta))}. 
-#' @param freepars a list of user declared logical values indicating which parameters to estimate. 
-#' To see how to define the parameters correctly use \code{freepars = 'index'} initially to see how the parameters
-#' are labeled. These values may be modified and input back into the function by using 
-#' \code{freepars=newfreepars}. Note that user input values must match what the default structure 
-#' would have been
-#' @param startvalues a list of user declared start values for parameters. To see how to define the
-#' parameters correctly use \code{startvalues = 'index'} initially to see what the defaults would 
-#' noramlly be. These values may be modified and input back into the function by using 
-#' \code{startavlues=newstartvalues}. Note that user input values must match what the default structure 
-#' would have been
+#' @param pars a data.frame with the structure of how the starting values, parameter numbers, and estimation
+#' logical values are defined. The user may observe how the model defines the values by using \code{pars = 
+#' 'values'}, and this object can in turn be modified and input back into the estimation with \code{pars = 
+#' mymodifiedpars}
 #' @param debug logical; turn on debugging features?
 #' @param object an object of class \code{confmirtClass}
 #' @param object2 an object of class \code{confmirtClass}
 #' @param digits the number of significant digits to be rounded
+#' @param ... additional arguments to be passed
 #' @param technical list specifying subtle parameters that can be adjusted. These 
 #' values are 
 #' \describe{
@@ -101,17 +102,16 @@
 #'  \item{return_newconstrain}{if \code{TRUE} returns a list consisting of the constraints to be used
 #'  just before estimation begins} 
 #' }
-#' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
 #' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{simdata}},
 #' \code{\link{confmirt.model}}, \code{\link{fscores}}
 #' @keywords models
 #' @usage 
-#' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, free.start = NULL, 
-#' invariance = '', method = 'MHRM', constrain = NULL, startvalues = NULL, 
-#' parprior = NULL, freepars = NULL, draws = 2000, quadpts = NULL,
-#' technical = list(), debug = FALSE, verbose = TRUE)
+#' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,  
+#' invariance = '', pars = NULL, method = 'MHRM', constrain = NULL, 
+#' parprior = NULL, draws = 2000, quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
+#' technical = list(), debug = FALSE, verbose = TRUE, ...)
 #' 
 #' \S4method{coef}{MultipleGroupClass}(object, digits = 3, verbose = TRUE, ...)
 #'
@@ -137,12 +137,17 @@
 #' 
 #' 
 #' mod_configural <- multipleGroup(dat, models, group = group, method = 'EM') #completely seperate analyses
-#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'EM') #equal slopes
+#' 
+#' # prev.mod can save precious iterations and help to avoid local minimums
+#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'EM',
+#'                             prev.mod = mod_configural) #equal slopes
 #' mod_scalar2 <- multipleGroup(dat, models, group = group, method = 'EM',  #equal intercepts, free variance and means
-#'                              invariance=c('slopes', 'intercepts', 'free_varcov','free_means'))
+#'                              invariance=c('slopes', 'intercepts', 'free_varcov','free_means'),
+#'                              prev.mod = mod_configural)
 #' mod_scalar1 <- multipleGroup(dat, models, group = group, method = 'EM', #fixed means
-#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))    
-#' mod_fullconstrain <- mirt(data, models) #fix variance (equivelent to full constrain)
+#'                              invariance=c('slopes', 'intercepts', 'free_varcov'),
+#'                              prev.mod = mod_configural)    
+#' mod_fullconstrain <- mirt(dat, models) #fix variance (equivalent to full constrain)
 #' 
 #' anova(mod_metric, mod_configural) #equal slopes only
 #' anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
@@ -150,18 +155,12 @@
 #' anova(mod_fullconstrain, mod_scalar1) #fix variance
 #'
 #' 
-#' #Wald test can be useful here too
-#' #compare whether intercepts should be equal
-#' index <- multipleGroup(dat, models, group = group, constrain = 'index') 
-#' index
-#' nitems <- ncol(dat)
-#' L <- matrix(0, nitems, 124)
-#' for(i in 1:nitems){
-#'      L[i, index[[1]][[i]][2]] <- 1    
-#'      L[i, index[[2]][[i]][2]] <- -1
-#'  } 
-#' wald(L, mod_configural)
-#' 
+#' #test whether first 6 slopes should be equal accross groups
+#' values <- multipleGroup(dat, models, group = group, pars = 'values') 
+#' values
+#' constrain <- list(c(1, 63), c(5,67), c(9,71), c(13,75), c(17,79), c(21,83)) 
+#' equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain, method = 'EM')
+#' anova(equalslopes, mod_configural)
 #' 
 #' #############
 #' #multiple factors 
@@ -198,202 +197,28 @@
 #' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #' mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
 #'                              invariance=c('slopes', 'intercepts', 'free_varcov'))    
-#' mod_fullconstrain <- confmirt(data, models)
+#' mod_fullconstrain <- confmirt(dat, models)
 #' 
 #' anova(mod_metric, mod_configural)
 #' anova(mod_scalar, mod_metric)
 #' anova(mod_fullconstrain, mod_scalar)
 
 #' }
-multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1, free.start = NULL, 
-                          invariance = '', method = 'MHRM', constrain = NULL, 
-                          startvalues = NULL, parprior = NULL, freepars = NULL, draws = 2000, 
-                          quadpts = NULL,
-                          technical = list(), debug = FALSE, verbose = TRUE)
-{
+multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1, 
+                          SE = FALSE, SEtol = .001, invariance = '', pars = NULL, 
+                          method = 'MHRM', constrain = NULL, 
+                          parprior = NULL, draws = 2000, 
+                          quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
+                          technical = list(), debug = FALSE, verbose = TRUE, ...)
+{   
     if(debug == 'Main') browser()
-    ##technical
-    Call <- match.call()               
-    set.seed(12345)	   
-    MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
-    MSTEPMAXIT <- ifelse(is.null(technical$MSTEPMAXIT), 15, technical$MSTEPMAXIT)        
-    RETURN <- ifelse(any('index' == c(startvalues, freepars, parprior, constrain)), TRUE, FALSE)
-    NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
-    if(method == 'EM')
-        NCYCLES <- ifelse(is.null(technical$NCYCLES), 300, technical$NCYCLES)
-    BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
-    SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
-    KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1, technical$KDRAWS)
-    TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)      
-    if(!is.null(technical$set.seed)) set.seed(technical$set.seed)	
-    gain <- c(0.05,0.5,0.004)
-    if(!is.null(technical$gain)){
-        if(length(technical$gain) == 3 && is.numeric(technical$gain))
-            gain <- technical$gain
-    }	 
-    RETURNFREEPARS <- RETURNSTARTVALUES <- RETURNPARINDEX <- FALSE
-    NULL.MODEL <- ifelse(!is.null(itemtype) && itemtype[1] == 'NullModel', TRUE, FALSE)
-    USEEM <- ifelse(method == 'EM', TRUE, FALSE)
-    ##	            
-    data <- as.matrix(data)
-    rownames(data) <- 1:nrow(data)
-    group <- factor(group)
-    groupNames <- unique(group)
-    ngroups <- length(groupNames)
-    oldmodel <- model
-    if(length(model) == 1){
-        model <- list()
-        for(g in 1:ngroups)
-            model[[g]] <- oldmodel
-        names(model) <- groupNames
-    } 
-    parnumber <- 1
-    PrepList <- vector('list', ngroups)
-    if(!is.null(freepars) && freepars == 'index'){
-        freepars <- rep('index', ngroups)    
-        RETURNFREEPARS <- TRUE
-    }
-    if(!is.null(startvalues) && startvalues == 'index'){
-        startvalues <- rep('index', ngroups)
-        RETURNSTARTVALUES <- TRUE
-    }
-    if((!is.null(constrain) && constrain == 'index') || (!is.null(parprior) && parprior =='index'))
-        RETURNPARINDEX <- TRUE 
-    PrepListFull <- PrepData(data=data, model=model[[1]], itemtype=itemtype, guess=guess, upper=upper, 
-                             startvalues=NULL, constrain=NULL, freepars=NULL, 
-                             parprior=NULL, verbose=verbose, debug=debug, free.start=NULL,
-                             technical=technical) #just a dummy model to collect fulldata stuff
-    for(g in 1:ngroups){    
-        select <- group == groupNames[g]        
-        tmp <- 1:ngroups
-        selectmod <- model[[tmp[names(model) == groupNames[g]]]]
-        PrepList[[g]] <- PrepData(data=data[select,], model=selectmod, itemtype=itemtype, guess=guess, upper=upper, 
-                             startvalues=startvalues[g], constrain=constrain, freepars=freepars[g], 
-                             parprior=parprior, verbose=verbose, debug=debug, free.start=free.start,
-                             technical=technical, parnumber=parnumber)
-        if(RETURNFREEPARS || RETURNSTARTVALUES) next
-        if(RETURNPARINDEX){
-            tmp <- PrepList[[g]][[length(PrepList[[g]])]]
-            parnumber <- tmp[length(tmp)] + 1
-            next            
-        }
-        tmp <- PrepList[[g]]$pars[[length(PrepList[[g]]$pars)]]
-        parnumber <- tmp@parnum[length(tmp@parnum)] + 1
-    }    
-    if(RETURN){
-        names(PrepList) <- groupNames
-        return(PrepList)
-    }      
-    pars <- vector('list', ngroups)
-    for(g in 1:ngroups)
-        pars[[g]] <- PrepList[[g]]$pars
-    J <- length(PrepList[[1]]$itemtype)
-    nfact <- PrepList[[1]]$pars[[J+1]]@nfact
-    nLambdas <- PrepList[[1]]$pars[[1]]@nfact
-    if(is.null(constrain)) constrain <- list()         
-    #default MG uses configural model (independent groups but each identified)        
-    if('free_means' %in% invariance ){ #Free factor means (means 0 for ref)
-        for(g in 2:ngroups)
-            pars[[g]][[J + 1]]@est[1:nfact] <- TRUE             
-    }    
-    if('free_varcov' %in% invariance){ #Free factor vars and covs (vars 1 for ref)        
-        for(g in 2:ngroups)
-            pars[[g]][[J + 1]]@est[(nfact+1):length(pars[[g]][[J + 1]]@est)] <- TRUE            
-    } 
-    constrain <- UpdateConstrain(pars=pars, constrain=constrain, invariance=invariance, nfact=nfact, 
-                                 nLambdas=nLambdas, J=J, ngroups=ngroups)    
-    if(!is.null(technical$return_newconstrain)) return(constrain)    
-    startlongpars <- c()
-    if(method == 'EM'){
-        esttype <- 'EM'
-        if(method == 'EM' && nLambdas > nfact) 
-            stop('Polynominals and product terms not supported for EM method')
-        if (is.null(quadpts)) quadpts <- ceiling(40/(nfact^1.5))
-        Theta <- theta <- as.matrix(seq(-4,4,length.out = quadpts))
-        if(quadpts^nfact <= MAXQUAD){
-            Theta <- thetaComb(theta,nfact)    	
-        } else stop('Greater than ', MAXQUAD, ' quadrature points.')
-        ESTIMATE <- EM.group(pars=pars, constrain=constrain, PrepList=PrepList,
-                               list = list(NCYCLES=NCYCLES, TOL=TOL, MSTEPMAXIT=MSTEPMAXIT,
-                                           nfactNames=PrepList[[1]]$nfactNames, 
-                                           itemloc=PrepList[[1]]$itemloc,
-                                           nfact=nfact, constrain=constrain, verbose=verbose), 
-                               Theta=Theta, debug=debug)
-        startlongpars <- ESTIMATE$longpars
-        logLik <- ESTIMATE$logLik
-        SElogLik <- 0                
-        ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, PrepList=PrepList,
-                      list = list(NCYCLES=NCYCLES, BURNIN=1, SEMCYCLES=5,
-                                  KDRAWS=KDRAWS, TOL=.01, USEEM=USEEM, gain=gain, 
-                                  nfactNames=PrepList[[1]]$nfactNames, 
-                                  itemloc=PrepList[[1]]$itemloc,  
-                                  nfact=nfact, constrain=constrain, verbose=FALSE,
-                                  startlongpars=startlongpars), 
-                      debug=debug)                 
-    } else if(method == 'MHRM'){
-        esttype <- 'MHRM'
-        ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, PrepList=PrepList,
-                               list = list(NCYCLES=NCYCLES, BURNIN=BURNIN, SEMCYCLES=SEMCYCLES,
-                                           KDRAWS=KDRAWS, TOL=TOL, USEEM=FALSE, gain=gain, 
-                                           nfactNames=PrepList[[1]]$nfactNames, 
-                                           itemloc=PrepList[[1]]$itemloc,  
-                                           nfact=nfact, constrain=constrain, verbose=verbose,
-                                           startlongpars=startlongpars), 
-                               debug=debug)        
-    }   
-    cmods <- list()
-    for(g in 1:ngroups){
-        lambdas <- Lambdas(ESTIMATE$pars[[g]])
-        if (nfact > 1) norm <- sqrt(1 + rowSums(lambdas[ ,1:nfact]^2))
-        else norm <- as.matrix(sqrt(1 + lambdas[ ,1]^2))  
-        alp <- as.matrix(lambdas[ ,1:nfact]/norm)
-        F <- alp
-        colnames(F) <- PrepList[[g]]$factorNames
-        h2 <- rowSums(F^2)
-        cmods[[g]] <- new('ConfirmatoryClass', pars=ESTIMATE$pars[[g]], itemloc=PrepList[[g]]$itemloc, 
-                          tabdata=PrepList[[g]]$tabdata2, data=data[group == groupNames[[g]], ], 
-                          converge=ESTIMATE$converge, esttype='MHRM', F=F, h2=h2,                
-                          K=PrepList[[g]]$K, tabdatalong=PrepList[[g]]$tabdata, nfact=nfact, 
-                          constrain=constrain,
-                          fulldata=PrepList[[g]]$fulldata, factorNames=PrepList[[g]]$factorNames)        
-    }            
-    if(method =='MHRM'){
-        if(verbose) cat("\nCalculating log-likelihood...\n")
-        flush.console()      
-        LLs <- matrix(0, ngroups, 2)
-        for(g in 1:ngroups)
-            LLs[g, ] <- calcLogLik(cmods[[g]], draws, G2 = 'return')[1:2]       
-        LL <- colSums(LLs)  
-        logLik <- LL[1]
-        SElogLik <- LL[2]
-    } 
-    r <- PrepListFull$tabdata
-    r <- r[, ncol(r)]
-    N <- sum(r)
-    logN <- 0
-    logr <- rep(0,length(r))
-    for (i in 1:N) logN <- logN + log(i)
-    for (i in 1:length(r)) 
-        for (j in 1:r[i]) 
-            logr[i] <- logr[i] + log(j)    		
-    if(sum(logr) != 0)		
-        logLik <- logLik + logN/sum(logr)							
-    nestpars <- nconstr <- 0
-    for(g in 1:ngroups)
-        for(i in 1:(J+1))
-            nestpars <- nestpars + sum(pars[[g]][[i]]@est)
-    if(length(constrain) > 0)
-        for(i in 1:length(constrain))
-            nconstr <- nconstr + length(constrain[[i]]) - 1     
-    nmissingtabdata <- sum(is.na(rowSums(PrepListFull$tabdata2)))
-    df <- length(r) - nestpars + nconstr + nfact*(nfact - 1)/2 - 1 - nmissingtabdata	
-    AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
-    BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)    			    	    
-    mod <- new('MultipleGroupClass', iter=ESTIMATE$cycles, cmods=cmods, itemloc=PrepListFull$itemloc, 
-               tabdata=PrepListFull$tabdata2, data=data, converge=ESTIMATE$converge, esttype=esttype,                
-               K=PrepListFull$K, tabdatalong=PrepListFull$tabdata, constrain=constrain,               
-               group=group, groupNames=groupNames, invariance=invariance, df=as.integer(df),
-               logLik=logLik, SElogLik=SElogLik, AIC=AIC, BIC=BIC, information=ESTIMATE$info, 
-               Call=Call)  
-    return(mod)        
+    Call <- match.call()        
+    mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, 
+                      itemtype=itemtype, guess=guess, upper=upper, nested.mod=prev.mod, 
+                      pars=pars, constrain=constrain, SE=SE, SEtol=SEtol, grsm.block=grsm.block,
+                      parprior=parprior, quadpts=quadpts, method=method,
+                      technical = technical, debug = debug, verbose = verbose, ...)
+    if(is(mod, 'MultipleGroupClass'))
+        mod@Call <- Call
+    return(mod)    
 }

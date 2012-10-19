@@ -16,6 +16,8 @@
 #' a-posteriori (\code{"EAP"}), Bayes modal (\code{"MAP"}), or maximum likelihood 
 #' (\code{"ML"})
 #' @param quadpts number of quadratures to use per dimension
+#' @param response.vector an optional argument used to calculate the factor scores and standard errors
+#' for a given response vector that may or may not have been in the original dataset 
 #' @param verbose logical; print verbose output messages?
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords factor.scores
@@ -29,14 +31,15 @@
 #' fullscores <- fscores(mod, full.scores = TRUE)
 #' fullscores <- fscores(mod, full.scores = TRUE, method='MAP')
 #' 
-#' 
+#' #calculate MAP for a given response vector
+#' fscores(mod, method='MAP', response.vector = c(1,2,3,4))
 #'   }
 #'
 fscores <- function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-                    quadpts = NULL, verbose = TRUE)
+                    quadpts = NULL, response.vector = NULL, verbose = TRUE)
 {
     ret <- fscores.internal(object=object, rotate=rotate, full.scores=full.scores, method=method, 
-                            quadpts=quadpts, verbose=verbose)
+                            quadpts=quadpts, response.vector=response.vector, verbose=verbose)
     ret    
 }
 
@@ -50,28 +53,44 @@ setMethod(
 	f = "fscores.internal",
 	signature = 'ExploratoryClass',
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-                          quadpts = NULL, verbose = TRUE)
-	{           
+                          quadpts = NULL, response.vector = NULL, verbose = TRUE)
+	{          
+        if(!is.null(response.vector)){            
+            if(!is.matrix(response.vector)) response.vector <- matrix(response.vector, nrow = 1)
+            v <- response.vector
+            newdata <- rbind(object@data, v)
+            nfact <- object@nfact 
+            newmod <- mirt(newdata, nfact, technical = list(TOL = 10))
+            newmod@pars <- object@pars
+            tabdata <- newmod@tabdata
+            index <- rep(FALSE, nrow(tabdata))
+            for(i in 1:nrow(v)){
+                vfull <-  matrix(v[i, ], nrow(tabdata), ncol(v), byrow = TRUE)
+                index[rowSums(tabdata[,1:ncol(v)] == vfull) == ncol(v)] <- TRUE                
+            }            
+            newmod@tabdata <- newmod@tabdata[index, , drop = FALSE]
+            newmod@tabdatalong <- newmod@tabdatalong[index, , drop = FALSE]
+            ret <- fscores(newmod, rotate=rotate, full.scores=FALSE, method=method, 
+                           quadpts=quadpts, verbose=FALSE)
+            ret <- ret[, -(ncol(ret) - nfact*2)]            
+            return(ret)
+        }
         pars <- object@pars        
 		K <- object@K        
         J <- length(K)        
         prodlist <- attr(pars, 'prodlist')
-        nfact <- object@nfact - length(prodlist)
+        nfact <- object@nfact
         nLambdas <- object@nfact
         itemloc <- object@itemloc
         gp <- ExtractGroupPars(object@pars[[length(itemloc)]])
-        if(!pars[[1]]@bfactor && rotate != 'CONFIRMATORY'){
+        if(rotate != 'CONFIRMATORY'){
             so <- summary(object, rotate = rotate, verbose = FALSE)            
             a <- rotateLambdas(so)
+            for(i in 1:J)
+                object@pars[[i]]@par[1:nfact] <- a[i, ]            
             gp$gmeans <- rep(0, nfact)
             gp$gcov <- so$fcor
-        } else {
-            a <- matrix(0, J, nLambdas)
-            for(i in 1:J){
-                a[i, ] <- ExtractLambdas(pars[[i]])            
-                pars[[i]]@bfactor <- FALSE
-            }
-        }        			
+        }               			        
         if (is.null(quadpts)) quadpts <- ceiling(40/(nfact^1.5))
 		theta <- as.matrix(seq(-4,4,length.out = quadpts))
 		ThetaShort <- Theta <- thetaComb(theta,nfact)         
@@ -79,7 +98,7 @@ setMethod(
             Theta <- prodterms(Theta,prodlist)
 		fulldata <- object@data 
 		tabdata <- object@tabdatalong
-		tabdata <- tabdata[ ,-ncol(tabdata)]
+		tabdata <- tabdata[ ,-ncol(tabdata), drop = FALSE]
 		SEscores <- scores <- matrix(0, nrow(tabdata), nfact)			                
 		W <- mvtnorm::dmvnorm(ThetaShort,gp$gmeans,gp$gcov) 
 		W <- W/sum(W)                
@@ -104,9 +123,11 @@ setMethod(
 				SEscores[i, ] <- SEest
 			}  
 		}
-		if(method == "ML"){            				 
-			tmp2 <- tabdata[,itemloc[-1] - 1]			             
-			scores[rowSums(tmp2) == J,] <- scores[rowSums(tmp2) == 0,] <- NA
+		if(method == "ML"){            		            
+			tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]			             
+			scores[rowSums(tmp2) == J,] <- NA
+            tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
+            scores[rowSums(tmp2) == J,] <- NA
 			SEscores[is.na(scores[,1]), ] <- rep(NA, nfact)
 			for (i in 1:nrow(scores)){
 				if(any(is.na(scores[i, ]))) next 
@@ -126,10 +147,24 @@ setMethod(
             scoremat <- .Call("fullScores", object@fulldata, tabdata2, scores)			 
 			colnames(scoremat) <- colnames(scores)	
 			return(cbind(fulldata,scoremat))
-		} else {						
-			if(verbose) cat("\nMethod: ", method,"\n\n")
+		} else {						            
+            r <- object@tabdata[,ncol(object@tabdata)]            
+            T <- E <- matrix(NA, 1, ncol(scores))
+            for(i in 1:nrow(scores)){
+                T <- rbind(T, matrix(rep(scores[i, ], r[i]), ncol=ncol(scores), byrow = TRUE))
+                E <- rbind(E, matrix(rep(SEscores[i, ], r[i]), ncol=ncol(scores), byrow = TRUE))
+            }            
+            T <- na.omit(T)
+            E <- na.omit(E)
+            reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))
+            names(reliability) <- colnames(scores)
+			if(verbose){
+                cat("\nMethod: ", method)                
+                cat("\n\nEmpirical Reliability:\n")
+                print(round(reliability, 4))                
+			}
 			colnames(SEscores) <- paste('SE_', colnames(scores), sep='')
-			return(cbind(object@tabdata,scores,SEscores))				
+			return(cbind(object@tabdata,scores,SEscores))
 		}   
 	}  
 )
@@ -139,11 +174,11 @@ setMethod(
 	f = "fscores.internal",
 	signature = 'ConfirmatoryClass',
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-	                      quadpts = NULL, verbose = TRUE)
+	                      quadpts = NULL, response.vector = NULL, verbose = TRUE)
 	{ 	        
         class(object) <- 'ExploratoryClass'
         ret <- fscores(object, rotate = 'CONFIRMATORY', full.scores=full.scores, method=method, quadpts=quadpts, 
-                       verbose=verbose)
+                       response.vector=response.vector, verbose=verbose)
         return(ret)
 	}	
 )
@@ -153,7 +188,7 @@ setMethod(
     f = "fscores.internal",
     signature = 'MultipleGroupClass',
     definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-                          quadpts = NULL, verbose = TRUE)
+                          quadpts = NULL, response.vector = NULL, verbose = TRUE)
     { 	        
         cmods <- object@cmods
         ngroups <- length(cmods)

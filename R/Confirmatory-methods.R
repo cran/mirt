@@ -7,11 +7,12 @@ setMethod(
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
             "\n\n", sep = "")
         cat("Full-information item factor analysis with ", x@nfact, " factors \n", sep="")
+        EMquad <- ''
+        if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
         if(x@converge == 1)    
-            cat("Converged in ", x@iter, " iterations.\n", sep="")
+            cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
         else 	
-            cat("Estimation stopped after ", x@iter, " iterations.\n", sep="")
-        
+            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")        
         if(length(x@logLik) > 0){
             cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0, 
                                                                paste(', SE = ', round(x@SElogLik,3)),
@@ -45,6 +46,8 @@ setMethod(
         nfact <- ncol(object@F)
         itemnames <- names(object@h2)	
         F <- object@F
+        h2 <- as.matrix(object@h2)
+        colnames(h2) <- 'h2'
         rownames(F) <- itemnames								
         SS <- apply(F^2,2,sum)
         gpars <- ExtractGroupPars(object@pars[[length(object@pars)]])
@@ -53,7 +56,7 @@ setMethod(
         colnames(Phi) <- rownames(Phi) <- paste('F',1:ncol(Phi), sep='')
         if(verbose){
             cat("\nFactor loadings metric: \n")
-            print(cbind(F),digits)		
+            print(cbind(F, h2),digits)		
             cat("\nSS loadings: ",round(SS,digits), "\n")		
             cat("\nFactor correlations: \n")
             print(Phi)
@@ -65,7 +68,7 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'ConfirmatoryClass',
-    definition = function(object, allpars = FALSE, digits = 3, verbose = TRUE, ...)
+    definition = function(object, allpars = TRUE, digits = 3, verbose = TRUE, ...)
     {                             
         K <- object@K
         J <- length(K)
@@ -87,8 +90,10 @@ setMethod(
                     colnames(allPars[[i]]) <- names(object@pars[[i]]@parnum)
                 }
             } else {
-                for(i in 1:(J+1))
+                for(i in 1:(J+1)){
                     allPars[[i]] <- round(object@pars[[i]]@par, digits)
+                    names(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                }
             }                  
             names(allPars) <- c(rownames(a), 'GroupPars')                
         }        
@@ -117,14 +122,14 @@ setMethod(
 setMethod(
     f = "residuals",
     signature = signature(object = 'ConfirmatoryClass'),
-    definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, verbose = TRUE, ...)
+    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, printvalue = NULL, 
+                          verbose = TRUE, ...)
     { 
         K <- object@K        
         data <- object@data    
         N <- nrow(data)	
         J <- ncol(data)
         nfact <- ncol(object@F) - length(attr(object@pars, 'prodlist'))
-        if(object@pars[[1]]@bfactor) nfact <- 2
         itemloc <- object@itemloc
         res <- matrix(0,J,J)
         diag(res) <- NA
@@ -134,9 +139,11 @@ setMethod(
         ThetaShort <- Theta
         if(length(object@prodlist) > 0) Theta <- prodterms(Theta, object@prodlist)
         gpars <- ExtractGroupPars(object@pars[[length(object@pars)]])
-        if(object@pars[[1]]@bfactor) prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
-            else prior <- mvtnorm::dmvnorm(ThetaShort,gpars$gmeans,gpars$gcov)        
-        prior <- prior/sum(prior)       	               
+        prior <- mvtnorm::dmvnorm(ThetaShort,gpars$gmeans,gpars$gcov)        
+        prior <- prior/sum(prior)  
+        df <- (object@K - 1) %o% (object@K - 1)
+        diag(df) <- NA
+        colnames(df) <- rownames(df) <- colnames(res)
         if(restype == 'LD'){	
             for(i in 1:J){								
                 for(j in 1:J){			
@@ -152,11 +159,17 @@ setMethod(
                         if(s == 0) s <- 1				
                         res[j,i] <- sum(((tab - Etab)^2)/Etab) /
                             ((K[i] - 1) * (K[j] - 1)) * sign(s)
-                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))	
+                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))
+                        df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                     }
                 }
-            }	
-            if(verbose) cat("LD matrix:\n\n")	
+            }	            
+            if(df.p){
+                cat("Degrees of freedom (lower triangle) and p-values:\n\n")
+                print(round(df, digits))
+                cat("\n")
+            }
+            if(verbose) cat("LD matrix (lower triangle) and standardized values:\n\n")	
             res <- round(res,digits)
             return(res)
         } 

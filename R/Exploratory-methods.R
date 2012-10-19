@@ -7,12 +7,12 @@ setMethod(
             "\n\n", sep = "")
         cat("Full-information factor analysis with ", ncol(x@F), " factor",
             if(ncol(x@F)>1) "s", "\n", sep="")
+        EMquad <- ''
+        if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
         if(x@converge == 1)	
-            cat("Converged in ", x@iter, " iterations using ", x@quadpts,
-                " quadrature points.\n", sep="")
+            cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
         else 	
-            cat("Estimation stopped after ", x@iter, " iterations using ", 
-                x@quadpts, " quadrature points.\n", sep="")
+            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
         cat("Log-likelihood =", x@logLik, "\n")
         cat("AIC =", x@AIC, "\n")		
         cat("BIC =", x@BIC, "\n")
@@ -76,12 +76,12 @@ setMethod(
                 colnames(Phi) <- rownames(Phi) <- colnames(F)                
             }			
             if(verbose){
-                cat("\nFactor correlations: \n\n")
-                print(Phi)
-                cat("\nRotation: ", rotate, "\n")
+                cat("\nRotation: ", rotate, "\n")                            
                 cat("\nRotated factor loadings: \n\n")
                 print(loads,digits)
                 cat("\nRotated SS loadings: ",round(SS,digits), "\n")		
+                cat("\nFactor correlations: \n\n")
+                print(Phi)
             }
             if(any(h2 > 1)) 
                 warning("Solution has heywood cases. Interpret with caution.") 
@@ -93,7 +93,7 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'ExploratoryClass',
-    definition = function(object, rotate = '', Target = NULL, allpars = FALSE, digits = 3, 
+    definition = function(object, rotate = '', Target = NULL, allpars = TRUE, digits = 3, 
                           verbose = TRUE, ...){         
         K <- object@K
         J <- length(K)
@@ -105,7 +105,9 @@ setMethod(
         if (ncol(a) > 1){ 
             rotname <- ifelse(rotate == '', object@rotate, rotate)
             so <- summary(object, rotate = rotate, Target = Target, verbose = FALSE, ...)             
-            a <- rotateLambdas(so)
+            a <- rotateLambdas(so)            
+            for(i in 1:J)
+                object@pars[[i]]@par[1:nfact] <- a[i, ] 
         }   
         rownames(a) <- colnames(object@data)
         if(nfact > 1){
@@ -125,8 +127,10 @@ setMethod(
                     colnames(allPars[[i]]) <- names(object@pars[[i]]@parnum)
                 } 
             } else {
-                for(i in 1:(J+1))
+                for(i in 1:(J+1)){
                     allPars[[i]] <- round(object@pars[[i]]@par, digits)
+                    names(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                }
             }                  
             names(allPars) <- c(rownames(a), 'GroupPars')
         }        
@@ -169,7 +173,8 @@ setMethod(
 setMethod(
     f = "residuals",
     signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, restype = 'LD', digits = 3, printvalue = NULL, verbose = TRUE, ...)
+    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, printvalue = NULL, 
+                          verbose = TRUE, ...)
     {   	
         K <- object@K        
         data <- object@data	
@@ -182,7 +187,10 @@ setMethod(
         colnames(res) <- rownames(res) <- colnames(data)
         Theta <- object@Theta
         prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
-        prior <- prior/sum(prior)       	               
+        prior <- prior/sum(prior) 
+        df <- (object@K - 1) %o% (object@K - 1)
+        diag(df) <- NA
+        colnames(df) <- rownames(df) <- colnames(res)
         if(restype == 'LD'){	
             for(i in 1:J){								
                 for(j in 1:J){			
@@ -198,11 +206,19 @@ setMethod(
                         if(s == 0) s <- 1				
                         res[j,i] <- sum(((tab - Etab)^2)/Etab) /
                             ((K[i] - 1) * (K[j] - 1)) * sign(s)
-                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))	
+                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))
+                        df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                     }
                 }
             }	
-            if(verbose) cat("LD matrix:\n\n")	
+            if(df.p){
+                cat("Degrees of freedom (lower triangle) and p-values:\n\n")
+                print(round(df, digits))
+                cat("\n")
+            }
+            if(verbose) cat("LD matrix (lower triangle) and standardized values:\n\n")    
+            res <- round(res,digits)
+            return(res)	
             res <- round(res,digits)
             return(res)
         } 
@@ -241,13 +257,16 @@ setMethod(
         if(nfact == 1) theta_angle <- 0        
         J <- length(x@pars) - 1        
         theta <- seq(-4,4,length.out=npts)             
-        Theta <- thetaComb(theta, nfact)        
+        ThetaFull <- Theta <- thetaComb(theta, nfact)        
+        prodlist <- attr(x@pars, 'prodlist')
+        if(length(prodlist) > 0)        
+            ThetaFull <- prodterms(Theta,prodlist)        
         info <- 0        
         for(l in 1:length(theta_angle)){
             ta <- theta_angle[l]
             if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
             for(i in 1:J)
-                info <- info + iteminfo(x=x@pars[[i]], Theta=Theta, degrees=ta)            
+                info <- info + iteminfo(x=x@pars[[i]], Theta=ThetaFull, degrees=ta)            
         }
         plt <- data.frame(cbind(info,Theta))
         if(nfact == 2){						

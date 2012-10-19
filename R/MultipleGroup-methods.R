@@ -7,19 +7,26 @@ setMethod(
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
             "\n\n", sep = "")
         cat("Full-information item factor analysis with ", x@nfact, " factors \n", sep="")
+        EMquad <- ''
+        if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
         if(x@converge == 1)    
-            cat("Converged in ", x@iter, " iterations.\n", sep="")
-        else 	
-            cat("Estimation stopped after ", x@iter, " iterations.\n", sep="")
-        
+            cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
+        else     
+            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")        
         if(length(x@logLik) > 0){
             cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0, 
                                                                paste(', SE = ', round(x@SElogLik,3)),
-                                                               ''), "\n",sep='')			
-            cat("df =", x@df, "\n")
+                                                               ''), "\n",sep='')			            
             cat("AIC =", x@AIC, "\n")			
             cat("BIC =", x@BIC, "\n")            	
         }		
+        if(!is.nan(x@p))
+            cat("G^2 = ", round(x@G2,2), ", df = ", 
+                x@df, ", p = ", round(x@p,4), "\nTLI = ", round(x@TLI,3),
+                ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
+        else 
+            cat("G^2 = ", NA, ", df = ", 
+                x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")
     } 
 )
 
@@ -43,13 +50,20 @@ setMethod(
         J <- length(itemnames)
         for(g in 1:ngroups){              
             allPars[[g]] <- list()
-            for(i in 1:(J+1)){
-                allPars[[g]][[i]] <- round(matrix(c(object@cmods[[g]]@pars[[i]]@par, 
-                                               object@cmods[[g]]@pars[[i]]@SEpar), 
-                                         2, byrow = TRUE), digits)
-                rownames(allPars[[g]][[i]]) <- c('pars', 'SE')
-                colnames(allPars[[g]][[i]]) <- names(object@cmods[[g]]@pars[[i]]@parnum)
-            }                       
+            if(length(object@cmods[[1]]@pars[[1]]@SEpar) > 0){
+                for(i in 1:(J+1)){
+                    allPars[[g]][[i]] <- round(matrix(c(object@cmods[[g]]@pars[[i]]@par, 
+                                                   object@cmods[[g]]@pars[[i]]@SEpar), 
+                                             2, byrow = TRUE), digits)
+                    rownames(allPars[[g]][[i]]) <- c('pars', 'SE')
+                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[g]]@pars[[i]]@parnum)
+                }
+            } else {
+                for(i in 1:(J+1)){
+                    allPars[[g]][[i]] <- round(object@cmods[[g]]@pars[[i]]@par, digits)
+                    names(allPars[[g]][[i]]) <- names(object@cmods[[g]]@pars[[i]]@parnum)            
+                }
+            }                      
             names(allPars[[g]]) <- c(itemnames, 'GroupPars')                
         }
         return(allPars)                  	

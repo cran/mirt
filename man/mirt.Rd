@@ -10,18 +10,18 @@
 Theory)}
 \usage{
   mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-    SE = TRUE, free.start = NULL, startvalues = NULL,
-    constrain = NULL, freepars = NULL, parprior = NULL,
-    rotate = 'varimax', Target = NULL, prev.cor = NULL,
-    quadpts = NULL, verbose = FALSE, debug = FALSE,
-    technical = list(), ...)
+    SE = FALSE, SEtol = .001, pars = NULL, constrain =
+    NULL, parprior = NULL, rotate = 'varimax', Target =
+    NaN, prev.cor = NULL, quadpts = NULL, grsm.block =
+    NULL, verbose = FALSE, debug = FALSE, technical =
+    list(), ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
     TRUE, ...)
 
   \S4method{coef}{ExploratoryClass}(object, rotate = '',
-    Target = NULL, allpars = FALSE, digits = 3, verbose =
+    Target = NULL, allpars = TRUE, digits = 3, verbose =
     TRUE, ...)
 
   \S4method{anova}{ExploratoryClass}(object, object2)
@@ -34,8 +34,8 @@ Theory)}
     yaxis = 30, zaxis = 10), ...)
 
   \S4method{residuals}{ExploratoryClass}(object, restype =
-    'LD', digits = 3, printvalue = NULL, verbose = TRUE,
-    ...)
+    'LD', digits = 3, df.p = FALSE, printvalue = NULL,
+    verbose = TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -51,19 +51,34 @@ Theory)}
   \item{itemtype}{type of items to be modeled, declared as
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
-  items are ordinal or 2PL, however they may be changed to
-  the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
-  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
-  'partcomp', for the Rasch/partial credit, 1 and 2
-  parameter logistic, 3 parameter logistic (lower asymptote
-  and upper), 4 parameter logistic, graded response model,
-  generalized partial credit model, nominal model, multiple
-  choice model, and partially compensatory model,
-  respectively. If \code{NULL} the default assumes that the
-  data follow a '2PL' or 'graded' format}
+  items follow a graded or 2PL structure, however they may
+  be changed to the following: 'Rasch', '1PL', '2PL',
+  '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm',
+  'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the
+  Rasch/partial credit, 1 and 2 parameter logistic, 3
+  parameter logistic (lower asymptote and upper), 4
+  parameter logistic, graded response model, rating scale
+  graded response model, generalized partial credit model,
+  nominal model, multiple choice model, and 2-3PL partially
+  compensatory model, respectively}
+
+  \item{grsm.block}{an optional numeric vector indicating
+  where the blocking should occur when using the grsm, NA
+  represents items that do not belong to the grsm block
+  (other items that may be estimated in the test data). For
+  example, to specify two blocks of 3 with a 2PL item for
+  the last item: \code{grsm.block = c(rep(1,3), rep(2,3),
+  NA)}. If NULL the all items are assumed to be within the
+  same group and therefore have the same number of item
+  categories}
 
   \item{SE}{logical, estimate the standard errors? Calls
   the MHRM subroutine for a stochastic approximation}
+
+  \item{SEtol}{tollerance value used to stop the MHRM
+  estimation when \code{SE = TRUE}. Lower values will take
+  longer but may be more stable for computing the
+  information matrix}
 
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
@@ -74,18 +89,6 @@ Theory)}
   Can be entered as a single value to assign a global
   guessing parameter or may be entered as a numeric vector
   corresponding to each item}
-
-  \item{free.start}{a list containing the start value and
-  logical indicating whether a given parameter is to be
-  freely estimated. Each element of the list consists of
-  three components, the parameter number, the starting (or
-  fixed) value, and a logical to indicate whether the
-  parameter is free. For example, \code{free.start =
-  list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter
-  20 to 0 while parameter 10 would be freely estimated with
-  a starting value of 1.5. Note that this will override the
-  values specified by a user defined \code{startvalues} or
-  \code{freepars} input for the specified parameters}
 
   \item{prev.cor}{use a previously computed correlation
   matrix to be used to estimate starting values for the EM
@@ -107,18 +110,18 @@ Theory)}
 
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
-  correctly use \code{constrain = 'index'} initially to see
-  how the parameters are labeled. To constrain parameters
-  to be equal create a list with separate concatenated
-  vectors signifying which parameters to constrain. For
-  example, to set parameters 1 and 5 equal, and also set
-  parameters 2, 6, and 10 equal use \code{constrain =
-  list(c(1,5), c(2,6,10))}}
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. To constrain parameters to be
+  equal create a list with separate concatenated vectors
+  signifying which parameters to constrain. For example, to
+  set parameters 1 and 5 equal, and also set parameters 2,
+  6, and 10 equal use \code{constrain = list(c(1,5),
+  c(2,6,10))}}
 
   \item{parprior}{a list of user declared prior item
   probabilities. To see how to define the parameters
-  correctly use \code{parprior = 'index'} initially to see
-  how the parameters are labeled. Can define either normal
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
   guessing and upper bounds) prior probabilities. Note that
   for upper bounds the value used in the prior is 1 - u so
@@ -128,23 +131,12 @@ Theory)}
   'norm', mean, sd))} and betas are \code{parprior =
   list(c(parnumber, 'beta', alpha, beta))}.}
 
-  \item{freepars}{a list of user declared logical values
-  indicating which parameters to estimate. To see how to
-  define the parameters correctly use \code{freepars =
-  'index'} initially to see how the parameters are labeled.
-  These values may be modified and input back into the
-  function by using \code{freepars=newfreepars}. Note that
-  user input values must match what the default structure
-  would have been}
-
-  \item{startvalues}{a list of user declared start values
-  for parameters. To see how to define the parameters
-  correctly use \code{startvalues = 'index'} initially to
-  see what the defaults would noramlly be. These values may
-  be modified and input back into the function by using
-  \code{startavlues=newstartvalues}. Note that user input
-  values must match what the default structure would have
-  been}
+  \item{pars}{a data.frame with the structure of how the
+  starting values, parameter numbers, and estimation
+  logical values are defined. The user may observe how the
+  model defines the values by using \code{pars = 'values'},
+  and this object can in turn be modified and input back
+  into the estimation with \code{pars = mymodifiedpars}}
 
   \item{quadpts}{number of quadrature points per dimension}
 
@@ -194,6 +186,9 @@ Theory)}
   either \code{'LD'} for a local dependence matrix (Chen &
   Thissen, 1997) or \code{'exp'} for the expected values
   for the frequencies of every response pattern}
+
+  \item{df.p}{logical; print the degrees of freedom and
+  p-values?}
 
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
@@ -312,16 +307,22 @@ Theory)}
   categories:
 
   \describe{ \item{Rasch}{ Only one intercept estimated.
-  Note the 1.702 constant. \deqn{P(x = 1|\theta, d) =
-  \frac{1}{1 + exp(-1.702 * (\theta + d}))} } \item{1-4PL}{
-  Depending on the model \eqn{u} may be equal to 1 and
-  \eqn{g} may be equal to 0. \deqn{P(x = 1|\theta, \psi) =
-  g + \frac{(u - g)}{1 + exp(-1.702 * (a_1 * \theta_1 + a_2
-  * \theta_2 + d}))} } \item{graded}{ The graded model
-  consists of sequential 2PL models, and here \eqn{k} is
-  the predicted category. \deqn{P(x = k | \theta, \psi) =
-  P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
-  \phi)} } \item{gpcm/nominal}{For the gpcm the \eqn{d_k}
+  \deqn{P(x = 1|\theta, d) = \frac{1}{1 + exp(-1*(\theta +
+  d}))} } \item{1-4PL}{ Depending on the model \eqn{u} may
+  be equal to 1 and \eqn{g} may be equal to 0. \deqn{P(x =
+  1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-1.702 *
+  (a_1 * \theta_1 + a_2 * \theta_2 + d}))} } \item{graded}{
+  The graded model consists of sequential 2PL models, and
+  here \eqn{k} is the predicted category. \deqn{P(x = k |
+  \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
+  | \theta, \phi)} } \item{grsm}{ A more constrained
+  version of the graded model where graded spacing is equal
+  accross item blocks and only adjusted by a single
+  'difficulty' parameter (c). Again, \deqn{P(x = k |
+  \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
+  | \theta, \phi)}#' but now \deqn{P = \frac{1}{1 +
+  exp(-1.702 * (a_1 * \theta_1 + a_2 * \theta_2 + d_k +
+  c}))} } \item{gpcm/nominal}{For the gpcm the \eqn{d_k}
   values are treated as fixed and orderd values from
   0:(k-1) (in the nominal model \eqn{d_0} is also set to
   0). Additionally, for identification in the nominal model
@@ -358,9 +359,9 @@ plot(mod1) #test information function
 
 #estimated 3PL model for item 5 only
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
-coef(mod1.3PL, allpars = TRUE)
+coef(mod1.3PL)
 
-(mod2 <- mirt(data, 2))
+(mod2 <- mirt(data, 2, SE = TRUE))
 summary(mod2, rotate = 'oblimin')
 coef(mod2)
 residuals(mod2)
@@ -381,20 +382,19 @@ anova(cmod, mod2)
 
 ###########
 #data from the 'ltm' package in numeric format
-pmod1 <- mirt(Science, 1, SE = FALSE)
+pmod1 <- mirt(Science, 1)
 plot(pmod1)
 summary(pmod1)
 
 #Constrain all slopes to be equal
 #first obtain parameter index
-mirt(Science,1, constrain = 'index') #note that slopes are numbered 1,5,9,13
+values <- mirt(Science,1, pars = 'values')
+values #note that slopes are numbered 1,5,9,13
 (pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
 coef(pmod1_equalslopes)
-#manually fix the first slope to .6
-(pmod1_fixedslope <- mirt(Science, 1, free.start = list(c(1, .6, FALSE))))
 
 pmod2 <- mirt(Science, 2)
-coef(pmod2)
+summary(pmod2)
 residuals(pmod2)
 plot(pmod2, theta_angle = seq(0,90, by = 5)) #sum across angles of theta 1
 itemplot(pmod2, 1)
@@ -419,6 +419,24 @@ mod2g <- mirt(data, 2, guess = .1)
 coef(mod2g)
 anova(mod1g, mod2g)
 summary(mod2g, rotate='promax')
+
+###########
+#graded rating scale example
+
+#make some data
+a <- matrix(rep(1/1.702, 10))
+d <- matrix(c(1,0.5,-.5,-1), 10, 4, byrow = TRUE)
+c <- seq(-1, 1, length.out=10)
+data <- simdata(a, d + c, 2000, itemtype = rep('graded',10))
+
+#use much better start values to save iterations
+sv <- mirt(data, 1, itemtype = 'grsm', pars = 'values')
+sv[,5] <- c(as.vector(t(cbind(a,d,c))),0,1)
+
+mod1 <- mirt(data, 1)
+mod2 <- mirt(data, 1, itemtype = 'grsm', verbose = TRUE, pars = sv)
+coef(mod2)
+anova(mod2, mod1) #not sig, mod2 should be prefered
 }
 }
 \author{
