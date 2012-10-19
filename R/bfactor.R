@@ -54,14 +54,16 @@
 #' @param parprior a list of user declared prior item probabilities. To see how to define the
 #' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' Can define either normal (normally for slopes and intercepts) or beta (for guessing and upper bounds) prior
-#' probabilities. Note that for upper bounds the value used in the prior is 1 - u so that the lower and upper 
-#' bounds can function the same. To specify a prior the form is c('priortype', ...), where normal priors 
-#' are \code{parprior = list(c(parnumber, 'norm', mean, sd))} and betas are 
+#' probabilities. To specify a prior the form is c('priortype', ...), where normal priors 
+#' are \code{parprior = list(c(parnumbers, 'norm', mean, sd))} and betas are 
+#' \code{parprior = list(c(parnumbers, 'beta', alpha, beta))}
 #' \code{parprior = list(c(parnumber, 'beta', alpha, beta))}. 
 #' @param pars a data.frame with the structure of how the starting values, parameter numbers, and estimation
 #' logical values are defined. The user may observe how the model defines the values by using \code{pars = 
 #' 'values'}, and this object can in turn be modified and input back into the estimation with \code{pars = 
 #' mymodifiedpars}
+#' @param D a numeric value used to adjust the logistic metric to be more similar to a normal
+#' cumulative density curve. Default is 1.702
 #' @param prev.cor uses a previously computed correlation matrix to be used to
 #' estimate starting values for the EM estimation
 #' @param quadpts number of quadrature points per dimension. 
@@ -97,7 +99,7 @@
 #' @usage
 #' bfactor(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001, pars = NULL,
 #' constrain = NULL, parprior = NULL,
-#' prev.cor = NULL, quadpts = 20, grsm.block = NULL, verbose = FALSE, debug = FALSE, 
+#' prev.cor = NULL, quadpts = 20, grsm.block = NULL, D = 1.702, verbose = FALSE, debug = FALSE, 
 #' technical = list(), ...)
 #' 
 #'
@@ -165,16 +167,16 @@
 #'     }
 #' 
 bfactor <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,
-                    pars = NULL, constrain = NULL, parprior = NULL,
-                     prev.cor = NULL, quadpts = 20, grsm.block = NULL, verbose = FALSE, debug = FALSE, 
-                     technical = list(), ...)
+                    pars = NULL, constrain = NULL, parprior = NULL, prev.cor = NULL, quadpts = 20, 
+                    grsm.block = NULL, D = 1.702, verbose = FALSE, debug = FALSE, 
+                    technical = list(), ...)
 {         
     if(debug == 'Main') browser()
     Call <- match.call()		    
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)), 
                       itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
                       pars=pars, method = 'EM', constrain=constrain, SE = SE, SEtol=SEtol,
-                      parprior=parprior, quadpts=quadpts, 
+                      parprior=parprior, quadpts=quadpts, D=D,
                       technical = technical, debug = debug, verbose = verbose, 
                       BFACTOR = TRUE, ...)
     if(is(mod, 'ConfirmatoryClass') || is(mod, 'MultipleGroupClass'))

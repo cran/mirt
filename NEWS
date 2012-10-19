@@ -1,4 +1,38 @@
 ----------------------------------------------------------------
+mirt 0.4.2
+----------------------------------------------------------------
+
+* item probability functions now only permit permissible values, and models may converge even when
+  the log-likelihood decreases during estimation. In the EM if the model does not have a strictly 
+  increasing log-likelihood then a warning message will be printed
+
+* infit and outfit statistics are now only applicable to Rasch models (as they should be), 
+  and in itemfit/personfit() a 'method' argument has been added to specify which factor score 
+  estimates should be used
+
+* read.mirt() re-added into the package to allow for translating estimated models into a format
+  usable by the plink package
+
+* test standard error added to plot() generic using type = 'SE', and expected score plot added 
+  to itemplot() using type = 'score'
+
+* weighted likelihood estimation (WLE) factor scores now available (without standard errors)
+
+* removed the allpars option to coef() generics and only return a named list with the (possibly 
+  rotated) item and group coefficients
+
+* information functions slightly positively biased due to logistic constant adjustment, 
+  fixed for all models. Also, information functions are now available for almost all item response models
+  (mcm items missing)
+
+* constant (D) used in estimating logistic functions can now be modified (default is still 1.702)
+
+* partcomp models recently broken, fixed now
+
+* more than one parameter can now be passed to parprior to make specifying identical priors more 
+  convenient 
+
+----------------------------------------------------------------
 mirt 0.4.1
 ----------------------------------------------------------------
 
@@ -150,7 +184,7 @@ mirt 0.2.6-1
   function for better maintenance
 
 * theta_angle added to mirt and polymirt plots for changing the viewing angle 
-  w.r..t theta_1 
+  w.r.t theta_1 
 
 * null model no longer calculated when missing data present
 

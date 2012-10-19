@@ -121,14 +121,16 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
                         pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] <- 1
                     if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] < 0) 
                         pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- 0
+                }            
+                #apply sum(t) == 1 constraint for mcm
+                if(is(pars[[g]][[i]], 'mcm')){
+                    tmp <- pars[[g]][[i]]@par
+                    cat <- pars[[g]][[i]]@ncat
+                    tmp2 <- (length(tmp) - (cat-1)):length(tmp) 
+                    Num <- exp(tmp[tmp2])
+                    tmp <- Num/sum(Num)                                    
+                    pars[[g]][[i]]@par[tmp2] <- tmp
                 }
-            }
-            #apply sum(t) == 1 constraint for mcm
-            if(is(pars[[g]][[i]], 'mcm')){
-                tmp <- pars[[g]][[i]]@par
-                tmp[length(tmp) - pars[[g]][[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
-                    pars[[g]][[i]]@ncat + 2)])
-                pars[[g]][[i]]@par <- tmp
             }
         }        
         for(g in 1:ngroups)
@@ -173,8 +175,11 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
         grad <- g %*% L 
         ave.h <- (-1)*L %*% h %*% L 			       
         grad <- grad[1, estpars & !redun_constr]		
-        ave.h <- ave.h[estpars & !redun_constr, estpars & !redun_constr] 
-        if(is.na(attr(gtheta0[[1]],"log.lik"))) stop('Estimation halted. Model did not converge.')		
+        ave.h <- ave.h[estpars & !redun_constr, estpars & !redun_constr]
+        if(any(is.na(grad))) 
+            stop('Model did not converge (unacceptable gradient caused by extreme parameter values)')   
+        if(is.na(attr(gtheta0[[1]],"log.lik"))) 
+            stop('Estimation halted. Model did not converge.')		
         if(verbose){
             if((cycles + 1) %% 10 == 0){
                 if(cycles < BURNIN)
@@ -189,15 +194,19 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             }
         }			
         if(stagecycle < 3){	
-            ave.h <- as(ave.h,'sparseMatrix')
-            inv.ave.h <- try(solve(ave.h))			
+            ave.h <- Matrix(ave.h, sparse = TRUE)
+            inv.ave.h <- try(Matrix::solve(ave.h), silent = TRUE)			            
             if(class(inv.ave.h) == 'try-error'){
-                inv.ave.h <- try(qr.solve(ave.h + 2*diag(ncol(ave.h))))
+                inv.ave.h <- ave.h 
+                tmp <- .1*diag(inv.ave.h)
+                tmp[tmp < 1] <- 1
+                diag(inv.ave.h) <- diag(inv.ave.h) + tmp
+                inv.ave.h <- try(solve(inv.ave.h))
                 noninvcount <- noninvcount + 1
                 if(noninvcount == 3) 
                     stop('\nEstimation halted during burn in stages, solution is unstable')
             }
-            correction <- as.numeric(inv.ave.h %*% grad)
+            correction <- as.vector(inv.ave.h %*% grad)
             correction[correction > .5] <- 1
             correction[correction < -.5] <- -1
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction           
@@ -217,15 +226,19 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
         
         #Step 3. Update R-M step		
         Tau <- Tau + gamma*(ave.h - Tau)
-        Tau <- as(Tau,'sparseMatrix')	
-        inv.Tau <- solve(Tau)
+        Tau <- Matrix(Tau, sparse = TRUE)	
+        inv.Tau <- try(solve(Tau), silent = TRUE)
         if(class(inv.Tau) == 'try-error'){
-            inv.Tau <- try(qr.solve(Tau + 2 * diag(ncol(Tau))))
+            inv.Tau <- Tau
+            tmp <- .1*diag(inv.Tau)
+            tmp[tmp < 1] <- 1
+            diag(inv.Tau) <- diag(inv.Tau) + tmp
+            inv.Tau <- try(solve(inv.Tau))
             noninvcount <- noninvcount + 1
-            if(noninvcount == 3) 
+            if(noninvcount == 5) 
                 stop('\nEstimation halted during stage 3, solution is unstable')
         }		
-        correction <-  as.numeric(inv.Tau %*% grad)
+        correction <- as.vector(inv.Tau %*% grad)
         longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction           
         if(length(constrain) > 0)
             for(i in 1:length(constrain))
@@ -246,7 +259,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             info <- matrix(0, length(grad), length(grad))
         }
         phi <- phi + gamma*(grad - phi)
-        info <- info + gamma*(Tau - phi %*% t(phi) - info)		
+        info <- info + gamma*(as.matrix(Tau) - phi %*% t(phi) - info)		
     } ###END BIG LOOP       
     #Reload final pars list
     if(list$USEEM) longpars <- list$startlongpars
@@ -265,9 +278,11 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             #apply sum(t) == 1 constraint for mcm
             if(is(pars[[g]][[i]], 'mcm')){
                 tmp <- pars[[g]][[i]]@par
-                tmp[length(tmp) - pars[[g]][[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
-                    pars[[g]][[i]]@ncat + 2)])
-                pars[[g]][[i]]@par <- tmp
+                cat <- pars[[g]][[i]]@ncat
+                tmp2 <- (length(tmp) - (cat-1)):length(tmp) 
+                Num <- exp(tmp[tmp2])
+                tmp <- Num/sum(Num)                                    
+                pars[[g]][[i]]@par[tmp2] <- tmp
             }
         }        
     }    

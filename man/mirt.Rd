@@ -13,16 +13,15 @@ Theory)}
     SE = FALSE, SEtol = .001, pars = NULL, constrain =
     NULL, parprior = NULL, rotate = 'varimax', Target =
     NaN, prev.cor = NULL, quadpts = NULL, grsm.block =
-    NULL, verbose = FALSE, debug = FALSE, technical =
-    list(), ...)
+    NULL, D = 1.702, verbose = FALSE, debug = FALSE,
+    technical = list(), ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
     TRUE, ...)
 
   \S4method{coef}{ExploratoryClass}(object, rotate = '',
-    Target = NULL, allpars = TRUE, digits = 3, verbose =
-    TRUE, ...)
+    Target = NULL, digits = 3, ...)
 
   \S4method{anova}{ExploratoryClass}(object, object2)
 
@@ -102,8 +101,9 @@ Theory)}
   object is ignored and the new rotation from the list is
   used instead}
 
-  \item{allpars}{logical; print all the item parameters
-  instead of just the slopes?}
+  \item{D}{a numeric value used to adjust the logistic
+  metric to be more similar to a normal cumulative density
+  curve. Default is 1.702}
 
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
@@ -123,13 +123,11 @@ Theory)}
   correctly use \code{pars = 'values'} initially to see how
   the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
-  guessing and upper bounds) prior probabilities. Note that
-  for upper bounds the value used in the prior is 1 - u so
-  that the lower and upper bounds can function the same. To
+  guessing and upper bounds) prior probabilities. To
   specify a prior the form is c('priortype', ...), where
-  normal priors are \code{parprior = list(c(parnumber,
+  normal priors are \code{parprior = list(c(parnumbers,
   'norm', mean, sd))} and betas are \code{parprior =
-  list(c(parnumber, 'beta', alpha, beta))}.}
+  list(c(parnumbers, 'beta', alpha, beta))}}
 
   \item{pars}{a data.frame with the structure of how the
   starting values, parameter numbers, and estimation
@@ -165,10 +163,10 @@ Theory)}
 
   \item{digits}{number of significant digits to be rounded}
 
-  \item{type}{type of plot to view; can be \code{'curve'}
-  for the total test score as a function of two dimensions,
-  or \code{'info'} to show the test information function
-  for two dimensions}
+  \item{type}{type of plot to view; can be \code{'info'} to
+  show the test information function, \code{'infocontour'}
+  for the test information contours, or \code{'SE'} for the
+  test standard error function}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
   used in \code{plot}. If a vector is used then a bubble
@@ -234,13 +232,13 @@ Theory)}
   the \code{GPArotation} package (e.g., \code{rotate =
   'oblimin'}) as well as a \code{'promax'} rotation.
 
-  Using \code{plot} will plot the either the test surface
-  function or the test information function for 1 and 2
-  dimensional solutions. To examine individual item plots
-  use \code{\link{itemplot}}. Residuals are computed using
-  the LD statistic (Chen & Thissen, 1997) in the lower
-  diagonal of the matrix returned by \code{residuals}, and
-  Cramer's V above the diagonal.
+  Using \code{plot} will plot the test information function
+  or the test standard errors for 1 and 2 dimensional
+  solutions. To examine individual item plots use
+  \code{\link{itemplot}}. Residuals are computed using the
+  LD statistic (Chen & Thissen, 1997) in the lower diagonal
+  of the matrix returned by \code{residuals}, and Cramer's
+  V above the diagonal.
 }
 \section{Confirmatory IRT}{
   Specification of the confirmatory item factor analysis
@@ -304,47 +302,47 @@ Theory)}
 \section{IRT Models}{
   The parameter labels use follow the convention, here
   using two factors and \eqn{k} as the number of
-  categories:
+  categories. Throughout all models D is a constant
+  (default 1.702):
 
   \describe{ \item{Rasch}{ Only one intercept estimated.
-  \deqn{P(x = 1|\theta, d) = \frac{1}{1 + exp(-1*(\theta +
-  d}))} } \item{1-4PL}{ Depending on the model \eqn{u} may
+  \deqn{P(x = 1|\theta, d) = \frac{1}{1 + exp(-D*(\theta +
+  d))}} } \item{1-4PL}{ Depending on the model \eqn{u} may
   be equal to 1 and \eqn{g} may be equal to 0. \deqn{P(x =
-  1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-1.702 *
-  (a_1 * \theta_1 + a_2 * \theta_2 + d}))} } \item{graded}{
-  The graded model consists of sequential 2PL models, and
-  here \eqn{k} is the predicted category. \deqn{P(x = k |
+  1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-D * (a_1 *
+  \theta_1 + a_2 * \theta_2 + d))}} } \item{graded}{ The
+  graded model consists of sequential 2PL models, and here
+  \eqn{k} is the predicted category. \deqn{P(x = k |
   \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
   | \theta, \phi)} } \item{grsm}{ A more constrained
   version of the graded model where graded spacing is equal
   accross item blocks and only adjusted by a single
   'difficulty' parameter (c). Again, \deqn{P(x = k |
   \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
-  | \theta, \phi)}#' but now \deqn{P = \frac{1}{1 +
-  exp(-1.702 * (a_1 * \theta_1 + a_2 * \theta_2 + d_k +
-  c}))} } \item{gpcm/nominal}{For the gpcm the \eqn{d_k}
-  values are treated as fixed and orderd values from
-  0:(k-1) (in the nominal model \eqn{d_0} is also set to
-  0). Additionally, for identification in the nominal model
-  \eqn{ak_0 = 1}, \eqn{ak_k = (k - 1)}. \deqn{P(x = k |
-  \theta, \psi) = \frac{exp(-1.702 * ak_k * (a_1 * \theta_1
-  + a_2 * \theta_2) + d_k)} {\sum_i^k exp(-1.702 * ak_k *
-  (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
-  \item{mcm}{For identification \eqn{ak_0 = d_0 = 0} and
-  \eqn{\sum_0^k t_k = 1}. \deqn{P(x = k | \theta, \psi) =
-  C_0 (\theta) * t_k + (1 - C_0 (\theta)) *
-  \frac{exp(-1.702 * ak_k * (a_1 * \theta_1 + a_2 *
-  \theta_2) + d_k} {\sum_i^k exp(-1.702 * ak_k * (a_1 *
+  | \theta, \phi)} but now \deqn{P = \frac{1}{1 + exp(-D *
+  (a_1 * \theta_1 + a_2 * \theta_2 + d_k + c))}} }
+  \item{gpcm/nominal}{For the gpcm the \eqn{d_k} values are
+  treated as fixed and orderd values from 0:(k-1) (in the
+  nominal model \eqn{d_0} is also set to 0). Additionally,
+  for identification in the nominal model \eqn{ak_0 = 1},
+  \eqn{ak_k = (k - 1)}. \deqn{P(x = k | \theta, \psi) =
+  \frac{exp(-D * ak_k * (a_1 * \theta_1 + a_2 * \theta_2) +
+  d_k)} {\sum_i^k exp(-D * ak_k * (a_1 * \theta_1 + a_2 *
+  \theta_2) + d_k)}} } \item{mcm}{For identification
+  \eqn{ak_0 = d_0 = 0} and \eqn{\sum_0^k t_k = 1}.
+  \deqn{P(x = k | \theta, \psi) = C_0 (\theta) * t_k + (1 -
+  C_0 (\theta)) * \frac{exp(-D * ak_k * (a_1 * \theta_1 +
+  a_2 * \theta_2) + d_k)} {\sum_i^k exp(-D * ak_k * (a_1 *
   \theta_1 + a_2 * \theta_2) + d_k)}}
 
-  where \eqn{C_0 (\theta) = \frac{exp(-1.702 * ak_0 * (a_1
-  * \theta_1 + a_2 * \theta_2) + d_0} {\sum_i^k exp(-1.702
-  * ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
+  where \eqn{C_0 (\theta) = \frac{exp(-D * ak_0 * (a_1 *
+  \theta_1 + a_2 * \theta_2) + d_0)} {\sum_i^k exp(-D *
+  ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
   \item{partcomp}{Partially compensatory models consist of
   the products of 2PL probability curves. \deqn{P(x = 1 |
-  \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-1.702 *
-  (a_1 * \theta_1 + d_1} * \frac{1}{1 + exp(-1.702 * (a_2 *
-  \theta_2 + d_2}))} } }
+  \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-D * (a_1 *
+  \theta_1 + d_1))} * \frac{1}{1 + exp(-D * (a_2 * \theta_2
+  + d_2))})} } }
 }
 \examples{
 \dontrun{
@@ -407,18 +405,23 @@ data <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 
 mod1 <- mirt(data, 1)
-mod2 <- mirt(data, 2)
-mod3 <- mirt(data, 3)
+mod2 <- mirt(data, 2, quadpts = 15)
+mod3 <- mirt(data, 3, quadpts = 10)
 anova(mod1,mod2)
 anova(mod2, mod3) #negative AIC, 2 factors probably best
 
 #with fixed guessing parameters
 mod1g <- mirt(data, 1, guess = .1)
 coef(mod1g)
-mod2g <- mirt(data, 2, guess = .1)
-coef(mod2g)
-anova(mod1g, mod2g)
-summary(mod2g, rotate='promax')
+
+#with estimated guessing and beta priors (for better stability)
+itemtype <- rep('3PL', 32)
+sv <- mirt(data, 1, itemtype, pars = 'values')
+gindex <- sv$parnum[sv$name == 'g']
+parprior <- list(c(gindex, 'beta', 10, 90))
+mod1wg <- mirt(data, 1, itemtype, guess = .1, parprior=parprior, verbose=TRUE)
+coef(mod1wg)
+anova(mod1g, mod1wg)
 
 ###########
 #graded rating scale example

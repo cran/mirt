@@ -45,6 +45,8 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     }
     stagecycle <- 1    
     converge <- 1
+    LLwarn <- FALSE
+    inverse_fail_count <- 1
     ##
     L <- c()    
     for(g in 1:ngroups)
@@ -72,7 +74,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     for(g in 1:ngroups)
         r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]
     #EM     
-    for (cycles in 1:NCYCLES){        
+    for (cycles in 1:NCYCLES){  
         #priors
         for(g in 1:ngroups){
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1]])        
@@ -103,6 +105,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             }
             LL <- LL + sum(r[[g]]*log(rlist[[g]]$expected))
         }
+        if(LL < lastLL && cycles > 1) LLwarn <- TRUE
         for(g in 1:ngroups){
             for(i in 1:J){
                 tmp <- c(itemloc[i]:(itemloc[i+1] - 1))
@@ -123,7 +126,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         for(mstep in 1:MSTEPMAXIT){                        
             #Reload pars list
             ind1 <- 1
-            for(g in 1:ngroups){
+            for(g in 1:ngroups){                
                 for(i in 1:(J+1)){
                     ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1
                     pars[[g]][[i]]@par <- longpars[ind1:ind2]
@@ -133,14 +136,16 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                             pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] <- 1
                         if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] < 0) 
                             pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- 0
+                    }    
+                    #apply sum(t) == 1 constraint for mcm
+                    if(is(pars[[g]][[i]], 'mcm')){                
+                        tmp <- pars[[g]][[i]]@par
+                        cat <- pars[[g]][[i]]@ncat
+                        tmp2 <- (length(tmp) - (cat-1)):length(tmp) 
+                        Num <- exp(tmp[tmp2])
+                        tmp <- Num/sum(Num)                                    
+                        pars[[g]][[i]]@par[tmp2] <- tmp
                     }
-                }
-                #apply sum(t) == 1 constraint for mcm
-                if(is(pars[[g]][[i]], 'mcm')){
-                    tmp <- pars[[g]][[i]]@par
-                    tmp[length(tmp) - pars[[g]][[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
-                        pars[[g]][[i]]@ncat + 2)])
-                    pars[[g]][[i]]@par <- tmp
                 }
             }
             #reset longpars and gradient
@@ -167,15 +172,23 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                 ind1 <- ind2 + 1
             }
             grad <- g %*% L 
-            hess <- L %*% h %*% L 			       
-            grad <- grad[1, estpars & !redun_constr]		
-            hess <- hess[estpars & !redun_constr, estpars & !redun_constr]            
-            inv.hess <- try(solve(hess))    		
-            if(class(inv.hess) == 'try-error'){                                                
-                diag(hess) <- 1.2*diag(hess)
-                inv.hess <- try(solve(hess))                
+            hess <- L %*% h %*% L 			                   
+            grad <- grad[1, estpars & !redun_constr]
+            if(any(is.na(grad))) 
+                stop('Model did not converge (unacceptable gradient caused by extreme parameter values)')            
+            Hess <- Matrix(hess[estpars & !redun_constr, estpars & !redun_constr], sparse = TRUE)            
+            inv.Hess <- try(solve(Hess), silent = TRUE)        	                        
+            if(class(inv.Hess) == 'try-error'){             
+                if(inverse_fail_count == 5) 
+                    stop('Hessian is not invertable. Likelihood surface is likely too flat.') 
+                inverse_fail_count <- inverse_fail_count + 1
+                inv.Hess <- Hess
+                tmp <- .1*diag(inv.Hess)
+                tmp[tmp > -25] <- -.25
+                diag(inv.Hess) <- diag(inv.Hess) + tmp
+                inv.Hess <- try(solve(inv.Hess))                
             }
-            correction <- as.numeric(inv.hess %*% grad)  
+            correction <- as.vector(inv.Hess %*% grad)
             #keep steps smaller
             correction[correction > stepLimit] <- stepLimit
             correction[correction < -stepLimit] <- -stepLimit
@@ -201,30 +214,11 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         for(g in 1:ngroups)
             for(i in 1:J) 
                 listpars[[g]][[i]] <- pars[[g]][[i]]@par         
-    } #END EM      
-    #Reload pars list
-    ind1 <- 1
-    for(g in 1:ngroups){
-        for(i in 1:(J+1)){
-            ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1
-            pars[[g]][[i]]@par <- longpars[ind1:ind2]
-            ind1 <- ind2 + 1       
-            if(any(class(pars[[g]][[i]]) == c('dich', 'partcomp'))){
-                if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] > 1) 
-                    pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] <- 1
-                if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] < 0) 
-                    pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- 0
-            }
-        }
-        #apply sum(t) == 1 constraint for mcm
-        if(is(pars[[g]][[i]], 'mcm')){
-            tmp <- pars[[g]][[i]]@par
-            tmp[length(tmp) - pars[[g]][[i]]@ncat + 1] <- 1 - sum(tmp[length(tmp):(length(tmp) - 
-                pars[[g]][[i]]@ncat + 2)])
-            pars[[g]][[i]]@par <- tmp
-        }
-    } 
+    } #END EM          
     
+    if(LLwarn && !list$NULL.MODEL) 
+        warning('Log-likelihood did not strictly decrease during estimation. 
+                Solution may not be a maximum.')
     ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                 logLik=LL, rlist=rlist)
     ret

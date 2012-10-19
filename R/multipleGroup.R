@@ -39,6 +39,8 @@
 #' numeric vector corresponding to each item
 #' @param SE logical, estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation.
 #' Only applicable when \code{method = 'EM'} since the MHRM method calculates them automatically
+#' @param D a numeric value used to adjust the logistic metric to be more similar to a normal
+#' cumulative density curve. Default is 1.702
 #' @param SEtol tollerance value used to stop the MHRM estimation when \code{SE = TRUE}. Lower values
 #' will take longer but may be more stable for computing the information matrix
 #' @param verbose logical; display iteration history during estimation?
@@ -72,10 +74,9 @@
 #' @param parprior a list of user declared prior item probabilities. To see how to define the
 #' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' Can define either normal (normally for slopes and intercepts) or beta (for guessing and upper bounds) prior
-#' probabilities. Note that for upper bounds the value used in the prior is 1 - u so that the lower and upper 
-#' bounds can function the same. To specify a prior the form is c('priortype', ...), where normal priors 
-#' are \code{parprior = list(c(parnumber, 'norm', mean, sd))} and betas are 
-#' \code{parprior = list(c(parnumber, 'beta', alpha, beta))}. 
+#' probabilities. To specify a prior the form is c('priortype', ...), where normal priors 
+#' are \code{parprior = list(c(parnumbers, 'norm', mean, sd))} and betas are 
+#' \code{parprior = list(c(parnumbers, 'beta', alpha, beta))}
 #' @param pars a data.frame with the structure of how the starting values, parameter numbers, and estimation
 #' logical values are defined. The user may observe how the model defines the values by using \code{pars = 
 #' 'values'}, and this object can in turn be modified and input back into the estimation with \code{pars = 
@@ -111,7 +112,7 @@
 #' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,  
 #' invariance = '', pars = NULL, method = 'MHRM', constrain = NULL, 
 #' parprior = NULL, draws = 2000, quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
-#' technical = list(), debug = FALSE, verbose = TRUE, ...)
+#' D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
 #' 
 #' \S4method{coef}{MultipleGroupClass}(object, digits = 3, verbose = TRUE, ...)
 #'
@@ -147,7 +148,9 @@
 #' mod_scalar1 <- multipleGroup(dat, models, group = group, method = 'EM', #fixed means
 #'                              invariance=c('slopes', 'intercepts', 'free_varcov'),
 #'                              prev.mod = mod_configural)    
-#' mod_fullconstrain <- mirt(dat, models) #fix variance (equivalent to full constrain)
+#' mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'EM', 
+#'                              invariance=c('slopes', 'intercepts'),
+#'                              prev.mod = mod_configural)   
 #' 
 #' anova(mod_metric, mod_configural) #equal slopes only
 #' anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
@@ -197,7 +200,8 @@
 #' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #' mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
 #'                              invariance=c('slopes', 'intercepts', 'free_varcov'))    
-#' mod_fullconstrain <- confmirt(dat, models)
+#' mod_fullconstrain <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
+#'                              invariance=c('slopes', 'intercepts'))
 #' 
 #' anova(mod_metric, mod_configural)
 #' anova(mod_scalar, mod_metric)
@@ -209,14 +213,14 @@ multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper 
                           method = 'MHRM', constrain = NULL, 
                           parprior = NULL, draws = 2000, 
                           quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
-                          technical = list(), debug = FALSE, verbose = TRUE, ...)
+                          D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
 {   
     if(debug == 'Main') browser()
     Call <- match.call()        
     mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, 
                       itemtype=itemtype, guess=guess, upper=upper, nested.mod=prev.mod, 
                       pars=pars, constrain=constrain, SE=SE, SEtol=SEtol, grsm.block=grsm.block,
-                      parprior=parprior, quadpts=quadpts, method=method,
+                      parprior=parprior, quadpts=quadpts, method=method, D=D, 
                       technical = technical, debug = debug, verbose = verbose, ...)
     if(is(mod, 'MultipleGroupClass'))
         mod@Call <- Call

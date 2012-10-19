@@ -3,7 +3,7 @@
 \title{Item fit statistics}
 \usage{
   itemfit(x, X2 = FALSE, group.size = 150,
-    empirical.plot = NULL, degrees = NULL)
+    empirical.plot = NULL, method = "EAP")
 }
 \arguments{
   \item{x}{a computed model object of class
@@ -22,30 +22,34 @@
   when \code{type = 'X2'}. The default is \code{NULL},
   therefore no plots are drawn}
 
-  \item{degrees}{the degrees angle to be passed to the
-  \code{\link{iteminfo}} function}
+  \item{method}{type of factor score estimation method. Can
+  be expected a-posteriori (\code{"EAP"}), Bayes modal
+  (\code{"MAP"}), weighted likelihood estimation
+  (\code{"WLE"}), or maximum likelihood (\code{"ML"})}
 }
 \description{
   \code{itemfit} calculates the Zh values from Drasgow,
-  Levine and Williams (1985), infits, and outfits for
-  unidimensional and multidimensional models, and
-  \eqn{\chi^2} values for unidimensional models.
+  Levine and Williams (1985) and \eqn{\chi^2} values for
+  unidimensional models. For Rasch models infit and outfit
+  statistics are also produced.
 }
 \examples{
 \dontrun{
 
 #make some data
 set.seed(1234)
-a <- matrix(rnorm(20),ncol=1)
+a <- matrix(rlnorm(20, meanlog=0, sdlog = .1),ncol=1)
 d <- matrix(rnorm(20),ncol=1)
 items <- rep('dich', 20)
 data <- simdata(a,d, 2000, items)
 
 x <- mirt(data, 1)
+raschfit <- mirt(data, 1, itemtype='Rasch')
 fit <- itemfit(x)
 fit
 
-itemfit(x, type = 'X2', empirical.plot = 1) #empirical item plot
+itemfit(x, empirical.plot = 1) #empirical item plot
+itemfit(raschfit, method = 'ML') #infit and outfit stats (method='ML' agrees better with eRm package)
 
   }
 }

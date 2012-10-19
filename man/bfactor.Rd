@@ -5,8 +5,8 @@
   bfactor(data, model, itemtype = NULL, guess = 0, upper =
     1, SE = FALSE, SEtol = .001, pars = NULL, constrain =
     NULL, parprior = NULL, prev.cor = NULL, quadpts = 20,
-    grsm.block = NULL, verbose = FALSE, debug = FALSE,
-    technical = list(), ...)
+    grsm.block = NULL, D = 1.702, verbose = FALSE, debug =
+    FALSE, technical = list(), ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -76,13 +76,12 @@
   correctly use \code{pars = 'values'} initially to see how
   the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
-  guessing and upper bounds) prior probabilities. Note that
-  for upper bounds the value used in the prior is 1 - u so
-  that the lower and upper bounds can function the same. To
+  guessing and upper bounds) prior probabilities. To
   specify a prior the form is c('priortype', ...), where
-  normal priors are \code{parprior = list(c(parnumber,
+  normal priors are \code{parprior = list(c(parnumbers,
   'norm', mean, sd))} and betas are \code{parprior =
-  list(c(parnumber, 'beta', alpha, beta))}.}
+  list(c(parnumbers, 'beta', alpha, beta))} \code{parprior
+  = list(c(parnumber, 'beta', alpha, beta))}.}
 
   \item{pars}{a data.frame with the structure of how the
   starting values, parameter numbers, and estimation
@@ -90,6 +89,10 @@
   model defines the values by using \code{pars = 'values'},
   and this object can in turn be modified and input back
   into the estimation with \code{pars = mymodifiedpars}}
+
+  \item{D}{a numeric value used to adjust the logistic
+  metric to be more similar to a normal cumulative density
+  curve. Default is 1.702}
 
   \item{prev.cor}{uses a previously computed correlation
   matrix to be used to estimate starting values for the EM
