@@ -1,13 +1,17 @@
 EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
-{
-    if(debug == 'EM.group') browser()
+{    
+    if(debug == 'EM') browser()
     verbose <- list$verbose        
     nfact <- list$nfact
     NCYCLES <- list$NCYCLES    
     MSTEPMAXIT <- list$MSTEPMAXIT
     TOL <- list$TOL    
+    BFACTOR <- list$BFACTOR
     itemloc <- list$itemloc
     ngroups <- length(pars)
+    specific <- list$specific
+    sitems <- list$sitems
+    theta <- list$theta
     J <- length(itemloc) - 1
     nfullpars <- 0
     estpars <- c()
@@ -63,26 +67,40 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
              paste(redindex[diag(L)[!estpars] > 0]), ' but should only be applied to 
                  estimated parameters. Please fix!')
     }   
-    prior <- gstructgrouppars <- rlist <- r <- list()
+    Prior <- prior <- gstructgrouppars <- rlist <- r <- list()    
     LL <- 0
     for(g in 1:ngroups)
         r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]
     #EM     
-    for (cycles in 1:NCYCLES){                
+    for (cycles in 1:NCYCLES){        
         #priors
         for(g in 1:ngroups){
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1]])        
-            prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
+            if(BFACTOR){
+                prior[[g]] <- dnorm(theta, 0, 1)
+                prior[[g]] <- prior[[g]]/sum(prior[[g]])
+                Prior[[g]] <- mvtnorm::dmvnorm(Theta[,1:2])
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])                
+                next  
+            } 
+            Prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
                                            gstructgrouppars[[g]]$gcov)
-            prior[[g]] <- prior[[g]]/sum(prior[[g]])
+            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
         #Estep
         lastLL <- LL
         LL <- 0
         for(g in 1:ngroups){
-            rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
-                                     Theta=Theta, prior=prior[[g]], itemloc=itemloc, 
-                                     debug=debug)            
+            if(BFACTOR){
+                rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
+                                            Theta=Theta, prior=prior[[g]],
+                                            specific=specific, sitems=sitems, 
+                                            itemloc=itemloc, debug=debug)
+            } else {
+                rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
+                                         Theta=Theta, prior=Prior[[g]], itemloc=itemloc, 
+                                         debug=debug)                      
+            }
             LL <- LL + sum(r[[g]]*log(rlist[[g]]$expected))
         }
         for(g in 1:ngroups){
@@ -102,7 +120,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         preMstep.longpars <- longpars
         lastgrad <- 0
         stepLimit <- .1        
-        for(mstep in 1:MSTEPMAXIT){            
+        for(mstep in 1:MSTEPMAXIT){                        
             #Reload pars list
             ind1 <- 1
             for(g in 1:ngroups){
@@ -130,8 +148,8 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             h <- matrix(0, nfullpars, nfullpars)
             ind1 <- 1                    
             for(group in 1:ngroups){
-                for (i in 1:J){	                
-                    deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, EM = TRUE)
+                for (i in 1:J){                    
+                    deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, EM = TRUE, prior=Prior[[group]])
                     ind2 <- ind1 + length(deriv$grad) - 1
                     longpars[ind1:ind2] <- pars[[group]][[i]]@par
                     g[ind1:ind2] <- pars[[group]][[i]]@gradient <- deriv$grad
@@ -151,18 +169,18 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             grad <- g %*% L 
             hess <- L %*% h %*% L 			       
             grad <- grad[1, estpars & !redun_constr]		
-            hess <- hess[estpars & !redun_constr, estpars & !redun_constr]                         
+            hess <- hess[estpars & !redun_constr, estpars & !redun_constr]            
             inv.hess <- try(solve(hess))    		
-            if(class(inv.hess) == 'try-error'){                                
-                converge <- 0
-                inv.hess <- try(solve(hess - diag(ncol(hess))))
+            if(class(inv.hess) == 'try-error'){                                                
+                diag(hess) <- 1.2*diag(hess)
+                inv.hess <- try(solve(hess))                
             }
             correction <- as.numeric(inv.hess %*% grad)  
             #keep steps smaller
             correction[correction > stepLimit] <- stepLimit
             correction[correction < -stepLimit] <- -stepLimit
             longpars[estindex_unique] <- longpars[estindex_unique] - correction                       
-            if(mstep > 4){
+            if(mstep > 1){
                 if (any(grad*lastgrad < 0.0)){    				# any changed sign
                     newcorrection <- rep(0, length(correction))
                     newcorrection[grad*lastgrad < 0.0] <- .5*correction[grad*lastgrad < 0.0]
@@ -176,10 +194,10 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             if(length(constrain) > 0)
                 for(i in 1:length(constrain))
                     longpars[index %in% constrain[[i]][-1]] <- longpars[constrain[[i]][1]]
-            if(all(abs(correction) < .001)) break            
+            if(all(abs(correction) < .0001)) break            
             if(is.list(debug)) print(longpars[debug[[1]]])
         }#END MSTEP        
-        if(all(abs(preMstep.longpars - longpars) < TOL) | abs(lastLL - LL) < .05) break 
+        if(all(abs(preMstep.longpars - longpars) < TOL) || abs(lastLL - LL) < .01 ) break 
         for(g in 1:ngroups)
             for(i in 1:J) 
                 listpars[[g]][[i]] <- pars[[g]][[i]]@par         
@@ -208,7 +226,42 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     } 
     
     ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
-                logLik=LL)
+                logLik=LL, rlist=rlist)
     ret
 }
 
+# Estep for mirt
+Estep.mirt <- function(pars, tabdata, Theta, prior, itemloc, debug, deriv = FALSE) 
+{   
+    if(debug == 'Estep.mirt') browser()
+    nfact <- ncol(Theta)
+    nquad <- nrow(Theta)    
+    J <- length(itemloc) - 1
+    r <- tabdata[ ,ncol(tabdata)]
+    X <- tabdata[ ,1:(ncol(tabdata) - 1)]    
+    itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))	
+    for (i in 1:J)
+        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+    retlist <- .Call("Estep", itemtrace, prior, X, nfact, r)    
+    if(deriv) retlist$itemtrace <- itemtrace        
+    return(retlist)
+} 
+
+# Estep for bfactor
+Estep.bfactor <- function(pars, tabdata, Theta, prior, specific, sitems, itemloc, debug) 
+{	    
+    if(debug == 'Estep.bfactor') browser()
+    J <- length(itemloc) - 1
+    r <- tabdata[ ,ncol(tabdata)]
+    X <- tabdata[ ,1:(ncol(tabdata) - 1)]	
+    itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))	
+    for (i in 1:J)
+        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)			
+    retlist <- .Call("Estepbfactor", itemtrace, prior, X, r, sitems)	
+    r1 <- matrix(0, nrow(Theta), ncol(X))	
+    for (i in 1:J){
+        r1[ ,itemloc[i]:(itemloc[i+1]-1)] <- 		
+            retlist$r1[ ,itemloc[i]:(itemloc[i+1]-1) + (specific[i] - 1)*ncol(X) ]		        
+    }
+    return(list(r1=r1, expected=retlist$expected))	
+}      

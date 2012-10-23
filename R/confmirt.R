@@ -60,54 +60,43 @@
 #' @param upper initial (or fixed) upper bound parameters for 4-PL model. Can be 
 #' entered as a single value to assign a global upper bound parameter or may be entered as a 
 #' numeric vector corresponding to each item
-#' @param free.start a list containing the start value and logical indicating whether a given parameter 
-#' is to be freely estimated. Each element of the list consists of three components, the parameter
-#' number, the starting (or fixed) value, and a logical to indicate whether the parameter is free. For
-#' example, \code{free.start = list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter 20 to 0 while
-#' parameter 10 would be freely estimated with a starting value of 1.5. Note that this will override 
-#' the values specified by a user defined \code{startvalues} or \code{freepars} input for the specified
-#' parameters
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #' option. Only prints patterns that have standardized residuals greater than 
 #' \code{abs(printvalue)}. The default (NULL) prints all response patterns
 #' @param verbose logical; display iteration history during estimation?
-#' @param calcLL logical; calculate the log-likelihood via Monte Carlo
-#' integration?
 #' @param draws the number of Monte Carlo draws to estimate the log-likelihood
 #' @param allpars logical; print all the item parameters instead of just the slopes?
 #' @param restype type of residuals to be displayed. Can be either \code{'LD'}
 #' for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
 #' expected values for the frequencies of every response pattern
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
-#' which will be repeated globally. The NULL default assumes that the items are ordinal or 2PL,
+#' which will be repeated globally. The NULL default assumes that the items follow a graded or 2PL structure,
 #' however they may be changed to the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu', 
-#' '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and 'partcomp', for the Rasch/partial credit, 1 and 2 parameter logistic, 
+#' '4PL', 'graded', 'grsm', 'gpcm', 'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the Rasch/partial credit, 1 and 2 parameter logistic, 
 #' 3 parameter logistic (lower asymptote and upper), 4 parameter logistic, graded response model, 
-#' generalized partial credit model, nominal model, multiple choice model, and partially compensatory model,
-#' respectively. The default assumes that items follow a '2PL' or 'graded' format
-#' If \code{NULL} the default assumes that the data follow a '2PL' or 'graded' format
+#' rating scale graded response model, generalized partial credit model, nominal model, 
+#' multiple choice model, and 2-3PL partially compensatory model, respectively
+#' @param grsm.block an optional numeric vector indicating where the blocking should occur when using 
+#' the grsm, NA represents items that do not belong to the grsm block (other items that may be estimated
+#' in the test data). For example, to specify two blocks of 3 with a 2PL item for the last item:
+#' \code{grsm.block = c(rep(1,3), rep(2,3), NA)}. If NULL the all items are assumed to be within the same 
+#' group and therefore have the same number of item categories
 #' @param constrain a list of user declared equality constraints. To see how to define the
-#' parameters correctly use \code{constrain = 'index'} initially to see how the parameters are labeled.
+#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' To constrain parameters to be equal create a list with separate concatenated vectors signifying which
 #' parameters to constrain. For example, to set parameters 1 and 5 equal, and also set parameters 2, 6, and 10 equal
 #' use \code{constrain = list(c(1,5), c(2,6,10))}
 #' @param parprior a list of user declared prior item probabilities. To see how to define the
-#' parameters correctly use \code{parprior = 'index'} initially to see how the parameters are labeled.
+#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
 #' Can define either normal (normally for slopes and intercepts) or beta (for guessing and upper bounds) prior
 #' probabilities. Note that for upper bounds the value used in the prior is 1 - u so that the lower and upper 
 #' bounds can function the same. To specify a prior the form is c('priortype', ...), where normal priors 
 #' are \code{parprior = list(c(parnumber, 'norm', mean, sd))} and betas are 
 #' \code{parprior = list(c(parnumber, 'beta', alpha, beta))}. 
-#' @param freepars a list of user declared logical values indicating which parameters to estimate. 
-#' To see how to define the parameters correctly use \code{freepars = 'index'} initially to see how the parameters
-#' are labeled. These values may be modified and input back into the function by using 
-#' \code{freepars=newfreepars}. Note that user input values must match what the default structure 
-#' would have been
-#' @param startvalues a list of user declared start values for parameters. To see how to define the
-#' parameters correctly use \code{startvalues = 'index'} initially to see what the defaults would 
-#' noramlly be. These values may be modified and input back into the function by using 
-#' \code{startavlues=newstartvalues}. Note that user input values must match what the default structure 
-#' would have been
+#' @param pars a data.frame with the structure of how the starting values, parameter numbers, and estimation
+#' logical values are defined. The user may observe how the model defines the values by using \code{pars = 
+#' 'values'}, and this object can in turn be modified and input back into the estimation with \code{pars = 
+#' mymodifiedpars}
 #' @param debug logical; turn on debugging features?
 #' @param object an object of class \code{ConfirmatoryClass}
 #' @param object2 an object of class \code{ConfirmatoryClass}
@@ -120,6 +109,7 @@
 #' statistical software. Default is 0 for no suppression
 #' @param technical list specifying subtle parameters that can be adjusted. These 
 #' values are 
+#' @param df.p logical; print the degrees of freedom and p-values?
 #' @param x an object of class \code{mirt} to be plotted or printed
 #' @param y an unused variable to be ignored
 #' @param type type of plot to view; can be \code{'curve'} for the total test
@@ -168,14 +158,14 @@
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, free.start = NULL, startvalues = NULL, 
-#' constrain = NULL, freepars = NULL, parprior = NULL, verbose = TRUE, calcLL = TRUE, 
+#' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
+#' constrain = NULL, parprior = NULL, grsm.block = NULL, verbose = TRUE, 
 #' draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, 
 #' technical = list(),  ...)
 #' 
 #' \S4method{summary}{ConfirmatoryClass}(object, suppress = 0, digits = 3, verbose = TRUE, ...)
 #' 
-#' \S4method{coef}{ConfirmatoryClass}(object, allpars = FALSE, digits = 3, verbose = TRUE, ...)
+#' \S4method{coef}{ConfirmatoryClass}(object, allpars = TRUE, digits = 3, verbose = TRUE, ...)
 #' 
 #' \S4method{anova}{ConfirmatoryClass}(object, object2)
 #' 
@@ -184,7 +174,7 @@
 #' \S4method{plot}{ConfirmatoryClass}(x, y, type = 'info', npts = 50, theta_angle = 45, 
 #' rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
 #' 
-#' \S4method{residuals}{ConfirmatoryClass}(object, restype = 'LD', digits = 3, printvalue = NULL, 
+#' \S4method{residuals}{ConfirmatoryClass}(object, restype = 'LD', digits = 3, df.p = FALSE, printvalue = NULL, 
 #' verbose = TRUE, ...)
 #'
 #' @export confmirt
@@ -275,83 +265,18 @@
 #' 
 #' }
 #' 
-confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, free.start = NULL,
-                     startvalues = NULL, 
-                     constrain = NULL, freepars = NULL, parprior = NULL, verbose = TRUE, calcLL = TRUE, 
+confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
+                     constrain = NULL, parprior = NULL, grsm.block = NULL, verbose = TRUE, 
                      draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, 
                      technical = list(),  ...)
-{    
+{   
     if(debug == 'Main') browser()
-    ##technical
-	Call <- match.call()               
-	set.seed(12345)	    
-    RETURN <- ifelse(any('index' == c(startvalues, freepars, parprior, constrain)), TRUE, FALSE)
-    NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
-    BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
-    SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
-    KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1, technical$KDRAWS)
-    TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)  
-    EMSE <- ifelse(is.null(technical$EMSE), FALSE, technical$EMSE)
-    if(!is.null(technical$set.seed)) set.seed(technical$set.seed)	
-    gain <- c(0.05,0.5,0.004)
-    if(!is.null(technical$gain)) {
-        if(length(technical$gain) == 3 && is.numeric(technical$gain))
-            gain <- technical$gain
-    }	
-    ##	
-    Target <- ifelse(is.null(Target), NaN, Target)
-    data <- as.matrix(data)
-    parnumber <- 1
-	PrepList <- PrepData(data=data, model=model, itemtype=itemtype, guess=guess, upper=upper, 
-                         startvalues=startvalues, constrain=constrain, freepars=freepars, 
-	                     parprior=parprior, verbose=verbose, debug=debug, free.start=free.start,
-                         technical=technical, parnumber=parnumber)           
-    if(RETURN) return(PrepList)
- 	ESTIMATE <- MHRM(pars=PrepList$pars, 
-                      list=list(NCYCLES=NCYCLES, BURNIN=BURNIN, SEMCYCLES=SEMCYCLES, 
-                                KDRAWS=KDRAWS, TOL=TOL, gain=gain, nfactNames=PrepList$nfactNames, 
-                                itemloc=PrepList$itemloc, fulldata=PrepList$fulldata, 
-                                nfact=PrepList$nfact, npars=PrepList$npars, 
-                                constrain=PrepList$constrain, verbose=verbose), 
-                      debug=debug, startvalues=startvalues, EMSE=EMSE) 
-    if(EMSE) return(ESTIMATE)
-    null.mod <- unclass(mirt(data,1,itemtype='NullModel', SE = FALSE))
-    # pars to FA loadings    
-    pars <- ESTIMATE$pars    
-    nfact <- pars[[1]]@nfact
-    lambdas <- Lambdas(pars)
-    if (nfact > 1) norm <- sqrt(1 + rowSums(lambdas[ ,1:nfact]^2))
-    else norm <- as.matrix(sqrt(1 + lambdas[ ,1]^2))  
-    alp <- as.matrix(lambdas[ ,1:nfact]/norm)
-    if(PrepList$exploratory){
-        FF <- alp %*% t(alp)
-        V <- eigen(FF)$vector[ ,1:nfact]
-        L <- eigen(FF)$values[1:nfact]
-        if (nfact == 1) F <- as.matrix(V * sqrt(L))
-        else F <- V %*% sqrt(diag(L))  
-        if (sum(F[ ,1] < 0)) F <- (-1) * F 
-        colnames(F) <- paste("F_", 1:ncol(F),sep="")    
-        h2 <- rowSums(F^2)
-        mod <- new('ExploratoryClass', iter=ESTIMATE$cycles, pars=ESTIMATE$pars, itemloc=PrepList$itemloc, 
-                   F=F, h2=h2, tabdata=PrepList$tabdata2, data=data, converge=ESTIMATE$converge, esttype='MHRM',                
-                   K=PrepList$K, tabdatalong=PrepList$tabdata, nfact=nfact, constrain=PrepList$constrain,
-                   rotate=rotate, null.mod=null.mod, Target=Target, factorNames=PrepList$factorNames,
-                   fulldata=PrepList$fulldata, information=ESTIMATE$info, longpars=ESTIMATE$longpars, 
-                   Call=Call)
-    } else {
-        F <- alp
-        colnames(F) <- PrepList$factorNames
-        h2 <- rowSums(F^2)       
-        mod <- new('ConfirmatoryClass', iter=ESTIMATE$cycles, pars=ESTIMATE$pars, itemloc=PrepList$itemloc, 
-                   F=F, h2=h2, tabdata=PrepList$tabdata2, data=data, converge=ESTIMATE$converge, esttype='MHRM',                
-                   K=PrepList$K, tabdatalong=PrepList$tabdata, nfact=nfact, constrain=PrepList$constrain,
-                   fulldata=PrepList$fulldata, null.mod=null.mod, factorNames=PrepList$factorNames, 
-                   information=ESTIMATE$info, longpars=ESTIMATE$longpars, Call=Call)
-    }        
-	if(calcLL){
-		if(verbose) cat("\nCalculating log-likelihood...\n")
-		flush.console()
-		mod <- calcLogLik(mod, draws)
-	}	
-	return(mod)
+    Call <- match.call()    
+    mod <- ESTIMATION(data=data, model=model, group = rep('all', nrow(data)), itemtype=itemtype, 
+                      guess=guess, upper=upper, grsm.block=grsm.block,
+                      pars=pars, constrain=constrain, parprior=parprior, verbose=verbose, 
+                      draws=draws, debug=debug, technical = list(),  ...)
+    if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
+        mod@Call <- Call
+    return(mod)    
 }

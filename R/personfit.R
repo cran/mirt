@@ -1,17 +1,16 @@
 #' Person fit statistics
 #' 
 #' \code{personfit} calculates the Zh values from Drasgow, Levine and Williams (1985) for 
-#' unidimensional and multidimensional models. The returned values approximate a standard normal
-#' distribution and therefore p-values are also returned. The returned object is a \code{data.frame}
-#' consisting either of the tabulated data or full data with the Zh and p-values appended to the last 
+#' unidimensional and multidimensional models, as well as infit and outfit statistics. 
+#' The returned object is a \code{data.frame}
+#' consisting either of the tabulated data or full data with the statistics appended to the last 
 #' columns. 
 #' 
 #' 
 #' @aliases personfit
 #' @param x a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or 
 #' \code{MultipleGroupClass}
-#' @param full.scores if \code{FALSE} (default) then a summary table with the Zh and p-values is returned,
-#' otherwise the original data matrix is returned with values appended to the rightmost column 
+#' @param degrees the degrees angle to be passed to the \code{\link{iteminfo}} function
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords person fit
 #' @export personfit
@@ -25,6 +24,9 @@
 #' polychotomous item response models and standardized indices. 
 #' \emph{Journal of Mathematical and Statistical Psychology, 38}, 67-86.
 #' 
+#' Reise, S. P. (1990). A comparison of item- and person-fit methods of assessing model-data fit 
+#' in IRT. \emph{Applied Psychological Measurement, 14}, 127-137.
+#' 
 #' @examples
 #' 
 #' \dontrun{
@@ -36,25 +38,27 @@
 #' items <- rep('dich', 20)
 #' data <- simdata(a,d, 2000, items)
 #'  
-#' x <- mirt(data, 1, SE = FALSE)
-#' tabdatafit <- personfit(x)
-#' head(tabdatafit)
+#' x <- mirt(data, 1)
+#' fit <- personfit(x)
+#' head(fit)
 #' 
 #'   }
 #' 
-personfit <- function(x, full.scores = FALSE){
+personfit <- function(x, degrees = NULL){        
     if(is(x, 'MultipleGroupClass')){
         ret <- list()   
         for(g in 1:length(x@cmods))
-            ret[[g]] <- personfit(x@cmods[[g]], full.scores=full.scores)
+            ret[[g]] <- personfit(x@cmods[[g]], degrees=degrees)
         names(ret) <- names(x@cmods)
         return(ret)
-    }    
+    }
+    full.scores <- TRUE
     sc <- fscores(x, verbose = FALSE, full.scores=full.scores) 
     J <- ncol(x@data)
     itemloc <- x@itemloc
-    nfact <- x@nfact        
     pars <- x@pars
+    prodlist <- attr(pars, 'prodlist')    
+    nfact <- x@nfact + length(prodlist)   
     if(full.scores){
         fulldata <- x@fulldata    
         Theta <- sc[ ,ncol(sc):(ncol(sc) - nfact + 1), drop = FALSE]
@@ -63,11 +67,10 @@ personfit <- function(x, full.scores = FALSE){
         fulldata <- fulldata[,-ncol(fulldata)]
         Theta <- sc[ ,ncol(sc):(ncol(sc) - nfact + 1) - nfact, drop = FALSE]        
     }
-    itemtrace <- matrix(0, ncol=ncol(fulldata), nrow=nrow(Theta))        
-    for (i in 1:J){
-        if(x@pars[[1]]@bfactor) pars[[i]]@bfactor <- FALSE
+    N <- nrow(Theta)
+    itemtrace <- matrix(0, ncol=ncol(fulldata), nrow=N)        
+    for (i in 1:J)
         itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)
-    }
     LL <- itemtrace * fulldata
     LL[LL < 1e-8] <- 1
     LL <- rowSums(log(LL)) 
@@ -85,11 +88,22 @@ personfit <- function(x, full.scores = FALSE){
             }            
         }
         Zh[n] <- (LL[n] - mu) / sqrt(sigma2)
-    }    
-    p <- round(pnorm(Zh), 3) 
-    p[Zh > 0] <- round(pnorm(Zh[Zh>0], lower.tail = FALSE), 3) 
-    if(full.scores) ret <- data.frame(x@data, Zh=Zh, p=p)
-    else ret <- data.frame(x@tabdata, Zh=Zh, p=p)
-    ret
+    }               
+    V <- Z <- info <- matrix(0, ncol=J, nrow=N)        
+    if(is.null(degrees))
+        if(nfact > 1) degrees <- rep(90/nfact, nfact)            
+    for (i in 1:J){
+        P <- ProbTrace(x=pars[[i]], Theta=Theta)
+        dat <- fulldata[ ,itemloc[i]:(itemloc[i+1] - 1)]            
+        item <- extract.item(x, i)
+        info[,i] <- iteminfo(item, Theta, degrees=degrees)
+        Z[ ,i] <- rowSums(dat - dat * P) / sqrt(info[,i])                         
+    }
+    if(!is.null(attr(x, 'inoutfitreturn'))) return(list(Z=Z, info=info))
+    outfit <- rowSums(Z^2) / J
+    infit <- rowSums(Z^2 * info) / rowSums(info)    
+    if(full.scores) ret <- data.frame(x@data, outfit=outfit, infit=infit, Zh=Zh)
+    else ret <- data.frame(x@tabdata, outfit=outfit, infit=infit, Zh=Zh)        
+    return(ret)
 }
     

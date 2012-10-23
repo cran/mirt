@@ -2,18 +2,18 @@
 \alias{bfactor}
 \title{Full-Information Item Bi-factor Analysis}
 \usage{
-  bfactor(data, specific, itemtype = NULL, guess = 0, upper
-    = 1, SE = FALSE, free.start = NULL, startvalues = NULL,
-    constrain = NULL, freepars = NULL, parprior = NULL,
-    prev.cor = NULL, quadpts = 20, verbose = FALSE, debug =
-    FALSE, technical = list(), ...)
+  bfactor(data, model, itemtype = NULL, guess = 0, upper =
+    1, SE = FALSE, SEtol = .001, pars = NULL, constrain =
+    NULL, parprior = NULL, prev.cor = NULL, quadpts = 20,
+    grsm.block = NULL, verbose = FALSE, debug = FALSE,
+    technical = list(), ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
   consists of numerically ordered data, with missing data
   coded as \code{NA}}
 
-  \item{specific}{a numeric vector specifying which factor
+  \item{model}{a numeric vector specifying which factor
   loads on which item. For example, if for a 4 item test
   with two specific factors, the first specific factor
   loads on the first two items and the second specific
@@ -23,16 +23,25 @@
   \item{itemtype}{type of items to be modeled, declared as
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
-  items are ordinal or 2PL, however they may be changed to
-  the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
-  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
-  'partcomp', for the Rasch/partial credit, 1 and 2
-  parameter logistic, 3 parameter logistic (lower asymptote
-  and upper), 4 parameter logistic, graded response model,
+  items follow a graded or 2PL structure, however they may
+  be changed to the following: '2PL', '3PL', '3PLu', '4PL',
+  'graded', 'grsm', 'gpcm', 'nominal', 'mcm', 'PC2PL', and
+  'PC3PL', 1 and 2 parameter logistic, 3 parameter logistic
+  (lower asymptote and upper), 4 parameter logistic, graded
+  response model, rating scale graded response model,
   generalized partial credit model, nominal model, multiple
-  choice model, and partially compensatory model,
-  respectively. The default assumes that items follow a
-  '2PL' or 'graded' format}
+  choice model, and 2-3PL partially compensatory model,
+  respectively}
+
+  \item{grsm.block}{an optional numeric vector indicating
+  where the blocking should occur when using the grsm, NA
+  represents items that do not belong to the grsm block
+  (other items that may be estimated in the test data). For
+  example, to specify two blocks of 3 with a 2PL item for
+  the last item: \code{grsm.block = c(rep(1,3), rep(2,3),
+  NA)}. If NULL the all items are assumed to be within the
+  same group and therefore have the same number of item
+  categories}
 
   \item{guess}{fixed pseudo-guessing parameter. Can be
   entered as a single value to assign a global value or may
@@ -44,35 +53,28 @@
   guessing parameter or may be entered as a numeric vector
   corresponding to each item}
 
-  \item{free.start}{a list containing the start value and
-  logical indicating whether a given parameter is to be
-  freely estimated. Each element of the list consists of
-  three components, the parameter number, the starting (or
-  fixed) value, and a logical to indicate whether the
-  parameter is free. For example, \code{free.start =
-  list(c(20,0,FALSE), c(10,1.5,TRUE))} would fix parameter
-  20 to 0 while parameter 10 would be freely estimated with
-  a starting value of 1.5. Note that this will override the
-  values specified by a user defined \code{startvalues} or
-  \code{freepars} input for the specified parameters}
-
   \item{SE}{logical, estimate the standard errors? Calls
   the MHRM subroutine for a stochastic approximation}
 
+  \item{SEtol}{tollerance value used to stop the MHRM
+  estimation when \code{SE = TRUE}. Lower values will take
+  longer but may be more stable for computing the
+  information matrix}
+
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
-  correctly use \code{constrain = 'index'} initially to see
-  how the parameters are labeled. To constrain parameters
-  to be equal create a list with separate concatenated
-  vectors signifying which parameters to constrain. For
-  example, to set parameters 1 and 5 equal, and also set
-  parameters 2, 6, and 10 equal use \code{constrain =
-  list(c(1,5), c(2,6,10))}}
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. To constrain parameters to be
+  equal create a list with separate concatenated vectors
+  signifying which parameters to constrain. For example, to
+  set parameters 1 and 5 equal, and also set parameters 2,
+  6, and 10 equal use \code{constrain = list(c(1,5),
+  c(2,6,10))}}
 
   \item{parprior}{a list of user declared prior item
   probabilities. To see how to define the parameters
-  correctly use \code{parprior = 'index'} initially to see
-  how the parameters are labeled. Can define either normal
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
   guessing and upper bounds) prior probabilities. Note that
   for upper bounds the value used in the prior is 1 - u so
@@ -82,23 +84,12 @@
   'norm', mean, sd))} and betas are \code{parprior =
   list(c(parnumber, 'beta', alpha, beta))}.}
 
-  \item{freepars}{a list of user declared logical values
-  indicating which parameters to estimate. To see how to
-  define the parameters correctly use \code{freepars =
-  'index'} initially to see how the parameters are labeled.
-  These values may be modified and input back into the
-  function by using \code{freepars=newfreepars}. Note that
-  user input values must match what the default structure
-  would have been}
-
-  \item{startvalues}{a list of user declared start values
-  for parameters. To see how to define the parameters
-  correctly use \code{startvalues = 'index'} initially to
-  see what the defaults would noramlly be. These values may
-  be modified and input back into the function by using
-  \code{startavalues=newstartvalues}. Note that user input
-  values must match what the default structure would have
-  been}
+  \item{pars}{a data.frame with the structure of how the
+  starting values, parameter numbers, and estimation
+  logical values are defined. The user may observe how the
+  model defines the values by using \code{pars = 'values'},
+  and this object can in turn be modified and input back
+  into the estimation with \code{pars = mymodifiedpars}}
 
   \item{prev.cor}{uses a previously computed correlation
   matrix to be used to estimate starting values for the EM
@@ -153,7 +144,7 @@ data <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
 mod1 <- bfactor(data, specific)
-coef(mod1)
+summary(mod1)
 
 ###Try with fixed guessing parameters added
 guess <- rep(.1,32)

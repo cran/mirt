@@ -4,15 +4,15 @@ test_that('dich', {
     data <- expand.table(LSAT7)        
     modm1 <- mirt(data, 1)
     expect_is(modm1, 'ConfirmatoryClass')          
-    modm2 <- mirt(data, 2)
+    modm2 <- mirt(data, 2, SE = TRUE)
     expect_is(modm2, 'ExploratoryClass')
     modm3 <- mirt(data, 1, itemtype = 'Rasch', SE = FALSE)
     expect_is(modm3, 'ConfirmatoryClass')
     modm4 <- mirt(data, 1, itemtype = '1PL')    
     expect_is(modm4, 'ConfirmatoryClass')
-    sv <- mirt(data,1, startvalues = 'index')
-    fp <- mirt(data,1, freepars = 'index')
-    modm5 <- mirt(data,1, startvalues = sv, freepars = fp)
+    svalues <- mirt(data, 1, pars = 'values')
+    svalues[22, 5] <- 2
+    modm5 <- mirt(data, 1, pars = svalues)    
     expect_is(modm5, 'ConfirmatoryClass')
     data[1,1] <- data[2,2] <- NA
     modm6 <- mirt(data, 1)
@@ -41,7 +41,7 @@ test_that('dich', {
     TP2 <- plot(modm2)
     expect_is(TP1, 'trellis')    
     expect_is(TP2, 'trellis')
-    ifit <- itemfit(modm1, type = 'X2')
+    ifit <- itemfit(modm1, X2 = TRUE)
     expect_is(ifit, 'data.frame')
 })
 

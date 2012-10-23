@@ -1,9 +1,11 @@
 #' Wald test for mirt models
 #' 
-#' Compute a Wald test given an \code{L} vector or matrix of contrasts.
+#' Compute a Wald test given an \code{L} vector or matrix of contrasts. Requires that the 
+#' information matrix already be computed (using \code{SE = TRUE} when using EM estimation). 
+#' 
 #' 
 #' @aliases wald
-#' @param L a coefficient matrix with dimensions nconstrasts x npars. Use \code{constrain = 'index'}
+#' @param L a coefficient matrix with dimensions nconstrasts x npars. Use \code{pars = 'values'}
 #' on the initially estimated model to obtain the parameter indicators  
 #' @param object estimated object from mirt, confmirt, or multipleGroup
 #' @param C a constant vector/matrix to be compared along side L
@@ -19,17 +21,18 @@
 #'    F2 = 2,3
 #'    
 #'    
-#' mod <- mirt(data, cmodel)
+#' mod <- mirt(data, cmodel, SE = TRUE)
 #' coef(mod, allpars = TRUE)
-#' index <- mirt(data, cmodel, constrain = 'index')
+#' index <- mirt(data, cmodel, pars = 'values')
 #' index
+#' 
 #'        
 #' #second factor slopes equal to 0?
 #' L <- rep(0, 30)
 #' L[c(7, 12)] <- 1
 #' wald(L, mod)
 #' 
-#' #last two items same factor 1 slope, and item 2 and 3 same factor slope
+#' #simultaniously test equal factor slopes for item 2 and 3, and 4 and 5
 #' L <- matrix(0, 2, 30)
 #' L[1,16] <- L[2, 7] <- 1
 #' L[1,21] <- L[2, 12] <- -1
@@ -83,7 +86,7 @@ print.wald <- function(x, ...){
     W <- x$W
     df <- x$df
     p <- 1 - pchisq(x$W, x$df)
-    cat('Wald test: \nW = ', round(W, 3), ', df = ', df, ', p = ', 
+    cat('\nWald test: \nW = ', round(W, 3), ', df = ', df, ', p = ', 
         round(p, 3), sep='')       
 }
 

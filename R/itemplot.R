@@ -3,13 +3,13 @@
 #' \code{itemplot} displays various item based IRT plots.
 #' 
 #'
-#' 
-#'
 #' @aliases itemplot
-#' @param object a computed model object of class \code{ExploratoryClass} or \code{ConfirmatoryClass}
+#' @param object a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or 
+#' \code{MultipleGroupClass}. Input may also be a \code{list} for comparing similar item types (e.g., 1PL vs 2PL)
 #' @param item a single numeric value indicating which item to plot
-#' @param type plot type to use, information (\code{'info'}), information contours \code{('infocontour')},
-#'  or item trace lines (\code{'trace'})
+#' @param type plot type to use, information (\code{'info'}), item trace lines (\code{'trace'}), relative 
+#' efficiency lines (\code{'RE'}), or information contours \code{('infocontour')} 
+#' (not for \code{MultipleGroupClass} objects)
 #' @param degrees the degrees argument to be used if there are exactly two factors. See \code{\link{iteminfo}}
 #' for more detail
 #' @param ... additional arguments to be passed to lattice 
@@ -22,8 +22,18 @@
 #' data(LSAT7)
 #' fulldata <- expand.table(LSAT7)
 #' mod1 <- mirt(fulldata,1)
+#' mod2 <- mirt(fulldata,1, itemtype = '1PL')
+#' mod3 <- mirt(fulldata,2)
 #' 
 #' itemplot(mod1, 2)
+#' itemplot(mod1, 2, type = 'info')
+#' 
+#' mods <- list(twoPL = mod1, onePL = mod2)
+#' itemplot(mods, 1, type = 'RE')
+#' 
+#' itemplot(mod3, 3, type = 'info')
+#' 
+#' 
 #'     }
 #' 
 itemplot <- function(object, item, type = 'trace', degrees = 45, ...){
@@ -59,21 +69,117 @@ setMethod(
 	}
 )
 
+#------------------------------------------------------------------------------
+setMethod(
+    f = "itemplot.internal",
+    signature = signature(object = 'list'),
+    definition = function(object, item, type = 'trace', degrees = 45, ...)
+    {        
+        newobject <- new('MultipleGroupClass', cmods=object, nfact=object[[1]]@nfact, 
+                         groupNames=factor(names(object)))        
+        x <- itemplot.internal(newobject, item, type, degrees, ...)    	
+        return(invisible(x))
+    }
+)
+
+#------------------------------------------------------------------------------
+setMethod(
+    f = "itemplot.internal",
+    signature = signature(object = 'MultipleGroupClass'),
+    definition = function(object, item, type = 'trace', degrees = 45, ...)
+    {       
+        Pinfo <- list()        
+        gnames <- object@groupNames
+        nfact <- object@nfact        
+        K <- object@cmods[[1]]@pars[[item]]@ncat
+        for(g in 1:length(gnames)){
+            Pinfo[[g]] <- itemplot.main(object@cmods[[g]], item=item, type='RETURN', 
+                                        degrees=degrees, ...)
+            Pinfo[[g]]$group <- rep(gnames[g], nrow(Pinfo[[g]]))
+        }        
+        if(type == 'RE'){
+            for(g in length(gnames):1)
+                Pinfo[[g]]$info <- Pinfo[[g]]$info / Pinfo[[1]]$info
+        }
+        dat <- Pinfo[[1]]        
+        for(g in 2:length(gnames))
+            dat <- rbind(dat, Pinfo[[g]])           
+        Plist <- unclass(dat[, 1:K])
+        P <- c()
+        dat2 <- dat[, (K+1):ncol(dat)]
+        for(i in 1:length(Plist))
+            P <- c(P, Plist[[i]])
+        for(i in 2:length(Plist))
+            dat2 <- rbind(dat2, dat[, (K+1):ncol(dat)])
+        dat2$P <- P
+        dat2$cat <- rep(as.character(0:(length(Plist)-1)), each = nrow(dat))
+        if(nfact == 1){
+            if(type == 'info')            
+                return(lattice::xyplot(info ~ Theta, dat, group=group, type = 'l', 
+                                       auto.key = TRUE, main = paste('Information for item', item), 
+                                       ylab = expression(I(theta)), xlab = expression(theta), ...))            
+            if(type == 'trace')
+                return(lattice::xyplot(P ~ Theta | cat, dat2, group=group, type = 'l', 
+                                auto.key = TRUE, main = paste("Item", item, "Trace"), 
+                                ylab = expression(P(theta)), xlab = expression(theta), ...))
+            if(type == 'RE')
+                return(lattice::xyplot(info ~ Theta, dat, group=group, type = 'l', 
+                                       auto.key = TRUE, main = paste('Relative efficiency for item', item), 
+                                       ylab = expression(RE(theta)), xlab = expression(theta), ...))
+        }
+        if(nfact == 2){
+            Names <- colnames(dat)
+            Names[c(length(Names) - 2,length(Names) - 1)] <- c('Theta1', 'Theta2')
+            Names2 <- colnames(dat2)
+            Names2[2:3] <- c('Theta2', 'Theta1')
+            colnames(dat) <- Names
+            colnames(dat2) <- Names2            
+            if(type == 'info')            
+                return(lattice::wireframe(info ~ Theta1 + Theta2, data = dat, group=group, 
+                                          main=paste("Item", item, "Information"), 
+                                          zlab=expression(I(theta)), xlab=expression(theta[1]), 
+                                          ylab=expression(theta[2]), 
+                                          scales = list(arrows = FALSE), 
+                                          auto.key = TRUE, ...))            
+            if(type == 'trace')
+                return(lattice::wireframe(P ~ Theta1 + Theta2|cat, data = dat2, group = group, 
+                                          main = paste("Item", item, "Trace"), 
+                                          zlab=expression(P(theta)), 
+                                          xlab=expression(theta[1]), 
+                                          ylab=expression(theta[2]), 
+                                          scales = list(arrows = FALSE), 
+                                          auto.key = TRUE, ...))   
+            if(type == 'RE')            
+                return(lattice::wireframe(info ~ Theta1 + Theta2, data = dat, group=group, 
+                                          main=paste("Relative efficiency for item", item), 
+                                          zlab=expression(RE(theta)), xlab=expression(theta[1]), 
+                                          ylab=expression(theta[2]), 
+                                          scales = list(arrows = FALSE), 
+                                          auto.key = TRUE, ...))
+        }
+    }
+)
+
+
 itemplot.main <- function(x, item, type, degrees = 45, ...){        
     nfact <- ncol(x@F)
-    if(nfact > 2 && !x[[1]]@bfactor) stop('Can not plot high dimensional models')
+    if(nfact > 2) stop('Can not plot high dimensional models')
     if(nfact == 2 && is.null(degrees)) stop('Please specify a vector of angles that sum to 90')    
     theta <- seq(-4,4, length.out=40)
-    Theta <- thetaComb(theta, nfact)   
+    Theta <- ThetaFull <- thetaComb(theta, nfact)   
+    prodlist <- attr(x@pars, 'prodlist')
+    if(length(prodlist) > 0)        
+        ThetaFull <- prodterms(Theta,prodlist)
     P <- ProbTrace(x=x@pars[[item]], Theta=Theta)         
     info <- 0 
     if(nfact == 2){
         for(i in 1:length(degrees))
-            info <- info + iteminfo(x=x@pars[[item]], Theta=Theta, degrees=c(degrees[i], 
+            info <- info + iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=c(degrees[i], 
                                                                              90 - degrees[i]))
     } else {
-        info <- iteminfo(x=x@pars[[item]], Theta=Theta, degrees=0)
+        info <- iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=0)
     }
+    if(type == 'RETURN') return(data.frame(P=P, info=info, Theta=Theta))
     if(nfact == 1){
         if(type == 'trace'){            
             plot(Theta, P[,1], col = 1, type='l', main = paste('Item', item), 

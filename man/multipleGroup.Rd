@@ -6,11 +6,11 @@
 \title{Multiple Group Estimation}
 \usage{
   multipleGroup(data, model, group, itemtype = NULL, guess
-    = 0, upper = 1, free.start = NULL, invariance = '',
-    method = 'MHRM', constrain = NULL, startvalues = NULL,
-    parprior = NULL, freepars = NULL, draws = 2000, quadpts
-    = NULL, technical = list(), debug = FALSE, verbose =
-    TRUE)
+    = 0, upper = 1, SE = FALSE, SEtol = .001, invariance =
+    '', pars = NULL, method = 'MHRM', constrain = NULL,
+    parprior = NULL, draws = 2000, quadpts = NULL,
+    grsm.block = NULL, prev.mod = NULL, technical = list(),
+    debug = FALSE, verbose = TRUE, ...)
 
   \S4method{coef}{MultipleGroupClass}(object, digits = 3,
     verbose = TRUE, ...)
@@ -63,21 +63,15 @@
   assign a global upper bound parameter or may be entered
   as a numeric vector corresponding to each item}
 
-  \item{free.start}{a list containing the start value and
-  logical indicating whether a given parameter is to be
-  freely estimated. Each element of the list consists of
-  three components, the parameter number, the starting (or
-  fixed) value, and a logical to indicate whether the
-  parameter is free. For example, \code{free.start =
-  list(c(20,0.0,FALSE), c(10,1.5,TRUE))} would fix
-  parameter 20 to 0.0 while parameter 10 would be freely
-  estimated from a starting value of 1.5. Note that this
-  will override the values specified by a user defined
-  \code{startvalues} or \code{freepars} input for the
-  specified parameters, and this may conflict with the
-  \code{invariance} input (e.g., freeing slopes manually
-  while specifying \code{invariance = 'slopes'} is
-  ambiguous and should be avoided).}
+  \item{SE}{logical, estimate the standard errors? Calls
+  the MHRM subroutine for a stochastic approximation. Only
+  applicable when \code{method = 'EM'} since the MHRM
+  method calculates them automatically}
+
+  \item{SEtol}{tollerance value used to stop the MHRM
+  estimation when \code{SE = TRUE}. Lower values will take
+  longer but may be more stable for computing the
+  information matrix}
 
   \item{verbose}{logical; display iteration history during
   estimation?}
@@ -88,38 +82,58 @@
   \item{quadpts}{the number of quadratures to be used per
   dimensions when \code{method = 'EM'}}
 
+  \item{prev.mod}{an optional input object of class
+  \code{'MultipleGroupClass'} to quickly change the
+  starting values of the current estimation. If a parameter
+  in the current model is being freely estimated then it's
+  value will be set to whatever the corresponding value was
+  in this input object. This is useful when testing nested
+  models since the starting values should be much closer to
+  the new ML values. Note that this method requires that
+  all the \code{itemtype} values be identical between
+  models}
+
   \item{method}{a character indicating whether to use the
   EM (\code{'EM'}) or the MH-RM (\code{'MHRM'}) algorithm}
 
   \item{itemtype}{type of items to be modeled, declared as
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
-  items are ordinal or 2PL, however they may be changed to
-  the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu',
-  '4PL', 'graded', 'gpcm', 'nominal', 'mcm', and
-  'partcomp', for the Rasch/partial credit, 1 and 2
-  parameter logistic, 3 parameter logistic (lower asymptote
-  and upper), 4 parameter logistic, graded response model,
-  generalized partial credit model, nominal model, multiple
-  choice model, and partially compensatory model,
-  respectively. The default assumes that items follow a
-  '2PL' or 'graded' format If \code{NULL} the default
-  assumes that the data follow a '2PL' or 'graded' format}
+  items follow a graded or 2PL structure, however they may
+  be changed to the following: 'Rasch', '1PL', '2PL',
+  '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm',
+  'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the
+  Rasch/partial credit, 1 and 2 parameter logistic, 3
+  parameter logistic (lower asymptote and upper), 4
+  parameter logistic, graded response model, rating scale
+  graded response model, generalized partial credit model,
+  nominal model, multiple choice model, and 2-3PL partially
+  compensatory model, respectively}
 
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
-  correctly use \code{constrain = 'index'} initially to see
-  how the parameters are labeled. To constrain parameters
-  to be equal create a list with separate concatenated
-  vectors signifying which parameters to constrain. For
-  example, to set parameters 1 and 5 equal, and also set
-  parameters 2, 6, and 10 equal use \code{constrain =
-  list(c(1,5), c(2,6,10))}}
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. To constrain parameters to be
+  equal create a list with separate concatenated vectors
+  signifying which parameters to constrain. For example, to
+  set parameters 1 and 5 equal, and also set parameters 2,
+  6, and 10 equal use \code{constrain = list(c(1,5),
+  c(2,6,10))}}
+
+  \item{grsm.block}{an optional numeric vector indicating
+  where the blocking should occur when using the grsm, NA
+  represents items that do not belong to the grsm block
+  (other items that may be estimated in the test data). For
+  example, to specify two blocks of 3 with a 2PL item for
+  the last item: \code{grsm.block = c(rep(1,3), rep(2,3),
+  NA)}. If NULL the all items are assumed to be within the
+  same group and therefore have the same number of item
+  categories}
 
   \item{parprior}{a list of user declared prior item
   probabilities. To see how to define the parameters
-  correctly use \code{parprior = 'index'} initially to see
-  how the parameters are labeled. Can define either normal
+  correctly use \code{pars = 'values'} initially to see how
+  the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
   guessing and upper bounds) prior probabilities. Note that
   for upper bounds the value used in the prior is 1 - u so
@@ -129,23 +143,12 @@
   'norm', mean, sd))} and betas are \code{parprior =
   list(c(parnumber, 'beta', alpha, beta))}.}
 
-  \item{freepars}{a list of user declared logical values
-  indicating which parameters to estimate. To see how to
-  define the parameters correctly use \code{freepars =
-  'index'} initially to see how the parameters are labeled.
-  These values may be modified and input back into the
-  function by using \code{freepars=newfreepars}. Note that
-  user input values must match what the default structure
-  would have been}
-
-  \item{startvalues}{a list of user declared start values
-  for parameters. To see how to define the parameters
-  correctly use \code{startvalues = 'index'} initially to
-  see what the defaults would noramlly be. These values may
-  be modified and input back into the function by using
-  \code{startavlues=newstartvalues}. Note that user input
-  values must match what the default structure would have
-  been}
+  \item{pars}{a data.frame with the structure of how the
+  starting values, parameter numbers, and estimation
+  logical values are defined. The user may observe how the
+  model defines the values by using \code{pars = 'values'},
+  and this object can in turn be modified and input back
+  into the estimation with \code{pars = mymodifiedpars}}
 
   \item{debug}{logical; turn on debugging features?}
 
@@ -155,6 +158,8 @@
 
   \item{digits}{the number of significant digits to be
   rounded}
+
+  \item{...}{additional arguments to be passed}
 
   \item{technical}{list specifying subtle parameters that
   can be adjusted. These values are \describe{
@@ -174,8 +179,6 @@
   \code{c(0.05,0.5,0.004)}} \item{return_newconstrain}{if
   \code{TRUE} returns a list consisting of the constraints
   to be used just before estimation begins} }}
-
-  \item{...}{additional arguments to be passed}
 }
 \description{
   \code{multipleGroup} performes a full-information
@@ -213,12 +216,17 @@ models <- confmirt.model()
 
 
 mod_configural <- multipleGroup(dat, models, group = group, method = 'EM') #completely seperate analyses
-mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'EM') #equal slopes
+
+# prev.mod can save precious iterations and help to avoid local minimums
+mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'EM',
+                            prev.mod = mod_configural) #equal slopes
 mod_scalar2 <- multipleGroup(dat, models, group = group, method = 'EM',  #equal intercepts, free variance and means
-                             invariance=c('slopes', 'intercepts', 'free_varcov','free_means'))
+                             invariance=c('slopes', 'intercepts', 'free_varcov','free_means'),
+                             prev.mod = mod_configural)
 mod_scalar1 <- multipleGroup(dat, models, group = group, method = 'EM', #fixed means
-                             invariance=c('slopes', 'intercepts', 'free_varcov'))
-mod_fullconstrain <- mirt(data, models) #fix variance (equivelent to full constrain)
+                             invariance=c('slopes', 'intercepts', 'free_varcov'),
+                             prev.mod = mod_configural)
+mod_fullconstrain <- mirt(dat, models) #fix variance (equivalent to full constrain)
 
 anova(mod_metric, mod_configural) #equal slopes only
 anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
@@ -226,18 +234,12 @@ anova(mod_scalar1, mod_scalar2) #fix mean
 anova(mod_fullconstrain, mod_scalar1) #fix variance
 
 
-#Wald test can be useful here too
-#compare whether intercepts should be equal
-index <- multipleGroup(dat, models, group = group, constrain = 'index')
-index
-nitems <- ncol(dat)
-L <- matrix(0, nitems, 124)
-for(i in 1:nitems){
-     L[i, index[[1]][[i]][2]] <- 1
-     L[i, index[[2]][[i]][2]] <- -1
- }
-wald(L, mod_configural)
-
+#test whether first 6 slopes should be equal accross groups
+values <- multipleGroup(dat, models, group = group, pars = 'values')
+values
+constrain <- list(c(1, 63), c(5,67), c(9,71), c(13,75), c(17,79), c(21,83))
+equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain, method = 'EM')
+anova(equalslopes, mod_configural)
 
 #############
 #multiple factors
@@ -274,7 +276,7 @@ mod_configural <- multipleGroup(dat, models, group = group) #completely seperate
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
-mod_fullconstrain <- confmirt(data, models)
+mod_fullconstrain <- confmirt(dat, models)
 
 anova(mod_metric, mod_configural)
 anova(mod_scalar, mod_metric)

@@ -1,7 +1,9 @@
 PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain, freepars, 
-                     free.start, parprior, verbose, debug, technical, parnumber = 1, BFACTOR = FALSE)
+                     free.start, parprior, verbose, debug, technical, parnumber = 1, BFACTOR = FALSE,
+                     grsm.block = NULL)
 {
-    if(debug == 'PrepData') browser()
+    if(debug == 'PrepData') browser()  
+    if(is.null(grsm.block)) grsm.block <- rep(1, ncol(data))
     itemnames <- colnames(data)
     keywords <- c('COV')
     data <- as.matrix(data)    	
@@ -18,24 +20,8 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
     }
     if(exploratory && any(itemtype == c('PC2PL', 'PC3PL'))) 
         stop('Partially compensatory models can only be estimated within a confirmatory model')
-    if(is(model, 'numeric') && length(model) > 1){
-        tmp <- tempfile('tempfile')
-        unique <- unique(model)
-        index <- 1:J
-        tmp2 <- sprintf(c('G =', paste('1-', J, sep='')))
-        for(i in 1:length(unique)){
-            ind <- index[model == unique[i]]
-            comma <- rep(',', 2*length(ind))
-            TF <- rep(c(TRUE,FALSE), length(ind))
-            comma[TF] <- ind
-            comma[length(comma)] <- ""
-            tmp2 <- c(tmp2, c(paste('\nF', i, ' =', sep=''), comma))
-        }
-        cat(tmp2, file=tmp)
-        model <- confmirt.model(tmp, quiet = TRUE)
-        BFACTOR <- TRUE
-        unlink(tmp)
-    }
+    if(is(model, 'numeric') && length(model) > 1)
+        model <- bfactor2mod(model, J)
     if(length(guess) == 1) guess <- rep(guess,J)
     if(length(guess) > J || length(guess) < J) 
         stop("The number of guessing parameters is incorrect.")					
@@ -119,19 +105,10 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
         names(pars) <- c(itemnames, 'Group_Parameters')
         attr(pars, 'parnumber') <- NULL
         return(pars)  
-    }
-    if(!is.null(constrain) || !is.null(parprior)){
-        if(any(constrain == 'index', parprior == 'index')){
-            returnedlist <- list()                        
-            for(i in 1:length(pars))
-                returnedlist[[i]] <- pars[[i]]@parnum 
-            names(returnedlist) <- c(itemnames, 'Group_Parameters')            
-            return(returnedlist)
-        }
     }   
+    if(is.null(constrain)) constrain <- list()
     onePLconstraint <- c()
-    if(itemtype[1] == '1PL'){
-        constrain <- list()
+    if(itemtype[1] == '1PL'){        
         for(i in 1:J)
             onePLconstraint <- c(onePLconstraint, pars[[i]]@parnum[1])    
         constrain[[length(constrain) + 1]] <- onePLconstraint
@@ -141,25 +118,30 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
                                itemnames=itemnames, exploratory=exploratory, constrain=constrain,
                                startvalues=startvalues, freepars=freepars, parprior=parprior, 
                                parnumber=parnumber, BFACTOR=BFACTOR, debug=debug)
-    }    
-    #update and overwrite from free.start
-    if(!is.null(free.start)){
-        if(!is.list(free.start)) stop('free.start must be a list')
-        for(i in 1:length(free.start)){
-            for(j in 1:length(pars)){
-                if(free.start[[i]][1] %in% pars[[j]]@parnum){
-                    pars[[j]]@par[pars[[j]]@parnum == free.start[[i]][1]] <- 
-                        free.start[[i]][2]
-                    pars[[j]]@est[pars[[j]]@parnum == free.start[[i]][1]] <-
-                        as.logical(free.start[[i]][3])
+    }        
+    if(any(itemtype == 'grsm')){           
+        unique.grsmgroups <- unique(na.omit(grsm.block))        
+        for(group in unique.grsmgroups){                
+            Kk <- unique(K[grsm.block[grsm.block == unique.grsmgroups[group]]])
+            if(length(Kk) > 1) stop('Rating scale models require that items to have the 
+                                       same number of categories')
+            for(k in 1:(Kk-1)){
+                grsmConstraint <- c()    
+                for(i in 1:J){
+                    if(grsm.block[i] == unique.grsmgroups[group]){
+                        if(length(grsmConstraint) == 0){ 
+                            pars[[i]]@est[length(pars[[i]]@est)] <- FALSE
+                            grsmConstraint <- c(grsmConstraint, pars[[i]]@parnum[nfact+k])
+                        } else grsmConstraint <- c(grsmConstraint, pars[[i]]@parnum[nfact+k])    
+                    }
                 }
+                constrain[[length(constrain) + 1]] <- grsmConstraint
             }
-        }
-    }
+        }            
+    }    
     npars <- 0
     for(i in 1:length(pars))
-        npars <- npars + sum(pars[[i]]@est)    
-    if(is.null(constrain)) constrain <- list()
+        npars <- npars + sum(pars[[i]]@est)     
     if(is.null(prodlist)) prodlist <- list()
     ret <- list(pars=pars, npars=npars, constrain=constrain, prodlist=prodlist, itemnames=itemnames,
                 K=K, fulldata=fulldata, nfactNames=nfactNames, nfact=nfact, npars=npars, 
