@@ -34,6 +34,7 @@ setClass("AllItemsClass",
                         n.prior.sd='numeric',
                         b.prior.alpha='numeric',
                         b.prior.beta='numeric',
+                        D='numeric', #scaling correction
                         'VIRTUAL')
 )
 
@@ -65,6 +66,10 @@ setGeneric('ExtractZetas', function(x) standardGeneric("ExtractZetas"))
 
 setGeneric('Deriv', function(x, Theta, ...) standardGeneric("Deriv"))
 
+setGeneric('DerivTheta', function(x, Theta) standardGeneric("DerivTheta"))
+
 setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))         
 
-setGeneric('ItemInfo', function(x, Theta, cosangle) standardGeneric("ItemInfo"))
+setGeneric("itemplot.internal",  function(object, ...) standardGeneric("itemplot.internal"))
+
+setGeneric("fscores.internal", function(object, ...) standardGeneric("fscores.internal"))

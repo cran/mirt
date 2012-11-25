@@ -11,14 +11,14 @@
   confmirt(data, model, itemtype = NULL, guess = 0, upper =
     1, pars = NULL, constrain = NULL, parprior = NULL,
     grsm.block = NULL, verbose = TRUE, draws = 2000, debug
-    = FALSE, rotate = 'varimax', Target = NULL, technical =
-    list(), ...)
+    = FALSE, rotate = 'varimax', Target = NULL, D = 1.702,
+    technical = list(), ...)
 
   \S4method{summary}{ConfirmatoryClass}(object, suppress =
     0, digits = 3, verbose = TRUE, ...)
 
-  \S4method{coef}{ConfirmatoryClass}(object, allpars =
-    TRUE, digits = 3, verbose = TRUE, ...)
+  \S4method{coef}{ConfirmatoryClass}(object, digits = 3,
+    ...)
 
   \S4method{anova}{ConfirmatoryClass}(object, object2)
 
@@ -66,9 +66,6 @@
   \item{draws}{the number of Monte Carlo draws to estimate
   the log-likelihood}
 
-  \item{allpars}{logical; print all the item parameters
-  instead of just the slopes?}
-
   \item{restype}{type of residuals to be displayed. Can be
   either \code{'LD'} for a local dependence matrix (Chen &
   Thissen, 1997) or \code{'exp'} for the expected values
@@ -113,13 +110,11 @@
   correctly use \code{pars = 'values'} initially to see how
   the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
-  guessing and upper bounds) prior probabilities. Note that
-  for upper bounds the value used in the prior is 1 - u so
-  that the lower and upper bounds can function the same. To
+  guessing and upper bounds) prior probabilities. To
   specify a prior the form is c('priortype', ...), where
-  normal priors are \code{parprior = list(c(parnumber,
+  normal priors are \code{parprior = list(c(parnumbers,
   'norm', mean, sd))} and betas are \code{parprior =
-  list(c(parnumber, 'beta', alpha, beta))}.}
+  list(c(parnumbers, 'beta', alpha, beta))}}
 
   \item{pars}{a data.frame with the structure of how the
   starting values, parameter numbers, and estimation
@@ -151,6 +146,10 @@
   .3 in most statistical software. Default is 0 for no
   suppression}
 
+  \item{D}{a numeric value used to adjust the logistic
+  metric to be more similar to a normal cumulative density
+  curve. Default is 1.702}
+
   \item{technical}{list specifying subtle parameters that
   can be adjusted. These values are}
 
@@ -162,10 +161,10 @@
 
   \item{y}{an unused variable to be ignored}
 
-  \item{type}{type of plot to view; can be \code{'curve'}
-  for the total test score as a function of two dimensions,
-  or \code{'info'} to show the test information function
-  for two dimensions}
+  \item{type}{type of plot to view; can be \code{'info'} to
+  show the test information function, \code{'infocontour'}
+  for the test information contours, or \code{'SE'} for the
+  test standard error function}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
   used in \code{plot}. If a vector is used then a bubble
@@ -228,6 +227,20 @@
   the \code{anova} function, where a Chi-squared difference
   test and AIC/BIC difference values are displayed.
 }
+\section{Convergence}{
+  The MHRM algorithm often is more stable than the EM
+  counterpart in \code{mirt} but convergence of the
+  algorithm should be interpreted with caution. When the
+  number of iterations grows very high (e.g., greater than
+  1500) or when \code{Max Change = .2500} values are
+  repeatedly printed to the console too often (indicating
+  that the parameters were being constrained since they are
+  naturally moving in steps greater than 0.25) then the
+  model may either be ill defined or have a very flat
+  likelihood surface, and genuine maximum likelihood
+  parameter estimates may be difficult to find.
+}
+
 \section{Confirmatory IRT}{
   Specification of the confirmatory item factor analysis
   model follows many of the rules in the SEM framework for

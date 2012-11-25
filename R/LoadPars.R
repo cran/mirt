@@ -1,5 +1,5 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact, 
-                     constrain, startvalues, freepars, parprior, parnumber, 
+                     constrain, startvalues, freepars, parprior, parnumber, D, 
                      estLambdas, BFACTOR = FALSE, debug)
     {       
     if(debug == 'LoadPars') browser() 
@@ -16,15 +16,15 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         startvalues <- list()
         for(i in 1:J){            
             if(any(itemtype[i] == c('Rasch', '1PL')) && K[i] == 2){
-                val <- c(1/1.702, zetas[[i]], guess[i], upper[i])
+                val <- c(1/D, zetas[[i]], guess[i], upper[i])
                 names(val) <- c(paste('a', 1:nfact, sep=''), 'd', 'g','u')
             }
             if(itemtype[i] == 'Rasch' && K[i] > 2){
-                val <- c(1/1.702, 0, zetas[[i]])
+                val <- c(1/D, 0, zetas[[i]])
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 0:(K[i]-1), sep=''))
             }
             if(itemtype[i] == '1PL' && K[i] > 2){
-                val <- c(1/1.702, zetas[[i]])
+                val <- c(1/D, zetas[[i]])
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 1:(K[i]-1), sep=''))
             }
             if(any(itemtype[i] == c('2PL', '3PL', '3PLu', '4PL'))){
@@ -53,10 +53,10 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 1:nfact, sep=''), 'g','u')
             }
             if(itemtype[i] == 'mcm'){
-                val <- c(lambdas[i,], 0, rep(.5, K[i] - 2), K[i]-1, rep(0, K[i]), 
+                val <- c(lambdas[i,], 1, 0, rep(.5, K[i] - 2), K[i]-1, rep(0, K[i]+1), 
                          rep(1/K[i], K[i]))
-                names(val) <- c(paste('a', 1:nfact, sep=''), paste('ak', 0:(K[i]-1), sep=''), 
-                                paste('d', 0:(K[i]-1), sep=''), paste('t', 0:(K[i]-1), sep=''))                
+                names(val) <- c(paste('a', 1:nfact, sep=''), paste('ak', 0:(K[i]), sep=''), 
+                                paste('d', 0:(K[i]), sep=''), paste('t', 1:(K[i]), sep=''))                
             }            
             startvalues[[i]] <- val
         } 
@@ -95,9 +95,11 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 freepars[[i]] <- estpars
             }
             if(itemtype[i] == 'mcm'){
-                estpars <- c(estLambdas[i, ], rep(TRUE, K[i]*3))
+                estpars <- c(estLambdas[i, ], rep(TRUE, 2+K[i]*3))
                 #identifiction constraints
-                estpars[c(nfact+1, nfact + K[i], nfact + K[i] + 1, length(estpars) - K[i] + 1)] <- FALSE
+                tmp <- names(startvalues[[i]])
+                tmp2 <- 1:length(tmp)
+                estpars[tmp2[tmp %in% c('ak0', 'ak1', paste('ak',i,sep=''), 'd0', 'd1', 't1')]] <- FALSE                
                 freepars[[i]] <- estpars
             }
         }         
@@ -113,6 +115,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              dat=fulldata[ ,tmp], 
                              constr=TRUE,                              
                              ncat=2,
+                             D=D,
                              lbound=ifelse(itemtype[i] == 'Rasch', -25, -Inf),
                              ubound=ifelse(itemtype[i] == 'Rasch', 25, Inf),                             
                              n.prior.mu=rep(NaN,length(startvalues[[i]])),
@@ -130,6 +133,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
                              constr=TRUE,                                                           
@@ -151,6 +155,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
@@ -174,6 +179,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
                              ncat=2,
+                             D=D,
                              lbound=-Inf,                                           
                              ubound=Inf,                             
                              n.prior.mu=rep(NaN,length(startvalues[[i]])),
@@ -197,6 +203,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
                              constr=TRUE,                              
@@ -217,6 +224,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
@@ -237,6 +245,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
@@ -259,6 +268,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]], 
                              nfact=nfact, 
                              ncat=K[i], 
+                             D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
                              lbound=-Inf,
@@ -280,6 +290,8 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              est=freepars[[i]],
                              nfact=nfact, 
+                             ncat=2, 
+                             D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
                              lbound=-Inf,
@@ -306,6 +318,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]], 
                              nfact=nfact, 
                              ncat=K[i], 
+                             D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
                              lbound=-Inf,
@@ -324,15 +337,15 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     for(i in 1:J){
         names(pars[[i]]@parnum) <- names(startvalues[[i]])
         if(!is.null(parprior) && parprior != 'index'){
-            for(j in 1:length(parprior)){
-                tmp <- pars[[i]]@parnum %in% as.numeric(parprior[[j]][1])
+            for(j in 1:length(parprior)){                                
+                tmp <- pars[[i]]@parnum %in% as.numeric(parprior[[j]][1:(length(parprior[[j]])-3)])
                 if(any(tmp)){
-                    if(parprior[[j]][2] == 'norm'){
-                        pars[[i]]@n.prior.mu[tmp] <- as.numeric(parprior[[j]][3])
-                        pars[[i]]@n.prior.sd[tmp] <- as.numeric(parprior[[j]][4])
-                    } else {
-                        pars[[i]]@b.prior.alpha[tmp] <- as.numeric(parprior[[j]][3])
-                        pars[[i]]@b.prior.beta[tmp] <- as.numeric(parprior[[j]][4])
+                    if(parprior[[j]][length(parprior[[j]]) - 2] == 'norm'){
+                        pars[[i]]@n.prior.mu[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])-1])
+                        pars[[i]]@n.prior.sd[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])])
+                    } else if(parprior[[j]][length(parprior[[j]]) - 2] == 'beta'){
+                        pars[[i]]@b.prior.alpha[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])-1])
+                        pars[[i]]@b.prior.beta[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])])
                     }                
                 }          
             }
@@ -367,18 +380,18 @@ LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, constrain
         else return(ret@est)        
     }
     if(!is.null(parprior) && is.list(parprior)){
-        for(j in 1:length(parprior)){
-            tmp <- parnum %in% as.numeric(parprior[[j]][1])
+        for(j in 1:length(parprior)){            
+            tmp <- parnum %in% as.numeric(parprior[[j]][1:(length(parprior[[j]])-3)])
             if(any(tmp)){
-                if(parprior[[j]][2] == 'norm'){
-                    ret@n.prior.mu[tmp] <- as.numeric(parprior[[j]][3])
-                    ret@n.prior.sd[tmp] <- as.numeric(parprior[[j]][4])
-                } else {
-                    ret@b.prior.alpha[tmp] <- as.numeric(parprior[[j]][3])
-                    ret@b.prior.beta[tmp] <- as.numeric(parprior[[j]][4])
+                if(parprior[[j]][length(parprior[[j]]) - 2] == 'norm'){
+                    ret@n.prior.mu[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])-1])
+                    ret@n.prior.sd[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])])
+                } else if(parprior[[j]][length(parprior[[j]]) - 2] == 'beta'){
+                    ret@b.prior.alpha[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])-1])
+                    ret@b.prior.beta[tmp] <- as.numeric(parprior[[j]][length(parprior[[j]])])
                 }                
             }          
         }    
-    }
+    }    
     return(ret)    
 }

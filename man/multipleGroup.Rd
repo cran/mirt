@@ -9,8 +9,8 @@
     = 0, upper = 1, SE = FALSE, SEtol = .001, invariance =
     '', pars = NULL, method = 'MHRM', constrain = NULL,
     parprior = NULL, draws = 2000, quadpts = NULL,
-    grsm.block = NULL, prev.mod = NULL, technical = list(),
-    debug = FALSE, verbose = TRUE, ...)
+    grsm.block = NULL, prev.mod = NULL, D = 1.702,
+    technical = list(), debug = FALSE, verbose = TRUE, ...)
 
   \S4method{coef}{MultipleGroupClass}(object, digits = 3,
     verbose = TRUE, ...)
@@ -67,6 +67,10 @@
   the MHRM subroutine for a stochastic approximation. Only
   applicable when \code{method = 'EM'} since the MHRM
   method calculates them automatically}
+
+  \item{D}{a numeric value used to adjust the logistic
+  metric to be more similar to a normal cumulative density
+  curve. Default is 1.702}
 
   \item{SEtol}{tollerance value used to stop the MHRM
   estimation when \code{SE = TRUE}. Lower values will take
@@ -135,13 +139,11 @@
   correctly use \code{pars = 'values'} initially to see how
   the parameters are labeled. Can define either normal
   (normally for slopes and intercepts) or beta (for
-  guessing and upper bounds) prior probabilities. Note that
-  for upper bounds the value used in the prior is 1 - u so
-  that the lower and upper bounds can function the same. To
+  guessing and upper bounds) prior probabilities. To
   specify a prior the form is c('priortype', ...), where
-  normal priors are \code{parprior = list(c(parnumber,
+  normal priors are \code{parprior = list(c(parnumbers,
   'norm', mean, sd))} and betas are \code{parprior =
-  list(c(parnumber, 'beta', alpha, beta))}.}
+  list(c(parnumbers, 'beta', alpha, beta))}}
 
   \item{pars}{a data.frame with the structure of how the
   starting values, parameter numbers, and estimation
@@ -226,7 +228,9 @@ mod_scalar2 <- multipleGroup(dat, models, group = group, method = 'EM',  #equal 
 mod_scalar1 <- multipleGroup(dat, models, group = group, method = 'EM', #fixed means
                              invariance=c('slopes', 'intercepts', 'free_varcov'),
                              prev.mod = mod_configural)
-mod_fullconstrain <- mirt(dat, models) #fix variance (equivalent to full constrain)
+mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'EM',
+                             invariance=c('slopes', 'intercepts'),
+                             prev.mod = mod_configural)
 
 anova(mod_metric, mod_configural) #equal slopes only
 anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
@@ -276,7 +280,8 @@ mod_configural <- multipleGroup(dat, models, group = group) #completely seperate
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
-mod_fullconstrain <- confmirt(dat, models)
+mod_fullconstrain <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
+                             invariance=c('slopes', 'intercepts'))
 
 anova(mod_metric, mod_configural)
 anova(mod_scalar, mod_metric)

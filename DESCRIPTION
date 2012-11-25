@@ -1,5 +1,5 @@
 Package: mirt
-Version: 0.4.1
+Version: 0.4.2
 Date: 2012-10-19
 Type: Package
 Title: Multidimensional Item Response Theory
@@ -39,8 +39,9 @@ Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
         'Confirmatory-methods.R' 'Exploratory-methods.R' 'MHRM.group.R'
         'MultipleGroup-methods.R' 'multipleGroup.R' 'wald.R'
         'EMstep.group.R' 'extract.item.R' 'iteminfo.R' 'itemfit.R'
-        'personfit.R' '03-estimation.R'
-Packaged: 2012-10-23 14:53:30 UTC; Phil
+        'personfit.R' '03-estimation.R' '04-derivatives.R'
+        'read.mirt.R' 'fscores.internal.R' 'itemplot.internal.R'
+Packaged: 2012-11-25 07:32:13 UTC; phil
 Author: Phil Chalmers [aut, cre]
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
-Date/Publication: 2012-10-23 16:45:00
+Date/Publication: 2012-11-25 08:09:48
