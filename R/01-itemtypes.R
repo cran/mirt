@@ -23,6 +23,7 @@ setClass("AllItemsClass",
                         constr='logical',
                         parnum='numeric',
                         nfact='numeric',
+                        nfixedeffects='numeric', #number of fixed effect predictors
                         dat='matrix',
                         ncat='numeric',
                         rs='matrix',
@@ -45,6 +46,8 @@ setClass("graded", contains = 'AllItemsClass')
 setClass("rating", contains = 'AllItemsClass')
 
 setClass("gpcm", contains = 'AllItemsClass')
+
+setClass("rsm", contains = 'AllItemsClass')
 
 setClass("nominal", contains = 'AllItemsClass')
 

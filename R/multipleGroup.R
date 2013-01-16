@@ -46,6 +46,10 @@
 #' @param verbose logical; display iteration history during estimation?
 #' @param draws the number of Monte Carlo draws to estimate the log-likelihood
 #' @param quadpts the number of quadratures to be used per dimensions when \code{method = 'EM'}
+#' @param calcNull logical; calculate the Null model for fit statics (e.g., TLI)?
+#' @param bfactor logical; use the dimensional reduction algorithm if the factor pattern is a bifactor
+#' model (has exactly 1 general factor and 1 specific factor for each item). Only applicable when 
+#' \code{method = 'EM'}
 #' @param prev.mod an optional input object of class \code{'MultipleGroupClass'} to quickly 
 #' change the starting values of the current estimation.
 #' If a parameter in the current model is being freely estimated then it's value will be set to whatever the 
@@ -54,33 +58,12 @@
 #' values be identical between models
 #' @param method a character indicating whether to use the EM (\code{'EM'}) or the MH-RM 
 #' (\code{'MHRM'}) algorithm
-#' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
-#' which will be repeated globally. The NULL default assumes that the items follow a graded or 2PL structure,
-#' however they may be changed to the following: 'Rasch', '1PL', '2PL', '3PL', '3PLu', 
-#' '4PL', 'graded', 'grsm', 'gpcm', 'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the Rasch/partial credit, 1 and 2 parameter logistic, 
-#' 3 parameter logistic (lower asymptote and upper), 4 parameter logistic, graded response model, 
-#' rating scale graded response model, generalized partial credit model, nominal model, 
-#' multiple choice model, and 2-3PL partially compensatory model, respectively
-#' @param constrain a list of user declared equality constraints. To see how to define the
-#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
-#' To constrain parameters to be equal create a list with separate concatenated vectors signifying which
-#' parameters to constrain. For example, to set parameters 1 and 5 equal, and also set parameters 2, 6, and 10 equal
-#' use \code{constrain = list(c(1,5), c(2,6,10))}
-#' @param grsm.block an optional numeric vector indicating where the blocking should occur when using 
-#' the grsm, NA represents items that do not belong to the grsm block (other items that may be estimated
-#' in the test data). For example, to specify two blocks of 3 with a 2PL item for the last item:
-#' \code{grsm.block = c(rep(1,3), rep(2,3), NA)}. If NULL the all items are assumed to be within the same 
-#' group and therefore have the same number of item categories
-#' @param parprior a list of user declared prior item probabilities. To see how to define the
-#' parameters correctly use \code{pars = 'values'} initially to see how the parameters are labeled.
-#' Can define either normal (normally for slopes and intercepts) or beta (for guessing and upper bounds) prior
-#' probabilities. To specify a prior the form is c('priortype', ...), where normal priors 
-#' are \code{parprior = list(c(parnumbers, 'norm', mean, sd))} and betas are 
-#' \code{parprior = list(c(parnumbers, 'beta', alpha, beta))}
-#' @param pars a data.frame with the structure of how the starting values, parameter numbers, and estimation
-#' logical values are defined. The user may observe how the model defines the values by using \code{pars = 
-#' 'values'}, and this object can in turn be modified and input back into the estimation with \code{pars = 
-#' mymodifiedpars}
+#' @param itemtype see \code{\link{mirt}} for details
+#' @param constrain see \code{\link{mirt}} for details
+#' @param grsm.block see \code{\link{mirt}} for details
+#' @param rsm.block see \code{\link{mirt}} for details
+#' @param parprior see \code{\link{mirt}} for details
+#' @param pars see \code{\link{mirt}} for details
 #' @param debug logical; turn on debugging features?
 #' @param object an object of class \code{confmirtClass}
 #' @param object2 an object of class \code{confmirtClass}
@@ -106,13 +89,13 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
 #' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{simdata}},
-#' \code{\link{confmirt.model}}, \code{\link{fscores}}
+#' \code{\link{confmirt.model}}, \code{\link{fscores}}, \code{\link{fitIndices}}
 #' @keywords models
 #' @usage 
 #' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,  
 #' invariance = '', pars = NULL, method = 'MHRM', constrain = NULL, 
-#' parprior = NULL, draws = 2000, quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
-#' D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
+#' parprior = NULL, calcNull = TRUE, draws = 2000, quadpts = NULL, grsm.block = NULL, rsm.block = NULL, 
+#' prev.mod = NULL, bfactor = FALSE, D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
 #' 
 #' \S4method{coef}{MultipleGroupClass}(object, digits = 3, verbose = TRUE, ...)
 #'
@@ -206,22 +189,22 @@
 #' anova(mod_metric, mod_configural)
 #' anova(mod_scalar, mod_metric)
 #' anova(mod_fullconstrain, mod_scalar)
-
 #' }
 multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1, 
-                          SE = FALSE, SEtol = .001, invariance = '', pars = NULL, 
-                          method = 'MHRM', constrain = NULL, 
-                          parprior = NULL, draws = 2000, 
-                          quadpts = NULL, grsm.block = NULL, prev.mod = NULL,
-                          D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
+                          SE = FALSE, SEtol = .001, invariance = '', pars = NULL,  method = 'MHRM',
+                          constrain = NULL, parprior = NULL, calcNull = TRUE, draws = 2000, 
+                          quadpts = NULL, grsm.block = NULL, rsm.block = NULL, prev.mod = NULL,
+                          bfactor = FALSE, D = 1.702, technical = list(), debug = FALSE, 
+                          verbose = TRUE, ...)
 {   
     if(debug == 'Main') browser()
     Call <- match.call()        
     mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, 
                       itemtype=itemtype, guess=guess, upper=upper, nested.mod=prev.mod, 
                       pars=pars, constrain=constrain, SE=SE, SEtol=SEtol, grsm.block=grsm.block,
-                      parprior=parprior, quadpts=quadpts, method=method, D=D, 
-                      technical = technical, debug = debug, verbose = verbose, ...)
+                      parprior=parprior, quadpts=quadpts, method=method, D=D, rsm.block=rsm.block,
+                      technical = technical, debug = debug, verbose = verbose, calcNull=calcNull, 
+                      BFACTOR=bfactor, ...)
     if(is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)    

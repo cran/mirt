@@ -57,7 +57,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     redun_constr <- rep(FALSE, length(estpars)) 
     if(length(constrain) > 0){
         for(i in 1:length(constrain)){            
-            L[constrain[[i]], constrain[[i]]] <- 1/length(constrain[[i]]) 
+            L[constrain[[i]], constrain[[i]]] <- 1
             for(j in 2:length(constrain[[i]]))
                 redun_constr[constrain[[i]][j]] <- TRUE
         }
@@ -69,10 +69,16 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
              paste(redindex[diag(L)[!estpars] > 0]), ' but should only be applied to 
                  estimated parameters. Please fix!')
     }   
-    Prior <- prior <- gstructgrouppars <- rlist <- r <- list()    
+    Prior <- prior <- gstructgrouppars <- rlist <- r <- list()        
+    #make sure constrained pars are equal    
+    tmp <- rowSums(L)
+    tmp[tmp == 0] <- 1
+    tmp <- matrix(1/tmp, length(longpars), length(longpars), byrow = TRUE)
+    tmp2 <- abs(diag(L) - 1)
+    longpars <- diag((tmp * L) * longpars) + tmp2 * longpars
     LL <- 0
     for(g in 1:ngroups)
-        r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]
+        r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]    
     #EM     
     for (cycles in 1:NCYCLES){  
         #priors
@@ -136,6 +142,10 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                             pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] <- 1
                         if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] < 0) 
                             pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- 0
+                        if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] > .6){
+                            warning('lower bound parameter larger than .6 during estimation.')
+                            pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- .6            
+                        }
                     }    
                     #apply sum(t) == 1 constraint for mcm
                     if(is(pars[[g]][[i]], 'mcm')){                
@@ -173,7 +183,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             }
             grad <- g %*% L 
             hess <- L %*% h %*% L 			                   
-            grad <- grad[1, estpars & !redun_constr]
+            grad <- grad[1, estpars & !redun_constr]            
             if(any(is.na(grad))) 
                 stop('Model did not converge (unacceptable gradient caused by extreme parameter values)')            
             Hess <- Matrix(hess[estpars & !redun_constr, estpars & !redun_constr], sparse = TRUE)            
@@ -192,6 +202,16 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             #keep steps smaller
             correction[correction > stepLimit] <- stepLimit
             correction[correction < -stepLimit] <- -stepLimit
+            #prevent guessing/upper pars from moving more than .001 at all times
+            names(correction) <- names(estpars[estpars & !redun_constr])
+            if(stepLimit > .002){                
+                tmp <- correction[names(correction) == 'g']
+                tmp[abs(tmp) > .002] <- sign(tmp[abs(tmp) > .002]) * .002
+                correction[names(correction) == 'g'] <- tmp
+                tmp <- correction[names(correction) == 'u']
+                tmp[abs(tmp) > .002] <- sign(tmp[abs(tmp) > .002]) * .002
+                correction[names(correction) == 'u'] <- tmp
+            }
             longpars[estindex_unique] <- longpars[estindex_unique] - correction                       
             if(mstep > 1){
                 if (any(grad*lastgrad < 0.0)){    				# any changed sign
@@ -216,9 +236,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                 listpars[[g]][[i]] <- pars[[g]][[i]]@par         
     } #END EM          
     
-    if(LLwarn && !list$NULL.MODEL) 
-        warning('Log-likelihood did not strictly decrease during estimation. 
-                Solution may not be a maximum.')
+    if(cycles == NCYCLES) converge <- 0
     ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                 logLik=LL, rlist=rlist)
     ret
@@ -232,7 +250,7 @@ Estep.mirt <- function(pars, tabdata, Theta, prior, itemloc, debug, deriv = FALS
     nquad <- nrow(Theta)    
     J <- length(itemloc) - 1
     r <- tabdata[ ,ncol(tabdata)]
-    X <- tabdata[ ,1:(ncol(tabdata) - 1)]    
+    X <- tabdata[ ,1:(ncol(tabdata) - 1), drop = FALSE]    
     itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))	
     for (i in 1:J)
         itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)

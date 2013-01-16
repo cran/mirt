@@ -101,8 +101,8 @@ setMethod(
             tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]    		             
             scores[rowSums(tmp2) == J,] <- Inf
             tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
-            scores[rowSums(tmp2) == J,] <- -Inf
-            SEscores[is.na(scores[,1]), ] <- rep(NA, nfact)
+            scores[rowSums(tmp2) == J,] <- -Inf            
+            SEscores <- matrix(NA, nrow(SEscores), ncol(SEscores))
             for (i in 1:nrow(scores)){
                 if(any(scores[i, ] %in% c(-Inf, Inf))) next
                 Theta <- scores[i, ]	  
@@ -110,14 +110,10 @@ setMethod(
                                 itemloc=itemloc, gp=gp, prodlist=prodlist, degrees=degrees,
                                 hessian = TRUE))
                 if(is(estimate, 'try-error')) {
-                    scores[i, ] <- SEscores[i, ] <- NA
+                    scores[i, ] <- NA
                     next
                 }
-                scores[i, ] <- estimate$estimate                
-                #SEest <- try(sqrt(diag(solve(estimate$hessian))))
-                #if(is(SEest, 'try-error')) 
-                SEest <- rep(NA, nfact)
-                SEscores[i, ] <- SEest
+                scores[i, ] <- estimate$estimate                                
             }  
         }
 		colnames(scores) <- paste('F', 1:ncol(scores), sep='')          
@@ -131,7 +127,7 @@ setMethod(
             r <- object@tabdata[,ncol(object@tabdata)]            
             T <- E <- matrix(NA, 1, ncol(scores))
             for(i in 1:nrow(scores)){
-                if(scores[i, ] %in% c(Inf, -Inf)) next
+                if(any(scores[i, ] %in% c(Inf, -Inf))) next
                 T <- rbind(T, matrix(rep(scores[i, ], r[i]), ncol=ncol(scores), byrow = TRUE))
                 E <- rbind(E, matrix(rep(SEscores[i, ], r[i]), ncol=ncol(scores), byrow = TRUE))
             }            
@@ -179,6 +175,7 @@ setMethod(
         for(g in 1:ngroups)
             ret[[g]] <- fscores(cmods[[g]], rotate = 'CONFIRMATORY', full.scores=full.scores, method=method, 
                            quadpts=quadpts, degrees=degrees, verbose=verbose)
+        names(ret) <- object@groupNames
         if(full.scores){
             id <- c()
             fulldata <- matrix(NA, 1, ncol(ret[[1]]))

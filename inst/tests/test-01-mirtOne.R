@@ -43,7 +43,26 @@ test_that('dich', {
     expect_is(TP2, 'trellis')
     ifit <- itemfit(modm1, X2 = TRUE)
     expect_is(ifit, 'data.frame')
+    
+    fitm1 <- fitIndices(modm1)
+    fitm2 <- fitIndices(modm2)
+    expect_is(fitm1, 'list')
+    expect_is(fitm2, 'list')
 })
 
-
+test_that('dichconfirm', {
+    data <- expand.table(LSAT7)
+    model <- confmirt.model('F1 = 1-3
+        F2 = 3-5', quiet = TRUE)
+    modm1 <- mirt(data, model)
+    modm2 <- mirt(data, model, itemtype=c('2PL','2PL', 'PC2PL','2PL', '2PL'))
+    
+    fm1 <- fscores(modm1, verbose = FALSE)
+    expect_is(fm1, 'matrix')
+    fm2 <- fscores(modm2, method = 'MAP', verbose = FALSE)
+    expect_is(fm2, 'matrix')
+    
+    
+    
+})
 

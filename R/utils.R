@@ -28,7 +28,7 @@ prodterms <- function(theta0, prodlist)
 
 # MH sampler for theta values
 draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var, 
-                        prior.mu, prodlist, debug) 
+                        prior.mu, prodlist, mixedlist = NULL, debug) 
 {         
     if(debug == 'draw.thetas') browser()
     tol <- 1e-8
@@ -36,21 +36,35 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     J <- length(pars) - 1
     nfact <- ncol(theta0)					
     unif <- runif(N)
-    if(nfact > 1)		
+    if(nfact > 1){		
         theta1 <- theta0 + mvtnorm::rmvnorm(N,prior.mu, 
                                             diag(rep(cand.t.var,ncol(theta0)))) 
-    else
+    } else
         theta1 <- theta0 + rnorm(N,prior.mu,sqrt(cand.t.var))							
     log_den0 <- mvtnorm::dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
     log_den1 <- mvtnorm::dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)		
     if(length(prodlist) > 0){
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)	
-    }	
+    }	    
     itemtrace0 <- itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(theta0))    
+    fixed.design0 <- fixed.design1 <- NULL    
+    if(!is.null(mixedlist)){
+        colnames(theta0) <- colnames(theta1) <- mixedlist$factorNames
+        fixed.design0 <- designMats(covdata=mixedlist$covdata, fixed=mixedlist$fixed, 
+                                    Thetas=theta0, nitems=J, 
+                                    itemdesign=mixedlist$itemdesign, 
+                                    fixed.identical=mixedlist$fixed.identical)
+        fixed.design1 <- designMats(covdata=mixedlist$covdata, fixed=mixedlist$fixed, 
+                                    Thetas=theta1, nitems=J, 
+                                    itemdesign=mixedlist$itemdesign, 
+                                    fixed.identical=mixedlist$fixed.identical)
+    }    
     for (i in 1:J){
-        itemtrace0[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=theta0)
-        itemtrace1[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=theta1)        
+        itemtrace0[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
+            ProbTrace(x=pars[[i]], Theta=theta0, fixed.design=fixed.design0[[i]])
+        itemtrace1[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
+            ProbTrace(x=pars[[i]], Theta=theta1, fixed.design=fixed.design1[[i]])        
     }    
     tmp0 <- itemtrace0*fulldata
     tmp1 <- itemtrace1*fulldata
@@ -65,7 +79,8 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     total_1[!accept] <- total_0[!accept]
     log.lik <- sum(total_1)	
     if(!is.null(prodlist)) 
-        theta1 <- theta1[ ,1:(pars[[1]]@nfact - length(prodlist)), drop=FALSE]
+        theta1 <- theta1[ ,1:(pars[[1]]@nfact - pars[[1]]@nfixedeffects - 
+                                  length(prodlist)), drop=FALSE]
     attr(theta1, "Proportion Accepted") <- sum(accept)/N 				
     attr(theta1, "log.lik") <- log.lik	
     return(theta1) 
@@ -295,7 +310,7 @@ bfactor2mod <- function(model, J){
         tmp2 <- c(tmp2, c(paste('\nF', i, ' =', sep=''), comma))
     }
     cat(tmp2, file=tmp)
-    model <- confmirt.model(tmp, quiet = TRUE)        
+    model <- confmirt.model(file=tmp, quiet = TRUE)        
     unlink(tmp)
     return(model)
 }
@@ -314,7 +329,10 @@ calcEMSE <- function(object, data, model, itemtype, fitvalues, constrain, parpri
     return(object)
 }
 
-UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList){    
+UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
+                            mixedlist, method)
+{        
+    #within group item constraints only
     for(g in 1:ngroups)  
         if(length(PrepList[[g]]$constrain) > 0)
             for(i in 1:length(PrepList[[g]]$constrain))
@@ -378,6 +396,15 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                 constrain[[length(constrain) + 1]] <- tmp
             }
         }
+    }
+    #accross item constraints for mixedmirt
+    if(method == 'MIXED' && mixedlist$fixed.constrain){                    
+        for(i in 1:pars[[1]][[1]]@nfixedeffects){
+            tmp <- c()
+            for(j in 1:J)
+                tmp <- c(tmp, pars[[1]][[j]]@parnum[i])
+            constrain[[length(constrain) + 1]] <- tmp           
+        }        
     }
     return(constrain)
 }
@@ -485,5 +512,54 @@ ItemInfo <- function(x, Theta, cosangle){
     }
     for(i in 1:x@ncat)        
         info <- info + ( (dx$grad[[i]])^2 / P[ ,i] - dx$hess[[i]])    
+    return(info)
+}
+
+designMats <- function(covdata, fixed, Thetas, nitems, itemdesign = NULL, random = NULL, 
+                       fixed.identical = FALSE){     
+    fixed.design.list <- vector('list', nitems)     
+    for(item in 1:nitems){
+        if(item > 1 && fixed.identical){
+            fixed.design.list[[item]] <- fixed.design.list[[1]]
+            next            
+        }                
+        if(colnames(itemdesign)[1] != 'InTeRnAlUsElESsNaMe2'){
+            dat <- data.frame(matrix(itemdesign[item, ], nrow(covdata), ncol(itemdesign), byrow=TRUE), 
+                                   covdata, Thetas)
+            colnames(dat) <- c(colnames(itemdesign), colnames(covdata), colnames(Thetas))
+        } else dat <- data.frame(covdata, Thetas)        
+        if(fixed == ~ 1) {
+            fixed.design <- NULL
+        } else fixed.design <- model.matrix(fixed, dat)[ ,-1, drop = FALSE]
+        cn <- colnames(Thetas)
+        CN <- colnames(fixed.design)
+        drop <- rep(FALSE, length(CN))
+        for(i in 1:ncol(Thetas))
+            drop <- drop | CN == cn[i]        
+        fixed.design.list[[item]] <- fixed.design[ , !drop, drop = FALSE]          
+    }
+    return(fixed.design.list)    
+}
+
+nameInfoMatrix <- function(info, correction, L, npars){
+    #give info meaningful names for wald test    
+    parnames <- names(correction)
+    tmp <- outer(1:npars, rep(1, npars))
+    matind <- matrix(0, ncol(tmp), nrow(tmp))
+    matind[lower.tri(matind, diag = TRUE)] <- tmp[lower.tri(tmp, diag = TRUE)]    
+    matind <- matind * L
+    matind[matind == 0 ] <- NA  
+    shortnames <- c()
+    for(i in 1:length(correction)){
+        keep <- is.na(matind[ , 1])
+        while(all(keep)){            
+            matind <- matind[-1, -1, drop = FALSE]        
+            keep <- is.na(matind[ , 1])
+        }            
+        tmp <- paste0(parnames[i], paste0('.', matind[!keep, 1], collapse=''))
+        shortnames <- c(shortnames, tmp)
+        matind <- matind[keep, keep, drop = FALSE]        
+    }
+    colnames(info) <- rownames(info) <- shortnames
     return(info)
 }
