@@ -10,7 +10,8 @@ test_that('one factor', {
     dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
     dat <- rbind(dataset1, dataset2)
     group <- c(rep('D1', N), rep('D2', N))    
-    models <- confmirt.model('confmods/MGmodel1', quiet = TRUE)
+    MGmodel1 <- 'F1 = 1-15'    
+    models <- confmirt.model(MGmodel1, quiet = TRUE)
     
     mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM')
     expect_is(mod_configural, 'MultipleGroupClass')
@@ -38,6 +39,9 @@ test_that('one factor', {
     expect_is(fs1, 'list')
     expect_is(fs2, 'data.frame')
     expect_is(fs3, 'list')
-    expect_is(fs4, 'data.frame')    
+    expect_is(fs4, 'data.frame') 
+    
+    fit1 <- fitIndices(mod_metric)
+    expect_is(fit1, 'list')
 })
 

@@ -1,13 +1,19 @@
 #' Wald test for mirt models
 #' 
-#' Compute a Wald test given an \code{L} vector or matrix of contrasts. Requires that the 
-#' information matrix already be computed (using \code{SE = TRUE} when using EM estimation). 
+#' Compute a Wald test given an \code{L} vector or matrix of numeric contrasts. Requires that the 
+#' model information matrix be computed (including \code{SE = TRUE} when using the EM method). Use
+#' \code{wald(model)} to observe how the information matrix columns are named, especially if 
+#' the estimated model contains constrained parameters (e.g., 1PL). The information matrix names 
+#' are labelled according to which parameter number(s) they correspeond to (to check the original 
+#' numbering use the option \code{pars = 'values'} in the original estimation function).
 #' 
 #' 
 #' @aliases wald
-#' @param L a coefficient matrix with dimensions nconstrasts x npars. Use \code{pars = 'values'}
-#' on the initially estimated model to obtain the parameter indicators  
-#' @param object estimated object from mirt, confmirt, or multipleGroup
+#' @param L a coefficient matrix with dimensions nconstrasts x npars, or a vector if only one
+#' set of contrasts is being tested. Ommiting this value will return the column names of the 
+#' information matrix used to identify the (potentially constrained) parameters  
+#' @param object estimated object from \code{mirt}, \code{bfactor}, \code{confmirt},
+#' \code{multipleGroup}, or \code{mixedmirt}
 #' @param C a constant vector/matrix to be compared along side L
 #' @keywords wald
 #' @export wald
@@ -22,55 +28,59 @@
 #'    
 #'    
 #' mod <- mirt(data, cmodel, SE = TRUE)
-#' coef(mod, allpars = TRUE)
+#' coef(mod)
+#' 
+#' #see how the infomation matrix relates to estimated parameters, and how it lines up with the index
+#' (infonames <- wald(mod))
 #' index <- mirt(data, cmodel, pars = 'values')
 #' index
 #' 
-#'        
-#' #second factor slopes equal to 0?
-#' L <- rep(0, 30)
-#' L[c(7, 12)] <- 1
-#' wald(L, mod)
+#' #second factor slope equal to 0?
+#' L <- rep(0, 10)
+#' names(L) <- infonames
+#' L[3] <- 1
+#' wald(mod, L)
 #' 
-#' #simultaniously test equal factor slopes for item 2 and 3, and 4 and 5
-#' L <- matrix(0, 2, 30)
-#' L[1,16] <- L[2, 7] <- 1
-#' L[1,21] <- L[2, 12] <- -1
-#' wald(L, mod)
+#' #simultaneously test equal factor slopes for item 2 and 3, and 4 and 5
+#' L <- matrix(0, 2, 10)
+#' colnames(L) <- infonames #colnames() not required
+#' L[1,3] <- L[2, 7] <- 1
+#' L[1,5] <- L[2, 9] <- -1
+#' L
+#' wald(mod, L)
 #' 
 #' #logLiklihood tests (requires estimating a new model)
 #' mod2 <- mirt(data, cmodel, constrain = list(c(7,12), c(16,21)))
 #' anova(mod2, mod)
 #' }
-wald <- function(L, object, C = 0){
+wald <- function(object, L, C = 0){
+    Names <- colnames(object@information)
+    if(missing(L)){
+        names(Names) <- 1:length(Names)
+        return(Names)    
+    }
+    if(!is.matrix(L))
+        L <- matrix(L, 1)    
     pars <- object@pars
     covB <- solve(object@information)
-    estB <- B <- c()
+    B <- parnum <- c()
     if(is(object, 'MultipleGroupClass')){
-        pars <- object@cmods
         for(g in 1:length(pars)){
             for(i in 1:length(pars[[g]]@pars)){
-                B <- c(B, pars[[g]]@pars[[i]]@par)        
-                estB <- c(estB, pars[[g]]@pars[[i]]@est)
+                B <- c(B, pars[[g]]@pars[[i]]@par)
+                parnum <- c(parnum, pars[[g]]@pars[[i]]@parnum)
             }
-        }        
+        }                
     } else {
         for(i in 1:length(pars)){
-            B <- c(B, pars[[i]]@par)        
-            estB <- c(estB, pars[[i]]@est)
+            B <- c(B, pars[[i]]@par)
+            parnum <- c(parnum, pars[[i]]@parnum)
         }
-    }
-    if(length(object@constrain) > 0){        
-        constr <- object@constrain
-        for(i in 1:length(constr))
-            for(j in 2:length(constr[[i]]))
-                estB[constr[[i]][j]] <- FALSE        
-    }
-    estB <- matrix(estB, 1)
-    B <- B[estB[1,]]       
-    if(!is.matrix(L))
-        L <- matrix(L, 1)        
-    if(ncol(L) == ncol(estB)) L <- L[, estB, drop = FALSE]    
+    }    
+    keep <- c()
+    for(i in 1:length(Names))
+        keep <- c(keep, as.numeric(strsplit(Names[i], '.', fixed = TRUE)[[1]][2]))
+    B <- B[keep]    
     W <- t(L %*% B - C) %*% solve(L %*% covB %*% t(L)) %*% (L %*% B - C)
     ret <- list(W=W, df = nrow(L))
     class(ret) <- 'wald'
@@ -87,6 +97,6 @@ print.wald <- function(x, ...){
     df <- x$df
     p <- 1 - pchisq(x$W, x$df)
     cat('\nWald test: \nW = ', round(W, 3), ', df = ', df, ', p = ', 
-        round(p, 3), sep='')       
+        round(p, 3), '\n', sep='')       
 }
 

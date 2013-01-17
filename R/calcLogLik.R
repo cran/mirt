@@ -26,6 +26,7 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @docType methods
 #' @rdname calcLogLik-methods  
+#' @export calcLogLik
 #' @seealso
 #' \code{\link{confmirt}}, \code{\link{multipleGroup}}
 #' @keywords calcLogLik
@@ -41,7 +42,7 @@ setMethod(
 	f = "calcLogLik",
 	signature = signature(object = 'ExploratoryClass'),
 	definition = function(object, draws = 2000, G2 = TRUE)
-	{	        
+	{	   
         pars <- object@pars
 	    tol <- 1e-8	    
         fulldata <- object@fulldata
@@ -49,19 +50,26 @@ setMethod(
         itemloc <- object@itemloc
         N <- nrow(fulldata)
 	    J <- length(pars)-1
-	    nfact <- length(ExtractLambdas(pars[[1]])) - length(object@prodlist)	    
+	    nfact <- length(ExtractLambdas(pars[[1]])) - length(object@prodlist) - pars[[1]]@nfixedeffects	    
         LL <- matrix(0, N, draws)
-        grp <- ExtractGroupPars(pars[[length(pars)]])
+        grp <- ExtractGroupPars(pars[[length(pars)]]) 
+        fixed.design.list <- vector('list', J)
         for(draw in 1:draws){
-	        if(nfact > 1)		
-	            theta <-  mvtnorm::rmvnorm(N,grp$gmeans, grp$gcov) 
-	        else
-	            theta <- as.matrix(rnorm(N,grp$gmeans, grp$gcov))
+	        if(nfact > 1) theta <-  mvtnorm::rmvnorm(N,grp$gmeans, grp$gcov)
+	        else theta <- as.matrix(rnorm(N,grp$gmeans, grp$gcov))
 	        if(length(prodlist) > 0)
 	            theta <- prodterms(theta,prodlist)	        	    	
 	        itemtrace <- matrix(0, ncol=ncol(fulldata), nrow=N)    
-	        for (i in 1:J)
-	            itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=theta)	            	        
+	        if(length(object@mixedlist) > 1){ 
+                colnames(theta) <- object@mixedlist$factorNames
+                fixed.design.list <- designMats(covdata=object@mixedlist$covdata, 
+                                                fixed=object@mixedlist$fixed, 
+                                                Thetas=theta, nitems=J, 
+                                                itemdesign=object@mixedlist$itemdesign, 
+                                                fixed.identical=object@mixedlist$fixed.identical)	            
+	        }
+	        for (i in 1:J) itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- 
+                ProbTrace(x=pars[[i]], Theta=theta, fixed.design=fixed.design.list[[i]])	            	        
 	        tmp <- itemtrace*fulldata	        
 	        tmp[tmp < tol] <- 1    
 	        LL[ ,draw] <- exp(rowSums(log(tmp)))
@@ -89,7 +97,6 @@ setMethod(
 			TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull 
 			TFvec[is.na(TFvec)] <- FALSE	
 			expected[j] <- mean(rwmeans[TFvec])			
-			rwmeans[TFvec] <- rwmeans[TFvec]/r[j]
 		}
 		expected[is.nan(expected)] <- NA
 		tabdata <- cbind(tabdata,expected*N)        
@@ -116,8 +123,8 @@ setMethod(
 		if(G2){						
 			if(any(is.na(data))){
 			    object@G2 <- object@p <- object@RMSEA <- object@TLI <- NaN
-			} else {				
-				G2 <- 2 * sum(log(1/(N*rwmeans)))
+			} else {
+				G2 <- 2 * sum(r*log(r/(N*expected)))
 				p <- 1 - pchisq(G2,df) 
 				object@G2 <- G2	
 				object@p <- p				

@@ -40,6 +40,17 @@ test_that('poly', {
     data <- simdata(a, d + c, 2000, itemtype = rep('graded',10))
     sv <- mirt(data, 1, itemtype = 'grsm', pars = 'values')
     sv[,5] <- c(as.vector(t(cbind(a,d,c))),0,1)    
-    grsm <- mirt(data, 1, itemtype = 'grsm', pars = sv)
+    grsm <- mirt(data, 1, itemtype = 'grsm', pars = sv, calcNull= FALSE)
+    rsm <- mirt(data, 1, itemtype = 'rsm', calcNull= FALSE)
     expect_is(grsm, 'ConfirmatoryClass')    
+    expect_is(rsm, 'ConfirmatoryClass')    
+    
+    #item and test info
+    Theta <- matrix(seq(-4,4,.01))
+    x <- extract.item(modp1, 1)
+    iinfo <- iteminfo(x, Theta)
+    expect_is(iinfo, 'matrix')    
+    tinfo <- testinfo(modp1, Theta)
+    expect_is(tinfo, 'matrix')
+    
 })

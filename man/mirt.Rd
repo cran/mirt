@@ -11,10 +11,11 @@ Theory)}
 \usage{
   mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
     SE = FALSE, SEtol = .001, pars = NULL, constrain =
-    NULL, parprior = NULL, rotate = 'varimax', Target =
-    NaN, prev.cor = NULL, quadpts = NULL, grsm.block =
-    NULL, D = 1.702, verbose = FALSE, debug = FALSE,
-    technical = list(), ...)
+    NULL, parprior = NULL, calcNull = TRUE, rotate =
+    'varimax', Target = NaN, prev.cor = NULL, quadpts =
+    NULL, grsm.block = NULL, rsm.block = NULL, D = 1.702,
+    verbose = FALSE, debug = FALSE, technical = list(),
+    ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
@@ -52,14 +53,15 @@ Theory)}
   repeated globally. The NULL default assumes that the
   items follow a graded or 2PL structure, however they may
   be changed to the following: 'Rasch', '1PL', '2PL',
-  '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm',
+  '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'rsm',
   'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the
   Rasch/partial credit, 1 and 2 parameter logistic, 3
   parameter logistic (lower asymptote and upper), 4
   parameter logistic, graded response model, rating scale
   graded response model, generalized partial credit model,
-  nominal model, multiple choice model, and 2-3PL partially
-  compensatory model, respectively}
+  Rasch rating scale model, nominal model, multiple choice
+  model, and 2-3PL partially compensatory model,
+  respectively}
 
   \item{grsm.block}{an optional numeric vector indicating
   where the blocking should occur when using the grsm, NA
@@ -70,6 +72,9 @@ Theory)}
   NA)}. If NULL the all items are assumed to be within the
   same group and therefore have the same number of item
   categories}
+
+  \item{rsm.block}{same as \code{grsm.block}, but for
+  \code{'rsm'} blocks}
 
   \item{SE}{logical, estimate the standard errors? Calls
   the MHRM subroutine for a stochastic approximation}
@@ -135,6 +140,9 @@ Theory)}
   model defines the values by using \code{pars = 'values'},
   and this object can in turn be modified and input back
   into the estimation with \code{pars = mymodifiedpars}}
+
+  \item{calcNull}{logical; calculate the Null model for fit
+  statics (e.g., TLI)?}
 
   \item{quadpts}{number of quadrature points per dimension}
 
@@ -208,8 +216,12 @@ Theory)}
   factor analysis model to dichotomous and polytomous data
   under the item response theory paradigm. Fits univariate
   and multivariate Rasch, 1-4PL, graded, (generalized)
-  partial credit, nominal, multiple choice, and partially
-  compenatory models using the EM algorithm.
+  partial credit, nominal, multiple choice, graded rating
+  scale, Rasch rating scale, and partially compenatory
+  models using the EM algorithm. Models may also contain
+  'explanatory' person or item level predictors, though
+  these can only be included by using the
+  \code{\link{mixedmirt}} function.
 }
 \details{
   \code{mirt} follows the item factor analysis strategy by
@@ -249,7 +261,10 @@ Theory)}
   constant values or set equal to other parameters using
   the appropriate declarations. If the model is
   confirmatory then the returned class will be
-  'ConfirmatoryClass'.
+  'ConfirmatoryClass'. Confirmatory models may also contain
+  'explanatory' person or item level predictors, though
+  including predictors is limited only to the
+  \code{\link{mixedmirt}} function.
 }
 
 \section{Exploratory IRT}{
@@ -310,17 +325,19 @@ Theory)}
   d))}} } \item{1-4PL}{ Depending on the model \eqn{u} may
   be equal to 1 and \eqn{g} may be equal to 0. \deqn{P(x =
   1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-D * (a_1 *
-  \theta_1 + a_2 * \theta_2 + d))}} } \item{graded}{ The
-  graded model consists of sequential 2PL models, and here
-  \eqn{k} is the predicted category. \deqn{P(x = k |
-  \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
-  | \theta, \phi)} } \item{grsm}{ A more constrained
-  version of the graded model where graded spacing is equal
-  accross item blocks and only adjusted by a single
-  'difficulty' parameter (c). Again, \deqn{P(x = k |
-  \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1
-  | \theta, \phi)} but now \deqn{P = \frac{1}{1 + exp(-D *
-  (a_1 * \theta_1 + a_2 * \theta_2 + d_k + c))}} }
+  \theta_1 + a_2 * \theta_2 + d))}} For the 1PL model the
+  number of factors must equal 1, and all the \eqn{a_1}
+  values are constrained to be equal accross all items. }
+  \item{graded}{ The graded model consists of sequential
+  2PL models, and here \eqn{k} is the predicted category.
+  \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi)
+  - P(x \ge k + 1 | \theta, \phi)} } \item{grsm}{ A more
+  constrained version of the graded model where graded
+  spacing is equal accross item blocks and only adjusted by
+  a single 'difficulty' parameter (c). Again, \deqn{P(x = k
+  | \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k +
+  1 | \theta, \phi)} but now \deqn{P = \frac{1}{1 + exp(-D
+  * (a_1 * \theta_1 + a_2 * \theta_2 + d_k + c))}} }
   \item{gpcm/nominal}{For the gpcm the \eqn{d_k} values are
   treated as fixed and orderd values from 0:(k-1) (in the
   nominal model \eqn{d_0} is also set to 0). Additionally,
@@ -328,12 +345,21 @@ Theory)}
   \eqn{ak_k = (k - 1)}. \deqn{P(x = k | \theta, \psi) =
   \frac{exp(-D * ak_k * (a_1 * \theta_1 + a_2 * \theta_2) +
   d_k)} {\sum_i^k exp(-D * ak_k * (a_1 * \theta_1 + a_2 *
-  \theta_2) + d_k)}} } \item{mcm}{For identification
-  \eqn{ak_0 = d_0 = 0} and \eqn{\sum_0^k t_k = 1}.
-  \deqn{P(x = k | \theta, \psi) = C_0 (\theta) * t_k + (1 -
-  C_0 (\theta)) * \frac{exp(-D * ak_k * (a_1 * \theta_1 +
-  a_2 * \theta_2) + d_k)} {\sum_i^k exp(-D * ak_k * (a_1 *
-  \theta_1 + a_2 * \theta_2) + d_k)}}
+  \theta_2) + d_k)}} } \item{rsm}{ A more constrained
+  version of the generalized partial credit model where the
+  spacing is equal accross item blocks and only adjusted by
+  a single 'difficulty' parameter (c), and the
+  discrimination parameter is constrained to be a constant.
+  Note that this is analogous to the relationship between
+  the graded model and the grsm (with an additional
+  constraint regarding the discrimination parameters; the
+  discrimination constraint can, however, be relaxed by
+  adjusting the starting values manually). } \item{mcm}{For
+  identification \eqn{ak_0 = d_0 = 0} and \eqn{\sum_0^k t_k
+  = 1}. \deqn{P(x = k | \theta, \psi) = C_0 (\theta) * t_k
+  + (1 - C_0 (\theta)) * \frac{exp(-D * ak_k * (a_1 *
+  \theta_1 + a_2 * \theta_2) + d_k)} {\sum_i^k exp(-D *
+  ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}}
 
   where \eqn{C_0 (\theta) = \frac{exp(-D * ak_0 * (a_1 *
   \theta_1 + a_2 * \theta_2) + d_0)} {\sum_i^k exp(-D *
@@ -387,9 +413,10 @@ summary(pmod1)
 #Constrain all slopes to be equal
 #first obtain parameter index
 values <- mirt(Science,1, pars = 'values')
-values #note that slopes are numbered 1,5,9,13
+values #note that slopes are numbered 1,5,9,13, or index with values$parnum[values$name == 'a1']
 (pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
 coef(pmod1_equalslopes)
+anova(pmod1_equalslopes, pmod1) #significantly worse fit with all criteria
 
 pmod2 <- mirt(Science, 2)
 summary(pmod2)
@@ -398,8 +425,17 @@ plot(pmod2, theta_angle = seq(0,90, by = 5)) #sum across angles of theta 1
 itemplot(pmod2, 1)
 anova(pmod1, pmod2)
 
+#unidimensional fit with a generalized partial credit and nominal model
+(gpcmod <- mirt(Science, 1, 'gpcm'))
+coef(gpcmod)
+(nomod <- mirt(Science, 1, 'nominal'))
+anova(gpcmod, nomod)
+itemplot(nomod, 3)
+
 
 ###########
+#empirical dimensionality testing that includes 'guessing'
+
 data(SAT12)
 data <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
@@ -427,6 +463,7 @@ anova(mod1g, mod1wg)
 #graded rating scale example
 
 #make some data
+set.seed(1234)
 a <- matrix(rep(1/1.702, 10))
 d <- matrix(c(1,0.5,-.5,-1), 10, 4, byrow = TRUE)
 c <- seq(-1, 1, length.out=10)
@@ -437,7 +474,7 @@ sv <- mirt(data, 1, itemtype = 'grsm', pars = 'values')
 sv[,5] <- c(as.vector(t(cbind(a,d,c))),0,1)
 
 mod1 <- mirt(data, 1)
-mod2 <- mirt(data, 1, itemtype = 'grsm', verbose = TRUE, pars = sv)
+mod2 <- mirt(data, 1, itemtype = 'grsm', verbose = TRUE, pars = sv, calcNull = FALSE)
 coef(mod2)
 anova(mod2, mod1) #not sig, mod2 should be prefered
 }
@@ -480,8 +517,11 @@ anova(mod2, mod1) #not sig, mod2 should be prefered
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
   \code{\link{confmirt}}, \code{\link{bfactor}},
-  \code{\link{multipleGroup}}, \code{\link{wald}}
-  \code{\link{itemplot}}, \code{\link{fscores}}
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{fitIndices}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}
 }
 \keyword{models}
 

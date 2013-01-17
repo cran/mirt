@@ -15,7 +15,9 @@ setMethod(
             cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
         cat("Log-likelihood =", x@logLik, "\n")
         cat("AIC =", x@AIC, "\n")		
+        cat("AICc =", x@AICc, "\n")
         cat("BIC =", x@BIC, "\n")
+        cat("SABIC =", x@SABIC, "\n")
         if(!is.nan(x@p))            		    
             cat("G^2 = ", round(x@G2,2), ", df = ", x@df, ", p = ", round(x@p,4),
                 "\nTLI = ", round(x@TLI,3), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
@@ -136,14 +138,23 @@ setMethod(
             temp <- object
             object <- object2
             object2 <- temp
-        }
-        X2 <- 2*object2@logLik - 2*object@logLik 		
-        AICdiff <- object@AIC - object2@AIC    
-        BICdiff <- object@BIC - object2@BIC
-        cat("\nChi-squared difference: \n\nX2 = ", round(X2,3), ", df = ",
-            df, ", p = ", round(1 - pchisq(X2,abs(df)),4), "\n", sep="")
-        cat("AIC difference = ", round(AICdiff,3), "\n")  
-        cat("BIC difference = ", round(BICdiff,3), "\n")
+        }        
+        X2 <- round(2*object2@logLik - 2*object@logLik, 3)
+        cat('\nModel 1: ')
+        print(object@Call)
+        cat('Model 2: ')
+        print(object2@Call)
+        cat('\n')
+        ret <- data.frame(Df = c(object@df, object2@df),
+                          AIC = c(object@AIC, object2@AIC),
+                          AICc = c(object@AICc, object2@AICc),
+                          BIC = c(object@BIC, object2@BIC), 
+                          SABIC = c(object@SABIC, object2@SABIC),
+                          logLik = c(object@logLik, object2@logLik),
+                          X2 = c('', X2),
+                          df = c('', abs(df)),
+                          p = c('', round(1 - pchisq(X2,abs(df)),3)))         
+        return(ret)
     }
 )
 

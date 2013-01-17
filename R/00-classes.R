@@ -5,6 +5,7 @@ setClass("AllModelClass",
                         df='numeric', 
                         p='numeric', 
                         AIC='numeric', 
+                        AICc='numeric',
                         F='matrix', 
                         h2='numeric', 
                         tabdata='matrix', 
@@ -14,6 +15,7 @@ setClass("AllModelClass",
                         converge='numeric', 
                         itemloc = 'numeric',                        
                         BIC='numeric', 
+                        SABIC='numeric',
                         RMSEA='numeric',                         
                         null.mod = 'S4', 
                         TLI = 'numeric',                          
@@ -32,6 +34,7 @@ setClass("AllModelClass",
                         factorNames='character',
                         method='character',
                         itemtype='character',
+                        time='numeric',
                         'VIRTUAL'),    
          validity = function(object) return(TRUE)
 )                       
@@ -52,7 +55,8 @@ setClass(
 # @keywords classes
 setClass(
     Class = 'ConfirmatoryClass', contains = 'AllModelClass',    	
-    representation = representation(Pl='numeric'),
+    representation = representation(Pl='numeric',
+                                    mixedlist='list'),
     validity = function(object) return(TRUE)
 )	
 
@@ -65,5 +69,14 @@ setClass(
                                     groupNames='factor',
                                     invariance='character',
                                     cmods='list'),    
+    validity = function(object) return(TRUE)
+)
+
+#------------------------------------------------------------------------------
+#' @exportClass MixedClass
+setClass(
+    Class = 'MixedClass', contains = 'AllModelClass',
+    representation = representation(Pl='numeric',
+        mixedlist='list'),    
     validity = function(object) return(TRUE)
 )

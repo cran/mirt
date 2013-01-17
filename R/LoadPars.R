@@ -1,10 +1,10 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact, 
                      constrain, startvalues, freepars, parprior, parnumber, D, 
-                     estLambdas, BFACTOR = FALSE, debug)
+                     estLambdas, BFACTOR = FALSE, mixedlist, debug)
     {       
     if(debug == 'LoadPars') browser() 
-    if(any(itemtype[1] == c('Rasch', '1PL', 'rating') && nfact > 1)) 
-        stop('Rasch, 1PL, and rating scale models can only be estimated for unidimensional models')
+    if(any(itemtype[1] == c('Rasch', '1PL') && nfact > 1)) 
+        stop('Rasch and 1PL models can only be estimated for unidimensional models')
     pars <- list()           
     constr <- c()
     if(!is.null(constrain) && is.list(constrain)) 
@@ -36,12 +36,16 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 1:(K[i]-1), sep=''))    
             }            
             if(itemtype[i] == 'grsm'){
-                val <- c(lambdas[i,], zetas[[1]], 0) #first item intercepts
+                val <- c(lambdas[i,], seq(2.5, -2.5, length.out = length(zetas[[i]])), 0) 
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 1:(K[i]-1), sep=''), 'c')
             }
             if(itemtype[i] == 'gpcm'){
                 val <- c(lambdas[i,], 0, zetas[[i]])
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 0:(K[i]-1), sep=''))                
+            }
+            if(itemtype[i] == 'rsm'){                
+                val <- c(rep(1/D, nfact), 0, seq(2.5, -2.5, length.out = length(zetas[[i]])), 0)
+                names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 0:(K[i]-1), sep=''), 'c')                
             }
             if(itemtype[i] == 'nominal'){
                 val <- c(lambdas[i,], 0, rep(.5, K[i] - 2), K[i]-1, rep(0, K[i]))
@@ -49,7 +53,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                                 paste('d', 0:(K[i]-1), sep=''))                
             }
             if(any(itemtype[i] == c('PC2PL','PC3PL'))){
-                val <- c(lambdas[i,], rep(-1, nfact), 0, 1)
+                val <- c(lambdas[i,], rep(1, nfact), 0, 1)
                 names(val) <- c(paste('a', 1:nfact, sep=''), paste('d', 1:nfact, sep=''), 'g','u')
             }
             if(itemtype[i] == 'mcm'){
@@ -82,7 +86,9 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             if(itemtype[i] == 'graded')
                 freepars[[i]] <- c(estLambdas[i, ], rep(TRUE, K[i]-1))
             if(itemtype[i] == 'gpcm')            
-                freepars[[i]] <- c(estLambdas[i, ], FALSE, rep(TRUE, K[i]-1))            
+                freepars[[i]] <- c(estLambdas[i, ], FALSE, rep(TRUE, K[i]-1))  
+            if(itemtype[i] == 'rsm')            
+                freepars[[i]] <- c(rep(FALSE, nfact), FALSE, rep(TRUE, K[i]))
             if(itemtype[i] == 'nominal'){
                 estpars <- c(estLambdas[i, ], rep(TRUE, K[i]*2))
                 #identifiction constraints
@@ -99,12 +105,32 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 #identifiction constraints
                 tmp <- names(startvalues[[i]])
                 tmp2 <- 1:length(tmp)
-                estpars[tmp2[tmp %in% c('ak0', 'ak1', paste('ak',i,sep=''), 'd0', 'd1', 't1')]] <- FALSE                
+                estpars[tmp2[tmp %in% c('ak0', 'ak1', 
+                                        paste('ak',i,sep=''), 'd0', 'd1', 't1')]] <- FALSE                
                 freepars[[i]] <- estpars
             }
         }         
     }
     for(i in 1:J) names(freepars[[i]]) <- names(startvalues[[i]])    
+    
+    #augment startvalues and fixedpars for mixed effects
+    nfixedeffects <- 0    
+    if(!is.null(mixedlist)){ 
+        fixed.design.list <- designMats(covdata=mixedlist$covdata, fixed=mixedlist$fixed, 
+                                        Thetas=mixedlist$Theta, nitems=J, 
+                                        itemdesign=mixedlist$itemdesign, 
+                                        fixed.identical=mixedlist$fixed.identical)
+        betas <- rep(0, ncol(fixed.design.list[[1]]))
+        estbetas <- rep(TRUE, length(betas))
+        names(estbetas) <- names(betas) <- colnames(fixed.design.list[[1]])
+        nfixedeffects <- length(betas)
+        nfact <- nfact + nfixedeffects
+        for(i in 1:J){
+            freepars[[i]] <- c(estbetas, freepars[[i]])
+            startvalues[[i]] <- c(betas, startvalues[[i]])            
+        }        
+    }    
+    
     #load items
     for(i in 1:J){
         tmp <- c(itemloc[i]:(itemloc[i+1] - 1)) #item location         
@@ -115,6 +141,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              dat=fulldata[ ,tmp], 
                              constr=TRUE,                              
                              ncat=2,
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              lbound=ifelse(itemtype[i] == 'Rasch', -25, -Inf),
                              ubound=ifelse(itemtype[i] == 'Rasch', 25, Inf),                             
@@ -133,6 +160,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
@@ -155,6 +183,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
@@ -176,6 +205,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              est=freepars[[i]],
                              nfact=nfact, 
+                             nfixedeffects=nfixedeffects, 
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
                              ncat=2,
@@ -203,6 +233,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
@@ -224,6 +255,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
@@ -245,6 +277,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              par=startvalues[[i]], 
                              nfact=nfact, 
                              ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              est=freepars[[i]], 
                              dat=fulldata[ ,tmp], 
@@ -260,7 +293,30 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             if(length(intersect(tmp2, constr)) > 0 ) pars[[i]]@constr <- TRUE            
             pars[[i]]@parnum <- tmp2
             parnumber <- parnumber + length(freepars[[i]])
-        }        
+        }    
+        
+        if(itemtype[i] == 'rsm'){            
+            pars[[i]] <- new('rsm', 
+                             par=startvalues[[i]], 
+                             nfact=nfact, 
+                             ncat=K[i],
+                             nfixedeffects=nfixedeffects, 
+                             D=D,
+                             est=freepars[[i]], 
+                             dat=fulldata[ ,tmp], 
+                             constr=TRUE,                              
+                             lbound=-Inf,
+                             ubound=Inf,                             
+                             n.prior.mu=rep(NaN,length(startvalues[[i]])),
+                             n.prior.sd=rep(NaN,length(startvalues[[i]])),
+                             b.prior.alpha=rep(NaN,length(startvalues[[i]])),
+                             b.prior.beta=rep(NaN,length(startvalues[[i]])))                   
+            pars[[i]]@par[nfact+1] <- 0            
+            tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1)
+            if(length(intersect(tmp2, constr)) > 0) pars[[i]]@constr <- TRUE            
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(freepars[[i]])
+        }   
         
         if(itemtype[i] == 'nominal'){
             pars[[i]] <- new('nominal', 
@@ -268,6 +324,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]], 
                              nfact=nfact, 
                              ncat=K[i], 
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
@@ -291,6 +348,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]],
                              nfact=nfact, 
                              ncat=2, 
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              
@@ -318,6 +376,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              est=freepars[[i]], 
                              nfact=nfact, 
                              ncat=K[i], 
+                             nfixedeffects=nfixedeffects, 
                              D=D,
                              dat=fulldata[ ,tmp], 
                              constr=FALSE,                              

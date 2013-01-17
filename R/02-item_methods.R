@@ -33,6 +33,14 @@ setMethod(
 
 setMethod(
     f = "print",
+    signature = signature(x = 'rsm'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "print",
     signature = signature(x = 'nominal'),
     definition = function(x, ...){
         cat('Item object of class:', class(x))
@@ -90,6 +98,14 @@ setMethod(
 setMethod(
     f = "show",
     signature = signature(object = 'gpcm'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'rsm'),
     definition = function(object){
         print(object)
     }
@@ -172,6 +188,19 @@ setMethod(
 setMethod(
     f = "LogLik",
     signature = signature(x = 'gpcm', Theta = 'matrix'),
+    definition = function(x, Theta, EM = FALSE, prior = NULL){          
+        itemtrace <- ProbTrace(x=x, Theta=Theta)
+        Prior <- rep(1, nrow(itemtrace))
+        if(EM) Prior <- prior
+        LL <- (-1) * sum(x@rs * log(itemtrace) * Prior)
+        LL <- LL.Priors(x=x, LL=LL)
+        return(LL)
+    }
+)
+
+setMethod(
+    f = "LogLik",
+    signature = signature(x = 'rsm', Theta = 'matrix'),
     definition = function(x, Theta, EM = FALSE, prior = NULL){          
         itemtrace <- ProbTrace(x=x, Theta=Theta)
         Prior <- rep(1, nrow(itemtrace))
@@ -282,6 +311,16 @@ setMethod(
 
 setMethod(
     f = "ExtractLambdas",
+    signature = signature(x = 'rsm'),
+    definition = function(x){          
+        par <- x@par
+        a <- par[1:x@nfact]
+        a        
+    }
+)
+
+setMethod(
+    f = "ExtractLambdas",
     signature = signature(x = 'nominal'),
     definition = function(x){          
         par <- x@par
@@ -353,6 +392,16 @@ setMethod(
 
 setMethod(
     f = "ExtractZetas",
+    signature = signature(x = 'rsm'),
+    definition = function(x){          
+        par <- x@par
+        d <- par[-(1:x@nfact)]
+        d        
+    }
+)
+
+setMethod(
+    f = "ExtractZetas",
     signature = signature(x = 'nominal'),
     definition = function(x){          
         d <- x@par[length(x@par):(length(x@par) - x@ncat + 1)]
@@ -383,11 +432,13 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'dich', Theta = 'matrix'),
-    definition = function(x, Theta){  
+    definition = function(x, Theta, fixed.design = NULL){  
         u <- x@par[length(x@par)]
         g <- x@par[length(x@par)-1]
         d <- x@par[length(x@par)-2]
-        a <- x@par[1:x@nfact]        
+        a <- x@par[1:x@nfact]   
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.mirt(a=a, d=d, Theta=Theta, g=g, u=u, D=x@D)
         return(cbind(1.0 - P, P))
     }
@@ -396,9 +447,11 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'graded', Theta = 'matrix'),
-    definition = function(x, Theta, itemexp = TRUE){                  
+    definition = function(x, Theta, itemexp = TRUE, fixed.design = NULL){                  
         a <- x@par[1:x@nfact]        
         d <- x@par[(x@nfact+1):length(x@par)]
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.poly(a=a, d=d, Theta=Theta, itemexp=itemexp, D=x@D)
         return(P)
     }
@@ -408,11 +461,13 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'rating', Theta = 'matrix'),
-    definition = function(x, Theta, itemexp = TRUE){
+    definition = function(x, Theta, itemexp = TRUE, fixed.design = NULL){
         nfact <- x@nfact
         a <- x@par[1:nfact]
         d <- x@par[(nfact+1):(length(x@par)-1)]
         t <- x@par[length(x@par)]
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.poly(a=a, d=(d + t), Theta=Theta, itemexp=itemexp, D=x@D)
         return(P)
     }
@@ -421,10 +476,27 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'gpcm', Theta = 'matrix'),
-    definition = function(x, Theta){                  
+    definition = function(x, Theta, fixed.design = NULL){                  
         a <- x@par[1:x@nfact]        
         d <- x@par[-(1:x@nfact)]
-        P <- P.gpcm(a=a, d=d, Theta=Theta, D=x@D)
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
+        P <- P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, D=x@D)
+        return(P)
+    }
+)
+
+setMethod(
+    f = "ProbTrace",
+    signature = signature(x = 'rsm', Theta = 'matrix'),
+    definition = function(x, Theta, fixed.design = NULL){                  
+        a <- x@par[1:x@nfact]        
+        d <- x@par[(x@nfact+1):(length(x@par)-1)]
+        t <- x@par[length(x@par)]
+        d[-1] <- d[-1] + t
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)        
+        P <- P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, D=x@D)
         return(P)
     }
 )
@@ -432,10 +504,12 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'nominal', Theta = 'matrix'),
-    definition = function(x, Theta){         
+    definition = function(x, Theta, fixed.design = NULL){         
         a <- x@par[1:x@nfact]        
         ak <- x@par[(x@nfact+1):(x@nfact + x@ncat)]
         d <- x@par[length(x@par):(length(x@par) - x@ncat + 1)]
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.nominal(a=a, ak=ak, d=d, Theta=Theta, D=x@D)
         return(P)
     }
@@ -444,12 +518,14 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'partcomp', Theta = 'matrix'),
-    definition = function(x, Theta){    
+    definition = function(x, Theta, fixed.design = NULL){    
         nfact <- x@nfact
         a <- x@par[1:nfact]
         d <- x@par[(nfact+1):(length(x@par)-2)]
         g <- x@par[length(x@par)-1]
-        u <- x@par[length(x@par)]        
+        u <- x@par[length(x@par)]      
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.comp(a=a, d=d, Theta=Theta, g=g, u=u, D=x@D)
         return(cbind(1.0 - P, P))
     }
@@ -458,14 +534,16 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'mcm', Theta = 'matrix'),
-    definition = function(x, Theta){        
+    definition = function(x, Theta, fixed.design = NULL){        
         a <- x@par[1:x@nfact]        
         ind <- x@nfact + 1
         ak <- x@par[ind:(ind + x@ncat)]
         ind <- ind + x@ncat + 1
         d <- x@par[ind:(ind + x@ncat)]
         ind <- ind + x@ncat + 1
-        t <- x@par[ind:length(x@par)]        
+        t <- x@par[ind:length(x@par)]  
+        if(!is.null(fixed.design))
+            Theta <- cbind(fixed.design, Theta)
         P <- P.mcm(a=a, ak=ak, d=d, t=t, Theta=Theta, D=x@D)
         return(P)
     }
@@ -523,21 +601,6 @@ P.nominal <- function(a, ak, d, Theta, D, returnNum = FALSE){
     P[P < 1e-8] <- 1e-8
     P[(1 - P) < 1e-8] <- 1 - 1e-8
     if(returnNum) return(numerator)
-    return(P)   
-}
-
-#d[1] == 0
-P.gpcm <- function(a, d, Theta, D){ 
-    ncat <- length(d)
-    nfact <- ncol(Theta)            
-    k <- 0:(ncat-1)
-    numerator <- matrix(0, nrow(Theta), ncat)    
-    a <- matrix(a)    
-    for(i in 1:ncat)
-        numerator[ ,i] <- exp(D * k[i] * (Theta %*% a) + D * d[i])
-    P <- numerator/rowSums(numerator)    
-    P[P < 1e-8] <- 1e-8
-    P[(1 - P) < 1e-8] <- 1 - 1e-8
     return(P)   
 }
 
