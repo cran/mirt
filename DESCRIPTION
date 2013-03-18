@@ -1,6 +1,6 @@
 Package: mirt
-Version: 0.5.0
-Date: 2013-01-16
+Version: 0.6.0
+Date: 2013-03-18
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", "Chalmers", email =
@@ -10,15 +10,15 @@ Description: Analysis of dichotomous and polytomous response data using
         Exploratory models can be estimated via quadrature or
         stochastic methods, a generalized confirmatory bi-factor
         analysis is included, and confirmatory models can be fit with a
-        Metropolis-Hastings Robbins-Monro algorithm which can include
+        Metropolis-Hastings Robbins-Monro algorithm which may include
         polynomial or product constructed latent traits. Multiple group
         analysis and mixed effects designs may be performed for
         unidimensional or multidimensional item response models for
         detecting differential item functioning and modelling item and
         person covariates.
-Depends: R (>= 2.14), stats4, lattice, MASS, methods
-Imports: stats4, psych, GPArotation, mvtnorm, Rcpp, numDeriv, Matrix
-Suggests: plink
+Depends: R (>= 2.15), stats4, lattice, methods
+Imports: stats4, GPArotation, mvtnorm, Rcpp, numDeriv
+Suggests: plink, psych, boot, parallel
 ByteCompile: yes
 LazyLoad: yes
 LazyData: yes
@@ -37,8 +37,10 @@ Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
         'personfit.R' '03-estimation.R' '04-derivatives.R'
         'read.mirt.R' 'fscores.internal.R' 'itemplot.internal.R'
         'mixedmirt.R' 'MHRM.mixed.R' 'Mixed-methods.R' 'fitIndices.R'
-        'testinfo.R'
-Packaged: 2013-01-17 19:43:00 UTC; root
+        'testinfo.R' 'imputeMissing.R' 'mod2values.R' 'probtrace.R'
+        'boot.mirt.R'
+Packaged: 2013-03-19 03:54:20 UTC; phil
 Author: Phil Chalmers [aut, cre]
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
-Date/Publication: 2013-01-17 22:21:31
+NeedsCompilation: yes
+Date/Publication: 2013-03-19 07:15:21

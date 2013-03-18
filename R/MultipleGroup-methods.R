@@ -81,10 +81,21 @@ setMethod(
     signature = signature(object = 'MultipleGroupClass'),
     definition = function(object, digits = 3, verbose = TRUE, ...) {        
         ngroups <- length(object@cmods)       
+        groupind <- length(object@cmods[[1]]@pars)
+        nfact <- object@nfact
         ret <- list()
+        coeflist <- coef(object)        
         for(g in 1:ngroups){
             if(verbose) cat('\n----------\nGROUP:', as.character(object@groupNames[g]), '\n')
             ret[[g]] <- summary(object@cmods[[g]], digits=digits, verbose=verbose, ...)
+            if(is(coeflist[[g]][[groupind]], 'matrix'))
+                ret[[g]]$mean <- coeflist[[g]][[groupind]][1, 1:nfact]
+            else ret[[g]]$mean <- coeflist[[g]][[groupind]][1:nfact]
+            names(ret[[g]]$mean) <- colnames(ret[[g]]$fcor)
+            if(verbose){
+                cat('\nFactor means:\n') 
+                print(round(ret[[g]]$mean, digits))
+            }
         }
         invisible(ret)
     } 
@@ -110,15 +121,17 @@ setMethod(
         cat('Model 2: ')
         print(object2@Call)
         cat('\n')
-        ret <- data.frame(Df = c(object@df, object2@df),
+        ret <- cbind(Df = c(object@df, object2@df),
                           AIC = c(object@AIC, object2@AIC),
                           AICc = c(object@AICc, object2@AICc),
                           BIC = c(object@BIC, object2@BIC), 
                           SABIC = c(object@SABIC, object2@SABIC),
                           logLik = c(object@logLik, object2@logLik),
-                          X2 = c('', X2),
-                          df = c('', abs(df)),
-                          p = c('', round(1 - pchisq(X2,abs(df)),3)))         
-        return(ret)
+                          X2 = c(NA, X2),
+                          df = c(NA, abs(df)),
+                          p = c(NA, round(1 - pchisq(X2,abs(df)),3)))         
+        ret
     }		
 )
+
+    

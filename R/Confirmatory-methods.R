@@ -53,14 +53,14 @@ setMethod(
         rownames(F) <- itemnames								
         SS <- apply(F^2,2,sum)
         gpars <- ExtractGroupPars(object@pars[[length(object@pars)]])
-        Phi <- cov2cor(gpars$gcov)      
+        Phi <- gpars$gcov
         Phi <- round(Phi, digits)
         colnames(Phi) <- rownames(Phi) <- paste('F',1:ncol(Phi), sep='')
         if(verbose){
             cat("\nFactor loadings metric: \n")
             print(cbind(F, h2),digits)		
             cat("\nSS loadings: ",round(SS,digits), "\n")		
-            cat("\nFactor correlations: \n")
+            cat("\nFactor covariance: \n")
             print(Phi)
         }                
         invisible(list(F=F, fcor=Phi))  	          
@@ -217,9 +217,7 @@ setMethod(
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45, 
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
     {           
-        class(x) <- 'ExploratoryClass'
-        if(length(attr(x@pars, 'prodlist')) > 0 ) stop('No plots for models with polynomial and 
-                                                       product terms')
+        class(x) <- 'ExploratoryClass'        
         plot(x, type=type, npts=npts, theta_angle=theta_angle, rot=rot, ...)
         
     }		

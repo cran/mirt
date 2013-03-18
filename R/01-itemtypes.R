@@ -8,6 +8,7 @@ setClass("GroupPars",
                         nfact='numeric',
                         gradient='numeric',
                         hessian='matrix',                        
+                        itemtrace='matrix',
                         lbound='numeric',
                         ubound='numeric',
                         n.prior.mu='numeric',
@@ -28,7 +29,8 @@ setClass("AllItemsClass",
                         ncat='numeric',
                         rs='matrix',
                         gradient='numeric',
-                        hessian='matrix',                        
+                        hessian='matrix', 
+                        itemtrace='matrix',
                         lbound='numeric',
                         ubound='numeric',
                         n.prior.mu='numeric',
@@ -76,3 +78,5 @@ setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))
 setGeneric("itemplot.internal",  function(object, ...) standardGeneric("itemplot.internal"))
 
 setGeneric("fscores.internal", function(object, ...) standardGeneric("fscores.internal"))
+
+setGeneric("summary", function(object, ...) standardGeneric("summary"))

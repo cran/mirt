@@ -15,7 +15,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     J <- length(itemloc) - 1
     nfullpars <- 0
     estpars <- c()
-    gfulldata <- gtheta0 <- gstructgrouppars <- vector('list', ngroups)
+    gfulldata <- gtheta0 <- gstructgrouppars <- gitemtrace <- vector('list', ngroups)
     for(g in 1:ngroups){
         gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1]])
         gfulldata[[g]] <- PrepList[[g]]$fulldata
@@ -78,11 +78,21 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
     longpars <- diag((tmp * L) * longpars) + tmp2 * longpars
     LL <- 0
     for(g in 1:ngroups)
-        r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]    
+        r[[g]] <- PrepList[[g]]$tabdata[, ncol(PrepList[[g]]$tabdata)]        
+    LBOUND <- UBOUND <- c()
+    for(g in 1:ngroups){
+        for(i in 1:(J+1)){
+            LBOUND <- c(LBOUND, pars[[g]][[i]]@lbound)    
+            UBOUND <- c(UBOUND, pars[[g]][[i]]@ubound)    
+        }
+    }
+    
     #EM     
-    for (cycles in 1:NCYCLES){  
-        #priors
-        for(g in 1:ngroups){
+    for (cycles in 1:NCYCLES){          
+        #priors        
+        for(g in 1:ngroups){            
+            gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=Theta, itemloc=itemloc)
+            pars[[g]] <- assignItemtrace(pars=pars[[g]], itemtrace=gitemtrace[[g]], itemloc=itemloc)
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1]])        
             if(BFACTOR){
                 prior[[g]] <- dnorm(theta, 0, 1)
@@ -97,17 +107,17 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         }
         #Estep
         lastLL <- LL
-        LL <- 0
-        for(g in 1:ngroups){
+        LL <- 0        
+        for(g in 1:ngroups){            
             if(BFACTOR){
                 rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
                                             Theta=Theta, prior=prior[[g]],
                                             specific=specific, sitems=sitems, 
-                                            itemloc=itemloc, debug=debug)
+                                            itemloc=itemloc, itemtrace=gitemtrace[[g]], debug=debug)
             } else {
                 rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
                                          Theta=Theta, prior=Prior[[g]], itemloc=itemloc, 
-                                         debug=debug)                      
+                                         itemtrace=gitemtrace[[g]], debug=debug)                      
             }
             LL <- LL + sum(r[[g]]*log(rlist[[g]]$expected))
         }
@@ -119,7 +129,7 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             }
         }
         if(verbose){
-            print(LL)                            
+            if(cycles > 1) print(LL)                            
             flush.console()
         }
         
@@ -130,33 +140,11 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         lastgrad <- 0
         stepLimit <- .1        
         for(mstep in 1:MSTEPMAXIT){                        
-            #Reload pars list
-            ind1 <- 1
-            for(g in 1:ngroups){                
-                for(i in 1:(J+1)){
-                    ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1
-                    pars[[g]][[i]]@par <- longpars[ind1:ind2]
-                    ind1 <- ind2 + 1       
-                    if(any(class(pars[[g]][[i]]) == c('dich', 'partcomp'))){
-                        if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] > 1) 
-                            pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)] <- 1
-                        if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] < 0) 
-                            pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- 0
-                        if(pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] > .6){
-                            warning('lower bound parameter larger than .6 during estimation.')
-                            pars[[g]][[i]]@par[length(pars[[g]][[i]]@par)-1] <- .6            
-                        }
-                    }    
-                    #apply sum(t) == 1 constraint for mcm
-                    if(is(pars[[g]][[i]], 'mcm')){                
-                        tmp <- pars[[g]][[i]]@par
-                        cat <- pars[[g]][[i]]@ncat
-                        tmp2 <- (length(tmp) - (cat-1)):length(tmp) 
-                        Num <- exp(tmp[tmp2])
-                        tmp <- Num/sum(Num)                                    
-                        pars[[g]][[i]]@par[tmp2] <- tmp
-                    }
-                }
+            #Reload pars list            
+            pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+            for(g in 1:ngroups){
+                gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=Theta, itemloc=itemloc)
+                pars[[g]] <- assignItemtrace(pars=pars[[g]], itemtrace=gitemtrace[[g]], itemloc=itemloc)
             }
             #reset longpars and gradient
             g <- rep(0, nfullpars)
@@ -171,10 +159,10 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                     h[ind1:ind2, ind1:ind2] <- pars[[group]][[i]]@hessian <- deriv$hess
                     ind1 <- ind2 + 1 
                 }
-                i <- i + 1                        
+                i <- i + 1                     
                 deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, EM = TRUE, 
                                pars=pars[[group]], tabdata=PrepList[[group]]$tabdata,
-                               itemloc=itemloc)
+                               itemloc=itemloc, prior=Prior[[group]])
                 ind2 <- ind1 + length(deriv$grad) - 1
                 longpars[ind1:ind2] <- pars[[group]][[i]]@par
                 g[ind1:ind2] <- pars[[group]][[i]]@gradient <- deriv$grad
@@ -186,17 +174,19 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
             grad <- grad[1, estpars & !redun_constr]            
             if(any(is.na(grad))) 
                 stop('Model did not converge (unacceptable gradient caused by extreme parameter values)')            
-            Hess <- Matrix(hess[estpars & !redun_constr, estpars & !redun_constr], sparse = TRUE)            
+            Hess <- hess[estpars & !redun_constr, estpars & !redun_constr]
             inv.Hess <- try(solve(Hess), silent = TRUE)        	                        
-            if(class(inv.Hess) == 'try-error'){             
+            if(class(inv.Hess) == 'try-error'){                
                 if(inverse_fail_count == 5) 
                     stop('Hessian is not invertable. Likelihood surface is likely too flat.') 
                 inverse_fail_count <- inverse_fail_count + 1
-                inv.Hess <- Hess
-                tmp <- .1*diag(inv.Hess)
-                tmp[tmp > -25] <- -.25
-                diag(inv.Hess) <- diag(inv.Hess) + tmp
-                inv.Hess <- try(solve(inv.Hess))                
+                tmp <- Hess
+                while(1){
+                    tmp <- tmp + .01*diag(diag(tmp))
+                    QR <- qr(tmp)
+                    if(QR$rank == ncol(tmp)) break
+                }
+                inv.Hess <- solve(tmp)
             }
             correction <- as.vector(inv.Hess %*% grad)
             #keep steps smaller
@@ -212,7 +202,9 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
                 tmp[abs(tmp) > .002] <- sign(tmp[abs(tmp) > .002]) * .002
                 correction[names(correction) == 'u'] <- tmp
             }
-            longpars[estindex_unique] <- longpars[estindex_unique] - correction                       
+            longpars[estindex_unique] <- longpars[estindex_unique] - correction             
+            longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
+            longpars[longpars > UBOUND] <- UBOUND[longpars > UBOUND]
             if(mstep > 1){
                 if (any(grad*lastgrad < 0.0)){    				# any changed sign
                     newcorrection <- rep(0, length(correction))
@@ -234,41 +226,46 @@ EM.group <- function(pars, constrain, PrepList, list, Theta, debug)
         for(g in 1:ngroups)
             for(i in 1:J) 
                 listpars[[g]][[i]] <- pars[[g]][[i]]@par         
-    } #END EM          
-    
-    if(cycles == NCYCLES) converge <- 0
+    } #END EM   
+    if(cycles == NCYCLES) converge <- 0    
+    infological <- estpars & !redun_constr    
     ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
-                logLik=LL, rlist=rlist)
+                logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological, correction=correction,
+                estindex_unique=estindex_unique)
     ret
 }
 
 # Estep for mirt
-Estep.mirt <- function(pars, tabdata, Theta, prior, itemloc, debug, deriv = FALSE) 
+Estep.mirt <- function(pars, tabdata, Theta, prior, itemloc, debug, itemtrace=NULL, deriv = FALSE) 
 {   
     if(debug == 'Estep.mirt') browser()
     nfact <- ncol(Theta)
     nquad <- nrow(Theta)    
     J <- length(itemloc) - 1
     r <- tabdata[ ,ncol(tabdata)]
-    X <- tabdata[ ,1:(ncol(tabdata) - 1), drop = FALSE]    
-    itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))	
-    for (i in 1:J)
-        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+    X <- tabdata[ ,1:(ncol(tabdata) - 1), drop = FALSE]   
+    if(is.null(itemtrace)){
+        itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))    
+        for (i in 1:J)
+            itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+    }
     retlist <- .Call("Estep", itemtrace, prior, X, nfact, r)    
     if(deriv) retlist$itemtrace <- itemtrace        
     return(retlist)
 } 
 
 # Estep for bfactor
-Estep.bfactor <- function(pars, tabdata, Theta, prior, specific, sitems, itemloc, debug) 
+Estep.bfactor <- function(pars, tabdata, Theta, prior, specific, sitems, itemloc, itemtrace=NULL, debug) 
 {	    
     if(debug == 'Estep.bfactor') browser()
     J <- length(itemloc) - 1
     r <- tabdata[ ,ncol(tabdata)]
     X <- tabdata[ ,1:(ncol(tabdata) - 1)]	
-    itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))	
-    for (i in 1:J)
-        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)			
+    if(is.null(itemtrace)){
+        itemtrace <- matrix(0, ncol=ncol(X), nrow=nrow(Theta))    
+        for (i in 1:J)
+            itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+    }
     retlist <- .Call("Estepbfactor", itemtrace, prior, X, r, sitems)	
     r1 <- matrix(0, nrow(Theta), ncol(X))	
     for (i in 1:J){

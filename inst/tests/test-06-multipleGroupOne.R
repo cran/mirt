@@ -27,9 +27,9 @@ test_that('one factor', {
                                  prev.mod = mod_configural)    
     expect_is(mod_scalar1, 'MultipleGroupClass')
     dat[1,1] <- dat[2,2] <- NA
-    mod_missing <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'MHRM',
+    mod_missing <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
                                  invariance=c('slopes', 'intercepts', 'free_varcov'), 
-                                 prev.mod = mod_configural)
+                                 prev.mod = mod_configural)    
     expect_is(mod_scalar1, 'MultipleGroupClass')
     
     fs1 <- fscores(mod_metric, verbose = FALSE)
@@ -45,3 +45,21 @@ test_that('one factor', {
     expect_is(fit1, 'list')
 })
 
+test_that('one factor polynomial and missing', {    
+    set.seed(1234)
+    Theta1 <- rnorm(1000, -1)
+    Theta2 <- rnorm(1000, 1) 
+    Theta <- matrix(rbind(Theta1, Theta2))
+    d <- rnorm(10,4)
+    d <- cbind(d, d-1, d-2, d-3, d-4, d-5, d-6)
+    a <- matrix(rlnorm(10, meanlog=.1))
+    group <- factor(c(rep('g1',1000), rep('g2',1000)))
+    
+    dat <- simdata(a,d,2000, itemtype = rep('graded', 10), Theta=Theta)
+    x <- multipleGroup(dat, 1, group=group, method='EM', verbose = FALSE)
+    expect_is(x, 'MultipleGroupClass')
+    
+    dat[1,1] <- dat[2,2] <- NA
+    x2 <- multipleGroup(dat, 1, group=group, method='EM', verbose = FALSE)
+    expect_is(x, 'MultipleGroupClass')
+})
