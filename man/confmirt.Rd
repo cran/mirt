@@ -11,8 +11,8 @@
   confmirt(data, model, itemtype = NULL, guess = 0, upper =
     1, pars = NULL, constrain = NULL, parprior = NULL,
     calcNull = TRUE, grsm.block = NULL, rsm.block = NULL,
-    verbose = TRUE, draws = 2000, debug = FALSE, rotate =
-    'varimax', Target = NULL, D = 1.702, technical =
+    verbose = TRUE, draws = 3000, debug = FALSE, rotate =
+    'oblimin', Target = NULL, D = 1.702, technical =
     list(), ...)
 
   \S4method{summary}{ConfirmatoryClass}(object, suppress =
@@ -100,7 +100,7 @@
 
   \item{rotate}{if \code{model} is numeric (indicating an
   exploratory item FA) then this rotation is used. Default
-  is \code{'varimax'}}
+  is \code{'oblimin'}}
 
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
@@ -275,7 +275,10 @@ model.1 <- confmirt.model()
   COV = F1*F2
 
 
-mod1 <- confmirt(dataset,model.1)
+#compute model, and use parallel computation of the log-likelhood
+library(parallel)
+cl <- makeCluster(4)
+mod1 <- confmirt(dataset, model.1, cl=cl)
 coef(mod1)
 summary(mod1)
 residuals(mod1)
@@ -314,6 +317,13 @@ model.combo <- confmirt.model()
 (mod.quad <- confmirt(data, model.quad))
 (mod.combo <- confmirt(data, model.combo))
 anova(mod.quad, mod.combo)
+
+#nonlinear item and test plots
+plot(mod.quad)
+plot(mod.combo, type = 'SE')
+itemplot(mod.quad, 1, type = 'score')
+itemplot(mod.combo, 2, type = 'score')
+itemplot(mod.combo, 2, type = 'infocontour')
 
 }
 }

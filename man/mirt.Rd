@@ -10,12 +10,12 @@
 Theory)}
 \usage{
   mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-    SE = FALSE, SEtol = .001, pars = NULL, constrain =
-    NULL, parprior = NULL, calcNull = TRUE, rotate =
-    'varimax', Target = NaN, prev.cor = NULL, quadpts =
-    NULL, grsm.block = NULL, rsm.block = NULL, D = 1.702,
-    verbose = FALSE, debug = FALSE, technical = list(),
-    ...)
+    SE = FALSE, SE.type = 'MHRM', SEtol = .001, pars =
+    NULL, constrain = NULL, parprior = NULL, calcNull =
+    TRUE, rotate = 'oblimin', Target = NaN, prev.cor =
+    NULL, quadpts = NULL, grsm.block = NULL, rsm.block =
+    NULL, D = 1.702, verbose = FALSE, debug = FALSE,
+    technical = list(), ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
@@ -76,8 +76,18 @@ Theory)}
   \item{rsm.block}{same as \code{grsm.block}, but for
   \code{'rsm'} blocks}
 
-  \item{SE}{logical, estimate the standard errors? Calls
-  the MHRM subroutine for a stochastic approximation}
+  \item{SE}{logical; estimate the standard errors? Calls
+  the MHRM subroutine for a stochastic approximation or the
+  Bock and Leiberman method (for EM only)}
+
+  \item{SE.type}{type of estimation method to use for
+  calculating the parameter information matrix. Can be
+  \code{'MHRM'} for stocastic estimation, or \code{'BL'}
+  for the Bock and Leiberman approach (EM only). Note that
+  \code{'MHRM'} may be faster and more accurate than
+  \code{'BL'} when there are 2 or more factors.
+  Bootstrapped standard errors are also possible but must
+  be run with the \code{\link{boot.mirt}} function}
 
   \item{SEtol}{tollerance value used to stop the MHRM
   estimation when \code{SE = TRUE}. Lower values will take
@@ -100,7 +110,7 @@ Theory)}
 
   \item{rotate}{type of rotation to perform after the
   initial orthogonal parameters have been extracted by
-  using \code{summary}; default is \code{'varimax'}. See
+  using \code{summary}; default is \code{'oblimin'}. See
   below for list of possible rotations. If \code{rotate !=
   ''} in the \code{summary} input then the default from the
   object is ignored and the new rotation from the list is
@@ -173,8 +183,10 @@ Theory)}
 
   \item{type}{type of plot to view; can be \code{'info'} to
   show the test information function, \code{'infocontour'}
-  for the test information contours, or \code{'SE'} for the
-  test standard error function}
+  for the test information contours, \code{'SE'} for the
+  test standard error function, or \code{'trace'} for all
+  item trace lines (only available when all items are
+  dichotomous)}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
   used in \code{plot}. If a vector is used then a bubble
@@ -246,11 +258,12 @@ Theory)}
 
   Using \code{plot} will plot the test information function
   or the test standard errors for 1 and 2 dimensional
-  solutions. To examine individual item plots use
-  \code{\link{itemplot}}. Residuals are computed using the
-  LD statistic (Chen & Thissen, 1997) in the lower diagonal
-  of the matrix returned by \code{residuals}, and Cramer's
-  V above the diagonal.
+  solutions, or all item trace lines if only 1 dimensional
+  the test is only dichotomous items. To examine individual
+  item plots use \code{\link{itemplot}}. Residuals are
+  computed using the LD statistic (Chen & Thissen, 1997) in
+  the lower diagonal of the matrix returned by
+  \code{residuals}, and Cramer's V above the diagonal.
 }
 \section{Confirmatory IRT}{
   Specification of the confirmatory item factor analysis
@@ -373,21 +386,23 @@ Theory)}
 \examples{
 \dontrun{
 #load LSAT section 7 data and compute 1 and 2 factor models
-data(LSAT7)
 data <- expand.table(LSAT7)
 
 (mod1 <- mirt(data, 1))
 summary(mod1)
 residuals(mod1)
 plot(mod1) #test information function
+plot(mod1, type = 'trace') #trace lines
 
 #estimated 3PL model for item 5 only
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 coef(mod1.3PL)
 
-(mod2 <- mirt(data, 2, SE = TRUE))
-summary(mod2, rotate = 'oblimin')
+(mod <- mirt(data, 2, SE = TRUE)) #standard errors with MHRM method
+coef(mod)
+(mod2 <- mirt(data, 2, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
 coef(mod2)
+summary(mod2, rotate = 'oblimin') #oblimin rotation
 residuals(mod2)
 plot(mod2)
 
@@ -516,12 +531,16 @@ anova(mod2, mod1) #not sig, mod2 should be prefered
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt}}, \code{\link{bfactor}},
-  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
-  \code{\link{wald}}, \code{\link{itemplot}},
-  \code{\link{fscores}}, \code{\link{fitIndices}},
-  \code{\link{extract.item}}, \code{\link{iteminfo}},
-  \code{\link{testinfo}}
+  \code{\link{confmirt.model}} \code{\link{confmirt}},
+  \code{\link{bfactor}}, \code{\link{multipleGroup}},
+  \code{\link{mixedmirt}}, \code{\link{wald}},
+  \code{\link{itemplot}}, \code{\link{fscores}},
+  \code{\link{fitIndices}}, \code{\link{extract.item}},
+  \code{\link{iteminfo}}, \code{\link{testinfo}},
+  \code{\link{probtrace}}, \code{\link{boot.mirt}},
+  \code{\link{imputeMissing}}, \code{\link{itemfit}},
+  \code{\link{mod2values}}, \code{\link{read.mirt}},
+  \code{\link{simdata}}
 }
 \keyword{models}
 

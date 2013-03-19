@@ -29,16 +29,23 @@
 #' makes sense if the factor variances are the same (i.e., unity)}
 #' \item{\code{'slopes'}}{to constrain all the slopes to be equal across all groups} 
 #' \item{\code{'intercepts'}}{to constrain all the intercepts to be equal across all groups, note for 
-#' nominal models this also includes the category specific slope parameters}
-#'}
+#' nominal models this also includes the category specific slope parameters}}
+#' Additionally, specifying specific item name bundles (from \code{colnames(data)}) will 
+#' constrain all freely estimated parameters in each item to be equal accross groups. This is useful
+#' for selecting 'anchor' items for vertical and horizontal scaling, and for detecting differential item 
+#' functioning (DIF) accross groups
 #' @param guess initial (or fixed) values for the pseudo-guessing parameter. Can be 
 #' entered as a single value to assign a global guessing parameter or may be entered as
 #' a numeric vector for each item
 #' @param upper initial (or fixed) upper bound parameters for 4-PL model. Can be 
 #' entered as a single value to assign a global upper bound parameter or may be entered as a 
 #' numeric vector corresponding to each item
-#' @param SE logical, estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation.
-#' Only applicable when \code{method = 'EM'} since the MHRM method calculates them automatically
+#' @param SE logical; estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation or 
+#' the Bock and Leiberman method (for EM only)
+#' @param SE.type type of estimation method to use for calculating the parameter information matrix. 
+#' Can be \code{'MHRM'} for stocastic estimation, or \code{'BL'} for the Bock and Leiberman approach (EM only). 
+#' Note that \code{'MHRM'} may be faster and more accurate than \code{'BL'} when there are 2 or more factors. 
+#' Bootstrapped standard errors are also possible but must be run with the \code{\link{boot.mirt}} function
 #' @param D a numeric value used to adjust the logistic metric to be more similar to a normal
 #' cumulative density curve. Default is 1.702
 #' @param SEtol tollerance value used to stop the MHRM estimation when \code{SE = TRUE}. Lower values
@@ -92,9 +99,9 @@
 #' \code{\link{confmirt.model}}, \code{\link{fscores}}, \code{\link{fitIndices}}
 #' @keywords models
 #' @usage 
-#' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,  
-#' invariance = '', pars = NULL, method = 'MHRM', constrain = NULL, 
-#' parprior = NULL, calcNull = TRUE, draws = 2000, quadpts = NULL, grsm.block = NULL, rsm.block = NULL, 
+#' multipleGroup(data, model, group, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SE.type = 'MHRM',
+#' SEtol = .001,  invariance = '', pars = NULL, method = 'EM', constrain = NULL, 
+#' parprior = NULL, calcNull = TRUE, draws = 3000, quadpts = NULL, grsm.block = NULL, rsm.block = NULL, 
 #' prev.mod = NULL, bfactor = FALSE, D = 1.702, technical = list(), debug = FALSE, verbose = TRUE, ...)
 #' 
 #' \S4method{coef}{MultipleGroupClass}(object, digits = 3, verbose = TRUE, ...)
@@ -116,24 +123,27 @@
 #' dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))    
-#' models <- confmirt.model()
-#'    F1 = 1-15
+#' models <- confmirt.model('F1 = 1-15')
 #' 
-#' 
-#' mod_configural <- multipleGroup(dat, models, group = group, method = 'EM') #completely seperate analyses
+#' mod_configural <- multipleGroup(dat, models, group = group) #completely seperate analyses
 #' 
 #' # prev.mod can save precious iterations and help to avoid local minimums
-#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'EM',
+#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), 
 #'                             prev.mod = mod_configural) #equal slopes
-#' mod_scalar2 <- multipleGroup(dat, models, group = group, method = 'EM',  #equal intercepts, free variance and means
+#' mod_scalar2 <- multipleGroup(dat, models, group = group, #equal intercepts, free variance and means
 #'                              invariance=c('slopes', 'intercepts', 'free_varcov','free_means'),
 #'                              prev.mod = mod_configural)
-#' mod_scalar1 <- multipleGroup(dat, models, group = group, method = 'EM', #fixed means
+#' mod_scalar1 <- multipleGroup(dat, models, group = group,  #fixed means
 #'                              invariance=c('slopes', 'intercepts', 'free_varcov'),
 #'                              prev.mod = mod_configural)    
-#' mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'EM', 
+#' mod_fullconstrain <- multipleGroup(dat, models, group = group, 
 #'                              invariance=c('slopes', 'intercepts'),
-#'                              prev.mod = mod_configural)   
+#'                              prev.mod = mod_configural)  
+#'                              
+#' summary(mod_scalar2)
+#' coef(mod_scalar2)
+#' itemplot(mod_configural, 2)  
+#' itemplot(mod_configural, 2, type = 'RE') 
 #' 
 #' anova(mod_metric, mod_configural) #equal slopes only
 #' anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
@@ -145,8 +155,36 @@
 #' values <- multipleGroup(dat, models, group = group, pars = 'values') 
 #' values
 #' constrain <- list(c(1, 63), c(5,67), c(9,71), c(13,75), c(17,79), c(21,83)) 
-#' equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain, method = 'EM')
+#' equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain, )
 #' anova(equalslopes, mod_configural)
+#' 
+#' #############
+#' #DIF test for each item (using all other items as anchors)
+#' itemnames <- colnames(dat)
+#' refmodel <- multipleGroup(dat, models, group = group,  
+#'                              invariance=c('free_means', 'free_varcov', itemnames))
+#'                              
+#' #loop over items (in practice, run in parallel to increase speed)                             
+#' estmodels <- vector('list', ncol(dat))
+#' for(i in 1:ncol(dat))
+#'     estmodels[[i]] <- multipleGroup(dat, models, group = group, prev.mod=refmodel,
+#'                              invariance=c('free_means', 'free_varcov', itemnames[-i]),
+#'                              verbose = FALSE) 
+#'                              
+#' (anovas <- lapply(estmodels, anova, object2=refmodel))
+#' 
+#' #family-wise error control
+#' p <- do.call(c, lapply(anovas, function(x) x[2,9]))
+#' p.adjust(p, method = 'BH') 
+#' 
+#' #same as above, except only test if slopes vary (1 df)
+#' estmodels <- vector('list', ncol(dat))
+#' for(i in 1:ncol(dat))
+#'     estmodels[[i]] <- multipleGroup(dat, models, group = group, prev.mod=refmodel,
+#'                              invariance=c('free_means', 'free_varcov', 'intercepts', itemnames[-i]),
+#'                              verbose = FALSE)  #constrain all intercepts
+#'                              
+#' (anovas <- lapply(estmodels, anova, object2=refmodel))
 #' 
 #' #############
 #' #multiple factors 
@@ -179,11 +217,25 @@
 #' 
 #' models <- list(D1=model1, D2=model2) #note the names match the groups
 #' 
+#' #EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
 #' mod_configural <- multipleGroup(dat, models, group = group) #completely seperate analyses
-#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
-#' mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
-#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))    
+#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), 
+#'      prev.mod=mod_configural) #equal slopes
+#' mod_scalar <- multipleGroup(dat, models, group = group, prev.mod=mod_configural, #equal means, slopes, intercepts
+#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))   
 #' mod_fullconstrain <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
+#'                              invariance=c('slopes', 'intercepts'), prev.mod=mod_configural)
+#'                              
+#' anova(mod_metric, mod_configural)
+#' anova(mod_scalar, mod_metric)
+#' anova(mod_fullconstrain, mod_scalar)
+#' 
+#' #same as above, but with MHRM (more accurate with 3 factors, but slower)
+#' mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM') #completely seperate analyses
+#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM') #equal slopes
+#' mod_scalar <- multipleGroup(dat, models, group = group, method = 'MHRM', #equal means, slopes, intercepts
+#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))    
+#' mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'MHRM', #equal means, slopes, intercepts
 #'                              invariance=c('slopes', 'intercepts'))
 #' 
 #' anova(mod_metric, mod_configural)
@@ -191,20 +243,24 @@
 #' anova(mod_fullconstrain, mod_scalar)
 #' }
 multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1, 
-                          SE = FALSE, SEtol = .001, invariance = '', pars = NULL,  method = 'MHRM',
-                          constrain = NULL, parprior = NULL, calcNull = TRUE, draws = 2000, 
+                          SE = FALSE, SE.type = 'MHRM', SEtol = .001, invariance = '', pars = NULL,  
+                          method = 'EM',
+                          constrain = NULL, parprior = NULL, calcNull = TRUE, draws = 3000, 
                           quadpts = NULL, grsm.block = NULL, rsm.block = NULL, prev.mod = NULL,
                           bfactor = FALSE, D = 1.702, technical = list(), debug = FALSE, 
                           verbose = TRUE, ...)
 {   
     if(debug == 'Main') browser()
-    Call <- match.call()        
+    Call <- match.call()            
+    invariance.check <- invariance %in% c('free_means', 'free_varcov')
+    if(all(invariance.check) && length(constrain) == 0)
+        stop('Model is not identified without further constrains (may require additional anchoring items).')
     mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, 
                       itemtype=itemtype, guess=guess, upper=upper, nested.mod=prev.mod, 
                       pars=pars, constrain=constrain, SE=SE, SEtol=SEtol, grsm.block=grsm.block,
                       parprior=parprior, quadpts=quadpts, method=method, D=D, rsm.block=rsm.block,
                       technical = technical, debug = debug, verbose = verbose, calcNull=calcNull, 
-                      BFACTOR=bfactor, ...)
+                      BFACTOR=bfactor, SE.type=SE.type, ...)
     if(is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)    

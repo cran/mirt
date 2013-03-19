@@ -92,8 +92,27 @@ Rotate <- function(F, rotate, Target = NULL, ...)
     if(ncol(F) == 1) rotF <- list()    
     if(rotate == 'none') rotF <- list(loadings=F, Phi=diag(ncol(F)), orthogonal=TRUE)            
 	if(rotate == 'promax'){
-        rotF <- psych::Promax(F)
-        rotF$orthogonal <- FALSE
+        mypromax <- function (x, m = 4) {
+                #borrowed and modified from stats::promax on Febuary 13, 2013
+                if (ncol(x) < 2) 
+                    return(x)
+                dn <- dimnames(x)
+                xx <- varimax(x)
+                x <- xx$loadings
+                Q <- x * abs(x)^(m - 1)
+                U <- lm.fit(x, Q)$coefficients
+                d <- diag(solve(t(U) %*% U))
+                U <- U %*% diag(sqrt(d))
+                dimnames(U) <- NULL
+                z <- x %*% U
+                U <- xx$rotmat %*% U
+                ui <- solve(U)
+                Phi <- ui %*% t(ui)
+                dimnames(z) <- dn
+                class(z) <- "loadings"
+                list(loadings = z, rotmat = U, Phi = Phi, orthogonal = FALSE)
+            }               
+        rotF <- mypromax(F, ...)                
 	}    
     if(rotate == 'oblimin') rotF <- GPArotation::oblimin(F, ...)     
 	if(rotate == 'quartimin') rotF <- GPArotation::quartimin(F, ...)
@@ -164,34 +183,11 @@ betaprior <- function(g,a,b)
 }
 
 # Approximation to polychoric matrix for initial values
-cormod <- function(fulldata, K, guess, smooth = TRUE) 
+cormod <- function(fulldata, K, guess, smooth = TRUE, use = 'pairwise.complete.obs') 
 {  
 	fulldata <- as.matrix(fulldata) 
-	nitems <- ncol(fulldata)         
-	cormat <- cor(fulldata)      
-	if (any(guess > 0)){
-		for (i in 1:nitems){
-			for (j in 1:nitems){
-				if (i < j & K[i] == 2 & K[j] == 2 & guess[i]!= 0 ){         
-					g1 <- guess[i]
-					g2 <- guess[j]
-					tabp <- tab <- table(fulldata[ ,i],fulldata[ ,j])/length(fulldata[ ,i])
-					w1 <- (1 - g1)
-					w2 <- (1 - g2)
-					tabp[1,1] <- tab[1,1]/(w1*w2)
-					tabp[1,2] <- (w2*tab[1,2] - g2*tab[1,1])/(w1*w2)
-					tabp[2,1] <- (w1*tab[2,1] - g1*tab[1,1])/(w1*w2)
-					tabp[2,2] <- 1 - tabp[1,1] - tabp[1,2] - tabp[2,1]
-					tabp <- round(tabp*length(fulldata[ ,i]))
-					if(any(tabp < 0)) next	
-					cormat[i,j] <- cormat[j,i] <- 
-						abs(psych::phi(tabp,6))^(1/1.15)*sign(psych::phi(tabp,6))          		  
-				} 
-				if(i < j & K[i] == 2 & K[j] > 2 & guess[i]!= 0) 
-					cormat[i,j] <- cormat[j,i] <- abs(cormat[i,j])^(1/1.15) * sign(cormat[i,j])
-			}	
-		}      
-	} 
+	nitems <- ncol(fulldata)                 
+	cormat <- cor(fulldata, use=use)      	
 	cormat <- abs(cormat)^(1/1.15) * sign(cormat)  
 	if(smooth){  
 		eig <- eigen(cormat)
@@ -330,13 +326,13 @@ calcEMSE <- function(object, data, model, itemtype, fitvalues, constrain, parpri
 }
 
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
-                            mixedlist, method)
-{        
+                            mixedlist, method, itemnames)
+{       
     #within group item constraints only
     for(g in 1:ngroups)  
         if(length(PrepList[[g]]$constrain) > 0)
             for(i in 1:length(PrepList[[g]]$constrain))
-                constrain[[length(constrain) + 1]] <- PrepList[[g]]$constrain[[i]]        
+                constrain[[length(constrain) + 1]] <- PrepList[[g]]$constrain[[i]]            
     if('covariances' %in% invariance){ #Fix covariance accross groups (only makes sense with vars = 1)
         tmpmat <- matrix(NA, nfact, nfact)
         low_tri <- lower.tri(tmpmat)
@@ -352,6 +348,19 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                 constrain[[length(constrain) + 1]] <- tmpmats[1:ngroups, i]
         
     }    
+    if(any(itemnames %in% invariance)){            
+        matched <- na.omit(match(invariance, itemnames))        
+        for(i in matched){            
+            jj <- sum(pars[[1]][[i]]@est)
+            stopifnot(jj > 0)
+            for(j in 1:jj){
+                tmp <- c()
+                for(g in 1:ngroups)            
+                    tmp <- c(tmp, pars[[g]][[i]]@parnum[pars[[g]][[i]]@est][j])
+                constrain[[length(constrain) + 1]] <- tmp                
+            }
+        }         
+    }
     if('slopes' %in% invariance){ #Equal factor loadings
         tmpmats <- tmpests <- list()
         for(g in 1:ngroups)
@@ -405,12 +414,29 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                 tmp <- c(tmp, pars[[1]][[j]]@parnum[i])
             constrain[[length(constrain) + 1]] <- tmp           
         }        
+    }    
+    #remove redundent constraints    
+    redun <- rep(FALSE, length(constrain)) 
+    if(length(constrain) > 0){
+        for(i in 1:length(redun)){
+            for(j in 1:length(redun)){
+                if(j < i){
+                    if(all(constrain[[i]] %in% constrain[[j]] || 
+                            all(constrain[[j]] %in% constrain[[i]]))){
+                        if(length(constrain[[i]]) < length(constrain[[j]])) redun[i] <- TRUE
+                        else redun[j] <- TRUE           
+                    }
+                }
+            }        
+        }    
     }
+    constrain[redun] <- NULL       
     return(constrain)
 }
 
 ReturnPars <- function(PrepList, itemnames, MG = FALSE){    
-    parnum <- par <- est <- item <- parname <- gnames <- itemtype <- c()                                    
+    parnum <- par <- est <- item <- parname <- gnames <- itemtype <- 
+        lbound <- ubound <- c()                                    
     if(!MG) PrepList <- list(full=PrepList)                        
     for(g in 1:length(PrepList)){
         tmpgroup <- PrepList[[g]]$pars                                
@@ -421,22 +447,27 @@ ReturnPars <- function(PrepList, itemnames, MG = FALSE){
             parnum <- c(parnum, tmpgroup[[i]]@parnum) 
             par <- c(par, tmpgroup[[i]]@par)
             est <- c(est, tmpgroup[[i]]@est)                    
+            lbound <- c(lbound, tmpgroup[[i]]@lbound)
+            ubound <- c(ubound, tmpgroup[[i]]@ubound)
         }
         item <- c(item, rep('GROUP', length(tmpgroup[[i]]@parnum)))                                
     }
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
-    ret <- data.frame(group=gnames, item = item, name=parname, parnum=parnum, value=par, est=est)
+    ret <- data.frame(group=gnames, item = item, name=parname, parnum=parnum, value=par, 
+                      lbound=lbound, ubound=ubound, est=est)
     ret
 }
 
 UpdatePrepList <- function(PrepList, pars, MG = FALSE){
-    if(!MG) PrepList <- list(PrepList)
+    if(!MG) PrepList <- list(PrepList)    
     ind <- 1    
     for(g in 1:length(PrepList)){
         for(i in 1:length(PrepList[[g]]$pars)){ 
             for(j in 1:length(PrepList[[g]]$pars[[i]]@par)){
-                PrepList[[g]]$pars[[i]]@par[j] <- pars[ind,5]
-                PrepList[[g]]$pars[[i]]@est[j] <- as.logical(pars[ind,6])                
+                PrepList[[g]]$pars[[i]]@par[j] <- pars[ind,'value']
+                PrepList[[g]]$pars[[i]]@est[j] <- as.logical(pars[ind,'est'])                
+                PrepList[[g]]$pars[[i]]@lbound[j] <- pars[ind,'lbound']
+                PrepList[[g]]$pars[[i]]@ubound[j] <- pars[ind,'ubound']                
                 ind <- ind + 1
             }
         }
@@ -506,6 +537,9 @@ ItemInfo <- function(x, Theta, cosangle){
     dx <- DerivTheta(x, Theta)    
     info <- 0     
     cosanglefull <- matrix(cosangle, nrow(P), length(cosangle), byrow = TRUE)
+    if(ncol(cosanglefull) < ncol(dx$grad[[1]]))
+        cosanglefull <- cbind(cosanglefull, matrix(1, nrow(cosanglefull),
+                                                   ncol(dx$grad[[1]]) - ncol(cosanglefull)))    
     for(i in 1:x@ncat){        
         dx$grad[[i]] <- matrix(rowSums(dx$grad[[i]] * cosanglefull))
         dx$hess[[i]] <- matrix(rowSums(dx$hess[[i]] * cosanglefull))
@@ -562,4 +596,189 @@ nameInfoMatrix <- function(info, correction, L, npars){
     }
     colnames(info) <- rownames(info) <- shortnames
     return(info)
+}
+
+maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem, K, itemloc,
+                        Names, itemnames){    
+    tabdata2 <- lapply(strsplit(stringtabdata, split='/'), as.numeric)
+    tabdata2 <- do.call(rbind, tabdata2)
+    tabdata2[tabdata2 == 99999] <- NA
+    tabdata <- matrix(0, nrow(tabdata2), sum(K))
+    for(i in 1:nitem){
+        uniq <- sort(na.omit(unique(tabdata2[,i])))        
+        for(j in 1:length(uniq))
+            tabdata[,itemloc[i] + j - 1] <- as.numeric(tabdata2[,i] == uniq[j])        
+    }     
+    tabdata[is.na(tabdata)] <- 0
+    colnames(tabdata) <- Names
+    colnames(tabdata2) <- itemnames
+    ret1 <- ret2 <- vector('list', length(groupNames))    
+    for(g in 1:length(groupNames)){
+        tmpstringdata <- stringfulldata[group == groupNames[g]]
+        Freq <- numeric(nrow(tabdata))
+        for(i in 1:length(stringtabdata))
+            Freq[i] <- sum(tmpstringdata == stringtabdata[i])
+        ret1[[g]] <- cbind(tabdata, Freq)
+        ret2[[g]] <- cbind(tabdata2, Freq)
+    }    
+    ret <- list(tabdata=ret1, tabdata2=ret2)
+    ret
+}
+
+makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN, 
+                     rotate = 'varimax', Target = NaN, SE = TRUE, SE.type = 'MHRM', verbose = TRUE, 
+                     SEtol = .01, nested.mod = NULL, grsm.block = NULL, D = 1.702, 
+                     rsm.block = NULL, calcNull = TRUE, cl = NULL, BFACTOR = FALSE, 
+                     technical = list(), use = 'pairwise.complete.obs', debug = FALSE)
+{    
+    opts <- list()
+    opts$method = method
+    opts$draws = draws
+    opts$calcLL = calcLL
+    opts$quadpts = quadpts 
+    opts$rotate = rotate 
+    opts$Target = Target
+    opts$SE = SE 
+    opts$verbose = verbose 
+    opts$SEtol = SEtol
+    opts$SE.type = SE.type
+    opts$nested.mod = nested.mod
+    opts$grsm.block = grsm.block
+    opts$D = D 
+    opts$rsm.block = rsm.block
+    opts$calcNull = calcNull
+    opts$cl = cl 
+    opts$BFACTOR = BFACTOR 
+    opts$debug = debug    
+    opts$technical <- technical
+    opts$use <- use
+    opts$MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
+    opts$MSTEPMAXIT <- ifelse(is.null(technical$MSTEPMAXIT), 15, technical$MSTEPMAXIT)        
+    opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
+    if(opts$method == 'EM')
+        opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 300, technical$NCYCLES)
+    opts$BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
+    opts$SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
+    opts$KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1, technical$KDRAWS)
+    opts$TOL <- ifelse(is.null(technical$TOL), .001, technical$TOL)
+    if(opts$method == 'MHRM' || opts$method =='MIXED')
+        set.seed(12345)
+    if(!is.null(technical$set.seed)) set.seed(technical$set.seed)    
+    opts$gain <- c(0.05,0.5,0.004)
+    if(!is.null(technical$gain)){
+        if(length(technical$gain) == 3 && is.numeric(technical$gain))
+            opts$gain <- technical$gain
+    }	 
+    opts$NULL.MODEL <- ifelse(is.null(technical$NULL.MODEL), FALSE, TRUE)
+    opts$USEEM <- ifelse(method == 'EM', TRUE, FALSE)    
+    if(!is.null(cl)) require(parallel)    
+    return(opts)
+}
+
+BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMATE, constrain){
+    LL <- function(p, est, longpars, pars, ngroups, J, Theta=Theta, tabdata, PrepList){
+        longpars[est] <- p
+        pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J) 
+        LL <- 0
+        for(g in 1:ngroups){
+            for(i in 1:(J+1)){
+                if(i < (J+1))
+                    LL <- LL + LogLik(pars2[[g]][[i]], Theta=Theta, EM = TRUE, prior = 1)
+                else if(any(pars2[[g]][[i]]@est))                    
+                    LL <- LL + LogLik(pars2[[g]][[i]], Theta=Theta, pars=pars[[g]], 
+                                      tabdata=PrepList[[g]]$tabdata, itemloc=itemloc, EM = TRUE)
+            }
+        }
+        LL       
+    }        
+    L <- ESTIMATE$L
+    longpars <- ESTIMATE$longpars
+    rlist <- ESTIMATE$rlist
+    infological=ESTIMATE$infological
+    ngroups <- length(pars)
+    J <- length(pars[[1]]) - 1
+    est <- c()
+    for(g in 1:ngroups)
+        for(j in 1:(J+1))
+            est <- c(est, pars[[g]][[j]]@est)
+    shortpars <- longpars[est]
+    gstructgrouppars <- vector('list', ngroups)
+    for(g in 1:ngroups)
+        gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1]])    
+    for(g in 1:ngroups){
+        for(i in 1:J){
+            tmp <- c(itemloc[i]:(itemloc[i+1] - 1))
+            pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]           
+        }
+    }    
+    hess <- numDeriv::hessian(LL, x=shortpars, est=est, longpars=longpars, 
+                      pars=pars, ngroups=ngroups, J=J, 
+                      Theta=Theta, PrepList=PrepList)    
+    Hess <- matrix(0, length(longpars), length(longpars))
+    Hess[est, est] <- hess 
+    Hess <- L %*% Hess %*% L
+    info <- Hess[infological, infological]    
+    info <- nameInfoMatrix(info=info, correction=ESTIMATE$correction, L=L, 
+                           npars=length(longpars))
+    ESTIMATE$info <- info
+    SEtmp <- diag(solve(info))        
+    if(any(SEtmp < 0)){
+        warning("Information matrix is not positive definite, negative SEs set to 0.\n")
+        SEtmp <- rep(0, length(SEtmp))
+    } else SEtmp <- sqrt(SEtmp)
+    SE <- rep(NA, length(longpars))
+    SE[ESTIMATE$estindex_unique] <- SEtmp
+    index <- 1:length(longpars) 
+    if(length(constrain) > 0)
+        for(i in 1:length(constrain))
+            SE[index %in% constrain[[i]][-1]] <- SE[constrain[[i]][1]]
+    ind1 <- 1
+    for(g in 1:ngroups){
+        for(i in 1:(J+1)){
+            ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1
+            pars[[g]][[i]]@SEpar <- SE[ind1:ind2]
+            ind1 <- ind2 + 1            
+        }         
+    }
+    ESTIMATE$pars <- pars
+    return(ESTIMATE)
+}
+
+reloadPars <- function(longpars, pars, ngroups, J){
+    ind1 <- 1
+    for(g in 1:ngroups){                
+        for(i in 1:(J+1)){
+            ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1
+            pars[[g]][[i]]@par <- longpars[ind1:ind2]
+            ind1 <- ind2 + 1
+        }
+        for(i in 1:(J+1)){                        
+            #apply sum(t) == 1 constraint for mcm
+            if(is(pars[[g]][[i]], 'mcm')){                
+                tmp <- pars[[g]][[i]]@par
+                cat <- pars[[g]][[i]]@ncat
+                tmp2 <- (length(tmp) - (cat-1)):length(tmp) 
+                Num <- exp(tmp[tmp2])
+                tmp <- Num/sum(Num)                                    
+                pars[[g]][[i]]@par[tmp2] <- tmp
+            }
+        }
+    }
+    return(pars)
+}
+
+computeItemtrace <- function(pars, Theta, itemloc){
+    #compute itemtrace for 1 group
+    J <- length(itemloc) - 1
+    itemtrace <- matrix(0, ncol=itemloc[length(itemloc)]-1, nrow=nrow(Theta))     
+    for (i in 1:J)
+        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)   
+    itemtrace
+}
+
+assignItemtrace <- function(pars, itemtrace, itemloc){    
+    for(i in 1:(length(pars)-1))
+        pars[[i]]@itemtrace <- itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)]
+    pars[[length(pars)]]@itemtrace <- itemtrace
+    pars
 }

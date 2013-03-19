@@ -26,7 +26,8 @@
 #' as well as a \code{'promax'} rotation. 
 #' 
 #' Using \code{plot} will plot the test information function or the test standard errors 
-#' for 1 and 2 dimensional solutions. To examine
+#' for 1 and 2 dimensional solutions, or all item trace lines if only 1 dimensional the test is only
+#' dichotomous items. To examine
 #' individual item plots use \code{\link{itemplot}}. Residuals are
 #' computed using the LD statistic (Chen & Thissen, 1997) in the lower
 #' diagonal of the matrix returned by \code{residuals}, and Cramer's V above
@@ -89,7 +90,12 @@
 #' \code{grsm.block = c(rep(1,3), rep(2,3), NA)}. If NULL the all items are assumed to be within the same 
 #' group and therefore have the same number of item categories
 #' @param rsm.block same as \code{grsm.block}, but for \code{'rsm'} blocks
-#' @param SE logical, estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation
+#' @param SE logical; estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation or 
+#' the Bock and Leiberman method (for EM only)
+#' @param SE.type type of estimation method to use for calculating the parameter information matrix. 
+#' Can be \code{'MHRM'} for stocastic estimation, or \code{'BL'} for the Bock and Leiberman approach (EM only). 
+#' Note that \code{'MHRM'} may be faster and more accurate than \code{'BL'} when there are 2 or more factors. 
+#' Bootstrapped standard errors are also possible but must be run with the \code{\link{boot.mirt}} function
 #' @param SEtol tollerance value used to stop the MHRM estimation when \code{SE = TRUE}. Lower values
 #' will take longer but may be more stable for computing the information matrix
 #' @param guess fixed pseudo-guessing parameters. Can be entered as a single
@@ -101,7 +107,7 @@
 #' @param prev.cor use a previously computed correlation matrix to be used to
 #' estimate starting values for the EM estimation? Default in \code{NULL} 
 #' @param rotate type of rotation to perform after the initial orthogonal
-#' parameters have been extracted by using \code{summary}; default is \code{'varimax'}. 
+#' parameters have been extracted by using \code{summary}; default is \code{'oblimin'}. 
 #' See below for list of possible rotations. If \code{rotate != ''} in the \code{summary} 
 #' input then the default from the object is ignored and the new rotation from the list 
 #' is used instead
@@ -140,7 +146,8 @@
 #' @param digits number of significant digits to be rounded
 #' @param type type of plot to view; can be \code{'info'} to show the test
 #' information function, \code{'infocontour'} for the test information contours, 
-#' or \code{'SE'} for the test standard error function
+#' \code{'SE'} for the test standard error function, or \code{'trace'} for all item trace lines
+#' (only available when all items are dichotomous)
 #' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}. If a vector is 
 #' used then a bubble plot is created with the summed information across the angles specified 
 #' (e.g., \code{theta_angle = seq(0, 90, by=10)})
@@ -231,10 +238,12 @@
 #' 
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
-#' \code{\link{expand.table}}, \code{\link{key2binary}}, 
+#' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{confmirt.model}}
 #' \code{\link{confmirt}}, \code{\link{bfactor}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}}, 
 #' \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, \code{\link{fitIndices}}, 
-#' \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}
+#' \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}, \code{\link{probtrace}}, 
+#' \code{\link{boot.mirt}}, \code{\link{imputeMissing}}, \code{\link{itemfit}}, \code{\link{mod2values}},
+#' \code{\link{read.mirt}}, \code{\link{simdata}}
 #' 
 #' @references
 #' 
@@ -265,8 +274,8 @@
 #' IL: Scientific Software International.
 #' @keywords models
 #' @usage 
-#' mirt(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001, pars = NULL, 
-#' constrain = NULL, parprior = NULL, calcNull = TRUE, rotate = 'varimax', Target = NaN, 
+#' mirt(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SE.type = 'MHRM', SEtol = .001, pars = NULL, 
+#' constrain = NULL, parprior = NULL, calcNull = TRUE, rotate = 'oblimin', Target = NaN, 
 #' prev.cor = NULL, quadpts = NULL, grsm.block = NULL, rsm.block = NULL, D = 1.702, verbose = FALSE, 
 #' debug = FALSE, technical = list(), ...)
 #' 
@@ -289,21 +298,23 @@
 #' 
 #' \dontrun{
 #' #load LSAT section 7 data and compute 1 and 2 factor models
-#' data(LSAT7)
 #' data <- expand.table(LSAT7)
 #' 
 #' (mod1 <- mirt(data, 1))
 #' summary(mod1)
 #' residuals(mod1)
 #' plot(mod1) #test information function
+#' plot(mod1, type = 'trace') #trace lines
 #' 
 #' #estimated 3PL model for item 5 only
 #' (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 #' coef(mod1.3PL)
 #' 
-#' (mod2 <- mirt(data, 2, SE = TRUE))
-#' summary(mod2, rotate = 'oblimin')
+#' (mod <- mirt(data, 2, SE = TRUE)) #standard errors with MHRM method
+#' coef(mod)
+#' (mod2 <- mirt(data, 2, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
 #' coef(mod2)
+#' summary(mod2, rotate = 'oblimin') #oblimin rotation 
 #' residuals(mod2)
 #' plot(mod2)
 #' 
@@ -395,8 +406,8 @@
 #' anova(mod2, mod1) #not sig, mod2 should be prefered 
 #' }
 #' 
-mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,
-                 pars = NULL, constrain = NULL, parprior = NULL, calcNull = TRUE, rotate = 'varimax', 
+mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SE.type = 'MHRM', SEtol = .001,
+                 pars = NULL, constrain = NULL, parprior = NULL, calcNull = TRUE, rotate = 'oblimin', 
                  Target = NaN, prev.cor = NULL, quadpts = NULL, grsm.block = NULL, rsm.block = NULL, 
                  D = 1.702, verbose = FALSE, debug = FALSE, technical = list(), ...)
 {   
@@ -407,7 +418,7 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       pars=pars, method = 'EM', constrain=constrain, SE=SE, SEtol=SEtol,
                       parprior=parprior, quadpts=quadpts, rotate=rotate, Target=Target, D=D,
                       rsm.block=rsm.block, technical=technical, debug=debug, verbose=verbose,
-                      calcNull=calcNull, ...)
+                      calcNull=calcNull, SE.type=SE.type, ...)
     if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
         mod@Call <- Call
     return(mod)    

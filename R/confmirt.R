@@ -91,7 +91,7 @@
 #' @param object2 an object of class \code{ConfirmatoryClass}
 #' @param digits the number of significant digits to be rounded
 #' @param rotate if \code{model} is numeric (indicating an exploratory item FA) then this 
-#' rotation is used. Default is \code{'varimax'}
+#' rotation is used. Default is \code{'oblimin'}
 #' @param Target a dummy variable matrix indicting a target rotation pattern
 #' @param suppress a numeric value indicating which factor
 #' loadings should be suppressed. Typical values are around .3 in most
@@ -152,7 +152,7 @@
 #' @usage 
 #' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
 #' constrain = NULL, parprior = NULL, calcNull = TRUE, grsm.block = NULL, rsm.block = NULL, verbose = TRUE, 
-#' draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, D = 1.702, 
+#' draws = 3000, debug = FALSE, rotate = 'oblimin', Target = NULL, D = 1.702, 
 #' technical = list(),  ...)
 #' 
 #' \S4method{summary}{ConfirmatoryClass}(object, suppress = 0, digits = 3, verbose = TRUE, ...)
@@ -215,7 +215,10 @@
 #'   COV = F1*F2
 #' 
 #' 
-#' mod1 <- confmirt(dataset,model.1)
+#' #compute model, and use parallel computation of the log-likelhood
+#' library(parallel)
+#' cl <- makeCluster(4)
+#' mod1 <- confmirt(dataset, model.1, cl=cl)
 #' coef(mod1)
 #' summary(mod1)
 #' residuals(mod1)
@@ -255,11 +258,18 @@
 #' (mod.combo <- confmirt(data, model.combo))
 #' anova(mod.quad, mod.combo)
 #' 
+#' #nonlinear item and test plots
+#' plot(mod.quad)
+#' plot(mod.combo, type = 'SE')
+#' itemplot(mod.quad, 1, type = 'score')
+#' itemplot(mod.combo, 2, type = 'score')
+#' itemplot(mod.combo, 2, type = 'infocontour')
+#' 
 #' }
 #' 
 confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
                      constrain = NULL, parprior = NULL, calcNull = TRUE, grsm.block = NULL, rsm.block = NULL, 
-                     verbose = TRUE, draws = 2000, debug = FALSE, rotate = 'varimax', Target = NULL, 
+                     verbose = TRUE, draws = 3000, debug = FALSE, rotate = 'oblimin', Target = NULL, 
                      D = 1.702, technical = list(),  ...)
 {   
     if(debug == 'Main') browser()
@@ -267,7 +277,7 @@ confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, pars = 
     mod <- ESTIMATION(data=data, model=model, group = rep('all', nrow(data)), itemtype=itemtype, 
                       guess=guess, upper=upper, grsm.block=grsm.block, D=D, calcNull=calcNull,
                       pars=pars, constrain=constrain, parprior=parprior, verbose=verbose, 
-                      rsm.block=rsm.block, draws=draws, debug=debug, technical = list(),  ...)
+                      rsm.block=rsm.block, draws=draws, debug=debug, technical = technical,  ...)
     if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
         mod@Call <- Call
     return(mod)    

@@ -24,6 +24,8 @@ setMethod(
             ret <- ret[, -(ncol(ret) - nfact*2)]            
             return(ret)
         }
+        if(method == 'EAPsum') return(EAPsum(object, full.scores=full.scores, 
+                                             quadpts=quadpts))
         pars <- object@pars        
 		K <- object@K        
         J <- length(K)        
@@ -55,7 +57,7 @@ setMethod(
         for (i in 1:J)
             itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)                    
 		for (i in 1:nrow(tabdata)){				
-			L <- rowSums(log(itemtrace)[ ,as.logical(tabdata[i,])])			
+			L <- rowSums(log(itemtrace)[ ,as.logical(tabdata[i,]), drop = FALSE])			
 			thetas <- colSums(ThetaShort * exp(L) * W / sum(exp(L) * W))
 			SE <- sqrt(colSums(t((t(ThetaShort) - thetas))^2 * exp(L) * W / sum(exp(L) * W)))	
 			scores[i, ] <- thetas
@@ -77,9 +79,11 @@ setMethod(
 			}  
 		}
 		if(method == "ML"){            		            
-			tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]			             
+			tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]	
+            tmp2[is.na(rowSums(object@tabdata))] <- 0
 			scores[rowSums(tmp2) == J,] <- Inf
             tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
+            tmp2[is.na(rowSums(object@tabdata))] <- 1
             scores[rowSums(tmp2) == J,] <- -Inf
 			SEscores[is.na(scores[,1]), ] <- rep(NA, nfact)
 			for (i in 1:nrow(scores)){
@@ -98,9 +102,11 @@ setMethod(
 			}  			
 		}
         if(method == 'WLE'){                            
-            tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]    		             
+            tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE] 
+            tmp2[is.na(rowSums(object@tabdata))] <- 0
             scores[rowSums(tmp2) == J,] <- Inf
             tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
+            tmp2[is.na(rowSums(object@tabdata))] <- 1
             scores[rowSums(tmp2) == J,] <- -Inf            
             SEscores <- matrix(NA, nrow(SEscores), ncol(SEscores))
             for (i in 1:nrow(scores)){
@@ -120,7 +126,9 @@ setMethod(
 		if (full.scores){                                       
             tabdata2 <- object@tabdatalong
             tabdata2 <- tabdata2[,-ncol(tabdata2)]
-            scoremat <- .Call("fullScores", object@fulldata, tabdata2, scores)			 
+            stabdata2 <- apply(tabdata2, 1, paste, sep='', collapse = '/')
+            sfulldata <- apply(object@fulldata, 1, paste, sep='', collapse = '/')
+            scoremat <- scores[match(sfulldata, stabdata2), , drop = FALSE]                                    
 			colnames(scoremat) <- colnames(scores)	
 			return(cbind(fulldata,scoremat))
 		} else {            
@@ -242,4 +250,81 @@ gradnorm.WLE <- function(Theta, pars, patdata, itemloc, gp, prodlist, degrees){
     grad <- dL - dW*I    
     MIN <- sum(grad^2)
     MIN
+}
+
+EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE){    
+    calcL1 <- function(itemtrace, K){        
+        J <- length(K)
+        L0 <- L1 <- matrix(1, sum(K-1) + 1, ncol(itemtrace))                
+        L0[1:K[1], ] <- itemtrace[1:K[1], ]
+        nstar <- K[1] + K[2] - 3    
+        Sum.Scores <- 1:nrow(L0)-1    
+        MAX.Scores <- cumsum(K-1)            
+        for(i in 1:(J-1)){
+            T <- itemtrace[itemloc[i+1]:(itemloc[i+2] - 1), ]
+            L1[1, ] <- L0[1, ] * T[1, ]        
+            #recursive rule for internal values (gets a little ugly at polytomous data edges)
+            for(j in 1:nstar+1){        
+                sums <- 0                            
+                for(k in 1:K[i+1]-1)
+                    if(Sum.Scores[j] >= k && (MAX.Scores[i] + k) >= Sum.Scores[j])
+                        sums <- sums + L0[j - k, ] * T[1 + k, ]
+                L1[j, ] <- sums                   
+            }        
+            L1[j+1, ] <- L0[j - k + 1, ] * T[nrow(T), ]
+            L0 <- L1        
+            nstar <- nstar + K[i+1] - 1
+        }        
+        list(L1=L1, Sum.Scores=Sum.Scores) 
+    }
+    if(x@nfact > 1) stop('EAP sum score method only is applicable to unidimensional models')             
+    if(is.null(quadpts)) quadpts <- 40
+    Theta <- as.matrix(seq(-4,4,length.out = quadpts))    
+    prior <- dnorm(Theta)
+    prior <- prior/sum(prior)
+    pars <- x@pars
+    K <- x@K
+    J <- length(K)
+    itemloc <- x@itemloc    
+    itemtrace <- matrix(0, ncol=ncol(x@tabdatalong)-1, nrow=nrow(Theta))        
+    for (i in 1:J)
+        itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)    
+    itemtrace <- t(itemtrace)    
+    tmp <- calcL1(itemtrace=itemtrace, K=K)    
+    L1 <- tmp$L1
+    Sum.Scores <- tmp$Sum.Scores            
+    if(S_X2){        
+        L1total <- L1 %*% prior         
+        Elist <- vector('list', J)        
+        for(i in 1:J){
+            KK <- K[-i]
+            T <- itemtrace[c(itemloc[i]:(itemloc[i+1]-1)), ]
+            itemtrace2 <- itemtrace[-c(itemloc[i]:(itemloc[i+1]-1)), ]
+            tmp <- calcL1(itemtrace=itemtrace2, K=KK)    
+            E <- matrix(NA, nrow(L1total), nrow(T))            
+            for(j in 1:(nrow(T)))                
+                E[1:nrow(tmp$L1)+j-1,j] <- tmp$L1 %*% (T[j,] * prior) / 
+                    L1total[1:nrow(tmp$L1)+j-1, ]                                        
+            Elist[[i]] <- E[-c(1, nrow(E)), ]
+        }
+        return(Elist)
+    }
+    thetas <- SEthetas <- numeric(nrow(L1))    
+    for(i in 1:length(thetas)){        
+        thetas[i] <- sum(Theta * L1[i, ] * prior / sum(L1[i,] * prior))
+        SEthetas[i] <- sqrt(sum((Theta - thetas[i])^2 * L1[i, ] * prior / sum(L1[i,] * prior)))
+    }
+    ret <- data.frame(Sum.Scores=Sum.Scores, Theta=thetas, SE.Theta=SEthetas)        
+    rownames(ret) <- ret$Sum.Scores
+    if(full.scores){               
+        if(any(is.na(x@data))) stop('Full scores requires a complete dataset (no N\'s)')
+        dat <- x@data
+        adj <- apply(dat, 2, min)
+        if(any(adj > 0)) message('Data adjusted so that every item has a lowest score of 0')
+        dat <- t(t(dat) - adj)
+        scores <- rowSums(dat)
+        EAPscores <- ret$Theta[match(scores, ret$Sum.Scores)]
+        ret <- data.frame(Sum.Scores=scores, Theta=EAPscores)
+    }
+    ret   
 }
