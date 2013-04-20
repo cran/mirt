@@ -5,25 +5,27 @@ setMethod(
     definition = function(x){  
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"), 
             "\n\n", sep = "")
-        cat("Full-information factor analysis with ", ncol(x@F), " factor",
-            if(ncol(x@F)>1) "s", "\n", sep="")
+        cat("Full-information item factor analysis with ", x@nfact, " factors \n", sep="")
         EMquad <- ''
         if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
-        if(x@converge == 1)	
+        if(x@converge == 1)    
             cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
-        else 	
-            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
-        cat("Log-likelihood =", x@logLik, "\n")
-        cat("AIC =", x@AIC, "\n")		
-        cat("AICc =", x@AICc, "\n")
-        cat("BIC =", x@BIC, "\n")
-        cat("SABIC =", x@SABIC, "\n")
-        if(!is.nan(x@p))            		    
-            cat("G^2 = ", round(x@G2,2), ", df = ", x@df, ", p = ", round(x@p,4),
-                "\nTLI = ", round(x@TLI,3), ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
-        else             
-            cat("G^2 = ", NA, ", df = ", 
-                x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="" )		
+        else     
+            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")        
+        if(length(x@logLik) > 0){
+            cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0, 
+                                                      paste(', SE = ', round(x@SElogLik,3)),
+                                                      ''), "\n",sep='')			
+            cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
+            cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')            
+            if(!is.nan(x@p)){
+                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), 
+                    "\nX2 (", x@df,") = ", round(x@X2,2), ", p = ", round(x@p.X2,4), sep='') 
+                cat("\nRMSEA (G2) = ", round(x@RMSEA,3), "; RMSEA (X2) = ", round(x@RMSEA.X2,3), sep='')
+                cat("\nCFI (G2) = ", round(x@CFI,3), "; CFI (X2) = ", round(x@CFI.X2,3), sep='')                    
+                cat("\nTLI (G2) = ", round(x@TLI,3), "; TLI (X2) = ", round(x@TLI.X2,3), '\n', sep='') 
+            }
+        }				
     }
 )
 
@@ -116,12 +118,12 @@ setMethod(
                 allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar), 
                                              2, byrow = TRUE), digits)
                 rownames(allPars[[i]]) <- c('pars', 'SE')
-                colnames(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
             } 
         } else {
             for(i in 1:(J+1)){
                 allPars[[i]] <- round(object@pars[[i]]@par, digits)
-                names(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                names(allPars[[i]]) <- names(object@pars[[i]]@est)
             }
         }                  
         names(allPars) <- c(colnames(object@data), 'GroupPars')
@@ -217,7 +219,8 @@ setMethod(
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,expected,res)
-            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")	
+            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")
+            tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]            
             if(!is.null(printvalue)){
                 if(!is.numeric(printvalue)) stop('printvalue is not a number.')
                 tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
@@ -234,7 +237,8 @@ setMethod(
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10), 
                           auto.key = TRUE, ...)
     {           
-        if (!type %in% c('info','infocontour', 'SE', 'trace')) stop(type, " is not a valid plot type.")
+        if (!type %in% c('info','infocontour', 'SE', 'trace', 'infotrace')) 
+            stop(type, " is not a valid plot type.")
         if (any(theta_angle > 90 | theta_angle < 0)) 
             stop('Improper angle specifed. Must be between 0 and 90.')
         if(length(theta_angle) > 1) type = 'infoangle'
@@ -248,12 +252,16 @@ setMethod(
         prodlist <- attr(x@pars, 'prodlist')
         if(length(prodlist) > 0)        
             ThetaFull <- prodterms(Theta,prodlist)        
-        info <- 0            
-        for(l in 1:length(theta_angle)){
-            ta <- theta_angle[l]
-            if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
-            for(i in 1:J)
-                info <- info + iteminfo(x=x@pars[[i]], Theta=ThetaFull, degrees=ta)            
+        info <- 0                  
+        if(any(sapply(x@pars, is , 'custom')) && type != 'trace') 
+            stop('Information function for custom classes not available')
+        if(all(!sapply(x@pars, is , 'custom'))){
+            for(l in 1:length(theta_angle)){
+                ta <- theta_angle[l]
+                if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
+                for(i in 1:J)
+                    info <- info + iteminfo(x=x@pars[[i]], Theta=ThetaFull, degrees=ta)            
+            }
         }
         plt <- data.frame(cbind(info,Theta=Theta))         
         if(nfact == 2){						
@@ -297,6 +305,18 @@ setMethod(
                 return(xyplot(P ~ Theta, plotobj, group = item, ylim = c(0,1), 
                        xlab = expression(theta), ylab = expression(P(theta)), 
                        auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))            
+            }
+            if(type == 'infotrace'){                
+                if(!all(x@K == 2)) stop('infotrace plot only available for tests 
+                                        with dichotomous items')                
+                I <- matrix(NA, nrow(Theta), J)
+                for(i in 1:J)
+                    I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
+                items <- gl(n=J, k=nrow(Theta), labels = paste('Item', 1:J))
+                plotobj <- data.frame(I = as.numeric(I), Theta=Theta, item=items)
+                return(xyplot(I ~ Theta, plotobj, group = item, ylim = c(0,1), 
+                              xlab = expression(theta), ylab = expression(I(theta)), 
+                              auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))            
             }
         }		
     }		

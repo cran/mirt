@@ -16,20 +16,17 @@ test_that('one factor', {
     mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM')
     expect_is(mod_configural, 'MultipleGroupClass')
     mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), verbose = FALSE, 
-                                method = 'EM', prev.mod = mod_configural)
+                                method = 'EM')
     expect_is(mod_metric, 'MultipleGroupClass')
     mod_scalar2 <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
-                                 invariance=c('slopes', 'intercepts', 'free_varcov','free_means'), 
-                                 prev.mod = mod_configural)
+                                 invariance=c('slopes', 'intercepts', 'free_varcov','free_means'))
     expect_is(mod_scalar2, 'MultipleGroupClass')
     mod_scalar1 <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'MHRM',
-                                 invariance=c('slopes', 'intercepts', 'free_varcov'), 
-                                 prev.mod = mod_configural)    
+                                 invariance=c('slopes', 'intercepts', 'free_varcov'))    
     expect_is(mod_scalar1, 'MultipleGroupClass')
     dat[1,1] <- dat[2,2] <- NA
     mod_missing <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
-                                 invariance=c('slopes', 'intercepts', 'free_varcov'), 
-                                 prev.mod = mod_configural)    
+                                 invariance=c('slopes', 'intercepts', 'free_varcov'))    
     expect_is(mod_scalar1, 'MultipleGroupClass')
     
     fs1 <- fscores(mod_metric, verbose = FALSE)
@@ -43,9 +40,10 @@ test_that('one factor', {
     
     fit1 <- fitIndices(mod_metric)
     expect_is(fit1, 'list')
-})
+    fit2 <- itemfit(mod_metric)
+    expect_is(fit2, 'list')
 
-test_that('one factor polynomial and missing', {    
+    #missing data
     set.seed(1234)
     Theta1 <- rnorm(1000, -1)
     Theta2 <- rnorm(1000, 1) 

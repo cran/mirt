@@ -1,9 +1,7 @@
 model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K, fulldata, 
-                           itemloc, data, N, guess, upper, itemnames, exploratory, constrain, 
-                           startvalues, freepars, parprior, parnumber, BFACTOR = FALSE, D, mixedlist,
-                           debug)
+                           itemloc, data, N, guess, upper, itemnames, exploratory, parprior, 
+                           parnumber, BFACTOR = FALSE, D, mixedlist, customItems, key)
 {       
-    if(debug == 'model.elements') browser()
     hasProdTerms <- ifelse(nfact == nfactNames, FALSE, TRUE)    
     prodlist <- NULL
     if(hasProdTerms){
@@ -49,7 +47,10 @@ model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K
         if(K[i] == 2){
             div <- ifelse(cs[i] > .25, cs[i], .25)		
             zetas[[i]] <- (-1)*qnorm(mean(fulldata[,itemloc[i]]))/div * 1.702/D  
-        } else {			
+        } else if(itemtype[i] %in% c('2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM')){
+            div <- ifelse(cs[i] > .25, cs[i], .25)    	
+            zetas[[i]] <- qnorm(mean(fulldata[,itemloc[i] + key[i]-1]))/div * 1.702/D          
+        } else {
             temp <- table(data[,i])[1:(K[i]-1)]/N
             temp <- cumsum(temp)
             div <- ifelse(cs[i] > .25, cs[i], .25)		
@@ -92,14 +93,14 @@ model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K
         colnames(Theta) <- model[ ,1]
         mixedlist$Theta <- Theta        
     }
-    ret <- LoadPars(itemtype=itemtype, itemloc=itemloc, lambdas=lambdas, zetas=zetas, guess=guess, upper=upper,
-                    fulldata=fulldata, J=J, K=K, nfact=nfact+length(prodlist), constrain=constrain, 
-                    startvalues=startvalues, freepars=freepars, parprior=parprior, parnumber=parnumber,
-                    estLambdas=estlam, BFACTOR=BFACTOR, D=D, mixedlist=mixedlist, debug=debug)      
+    ret <- LoadPars(itemtype=itemtype, itemloc=itemloc, lambdas=lambdas, zetas=zetas, 
+                    guess=guess, upper=upper, fulldata=fulldata, J=J, K=K, 
+                    nfact=nfact+length(prodlist), parprior=parprior, 
+                    parnumber=parnumber, estLambdas=estlam, BFACTOR=BFACTOR, D=D, 
+                    mixedlist=mixedlist, customItems=customItems, key=key)      
     ret[[length(ret) + 1]] <- LoadGroupPars(gmeans=gmeans, gcov=gcov, estgmeans=estgmeans, 
                                             estgcov=estgcov, parnumber=attr(ret, 'parnumber'),
-                                            startvalues=startvalues, freepars=freepars, parprior=parprior,
-                                            constrain=constrain, debug=debug)
+                                            parprior=parprior)
     attr(ret, 'prodlist') <- prodlist     
     return(ret)    
 }

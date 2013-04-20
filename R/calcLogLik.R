@@ -8,15 +8,15 @@
 #' calcLogLik(object, ...)
 #'
 #' \S4method{calcLogLik}{ExploratoryClass}(object,
-#'    draws = 3000, G2 = TRUE)
+#'    draws = 3000, G2 = TRUE, cl = NULL)
 #' \S4method{calcLogLik}{ConfirmatoryClass}(object,
-#'    draws = 3000, G2 = TRUE)
+#'    draws = 3000, G2 = TRUE, cl = NULL)
 #' @aliases calcLogLik-method calcLogLik,ExploratoryClass-method
 #' calcLogLik,ConfirmatoryClass-method
 #' @param object a model of class \code{ConfirmatoryClass} or \code{ExploratoryClass}
 #' @param draws the number of Monte Carlo draws
 #' @param G2 logical; estimate the G2 model fit statistic?
-#' @param cl a cluster object from the \code{parallel} package
+#' @param cl a cluster object from the \code{parallel} package (set from using \code{makeCluster(ncores)})
 #' @param ... parameters that are passed
 #' @section Methods: 
 #' \describe{ \item{calcLogLik}{\code{signature(object = "ConfirmatoryClass")}, 
@@ -38,9 +38,9 @@
 #' # no parallel
 #' mod1withLogLik <- calcLogLik(mod1, draws=5000)
 #' 
-#' #with parallel using 4 cores
+#' #with parallel using detected number of cores
 #' library(parallel)
-#' cl <- makeCluster(4)
+#' cl <- makeCluster(detectCores())
 #' mod1withLogLik <- calcLogLik(mod1, draws=5000, cl=cl)
 #' 
 #'   }
@@ -71,7 +71,7 @@ setMethod(
             return(exp(rowSums(log(tmp))))           
         }
         pars <- object@pars
-	    tol <- 1e-8	    
+	    tol <- .Machine$double.eps	    
         fulldata <- object@fulldata
         prodlist <- object@prodlist
         itemloc <- object@itemloc
@@ -98,17 +98,11 @@ setMethod(
             G2 <- TRUE
         }
 		data <- object@data
-		pats <- apply(data,1,paste,collapse = "/")			
-		freqs <- table(pats)
-		nfreqs <- length(freqs)		
-		r <- as.vector(freqs)
-		ncolfull <- ncol(data)
-		tabdata <- unlist(strsplit(cbind(names(freqs)),"/"))
-		tabdata <- suppressWarnings(matrix(as.numeric(tabdata),nfreqs,ncolfull,TRUE))
-		tabdata <- cbind(tabdata,r)	
+        tabdata <- object@tabdata
+        r <- tabdata[,ncol(tabdata)]
 		expected <- rep(0,nrow(tabdata))
 		for (j in 1:nrow(tabdata)){          
-			TFvec <- colSums(ifelse(t(data) == tabdata[j,1:ncolfull],1,0)) == ncolfull 
+			TFvec <- colSums(ifelse(t(data) == tabdata[j,1:J],1,0)) == J 
 			TFvec[is.na(TFvec)] <- FALSE	
 			expected[j] <- mean(rwmeans[TFvec])			
 		}
@@ -134,16 +128,16 @@ setMethod(
         df <- length(r) - nestpars + nconstr + nfact*(nfact - 1)/2 - 1 - nmissingtabdata	
 		AIC <- (-2) * logLik + 2 * (length(r) - df - 1)
 		BIC <- (-2) * logLik + (length(r) - df - 1)*log(N)        
-		if(G2){						
+		if(G2){						            
 			if(any(is.na(data))){
-			    object@G2 <- object@p <- object@RMSEA <- object@TLI <- NaN
+			    object@G2 <- object@X2 <- NaN
 			} else {
-				G2 <- 2 * sum(r*log(r/(N*expected)))
-				p <- 1 - pchisq(G2,df) 
+                r <- r[!is.na(expected)]
+                expected <- expected[!is.na(expected)]
+				G2 <- 2 * sum(r*log(r/(sum(r)*expected)))				
+                X2 <- sum((r - sum(r)*expected)^2 / (sum(r)*expected))
 				object@G2 <- G2	
-				object@p <- p				
-				object@RMSEA <- ifelse((G2 - df) > 0, 
-				    sqrt(G2 - df) / sqrt(df * (N-1)), 0)
+                object@X2 <- X2						
                 if(logLikpre == 0){
     				null.mod <- object@null.mod
     				object@TLI <- (null.mod@G2 / null.mod@df - G2/df) / (null.mod@G2 / null.mod@df - 1)

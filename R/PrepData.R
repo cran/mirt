@@ -1,8 +1,8 @@
-PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain, freepars, 
-                     free.start, parprior, verbose, debug, technical, parnumber = 1, BFACTOR = FALSE,
-                     grsm.block = NULL, rsm.block = NULL, D, mixedlist)
-{
-    if(debug == 'PrepData') browser()  
+PrepData <- function(data, model, itemtype, guess, upper, 
+                     parprior, verbose, technical, parnumber = 1, BFACTOR = FALSE,
+                     grsm.block = NULL, rsm.block = NULL, D, mixedlist, customItems, 
+                     fulldata = NULL, key)
+{    
     if(is.null(grsm.block)) grsm.block <- rep(1, ncol(data))
     if(is.null(rsm.block)) rsm.block <- rep(1, ncol(data))
     itemnames <- colnames(data)
@@ -29,13 +29,25 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
     if(length(upper) == 1) upper <- rep(upper,J)
     if(length(upper) > J || length(upper) < J) 
         stop("The number of upper bound parameters is incorrect.")
+    if(is.null(key) && any(itemtype %in% c('2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM')))
+        stop('When using nested logit items a scoring key must be provided with key = c(...)')
+    if(is.null(key))  key <- rep(1L, J)
+    if(length(key) != J)
+        stop("The number of elements in the key input is incorrect.")
+    key <- as.integer(key)        
     uniques <- list()
-    for(i in 1:J)
+    for(i in 1:J){    
         uniques[[i]] <- sort(unique(data[,i]))
+        if(any(key[i] == uniques[[i]]))
+            key[i] <- which(key[i] == uniques[[i]])
+    }
     K <- rep(0,J)
     for(i in 1:J) K[i] <- length(uniques[[i]])	
     guess[K > 2] <- 0
-    upper[K > 2] <- 1		
+    upper[K > 2] <- 1
+    if(any(K < 2))
+        stop('The following items have only one response category and cannot be estimated: ', 
+             paste(itemnames[K < 2], ''))    
     if(is.null(itemtype)) {
         itemtype <- rep('', J)
         for(i in 1:J){
@@ -52,34 +64,36 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
     factorNames <- setdiff(model[,1],keywords)
     nfactNames <- length(factorNames)
     nfact <- sum(!grepl('\\(',factorNames))
-    index <- 1:J	
-    fulldata <- matrix(0,N,sum(K))
+    index <- 1:J
     Names <- NULL
     for(i in 1:J)
-        Names <- c(Names, paste("Item.",i,"_",1:K[i],sep=""))				
-    colnames(fulldata) <- Names			
-    for(i in 1:J){
-        ind <- index[i]		
-        dummy <- matrix(0,N,K[ind])
-        for (j in 0:(K[ind]-1))  
-            dummy[,j+1] <- as.integer(data[,ind] == uniques[[ind]][j+1])  		
-        fulldata[ ,itemloc[ind]:(itemloc[ind+1]-1)] <- dummy		
-    }	
-    fulldata[is.na(fulldata)] <- 0        
+        Names <- c(Names, paste("Item.",i,"_",1:K[i],sep=""))    			
+    if(is.null(fulldata)){
+        fulldata <- matrix(0,N,sum(K))    
+        colnames(fulldata) <- Names			
+        for(i in 1:J){
+            ind <- index[i]		
+            dummy <- matrix(0,N,K[ind])
+            for (j in 0:(K[ind]-1))  
+                dummy[,j+1] <- as.integer(data[,ind] == uniques[[ind]][j+1])  		
+            fulldata[ ,itemloc[ind]:(itemloc[ind+1]-1)] <- dummy		
+        }	
+        fulldata[is.na(fulldata)] <- 0        
+    }
     pars <- model.elements(model=model, itemtype=itemtype, factorNames=factorNames, 
                            nfactNames=nfactNames, nfact=nfact, J=J, K=K, fulldata=fulldata, 
                            itemloc=itemloc, data=data, N=N, guess=guess, upper=upper,  
-                           itemnames=itemnames, exploratory=exploratory, constrain=constrain,
-                           startvalues=startvalues, freepars=freepars, parprior=parprior, 
+                           itemnames=itemnames, exploratory=exploratory, parprior=parprior, 
                            parnumber=parnumber, BFACTOR=BFACTOR, D=D, mixedlist=mixedlist, 
-                           debug=debug)   
+                           customItems=customItems, key=key)   
     prodlist <- attr(pars, 'prodlist')
     if(is(pars[[1]], 'numeric') || is(pars[[1]], 'logical')){
         names(pars) <- c(itemnames, 'Group_Parameters')
         attr(pars, 'parnumber') <- NULL
         return(pars)  
     }   
-    if(is.null(constrain)) constrain <- list()
+    #within group constraints
+    constrain <- list()
     onePLconstraint <- c()    
     if(itemtype[1] == '1PL'){        
         for(i in 1:J)
@@ -125,10 +139,8 @@ PrepData <- function(data, model, itemtype, guess, upper, startvalues, constrain
                 constrain[[length(constrain) + 1]] <- rsmConstraint
             }
         }            
-    } 
-    npars <- 0
-    for(i in 1:length(pars))
-        npars <- npars + sum(pars[[i]]@est)     
+    }     
+    npars <- sum(sapply(pars, function(x) sum(x@est)))
     if(is.null(prodlist)) prodlist <- list()
     ret <- list(pars=pars, npars=npars, constrain=constrain, prodlist=prodlist, itemnames=itemnames,
                 K=K, fulldata=fulldata, nfactNames=nfactNames, nfact=nfact, npars=npars, 

@@ -12,7 +12,7 @@
 #' interested in computing the S-X2 quickly
 #' @param X2 logical; calculate the X2 statistic for unidimensional models?
 #' @param mincell the minimum expected cell size to be used in the S-X2 computations. Tables will be 
-#' collapsed accross items first if polytomous, and then accross scores if necessary
+#' collapsed across items first if polytomous, and then across scores if necessary
 #' @param S_X2.tables logical; return the tables in a list format used to compute the S-X2 stats?
 #' @param group.size approximate size of each group to be used in calculating the \eqn{\chi^2} statistic
 #' @param empirical.plot a single numeric value or character of the item name  indicating which item to plot
@@ -115,32 +115,37 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
         for (i in 1:J)            
             itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)        
         LL <- itemtrace * fulldata        
-        LL[LL < 1e-8] <- 1
+        LL[LL < .Machine$double.eps] <- 1
         Lmatrix <- matrix(log(LL[as.logical(fulldata)]), N, J)              
-        mu <- sigma2 <- rep(0, J)    
+        mu <- sigma2 <- rep(0, J)            
+        log_itemtrace <- log(itemtrace)
         for(item in 1:J){              
-            for(n in 1:N){                
-                P <- itemtrace[n ,itemloc[item]:(itemloc[item+1]-1)]
-                mu[item] <- mu[item] + sum(P * log(P))            
-                for(i in 1:length(P)){
-                    for(j in 1:length(P)){
-                        if(i != j)
-                            sigma2[item] <- sigma2[item] + P[i] * P[j] * log(P[i]) * log(P[i]/P[j])
-                    }
-                }                               
-            }               
-        }        
+            P <- itemtrace[ ,itemloc[item]:(itemloc[item+1]-1)]
+            log_P <- log_itemtrace[ ,itemloc[item]:(itemloc[item+1]-1)]
+            mu[item] <- sum(P * log_P) 
+            for(i in 1:ncol(P))
+                for(j in 1:ncol(P))
+                    if(i != j)
+                        sigma2[item] <- sigma2[item] + sum(P[,i] * P[,j] * log_P[,i] * log(P[,i]/P[,j]))
+        } 
         Zh <- (colSums(Lmatrix) - mu) / sqrt(sigma2) 
         #if all Rasch models, infit and outfit        
         if(all(x@itemtype %in% c('Rasch', 'rsm', 'gpcm'))){
             for(i in 1:length(x@itemtype))
                 if((x@pars[[i]]@par[1] * x@pars[[1]]@D) != 1) break
             attr(x, 'inoutfitreturn') <- TRUE
-            pf <- personfit(x, method=method)        
-            outfit <- colSums(pf$resid2 / pf$info) / N
-            infit <- colSums(pf$resid2) / colSums(pf$info)        
+            pf <- personfit(x, method=method)            
+            z2 <- pf$resid^2 / pf$W
+            outfit <- colSums(z2) / N
+            q.outfit <- sqrt(colSums((pf$C / pf$W^2) / N^2) - 1 / N)
+            z.outfit <- (outfit^(1/3) - 1) * (3/q.outfit) + (q.outfit/3)
+            infit <- colSums(pf$W * z2) / colSums(pf$W)
+            q.infit <- sqrt(colSums(pf$C - pf$W^2) / colSums(pf$W)^2)
+            z.infit <- (infit^(1/3) - 1) * (3/q.infit) + (q.infit/3)
             ret$outfit <- outfit
+            ret$z.outfit <- z.outfit
             ret$infit <- infit
+            ret$z.infit <- z.infit
             ret$Zh <- Zh        
         } else {
             ret$Zh <- Zh    
@@ -263,11 +268,11 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
                     if(any(L[j,])) {
                         On[j+1, L[j,]] <- On[j+1, L[j,]] + On[j, L[j,]]
                         En[j+1, L[j,]] <- En[j+1, L[j,]] + En[j, L[j,]]
-                        drop <- c(drop, i)         
+                        drop <- c(drop, j)         
                         break
                     }
                 }
-                for(j in nrow(On):1){
+                for(j in nrow(On):2){
                     if(any(L[j,])) {
                         On[j-1, L[j,]] <- On[j-1, L[j,]] + On[j, L[j,]]
                         En[j-1, L[j,]] <- En[j-1, L[j,]] + En[j, L[j,]]

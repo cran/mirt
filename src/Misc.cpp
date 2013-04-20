@@ -1,17 +1,35 @@
 #include"Misc.h"
 
+RcppExport SEXP dichOuter(SEXP RThetas, SEXP RPQ, SEXP RN)
+{	
+    BEGIN_RCPP
+	int i, j, n;
+    NumericMatrix Thetas(RThetas);    
+    NumericVector PQ(RPQ);
+    NumericVector N(RN);
+    const int nfact = Thetas.ncol();
+	NumericMatrix ret(nfact,nfact);			
+
+	for(n = 0; n < N(0); n++)
+		for(i = 0; i < nfact; i++)
+			for(j = 0; j < nfact; j++)
+				ret(i,j) += Thetas(n,i) * Thetas(n,j) * PQ(n);
+		
+	return(ret);
+	END_RCPP
+}
+
 NumericMatrix polyOuter(NumericMatrix Thetas, NumericVector Pk,
 	NumericVector Pk_1, NumericVector PQ_1, NumericVector PQ, 
 	NumericVector dif1sq, NumericVector dif1)
 {
-	int i, j, n, nfact, N;
-	nfact = Thetas.ncol();
-	N = Thetas.nrow();
+	int i, j, n;
+	const int nfact = Thetas.ncol();
 	NumericMatrix d2Louter(nfact,nfact), outer(nfact,nfact);
 	NumericVector temp(nfact);
 	d2Louter.fill(0.0);
 	
-	for(n = 0; n < N; n++){
+	for(n = 0; n < Thetas.nrow(); n++){
 		for(i = 0; i < nfact; i++)
 			for(j = 0; j < nfact; j++)
 				outer(i,j) = Thetas(n,i) * Thetas(n,j);
@@ -27,19 +45,18 @@ NumericMatrix polyOuter(NumericMatrix Thetas, NumericVector Pk,
 }
 
 NumericVector itemTrace(NumericVector a, const double *d, 
-        NumericMatrix Theta, const double *g, const double *u)
+        NumericMatrix Theta, const double *g, const double *u, const double *D)
 {	
 	int i, j;
-    int nquad = Theta.nrow();
-    int nfact = Theta.ncol();
+    const int nquad = Theta.nrow();
 	NumericVector P(nquad), z(nquad);
 
 	for (i = 0; i <	nquad; i++){
 	    z(i) = 0.0;
-		for (j = 0; j <	nfact; j++){		
-			z(i) += 1.702 * a(j) * Theta(i,j);  		
+		for (j = 0; j <	Theta.ncol(); j++){		
+			z(i) += *D * a(j) * Theta(i,j);  		
 		}
-		z(i) += *d * 1.702;
+		z(i) += *d * *D;
 	}	
 	for (i = 0; i < nquad; i++) 
 		P(i) = *g + (*u - *g) * (exp(z(i))/(1 + exp(z(i))));
@@ -47,63 +64,32 @@ NumericVector itemTrace(NumericVector a, const double *d,
 	return P;		
 }
 
-NumericMatrix Prob(NumericMatrix Theta, NumericVector a,
-        NumericVector zetas, const double *g, const double *u)
-{
-	int i, j;
-    int N = Theta.nrow();
-    int k = zetas.length() + 1;
-    double tmp;
-	NumericVector p1(N);
-	NumericMatrix Ps(N,k+1), Pdif(N,k), P(N,k);
+RcppExport SEXP reloadPars(SEXP Rlongpars, SEXP Rpars, SEXP Rngroups, SEXP RJ)
+{    
+    BEGIN_RCPP
+	NumericVector longpars(Rlongpars);
+    List pars(Rpars);
+    NumericVector ngroups(Rngroups);
+    NumericVector J(RJ);
+    int i, j, g;
+    int ind = 0, len;
 
-	for(i = 0; i < N; i++){
-		Ps(i,0) = 1.0;
-		Ps(i,k) = 0.0;
-	}
-	for(j = 0; j < (k - 1); j++){
-		tmp = zetas(j);
-		p1 = itemTrace(a, &tmp, Theta, g, u);
-		for(i = 0; i < N; i++)
-			Ps(i,j+1) = p1(i);
-	}
-	for(j = (k - 1); j >= 0; j--)
-		for(i = 0; i < N; i++)
-			Pdif(i,j) = Ps(i,j) - Ps(i,j+1);				
-	for(j = 0; j < k; j++){
-		for(i = 0; i < N; i++){
-			if(Pdif(i,j) < .00000001) Pdif(i,j) = .00000001;
-			if(k == 2) Pdif(i,j) = 1.0 - Pdif(i,j);
-			P(i,j) = Pdif(i,j);
-		}
-	}
-	return P;
+    for(g = 0; g < ngroups[0]; g++){
+        List glist = pars[g];
+        for(i = 0; i < (J[0]+1); i++){
+            S4 item = glist[i];
+            NumericVector p = item.slot("par");
+            len = p.length();
+            for(j = 0; j < len; j++)
+                p(j) = longpars(ind+j);
+            ind += len;
+            item.slot("par") = p;
+            glist[i] = item;
+        }        
+        pars[g] = glist;
+    }
+	
+    return(pars);
+	END_RCPP
 }
-
-NumericMatrix ProbComp(NumericMatrix Theta, NumericVector a, 
-        NumericVector zetas, const double *g, const double *u)
-{
-	int i, j;
-    int nfact = Theta.ncol();
-    int N = Theta.nrow();
-	NumericMatrix Pret(N,2), theta(N,1);    
-	NumericVector P(N), p1(N), tmpa(1);
-	double zerog = 0.0, tmpd, oneu = 1.0;
-	P.fill(1.0);
-
-	for(j = 0; j < nfact; j++){
-		tmpa(0) = a(j);
-		tmpd = zetas(j);
-		theta(_,0) = Theta(_,j);
-		p1 = itemTrace(tmpa, &tmpd, theta, &zerog, &oneu);
-		for(i = 0; i < N; i++)
-			P(i) *= p1(i);
-	}
-	for(i = 0; i < N; i++){
-		Pret(i,0) = *g + (*u - *g) * P(i);
-		Pret(i,1) = 1.0 - Pret(i,0);
-	}
-	return Pret;
-}
-
 

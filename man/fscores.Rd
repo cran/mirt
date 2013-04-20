@@ -4,7 +4,7 @@
 \usage{
   fscores(object, rotate = "", full.scores = FALSE,
     method = "EAP", quadpts = NULL, response.vector = NULL,
-    degrees = NULL, verbose = TRUE)
+    degrees = NULL, returnER = FALSE, verbose = TRUE)
 }
 \arguments{
   \item{object}{a computed model object of class
@@ -40,11 +40,17 @@
   given response vector that may or may not have been in
   the original dataset}
 
+  \item{returnER}{logical; return empirical reliability
+  estimate as a numeric value?}
+
   \item{verbose}{logical; print verbose output messages?}
 }
 \description{
   Computes MAP, EAP, EAP for sum-scores, WLE, or ML factor
   scores with a multivariate normal prior distribution.
+  Will return either a table with the computed scores and
+  standard errors, or the original data matrix with scores
+  appended to the rightmost column.
 }
 \examples{
 \dontrun{

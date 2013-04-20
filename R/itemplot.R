@@ -13,7 +13,7 @@
 #' @param degrees the degrees argument to be used if there are exactly two factors. See \code{\link{iteminfo}}
 #' for more detail
 #' @param CE logical; plot confidence envelope?
-#' @param CEalpha area remaining in the tail for confidence envolope. Default gives 95\% confidence region 
+#' @param CEalpha area remaining in the tail for confidence envelope. Default gives 95\% confidence region 
 #' @param CEdraws draws number of draws to use for confidence envelope
 #' @param ... additional arguments to be passed to lattice 
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
@@ -40,15 +40,16 @@
 #' itemplot(mod3, 3, type = 'info')
 #' 
 #' #polytomous items
-#' pmod <- mirt(Science, 1, SE=TRUE)
+#' pmod <- mirt(Science, 1, SE=TRUE, SE.type = 'MHRM')
 #' itemplot(pmod, 3)
 #' itemplot(pmod, 3, CE = TRUE)
 #' 
 #'     }
 #' 
 itemplot <- function(object, item, type = 'trace', degrees = 45, CE = FALSE, CEalpha = .05, 
-                     CEdraws = 1000, ...){
-    inames <- colnames(object@data)
+                     CEdraws = 1000, ...){    
+    if(is.list(object)) inames <- colnames(object[[1]]@data)
+    else inames <- colnames(object@data)
     ind <- 1:length(inames)
     if(!is.numeric(item)) item <- ind[inames == item]    
     ret <- itemplot.internal(object=object, item=item, type=type, degrees=degrees, CE=CE, 

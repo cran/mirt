@@ -11,9 +11,9 @@
   confmirt(data, model, itemtype = NULL, guess = 0, upper =
     1, pars = NULL, constrain = NULL, parprior = NULL,
     calcNull = TRUE, grsm.block = NULL, rsm.block = NULL,
-    verbose = TRUE, draws = 3000, debug = FALSE, rotate =
-    'oblimin', Target = NULL, D = 1.702, technical =
-    list(), ...)
+    verbose = TRUE, draws = 3000, rotate = 'oblimin',
+    Target = NULL, key = NULL, D = 1.702, cl = NULL,
+    technical = list(), ...)
 
   \S4method{summary}{ConfirmatoryClass}(object, suppress =
     0, digits = 3, verbose = TRUE, ...)
@@ -75,6 +75,8 @@
   Thissen, 1997) or \code{'exp'} for the expected values
   for the frequencies of every response pattern}
 
+  \item{key}{see \code{\link{mirt}} for details}
+
   \item{itemtype}{see \code{\link{mirt}} for details}
 
   \item{grsm.block}{see \code{\link{mirt}} for details}
@@ -86,8 +88,6 @@
   \item{parprior}{see \code{\link{mirt}} for details}
 
   \item{pars}{see \code{\link{mirt}} for details}
-
-  \item{debug}{logical; turn on debugging features?}
 
   \item{object}{an object of class
   \code{ConfirmatoryClass}}
@@ -113,6 +113,9 @@
   \item{D}{a numeric value used to adjust the logistic
   metric to be more similar to a normal cumulative density
   curve. Default is 1.702}
+
+  \item{cl}{a cluster object from the \code{parallel}
+  package (set from using \code{makeCluster(ncores)})}
 
   \item{technical}{list specifying subtle parameters that
   can be adjusted. These values are}
@@ -160,15 +163,14 @@
   full-information maximum-likelihood factor analysis model
   to dichotomous and polytomous data under the item
   response theory paradigm using Cai's (2010)
-  Metropolis-Hastings Robbins-Monro algorithm. Fits
-  univariate and multivariate Rasch, 1-4PL, graded,
-  (generalized) partial credit, nominal, multiple choice,
-  graded rating scale, Rasch rating scale, and
-  partially-compensatory models, potentially with
-  polynomial and product constructed latent traits. Models
-  may also contain 'explanatory' person or item level
-  predictors, though these can only be included by using
-  the \code{\link{mixedmirt}} function.
+  Metropolis-Hastings Robbins-Monro algorithm. Will fit the
+  same models as \code{\link{mirt}}, in addition to
+  polynomial and product constructed latent traits. User
+  defined item classes can also be defined using the
+  \code{\link{createItem}} function. Models may also
+  contain 'explanatory' person or item level predictors,
+  though these can only be included by using the
+  \code{\link{mixedmirt}} function.
 }
 \details{
   \code{confmirt} follows a confirmatory and exploratory
@@ -195,18 +197,16 @@
   the \code{anova} function, where a Chi-squared difference
   test and AIC/BIC difference values are displayed.
 }
-\section{Convergence}{
-  The MHRM algorithm often is more stable than the EM
-  counterpart in \code{mirt} but convergence of the
-  algorithm should be interpreted with caution. When the
-  number of iterations grows very high (e.g., greater than
-  1500) or when \code{Max Change = .2500} values are
-  repeatedly printed to the console too often (indicating
-  that the parameters were being constrained since they are
-  naturally moving in steps greater than 0.25) then the
-  model may either be ill defined or have a very flat
-  likelihood surface, and genuine maximum likelihood
-  parameter estimates may be difficult to find.
+\section{Convergence monitoring}{
+  When the number of iterations grows very high (e.g.,
+  greater than 1500) or when \code{Max Change = .2500}
+  values are repeatedly printed to the console too often
+  (indicating that the parameters were being constrained
+  since they are naturally moving in steps greater than
+  0.25) then the model may either be ill defined or have a
+  very flat likelihood surface, and genuine
+  maximum-likelihood parameter estimates may be difficult
+  to find.
 }
 
 \section{Confirmatory IRT}{
@@ -353,11 +353,17 @@ itemplot(mod.combo, 2, type = 'infocontour')
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{simdata}}, \code{\link{fscores}},
-  \code{\link{confmirt.model}}, \code{\link{wald}},
-  \code{\link{multipleGroup}}, \code{\link{itemplot}},
-  \code{\link{fitIndices}}, \code{\link{mixedmirt}},
-  \code{\link{testinfo}}, \code{\link{iteminfo}},
+  \code{\link{confmirt.model}}, \code{\link{mirt}},
+  \code{\link{confmirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{fitIndices}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}, \code{\link{probtrace}},
+  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
+  \code{\link{itemfit}}, \code{\link{mod2values}},
+  \code{\link{read.mirt}}, \code{\link{simdata}},
+  \code{\link{createItem}}
 }
 \keyword{models}
 

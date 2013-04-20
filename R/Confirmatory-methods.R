@@ -17,17 +17,15 @@ setMethod(
             cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0, 
                                                                paste(', SE = ', round(x@SElogLik,3)),
                                                                ''), "\n",sep='')			
-            cat("AIC =", x@AIC, "\n")	
-            cat("AICc =", x@AICc, "\n")
-            cat("BIC =", x@BIC, "\n")
-            cat("SABIC =", x@SABIC, "\n")
-            if(!is.nan(x@p))
-                cat("G^2 = ", round(x@G2,2), ", df = ", 
-                    x@df, ", p = ", round(x@p,4), "\nTLI = ", round(x@TLI,3),
-                    ", RMSEA = ", round(x@RMSEA,3), "\n", sep="")
-            else 
-                cat("G^2 = ", NA, ", df = ", 
-                    x@df, ", p = ", NA, ", RMSEA = ", NA, "\n", sep="")		
+            cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
+            cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')                                          
+            if(!is.nan(x@p)){
+                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), 
+                    "\nX2 (", x@df,") = ", round(x@X2,2), ", p = ", round(x@p.X2,4), sep='') 
+                cat("\nRMSEA (G2) = ", round(x@RMSEA,3), "; RMSEA (X2) = ", round(x@RMSEA.X2,3), sep='')  
+                cat("\nCFI (G2) = ", round(x@CFI,3), "; CFI (X2) = ", round(x@CFI.X2,3), sep='')                    
+                cat("\nTLI (G2) = ", round(x@TLI,3), "; TLI (X2) = ", round(x@TLI.X2,3), '\n', sep='') 
+            }
         }		
     } 
 )
@@ -81,12 +79,12 @@ setMethod(
                 allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar), 
                                          2, byrow = TRUE), digits)
                 rownames(allPars[[i]]) <- c('pars', 'SE')
-                colnames(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
             }
         } else {
             for(i in 1:(J+1)){
                 allPars[[i]] <- round(object@pars[[i]]@par, digits)
-                names(allPars[[i]]) <- names(object@pars[[i]]@parnum)
+                names(allPars[[i]]) <- names(object@pars[[i]]@est)
             }
         }                  
         names(allPars) <- c(colnames(object@data), 'GroupPars')                
@@ -157,7 +155,8 @@ setMethod(
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,expected,res)
-            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")	
+            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")
+            tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
             if(!is.null(printvalue)){
                 if(!is.numeric(printvalue)) stop('printvalue is not a number.')
                 tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]

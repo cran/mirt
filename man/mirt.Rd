@@ -10,12 +10,12 @@
 Theory)}
 \usage{
   mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-    SE = FALSE, SE.type = 'MHRM', SEtol = .001, pars =
-    NULL, constrain = NULL, parprior = NULL, calcNull =
-    TRUE, rotate = 'oblimin', Target = NaN, prev.cor =
-    NULL, quadpts = NULL, grsm.block = NULL, rsm.block =
-    NULL, D = 1.702, verbose = FALSE, debug = FALSE,
-    technical = list(), ...)
+    SE = FALSE, SE.type = 'SEM', pars = NULL, constrain =
+    NULL, parprior = NULL, calcNull = TRUE, rotate =
+    'oblimin', Target = NaN, quadpts = NULL, grsm.block =
+    NULL, rsm.block = NULL, key= NULL, D = 1.702, cl =
+    NULL, large = FALSE, verbose = TRUE, technical =
+    list(), ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
@@ -54,14 +54,17 @@ Theory)}
   items follow a graded or 2PL structure, however they may
   be changed to the following: 'Rasch', '1PL', '2PL',
   '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'rsm',
-  'nominal', 'mcm', 'PC2PL', and 'PC3PL', for the
-  Rasch/partial credit, 1 and 2 parameter logistic, 3
-  parameter logistic (lower asymptote and upper), 4
-  parameter logistic, graded response model, rating scale
-  graded response model, generalized partial credit model,
-  Rasch rating scale model, nominal model, multiple choice
-  model, and 2-3PL partially compensatory model,
-  respectively}
+  'nominal', 'mcm', 'PC2PL', 'PC3PL', '2PLNRM', '3PLNRM',
+  '3PLuNRM', and '4PLNRM', for the Rasch/partial credit, 1
+  and 2 parameter logistic, 3 parameter logistic (lower
+  asymptote and upper), 4 parameter logistic, graded
+  response model, rating scale graded response model,
+  generalized partial credit model, Rasch rating scale
+  model, nominal model, multiple choice model, and 2-3PL
+  partially compensatory model, and 2-4 parameter nested
+  logistic models, respectively. User defined item classes
+  can also be defined using the \code{\link{createItem}}
+  function}
 
   \item{grsm.block}{an optional numeric vector indicating
   where the blocking should occur when using the grsm, NA
@@ -76,23 +79,27 @@ Theory)}
   \item{rsm.block}{same as \code{grsm.block}, but for
   \code{'rsm'} blocks}
 
-  \item{SE}{logical; estimate the standard errors? Calls
-  the MHRM subroutine for a stochastic approximation or the
-  Bock and Leiberman method (for EM only)}
+  \item{key}{a numeric vector of the response scoring key.
+  Required when using nested logit item types, and must be
+  the same length as the number of items used. Items that
+  are not nested logit will ignore this vector, so use
+  \code{NA} in item locations that are not applicable}
+
+  \item{SE}{logical; estimate the standard errors?
+  Calculates the information matrix from MHRM subroutine
+  for stochastic approximation, Bock and Lieberman style
+  information (use only with small number of items), or
+  supplemented EM (SEM) computations for Bock and Lieberman
+  style information matrix}
 
   \item{SE.type}{type of estimation method to use for
   calculating the parameter information matrix. Can be
-  \code{'MHRM'} for stocastic estimation, or \code{'BL'}
-  for the Bock and Leiberman approach (EM only). Note that
-  \code{'MHRM'} may be faster and more accurate than
-  \code{'BL'} when there are 2 or more factors.
+  \code{'MHRM'} for stochastic estimation, \code{'BL'} for
+  the Bock and Lieberman approach (EM only), or
+  \code{'SEM'} for the supplemented EM (TOL is
+  automatically reduced to .0001 to help the EM history).
   Bootstrapped standard errors are also possible but must
   be run with the \code{\link{boot.mirt}} function}
-
-  \item{SEtol}{tollerance value used to stop the MHRM
-  estimation when \code{SE = TRUE}. Lower values will take
-  longer but may be more stable for computing the
-  information matrix}
 
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
@@ -103,10 +110,6 @@ Theory)}
   Can be entered as a single value to assign a global
   guessing parameter or may be entered as a numeric vector
   corresponding to each item}
-
-  \item{prev.cor}{use a previously computed correlation
-  matrix to be used to estimate starting values for the EM
-  estimation? Default in \code{NULL}}
 
   \item{rotate}{type of rotation to perform after the
   initial orthogonal parameters have been extracted by
@@ -152,7 +155,11 @@ Theory)}
   into the estimation with \code{pars = mymodifiedpars}}
 
   \item{calcNull}{logical; calculate the Null model for fit
-  statics (e.g., TLI)?}
+  statics (e.g., TLI)? Only applicable if the data contains
+  no NA's}
+
+  \item{cl}{a cluster object from the \code{parallel}
+  package (set from using \code{makeCluster(ncores)})}
 
   \item{quadpts}{number of quadrature points per dimension}
 
@@ -184,8 +191,9 @@ Theory)}
   \item{type}{type of plot to view; can be \code{'info'} to
   show the test information function, \code{'infocontour'}
   for the test information contours, \code{'SE'} for the
-  test standard error function, or \code{'trace'} for all
-  item trace lines (only available when all items are
+  test standard error function, and \code{'trace'} and
+  \code{'infotrace'} for all item probability information
+  or trace lines (only available when all items are
   dichotomous)}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
@@ -200,6 +208,22 @@ Theory)}
 
   \item{rot}{allows rotation of the 3D graphics}
 
+  \item{large}{a logical, indicating whether the internal
+  collapsed data should be returned, or list of internally
+  computed mirt parameters containing the data. If
+  \code{TRUE} a list containing the organized data used
+  prior to estimation is returned. This list object can
+  then be passed back into \code{large} to avoid
+  reorganizing the data in every estimation (useful when
+  the dataset are very large and computing the tabularized
+  data is computationally burdensome). Therefore, the best
+  strategy for large data is to always pass the internal
+  data to the estimation function, shown below: \describe{
+  \item{Compute organized data}{e.g., \code{internaldat <-
+  mirt(Science, 1, large = TRUE)}} \item{Pass the organized
+  data to all estimation functions}{e.g., \code{mod <-
+  mirt(Science, 1, large = internaldat)}} }}
+
   \item{restype}{type of residuals to be displayed. Can be
   either \code{'LD'} for a local dependence matrix (Chen &
   Thissen, 1997) or \code{'exp'} for the expected values
@@ -211,15 +235,17 @@ Theory)}
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
 
-  \item{debug}{logical; turn on debugging features?}
-
   \item{technical}{a list containing lower level technical
   parameters for estimation. May be: \describe{
   \item{MAXQUAD}{maximum number of quadratures; default
-  10000} \item{MSTEPMAXIT}{number of M-step iterations;
-  default 25} \item{TOL}{EM convergence threshold; default
-  .001} \item{NCYCLES}{maximum number of EM cycles; default
-  300} }}
+  10000} \item{TOL}{EM convergence threshold; default .001}
+  \item{MSTEPTOL}{convergence threshold for Mstep; default
+  is \code{TOL/100}} \item{SEtol}{tolerance value used to
+  stop the MHRM estimation when \code{SE = TRUE} and
+  \code{SE.type = 'MHRM'}. Lower values will take longer
+  but may be more stable for computing the information
+  matrix. Default is .001} \item{NCYCLES}{maximum number of
+  EM cycles; default 500} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -229,10 +255,12 @@ Theory)}
   under the item response theory paradigm. Fits univariate
   and multivariate Rasch, 1-4PL, graded, (generalized)
   partial credit, nominal, multiple choice, graded rating
-  scale, Rasch rating scale, and partially compenatory
-  models using the EM algorithm. Models may also contain
-  'explanatory' person or item level predictors, though
-  these can only be included by using the
+  scale, Rasch rating scale, nested logistic, and partially
+  compensatory models using the EM algorithm. User defined
+  item classes can also be defined using the
+  \code{\link{createItem}} function. Models may also
+  contain 'explanatory' person or item level predictors,
+  though these can only be included by using the
   \code{\link{mixedmirt}} function.
 }
 \details{
@@ -248,22 +276,18 @@ Theory)}
   applied to allow comparison to mainstream programs such
   as TESTFACT (2003) and POLYFACT.
 
-  Factor scores are estimated assuming a normal prior
-  distribution and can be appended to the input data matrix
-  (\code{full.data = TRUE}) or displayed in a summary table
-  for all the unique response patterns. \code{summary} and
-  \code{coef} allow for all the rotations available from
-  the \code{GPArotation} package (e.g., \code{rotate =
-  'oblimin'}) as well as a \code{'promax'} rotation.
-
-  Using \code{plot} will plot the test information function
-  or the test standard errors for 1 and 2 dimensional
-  solutions, or all item trace lines if only 1 dimensional
-  the test is only dichotomous items. To examine individual
-  item plots use \code{\link{itemplot}}. Residuals are
-  computed using the LD statistic (Chen & Thissen, 1997) in
-  the lower diagonal of the matrix returned by
-  \code{residuals}, and Cramer's V above the diagonal.
+  \code{summary} and \code{coef} allow for all the
+  rotations available from the \code{GPArotation} package
+  (e.g., \code{rotate = 'oblimin'}) as well as a
+  \code{'promax'} rotation. Using \code{plot} will plot the
+  test information function or the test standard errors for
+  1 and 2 dimensional solutions, or all item trace lines if
+  only 1 dimensional the test is only dichotomous items. To
+  examine individual item plots use \code{\link{itemplot}}.
+  Residuals are computed using the LD statistic (Chen &
+  Thissen, 1997) in the lower diagonal of the matrix
+  returned by \code{residuals}, and Cramer's V above the
+  diagonal.
 }
 \section{Confirmatory IRT}{
   Specification of the confirmatory item factor analysis
@@ -304,13 +328,7 @@ Theory)}
   are determined by calculating the inverse normal of the
   item facility (i.e., item easiness), \eqn{q_j}, to obtain
   \eqn{d_j = q_j / u_j}. A similar implementation is also
-  used for obtaining initial values for polychotomous
-  items. Following these initial estimates the model is
-  iterated using the EM estimation strategy with fixed
-  quadrature points. Implicit equation accelerations
-  described by Ramsey (1975) are also added to facilitate
-  parameter convergence speed, and these are adjusted every
-  third cycle.
+  used for obtaining initial values for polytomous items.
 }
 
 \section{Convergence}{
@@ -328,7 +346,7 @@ Theory)}
 }
 
 \section{IRT Models}{
-  The parameter labels use follow the convention, here
+  The parameter labels use the follow convention, here
   using two factors and \eqn{k} as the number of
   categories. Throughout all models D is a constant
   (default 1.702):
@@ -381,7 +399,18 @@ Theory)}
   the products of 2PL probability curves. \deqn{P(x = 1 |
   \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-D * (a_1 *
   \theta_1 + d_1))} * \frac{1}{1 + exp(-D * (a_2 * \theta_2
-  + d_2))})} } }
+  + d_2))})} } \item{1-4PLNRM}{Nested logistic curves for
+  modeling distractor items. Requires a scoring key. The
+  model is broken into two components for the probability
+  of endorment. For sucessful endorsement the probability
+  trace is the 1-4PL model, while for unsucessful
+  endormenent: \deqn{P(x = 0 | \theta, \psi) = (1 -
+  P_{1-4PL}(x = 1 | \theta, \psi)) * P_{nominal}(x = k |
+  \theta, \psi)} which is the product of the compliment of
+  the dichotomous trace line with the nominal response
+  model. In the nominal model, the slope parameters defined
+  above are constrained to be 1's, while the last value of
+  the \eqn{ak} is freely estimated. } }
 }
 \examples{
 \dontrun{
@@ -389,6 +418,10 @@ Theory)}
 data <- expand.table(LSAT7)
 
 (mod1 <- mirt(data, 1))
+coef(mod1)
+(mod1 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
+(mod1 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
+coef(mod1)
 summary(mod1)
 residuals(mod1)
 plot(mod1) #test information function
@@ -398,9 +431,7 @@ plot(mod1, type = 'trace') #trace lines
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 coef(mod1.3PL)
 
-(mod <- mirt(data, 2, SE = TRUE)) #standard errors with MHRM method
-coef(mod)
-(mod2 <- mirt(data, 2, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
+(mod2 <- mirt(data, 2))
 coef(mod2)
 summary(mod2, rotate = 'oblimin') #oblimin rotation
 residuals(mod2)
@@ -465,15 +496,6 @@ anova(mod2, mod3) #negative AIC, 2 factors probably best
 mod1g <- mirt(data, 1, guess = .1)
 coef(mod1g)
 
-#with estimated guessing and beta priors (for better stability)
-itemtype <- rep('3PL', 32)
-sv <- mirt(data, 1, itemtype, pars = 'values')
-gindex <- sv$parnum[sv$name == 'g']
-parprior <- list(c(gindex, 'beta', 10, 90))
-mod1wg <- mirt(data, 1, itemtype, guess = .1, parprior=parprior, verbose=TRUE)
-coef(mod1wg)
-anova(mod1g, mod1wg)
-
 ###########
 #graded rating scale example
 
@@ -489,15 +511,57 @@ sv <- mirt(data, 1, itemtype = 'grsm', pars = 'values')
 sv[,5] <- c(as.vector(t(cbind(a,d,c))),0,1)
 
 mod1 <- mirt(data, 1)
-mod2 <- mirt(data, 1, itemtype = 'grsm', verbose = TRUE, pars = sv, calcNull = FALSE)
+mod2 <- mirt(data, 1, itemtype = 'grsm', pars = sv)
 coef(mod2)
 anova(mod2, mod1) #not sig, mod2 should be prefered
+
+###########
+# 2PL nominal response model example (Suh and Bolt, 2010)
+data(SAT12)
+SAT12[SAT12 == 8] <- NA
+head(SAT12)
+
+key <- c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5)
+scoredSAT12 <- key2binary(SAT12, key)
+mod0 <- mirt(scoredSAT12, 1)
+
+#for first 5 items use 2PLNRM and nominal
+scoredSAT12[,1:5] <- as.matrix(SAT12[,1:5])
+mod1 <- mirt(scoredSAT12, 1, c(rep('nominal',5),rep('2PL', 27)))
+mod2 <- mirt(scoredSAT12, 1, c(rep('2PLNRM',5),rep('2PL', 27)), key=key)
+coef(mod0)$Item.1
+coef(mod1)$Item.1
+coef(mod2)$Item.1
+itemplot(mod0, 1)
+itemplot(mod1, 1)
+itemplot(mod2, 1)
+
+#compare added information from distractors
+Theta <- matrix(seq(-4,4,.01))
+par(mfrow = c(2,3))
+for(i in 1:5){
+    info <- iteminfo(extract.item(mod0,i), Theta)
+    info2 <- iteminfo(extract.item(mod2,i), Theta)
+    plot(Theta, info2, type = 'l', main = paste('Information for item', i), ylab = 'Information')
+    lines(Theta, info, col = 'red')
+}
+
+#test information
+par(mfrow = c(1,1))
+plot(Theta, testinfo(mod2, Theta), type = 'l', main = 'Test information', ylab = 'Information')
+lines(Theta, testinfo(mod0, Theta), col = 'red')
+
+
 }
 }
 \author{
   Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
+  Andrich, D. (1978). A rating scale formulation for
+  ordered response categories. \emph{Psychometrika, 43},
+  561-573.
+
   Bock, R. D., & Aitkin, M. (1981). Marginal maximum
   likelihood estimation of item parameters: Application of
   an EM algorithm. \emph{Psychometrika, 46}(4), 443-459.
@@ -506,41 +570,68 @@ anova(mod2, mod1) #not sig, mod2 should be prefered
   Full-Information Item Factor Analysis. \emph{Applied
   Psychological Measurement, 12}(3), 261-280.
 
-  Carroll, J. B. (1945). The effect of difficulty and
-  chance success on correlations between items and between
-  tests. \emph{Psychometrika, 26}, 347-372.
+  Bock, R. D. & Lieberman, M. (1970). Fitting a response
+  model for n dichotomously scored items.
+  \emph{Psychometrika, 35}, 179-197.
 
   Chalmers, R., P. (2012). mirt: A Multidimensional Item
   Response Theory Package for the R Environment.
   \emph{Journal of Statistical Software, 48}(6), 1-29.
 
+  Lord, F. M. & Novick, M. R. (1968). Statistical theory of
+  mental test scores. Addison-Wesley.
+
+  Rasch, G. (1960). Probabilistic models for some
+  intelligence and attainment tests. \emph{Danish Institute
+  for Educational Research}.
+
+  Muraki, E. (1992). A generalized partial credit model:
+  Application of an EM algorithm. \emph{Applied
+  Psychological Measurement, 16}, 159-176.
+
   Muraki, E. & Carlson, E. B. (1995). Full-information
   factor analysis for polytomous item responses.
   \emph{Applied Psychological Measurement, 19}, 73-90.
 
-  Ramsay, J. O. (1975). Solving implicit equations in
-  psychometric data analysis. \emph{Psychometrika, 40}(3),
-  337-360.
+  Samejima, F. (1969). Estimation of latent ability using a
+  response pattern of graded scores. \emph{Psychometrika
+  Monographs}, 34.
+
+  Suh, Y. & Bolt, D. (2010). Nested logit models for
+  multiple-choice item response data. \emph{Psychometrika,
+  75}, 454-473.
+
+  Sympson, J. B. (1977). A model for testing with
+  multidimensional items. Proceedings of the 1977
+  Computerized Adaptive Testing Conference.
+
+  Thissen, D. (1982). Marginal maximum likelihood
+  estimation for the one-parameter logistic model.
+  \emph{Psychometrika, 47}, 175-186.
+
+  Thissen, D. & Steinberg, L. (1984). A response model for
+  multiple-choice items. \emph{Psychometrika, 49}, 501-519.
 
   Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S.
-  G., Muraki, E., & Bock, R. D. (2003). TESTFACT 4 for
-  Windows: Test Scoring, Item Statistics, and
-  Full-information Item Factor Analysis [Computer
+  G., Muraki, E., & Bock, R. D. (2003). \emph{TESTFACT 4
+  for Windows: Test Scoring, Item Statistics, and
+  Full-information Item Factor Analysis} [Computer
   software]. Lincolnwood, IL: Scientific Software
   International.
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt.model}} \code{\link{confmirt}},
-  \code{\link{bfactor}}, \code{\link{multipleGroup}},
-  \code{\link{mixedmirt}}, \code{\link{wald}},
-  \code{\link{itemplot}}, \code{\link{fscores}},
-  \code{\link{fitIndices}}, \code{\link{extract.item}},
-  \code{\link{iteminfo}}, \code{\link{testinfo}},
-  \code{\link{probtrace}}, \code{\link{boot.mirt}},
-  \code{\link{imputeMissing}}, \code{\link{itemfit}},
-  \code{\link{mod2values}}, \code{\link{read.mirt}},
-  \code{\link{simdata}}
+  \code{\link{confmirt.model}}, \code{\link{mirt}},
+  \code{\link{confmirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{fitIndices}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}, \code{\link{probtrace}},
+  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
+  \code{\link{itemfit}}, \code{\link{mod2values}},
+  \code{\link{read.mirt}}, \code{\link{simdata}},
+  \code{\link{createItem}}
 }
 \keyword{models}
 
