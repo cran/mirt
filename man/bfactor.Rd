@@ -2,12 +2,8 @@
 \alias{bfactor}
 \title{Full-Information Item Bi-factor Analysis}
 \usage{
-  bfactor(data, model, itemtype = NULL, guess = 0, upper =
-    1, SE = FALSE, SEtol = .001, pars = NULL, constrain =
-    NULL, parprior = NULL, calcNull = TRUE, prev.cor =
-    NULL, quadpts = 20, grsm.block = NULL, rsm.block =
-    NULL, D = 1.702, verbose = FALSE, debug = FALSE,
-    technical = list(), ...)
+  bfactor(data, model, quadpts = 20, SE = FALSE, verbose =
+    TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -21,58 +17,18 @@
   factor on the last two, then the vector is
   \code{c(1,1,2,2)}.}
 
-  \item{itemtype}{see \code{\link{mirt}} for details}
+  \item{quadpts}{number of quadrature points per dimension
+  (default 20).}
 
-  \item{grsm.block}{see \code{\link{mirt}} for details}
-
-  \item{rsm.block}{see \code{\link{mirt}} for details}
-
-  \item{calcNull}{logical; calculate the Null model for fit
-  statics (e.g., TLI)?}
-
-  \item{guess}{fixed pseudo-guessing parameter. Can be
-  entered as a single value to assign a global value or may
-  be entered as a numeric vector for each item of length
-  \code{ncol(data)}.}
-
-  \item{upper}{fixed upper bound parameters for 4-PL model.
-  Can be entered as a single value to assign a global
-  guessing parameter or may be entered as a numeric vector
-  corresponding to each item}
-
-  \item{SE}{logical, estimate the standard errors? Calls
-  the MHRM subroutine for a stochastic approximation}
-
-  \item{SEtol}{tollerance value used to stop the MHRM
-  estimation when \code{SE = TRUE}. Lower values will take
-  longer but may be more stable for computing the
-  information matrix}
-
-  \item{constrain}{see \code{\link{mirt}} for details}
-
-  \item{parprior}{see \code{\link{mirt}} for details}
-
-  \item{pars}{see \code{\link{mirt}} for details}
-
-  \item{D}{a numeric value used to adjust the logistic
-  metric to be more similar to a normal cumulative density
-  curve. Default is 1.702}
-
-  \item{prev.cor}{uses a previously computed correlation
-  matrix to be used to estimate starting values for the EM
-  estimation}
-
-  \item{quadpts}{number of quadrature points per
-  dimension.}
+  \item{SE}{logical; calculate information matrix and
+  standard errors?}
 
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
 
-  \item{debug}{logical; turn on debugging features?}
-
-  \item{technical}{see \code{\link{mirt}} for details}
-
-  \item{...}{additional arguments to be passed}
+  \item{...}{additional arguments to be passed to the main
+  estimation function. See \code{\link{mirt}} for more
+  details}
 }
 \description{
   \code{bfactor} fits a confirmatory maximum likelihood
@@ -178,9 +134,17 @@ coef(simmod)
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt}}, \code{\link{fscores}},
-  \code{\link{multipleGroup}}, \code{\link{wald}},
-  \code{\link{fitIndices}}
+  \code{\link{confmirt.model}}, \code{\link{mirt}},
+  \code{\link{confmirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{fitIndices}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}, \code{\link{probtrace}},
+  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
+  \code{\link{itemfit}}, \code{\link{mod2values}},
+  \code{\link{read.mirt}}, \code{\link{simdata}},
+  \code{\link{createItem}}
 }
 \keyword{models}
 

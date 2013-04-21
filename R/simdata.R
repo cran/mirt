@@ -12,7 +12,8 @@
 #' @param d a matrix of intercepts. The matrix should have as many columns as
 #' the item with the largest number of categories, and filled empty locations
 #' with \code{NA}
-#' @param itemtype a character vector of length \code{nrow(a)} specifying the type of items to simulate. 
+#' @param itemtype a character vector of length \code{nrow(a)} (or 1, if all the item types are the same)
+#' specifying the type of items to simulate. 
 #' Can be \code{'dich', 'graded', 'gpcm','nominal'}, or \code{'partcomp'}, for 
 #' dichotomous, graded, generalized 
 #' partial credit, nominal, and partially compensatory models. Note that 
@@ -85,10 +86,9 @@
 #' 
 #' mu <- c(-.4, -.7, .1)
 #' sigma <- matrix(c(1.21,.297,1.232,.297,.81,.252,1.232,.252,1.96),3,3)
-#' itemtype <- rep('dich', nrow(a))
 #' 
-#' dataset1 <- simdata(a, d, 2000, itemtype)
-#' dataset2 <- simdata(a, d, 2000, itemtype, mu = mu, sigma = sigma)
+#' dataset1 <- simdata(a, d, 2000, itemtype = 'dich')
+#' dataset2 <- simdata(a, d, 2000, itemtype = 'dich', mu = mu, sigma = sigma)
 #' 
 #' ###An example of a mixed item, bifactor loadings pattern with correlated specific factors
 #' a <- matrix(c(
@@ -136,7 +136,8 @@
 #' 
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0, 
 	upper = 1, nominal = NULL, Theta = NULL, D = 1.702)
-{     
+{       
+    fn <- function(p, ns) sample(1:ns, 1, prob = p)
 	nfact <- ncol(a)
 	nitems <- nrow(a)		
 	K <- rep(0,nitems)	
@@ -144,6 +145,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	if(length(guess) != nitems) stop("Guessing parameter is incorrect")
 	if(length(upper) == 1) upper <- rep(upper,nitems)    
 	if(length(upper) != nitems) stop("Upper bound parameter is incorrect")
+    if(length(itemtype) == 1) itemtype <- rep(itemtype, nitems)
     for(i in 1:length(K)){
         K[i] <- length(na.omit(d[i, ])) + 1
         if(itemtype[i] =='partcomp') K[i] <- 2
@@ -165,8 +167,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         if(any(itemtype[i] == c('gpcm','nominal'))) 
             obj@ncat <- K[i]
         P <- ProbTrace(obj, Theta)
-		for (j in 1:N) 
-            data[j,i] <- sample(1:ncol(P), 1, prob = P[j,])        
+        data[,i] <- apply(P, 1, fn, ns = ncol(P))		                   
         if(any(itemtype[i] == c('dich', 'gpcm', 'partcomp'))) data[ ,i] <- data[ ,i] - 1 
 	}
 	colnames(data) <- paste("Item_", 1:nitems, sep="") 

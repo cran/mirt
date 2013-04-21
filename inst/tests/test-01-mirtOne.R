@@ -2,22 +2,32 @@ context('mirtOne')
 
 test_that('dich', {
     data <- expand.table(LSAT7)        
-    modm1 <- mirt(data, 1)
+    mod1 <- mirt(data, 1, verbose=FALSE)
+    expect_is(mod1, 'ConfirmatoryClass')          
+    sv <- mod2values(mod1)
+    sv$est <- FALSE
+    moddummy <- mirt(data, 1, pars= sv, verbose=FALSE)
+    expect_is(moddummy, 'ConfirmatoryClass')
+    sv2 <- mod2values(moddummy)
+    expect_equal(sv$value, sv2$value)
+    modm1 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM', verbose=FALSE)
     expect_is(modm1, 'ConfirmatoryClass')          
-    modm2 <- mirt(data, 2, SE = TRUE)
-    expect_is(modm2, 'ExploratoryClass')
-    modm2 <- mirt(data, 2, SE = TRUE, SE.type = 'BL')
-    expect_is(modm2, 'ExploratoryClass')
-    modm3 <- mirt(data, 1, itemtype = 'Rasch', SE = FALSE)
+    modm1 <- mirt(data, 1, SE = TRUE, SE.type = 'BL', verbose=FALSE)
+    expect_is(modm1, 'ConfirmatoryClass')          
+    suppressWarnings(modm2 <- mirt(data, 1, SE = TRUE, SE.type = 'MHRM', verbose=FALSE))
+    expect_is(modm2, 'ConfirmatoryClass')
+    modm3 <- mirt(data, 1, itemtype = 'Rasch', verbose=FALSE)
     expect_is(modm3, 'ConfirmatoryClass')
-    modm4 <- mirt(data, 1, itemtype = '1PL')    
+    modm3 <- mirt(data, 1, itemtype = 'Rasch', SE = TRUE, technical=list(TOL=1e-6), verbose=FALSE)
+    expect_is(modm3, 'ConfirmatoryClass')
+    modm4 <- mirt(data, 1, itemtype = '1PL', verbose=FALSE)    
     expect_is(modm4, 'ConfirmatoryClass')
-    svalues <- mirt(data, 1, pars = 'values')
+    svalues <- mirt(data, 1, pars = 'values', verbose=FALSE)
     svalues[22, 5] <- 2
-    modm5 <- mirt(data, 1, pars = svalues)    
+    modm5 <- mirt(data, 1, pars = svalues, verbose=FALSE)    
     expect_is(modm5, 'ConfirmatoryClass')
     data[1,1] <- data[2,2] <- NA
-    modm6 <- mirt(data, 1)
+    modm6 <- mirt(data, 1, verbose=FALSE)
     expect_is(modm6, 'ConfirmatoryClass')
     
     fm1 <- fscores(modm1, verbose = FALSE)
@@ -52,21 +62,18 @@ test_that('dich', {
     fitm2 <- fitIndices(modm2)
     expect_is(fitm1, 'list')
     expect_is(fitm2, 'list')
-})
 
-test_that('dichconfirm', {
     data <- expand.table(LSAT7)
     model <- confmirt.model('F1 = 1-3
         F2 = 3-5', quiet = TRUE)
-    modm1 <- mirt(data, model)
-    modm2 <- mirt(data, model, itemtype=c('2PL','2PL', 'PC2PL','2PL', '2PL'))
+    modm1 <- mirt(data, model, verbose=FALSE)
+    modm2 <- mirt(data, model, itemtype=c('2PL','2PL', 'PC2PL','2PL', '2PL'), verbose=FALSE)
+    modm3 <- mirt(data, model, SE = TRUE, verbose=FALSE)
+    expect_is(modm3, 'ConfirmatoryClass')
     
     fm1 <- fscores(modm1, verbose = FALSE)
     expect_is(fm1, 'matrix')
     fm2 <- fscores(modm2, method = 'MAP', verbose = FALSE)
-    expect_is(fm2, 'matrix')
-    
-    
-    
+    expect_is(fm2, 'matrix')    
 })
 

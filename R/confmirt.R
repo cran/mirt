@@ -3,9 +3,9 @@
 #' \code{confmirt} fits a conditional (i.e., confirmatory) full-information
 #' maximum-likelihood factor analysis model to dichotomous and polytomous
 #' data under the item response theory paradigm using Cai's (2010)
-#' Metropolis-Hastings Robbins-Monro algorithm. Fits univariate and multivariate Rasch, 
-#' 1-4PL, graded, (generalized) partial credit, nominal, multiple choice, graded rating scale, Rasch rating scale,
-#' and partially-compensatory models, potentially with polynomial and product constructed latent traits. 
+#' Metropolis-Hastings Robbins-Monro algorithm. Will fit the same models as \code{\link{mirt}}, 
+#' in addition to polynomial and product constructed latent traits. 
+#' User defined item classes can also be defined using the \code{\link{createItem}} function.
 #' Models may also contain 'explanatory' 
 #' person or item level predictors, though these can only be included by using the 
 #' \code{\link{mixedmirt}} function.
@@ -29,14 +29,13 @@
 #' \code{anova} function, where a Chi-squared difference test and AIC/BIC
 #' difference values are displayed.
 #' 
-#' @section Convergence:
+#' @section Convergence monitoring:
 #' 
-#' The MHRM algorithm often is more stable than the EM counterpart in \code{mirt} but 
-#' convergence of the algorithm should be interpreted with caution. When the number of iterations 
-#' grows very high (e.g., greater than 1500) or when \code{Max Change = .2500} values are repeatedly printed
+#' When the number of iterations grows very high (e.g., greater than 1500) or 
+#' when \code{Max Change = .2500} values are repeatedly printed
 #' to the console too often (indicating that the parameters were being constrained since they are naturally 
 #' moving in steps greater than 0.25) then the model may either be ill defined or have a 
-#' very flat likelihood surface, and genuine maximum likelihood parameter estimates may be difficult to find. 
+#' very flat likelihood surface, and genuine maximum-likelihood parameter estimates may be difficult to find. 
 #' 
 #' @section Confirmatory IRT:
 #' 
@@ -80,13 +79,13 @@
 #' @param restype type of residuals to be displayed. Can be either \code{'LD'}
 #' for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
 #' expected values for the frequencies of every response pattern
+#' @param key see \code{\link{mirt}} for details
 #' @param itemtype see \code{\link{mirt}} for details
 #' @param grsm.block see \code{\link{mirt}} for details
 #' @param rsm.block see \code{\link{mirt}} for details
 #' @param constrain see \code{\link{mirt}} for details
 #' @param parprior see \code{\link{mirt}} for details
 #' @param pars see \code{\link{mirt}} for details
-#' @param debug logical; turn on debugging features?
 #' @param object an object of class \code{ConfirmatoryClass}
 #' @param object2 an object of class \code{ConfirmatoryClass}
 #' @param digits the number of significant digits to be rounded
@@ -98,6 +97,7 @@
 #' statistical software. Default is 0 for no suppression
 #' @param D a numeric value used to adjust the logistic metric to be more similar to a normal
 #' cumulative density curve. Default is 1.702
+#' @param cl a cluster object from the \code{parallel} package (set from using \code{makeCluster(ncores)})
 #' @param technical list specifying subtle parameters that can be adjusted. These 
 #' values are 
 #' @param df.p logical; print the degrees of freedom and p-values?
@@ -126,10 +126,12 @@
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
-#' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{simdata}},
-#' \code{\link{fscores}}, \code{\link{confmirt.model}}, \code{\link{wald}}, 
-#' \code{\link{multipleGroup}}, \code{\link{itemplot}}, \code{\link{fitIndices}}, 
-#' \code{\link{mixedmirt}}, \code{\link{testinfo}}, \code{\link{iteminfo}},
+#' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{confmirt.model}}, \code{\link{mirt}},
+#' \code{\link{confmirt}}, \code{\link{bfactor}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}}, 
+#' \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, \code{\link{fitIndices}}, 
+#' \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}, \code{\link{probtrace}}, 
+#' \code{\link{boot.mirt}}, \code{\link{imputeMissing}}, \code{\link{itemfit}}, \code{\link{mod2values}},
+#' \code{\link{read.mirt}}, \code{\link{simdata}}, \code{\link{createItem}}
 #' @references
 #' 
 #' Cai, L. (2010a). High-Dimensional exploratory item factor analysis by a
@@ -152,8 +154,7 @@
 #' @usage 
 #' confmirt(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
 #' constrain = NULL, parprior = NULL, calcNull = TRUE, grsm.block = NULL, rsm.block = NULL, verbose = TRUE, 
-#' draws = 3000, debug = FALSE, rotate = 'oblimin', Target = NULL, D = 1.702, 
-#' technical = list(),  ...)
+#' draws = 3000, rotate = 'oblimin', Target = NULL, key = NULL, D = 1.702, cl = NULL, technical = list(),  ...)
 #' 
 #' \S4method{summary}{ConfirmatoryClass}(object, suppress = 0, digits = 3, verbose = TRUE, ...)
 #' 
@@ -269,15 +270,14 @@
 #' 
 confmirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, pars = NULL, 
                      constrain = NULL, parprior = NULL, calcNull = TRUE, grsm.block = NULL, rsm.block = NULL, 
-                     verbose = TRUE, draws = 3000, debug = FALSE, rotate = 'oblimin', Target = NULL, 
-                     D = 1.702, technical = list(),  ...)
-{   
-    if(debug == 'Main') browser()
+                     verbose = TRUE, draws = 3000, rotate = 'oblimin', Target = NULL, 
+                     key = NULL, D = 1.702, cl = NULL, technical = list(),  ...)
+{       
     Call <- match.call()    
     mod <- ESTIMATION(data=data, model=model, group = rep('all', nrow(data)), itemtype=itemtype, 
                       guess=guess, upper=upper, grsm.block=grsm.block, D=D, calcNull=calcNull,
                       pars=pars, constrain=constrain, parprior=parprior, verbose=verbose, 
-                      rsm.block=rsm.block, draws=draws, debug=debug, technical = technical,  ...)
+                      rsm.block=rsm.block, draws=draws, technical=technical, cl=cl, key=key, ...)
     if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
         mod@Call <- Call
     return(mod)    

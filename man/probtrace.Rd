@@ -8,11 +8,12 @@
   \item{x}{an extracted internal mirt object containing
   item information}
 
-  \item{Theta}{a matrix of latent trait values}
+  \item{Theta}{a vector (unidimensional) or matrix
+  (multidimensional) of latent trait values}
 }
 \description{
   Given an internal mirt object extracted from an estimated
-  model compute the probility trace lines for all
+  model compute the probability trace lines for all
   categories.
 }
 \examples{
@@ -25,6 +26,9 @@ traceline <- probtrace(extr.2, Theta)
 head(data.frame(traceline, Theta=Theta))
 
 }
+}
+\seealso{
+  \code{\link{extract.item}}
 }
 \keyword{tracelines}
 

@@ -2,28 +2,28 @@ setMethod(
 	f = "fscores.internal",
 	signature = 'ExploratoryClass',
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-                          quadpts = NULL, response.vector = NULL, degrees = NULL, verbose = TRUE)
+                          quadpts = NULL, response.vector = NULL, degrees = NULL, 
+	                      returnER = FALSE, verbose = TRUE)
 	{          
         if(!is.null(response.vector)){            
-            if(!is.matrix(response.vector)) response.vector <- matrix(response.vector, nrow = 1)
+            if(!is.matrix(response.vector)) response.vector <- matrix(response.vector, nrow = 1)            
             v <- response.vector
             newdata <- rbind(object@data, v)
             nfact <- object@nfact 
-            newmod <- mirt(newdata, nfact, technical = list(TOL = 10))
-            newmod@pars <- object@pars
-            tabdata <- newmod@tabdata
-            index <- rep(FALSE, nrow(tabdata))
-            for(i in 1:nrow(v)){
-                vfull <-  matrix(v[i, ], nrow(tabdata), ncol(v), byrow = TRUE)
-                index[rowSums(tabdata[,1:ncol(v)] == vfull) == ncol(v)] <- TRUE                
-            }            
-            newmod@tabdata <- newmod@tabdata[index, , drop = FALSE]
-            newmod@tabdatalong <- newmod@tabdatalong[index, , drop = FALSE]
+            sv <- mod2values(object)
+            sv$est <- FALSE
+            newmod <- mirt(newdata, nfact, pars=sv)
+            tmptabdata <- t(newmod@tabdata[, 1:length(v)])
+            tmptabdata[is.na(tmptabdata)] <- 9999
+            v[is.na(v)] <- 9999
+            ind <- which(colSums(tmptabdata == as.numeric(v)) == length(v))
+            newmod@tabdata <- newmod@tabdata[ind, , drop = FALSE]
+            newmod@tabdatalong <- newmod@tabdatalong[ind, , drop = FALSE]            
             ret <- fscores(newmod, rotate=rotate, full.scores=FALSE, method=method, 
-                           quadpts=quadpts, verbose=FALSE)
-            ret <- ret[, -(ncol(ret) - nfact*2)]            
+                           quadpts=quadpts, verbose=FALSE, degrees=degrees, response.vector=NULL)                        
+            ret <- ret[,colnames(ret) != 'Freq']
             return(ret)
-        }
+        }        
         if(method == 'EAPsum') return(EAPsum(object, full.scores=full.scores, 
                                              quadpts=quadpts))
         pars <- object@pars        
@@ -52,10 +52,8 @@ setMethod(
 		tabdata <- tabdata[ ,-ncol(tabdata), drop = FALSE]
 		SEscores <- scores <- matrix(0, nrow(tabdata), nfact)			                
 		W <- mvtnorm::dmvnorm(ThetaShort,gp$gmeans,gp$gcov) 
-		W <- W/sum(W)                
-		itemtrace <- matrix(0, ncol=ncol(tabdata), nrow=nrow(Theta))        
-        for (i in 1:J)
-            itemtrace[ ,itemloc[i]:(itemloc[i+1] - 1)] <- ProbTrace(x=pars[[i]], Theta=Theta)                    
+		W <- W/sum(W)                		
+        itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc)
 		for (i in 1:nrow(tabdata)){				
 			L <- rowSums(log(itemtrace)[ ,as.logical(tabdata[i,]), drop = FALSE])			
 			thetas <- colSums(ThetaShort * exp(L) * W / sum(exp(L) * W))
@@ -78,13 +76,16 @@ setMethod(
 				SEscores[i, ] <- SEest
 			}  
 		}
-		if(method == "ML"){            		            
+		if(method == "ML"){               
+            tabdata2 <- object@tabdata[,-ncol(object@tabdata)]             
 			tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]	
-            tmp2[is.na(rowSums(object@tabdata))] <- 0
+            tmp2[is.na(tabdata2)] <- 1            
 			scores[rowSums(tmp2) == J,] <- Inf
-            tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
-            tmp2[is.na(rowSums(object@tabdata))] <- 1
+            SEscores[rowSums(tmp2) == J,] <- NA
+            tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]            
+            tmp2[is.na(tabdata2)] <- 1
             scores[rowSums(tmp2) == J,] <- -Inf
+            SEscores[rowSums(tmp2) == J,] <- NA
 			SEscores[is.na(scores[,1]), ] <- rep(NA, nfact)
 			for (i in 1:nrow(scores)){
 				if(any(scores[i, ] %in% c(-Inf, Inf))) next 
@@ -102,13 +103,15 @@ setMethod(
 			}  			
 		}
         if(method == 'WLE'){                            
-            tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE] 
-            tmp2[is.na(rowSums(object@tabdata))] <- 0
+            tabdata2 <- object@tabdata[,-ncol(object@tabdata)]             
+            tmp2 <- tabdata[,itemloc[-1] - 1, drop = FALSE]	
+            tmp2[is.na(tabdata2)] <- 1            
             scores[rowSums(tmp2) == J,] <- Inf
-            tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]
-            tmp2[is.na(rowSums(object@tabdata))] <- 1
-            scores[rowSums(tmp2) == J,] <- -Inf            
-            SEscores <- matrix(NA, nrow(SEscores), ncol(SEscores))
+            tmp2 <- tabdata[,itemloc[-length(itemloc)], drop = FALSE]            
+            tmp2[is.na(tabdata2)] <- 1
+            scores[rowSums(tmp2) == J,] <- -Inf
+            SEscores[is.na(scores[,1]), ] <- rep(NA, nfact)
+            SEscores[!is.na(SEscores)] <- NA
             for (i in 1:nrow(scores)){
                 if(any(scores[i, ] %in% c(-Inf, Inf))) next
                 Theta <- scores[i, ]	  
@@ -119,7 +122,7 @@ setMethod(
                     scores[i, ] <- NA
                     next
                 }
-                scores[i, ] <- estimate$estimate                                
+                scores[i, ] <- estimate$estimate                 
             }  
         }
 		colnames(scores) <- paste('F', 1:ncol(scores), sep='')          
@@ -141,15 +144,18 @@ setMethod(
             }            
             T <- na.omit(T)
             E <- na.omit(E)
-            reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))
+            reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))            
             names(reliability) <- colnames(scores)
+            if(returnER) return(reliability)
 			if(verbose){
                 cat("\nMethod: ", method)                
                 cat("\n\nEmpirical Reliability:\n")
                 print(round(reliability, 4))                
 			}
 			colnames(SEscores) <- paste('SE_', colnames(scores), sep='')
-			return(cbind(object@tabdata,scores,SEscores))
+            ret <- cbind(object@tabdata,scores,SEscores)            
+            if(nrow(ret) > 1) ret <- ret[do.call(order, as.data.frame(ret[,1:J])), ]
+			return(ret)
 		}   
 	}  
 )
@@ -159,11 +165,12 @@ setMethod(
 	f = "fscores.internal",
 	signature = 'ConfirmatoryClass',
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-	                      quadpts = NULL, response.vector = NULL, degrees = NULL, verbose = TRUE)
+	                      quadpts = NULL, response.vector = NULL, degrees = NULL, 
+	                      returnER = FALSE, verbose = TRUE)
 	{ 	        
         class(object) <- 'ExploratoryClass'
         ret <- fscores(object, rotate = 'CONFIRMATORY', full.scores=full.scores, method=method, quadpts=quadpts, 
-                       response.vector=response.vector, degrees=degrees, verbose=verbose)
+                       response.vector=response.vector, degrees=degrees, returnER=returnER, verbose=verbose)
         return(ret)
 	}	
 )
@@ -173,7 +180,8 @@ setMethod(
     f = "fscores.internal",
     signature = 'MultipleGroupClass',
     definition = function(object, rotate = '', full.scores = FALSE, method = "EAP", 
-                          quadpts = NULL, response.vector = NULL, degrees = NULL, verbose = TRUE)
+                          quadpts = NULL, response.vector = NULL, degrees = NULL, 
+                          returnER = FALSE, verbose = TRUE)
     { 	        
         cmods <- object@cmods
         ngroups <- length(cmods)
@@ -182,7 +190,7 @@ setMethod(
         ret <- vector('list', length(cmods))
         for(g in 1:ngroups)
             ret[[g]] <- fscores(cmods[[g]], rotate = 'CONFIRMATORY', full.scores=full.scores, method=method, 
-                           quadpts=quadpts, degrees=degrees, verbose=verbose)
+                           quadpts=quadpts, degrees=degrees, returnER=returnER, verbose=verbose)
         names(ret) <- object@groupNames
         if(full.scores){
             id <- c()

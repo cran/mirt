@@ -29,7 +29,7 @@
   \item{CE}{logical; plot confidence envelope?}
 
   \item{CEalpha}{area remaining in the tail for confidence
-  envolope. Default gives 95\% confidence region}
+  envelope. Default gives 95\% confidence region}
 
   \item{CEdraws}{draws number of draws to use for
   confidence envelope}
@@ -60,7 +60,7 @@ itemplot(mods, 1, type = 'RE')
 itemplot(mod3, 3, type = 'info')
 
 #polytomous items
-pmod <- mirt(Science, 1, SE=TRUE)
+pmod <- mirt(Science, 1, SE=TRUE, SE.type = 'MHRM')
 itemplot(pmod, 3)
 itemplot(pmod, 3, CE = TRUE)
 

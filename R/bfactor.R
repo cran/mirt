@@ -25,35 +25,19 @@
 #' item. For example, if for a 4 item test with two specific factors, the first
 #' specific factor loads on the first two items and the second specific factor
 #' on the last two, then the vector is \code{c(1,1,2,2)}.
-#' @param itemtype see \code{\link{mirt}} for details
-#' @param grsm.block see \code{\link{mirt}} for details
-#' @param rsm.block see \code{\link{mirt}} for details
-#' @param calcNull logical; calculate the Null model for fit statics (e.g., TLI)?
-#' @param guess fixed pseudo-guessing parameter. Can be entered as a single
-#' value to assign a global value or may be entered as a numeric vector for
-#' each item of length \code{ncol(data)}.
-#' @param upper fixed upper bound parameters for 4-PL model. Can be entered as a single
-#' value to assign a global guessing parameter or may be entered as a numeric
-#' vector corresponding to each item
-#' @param SE logical, estimate the standard errors? Calls the MHRM subroutine for a stochastic approximation
-#' @param SEtol tollerance value used to stop the MHRM estimation when \code{SE = TRUE}. Lower values
-#' will take longer but may be more stable for computing the information matrix
-#' @param constrain see \code{\link{mirt}} for details
-#' @param parprior see \code{\link{mirt}} for details
-#' @param pars see \code{\link{mirt}} for details
-#' @param D a numeric value used to adjust the logistic metric to be more similar to a normal
-#' cumulative density curve. Default is 1.702
-#' @param prev.cor uses a previously computed correlation matrix to be used to
-#' estimate starting values for the EM estimation
-#' @param quadpts number of quadrature points per dimension. 
-#' @param verbose logical; print observed log-likelihood value at each iteration?
-#' @param debug logical; turn on debugging features?
-#' @param technical see \code{\link{mirt}} for details
-#' @param ... additional arguments to be passed
+#' @param quadpts number of quadrature points per dimension (default 20). 
+#' @param SE logical; calculate information matrix and standard errors?
+#' @param verbose logical; print observed log-likelihood value at each iteration? 
+#' @param ... additional arguments to be passed to the main estimation function. See \code{\link{mirt}}
+#' for more details
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso
-#' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{confmirt}},
-#' \code{\link{fscores}}, \code{\link{multipleGroup}}, \code{\link{wald}}, \code{\link{fitIndices}}
+#' \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{confmirt.model}}, \code{\link{mirt}},
+#' \code{\link{confmirt}}, \code{\link{bfactor}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}}, 
+#' \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, \code{\link{fitIndices}}, 
+#' \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}, \code{\link{probtrace}}, 
+#' \code{\link{boot.mirt}}, \code{\link{imputeMissing}}, \code{\link{itemfit}}, \code{\link{mod2values}},
+#' \code{\link{read.mirt}}, \code{\link{simdata}}, \code{\link{createItem}}
 #' @references
 #' 
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
@@ -70,9 +54,7 @@
 #' 
 #' @keywords models
 #' @usage
-#' bfactor(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001, pars = NULL,
-#' constrain = NULL, parprior = NULL, calcNull = TRUE, prev.cor = NULL, quadpts = 20, grsm.block = NULL, 
-#' rsm.block = NULL, D = 1.702, verbose = FALSE, debug = FALSE, technical = list(), ...)
+#' bfactor(data, model, quadpts = 20, SE = FALSE, verbose = TRUE, ...)
 #' 
 #'
 #' @export bfactor
@@ -138,19 +120,12 @@
 #'
 #'     }
 #' 
-bfactor <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SEtol = .001,
-                    pars = NULL, constrain = NULL, parprior = NULL, calcNull = TRUE, prev.cor = NULL, 
-                    quadpts = 20, grsm.block = NULL, rsm.block = NULL, D = 1.702, verbose = FALSE, debug = FALSE, 
-                    technical = list(), ...)
-{         
-    if(debug == 'Main') browser()
+bfactor <- function(data, model, quadpts = 20, SE = FALSE, verbose = TRUE, ...)
+{       
     Call <- match.call()		    
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)), 
-                      itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
-                      pars=pars, method = 'EM', constrain=constrain, SE = SE, SEtol=SEtol,
-                      parprior=parprior, quadpts=quadpts, D=D, rsm.block=rsm.block,
-                      technical = technical, debug = debug, verbose = verbose, 
-                      BFACTOR = TRUE, calcNull=calcNull, ...)
+                      method = 'EM', quadpts=quadpts, verbose=verbose,
+                      BFACTOR = TRUE, SE=SE, ...)
     if(is(mod, 'ConfirmatoryClass') || is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)

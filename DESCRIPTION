@@ -1,6 +1,6 @@
 Package: mirt
-Version: 0.6.0
-Date: 2013-03-18
+Version: 0.7.0
+Date: 2013-04-20
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", "Chalmers", email =
@@ -38,9 +38,9 @@ Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
         'read.mirt.R' 'fscores.internal.R' 'itemplot.internal.R'
         'mixedmirt.R' 'MHRM.mixed.R' 'Mixed-methods.R' 'fitIndices.R'
         'testinfo.R' 'imputeMissing.R' 'mod2values.R' 'probtrace.R'
-        'boot.mirt.R'
-Packaged: 2013-03-19 03:54:20 UTC; phil
+        'boot.mirt.R' 'createItem.R' 'zzz.R'
+Packaged: 2013-04-20 21:10:40 UTC; phil
 Author: Phil Chalmers [aut, cre]
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
 NeedsCompilation: yes
-Date/Publication: 2013-03-19 07:15:21
+Date/Publication: 2013-04-21 07:42:11

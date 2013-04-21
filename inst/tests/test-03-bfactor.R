@@ -1,11 +1,10 @@
 context('bfactor')
 
-
 test_that('dich data', {
     data <- key2binary(SAT12,
                        key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
     specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
-    mod1 <- bfactor(data, specific)    
+    mod1 <- bfactor(data, specific, verbose=FALSE)    
     expect_is(mod1, 'ConfirmatoryClass')                  
     fs <- fscores(mod1, verbose = FALSE)
     expect_is(fs, 'matrix')        
@@ -17,11 +16,7 @@ test_that('dich data', {
     expect_is(pfit1, 'data.frame')    
     ifit <- itemfit(mod1)
     expect_is(ifit, 'data.frame')
-})
 
-
-
-test_that('mix data', {
     #simulate data
     set.seed(1234)
     a <- matrix(c(
@@ -65,7 +60,7 @@ test_that('mix data', {
      
     specific <- c(rep(1,7),rep(2,7))
     items[items == 'dich'] <- '2PL'
-    simmod <- bfactor(dataset, specific, itemtype = items)
+    simmod <- bfactor(dataset, specific, itemtype = items, verbose=FALSE)
     expect_is(simmod, 'ConfirmatoryClass')              
     fs <- fscores(simmod, verbose = FALSE)
     expect_is(fs, 'matrix')

@@ -1,6 +1,5 @@
-MHRM.group <- function(pars, constrain, PrepList, list, debug)
-{
-    if(debug == 'MHRM') browser()    
+MHRM.group <- function(pars, constrain, PrepList, list)
+{       
     verbose <- list$verbose        
     nfact <- list$nfact
     NCYCLES <- list$NCYCLES
@@ -34,8 +33,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]], 
                                         itemloc=itemloc, cand.t.var=cand.t.var, 
                                         prior.t.var=gstructgrouppars[[g]]$gcov, 
-                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist, 
-                                        debug=debug)
+                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)
             if(i > 5){		
                 if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp 
                 else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3) 
@@ -104,8 +102,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
     
     ####Big MHRM loop
     for(cycles in 1:(NCYCLES + BURNIN + SEMCYCLES))
-    {     
-        if(is.list(debug)) print(longpars[debug[[1]]])
+    {             
         if(cycles == BURNIN + 1) stagecycle <- 2			
         if(stagecycle == 3)
             gamma <- (gain[1] / (cycles - SEMCYCLES - BURNIN - 1))^(gain[2]) - gain[3]
@@ -135,8 +132,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
                 gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]], 
                                       itemloc=itemloc, cand.t.var=cand.t.var, 
                                       prior.t.var=gstructgrouppars[[g]]$gcov, 
-                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist, 
-                                      debug=debug)            
+                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)            
             LL <- LL + attr(gtheta0[[g]], "log.lik")
         }        
         
@@ -176,34 +172,28 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             stop('Model did not converge (unacceptable gradient caused by extreme parameter values)')   
         if(is.na(attr(gtheta0[[1]],"log.lik"))) 
             stop('Estimation halted. Model did not converge.')		
-        if(verbose){
-            if((cycles + 1) %% 10 == 0){
-                if(cycles < BURNIN)
-                    cat("Stage 1: Cycle = ", cycles + 1, ", Log-Lik = ", 
-                        sprintf("%.1f", LL), sep="")
-                if(cycles > BURNIN && cycles < BURNIN + SEMCYCLES)
-                    cat("Stage 2: Cycle = ", cycles-BURNIN+1, ", Log-Lik = ",
-                        sprintf("%.1f", LL), sep="")
-                if(cycles > BURNIN + SEMCYCLES)
-                    cat("Stage 3: Cycle = ", cycles-BURNIN-SEMCYCLES+1, 
-                        ", Log-Lik = ", sprintf("%.1f",LL), sep="")					
-            }
+        if(verbose){            
+            if(cycles < BURNIN)
+                printmsg <- sprintf("\rStage 1: Cycle = %i, Log-Lik = %.1f", cycles+1, LL)                
+            if(cycles > BURNIN && cycles < BURNIN + SEMCYCLES)
+                printmsg <- sprintf("\rStage 2: Cycle = %i, Log-Lik = %.1f", cycles-BURNIN+1, LL)                
+            if(cycles > BURNIN + SEMCYCLES)
+                printmsg <- sprintf("\rStage 3: Cycle = %i, Log-Lik = %.1f", cycles-BURNIN-SEMCYCLES+1, LL)                                        
         }			
-        if(stagecycle < 3){	            
-            inv.ave.h <- try(solve(ave.h), silent = TRUE)			            
-            if(class(inv.ave.h) == 'try-error'){
+        if(stagecycle < 3){	                        
+            if(qr(ave.h)$rank != ncol(ave.h)){
                 tmp <- ave.h                 
                 while(1){
-                    tmp <- tmp + .01*diag(diag(tmp))
+                    tmp <- tmp + .001*diag(diag(tmp))
                     QR <- qr(tmp)
                     if(QR$rank == ncol(tmp)) break
                 }
-                inv.ave.h <- solve(tmp)
+                ave.h <- tmp
                 noninvcount <- noninvcount + 1
                 if(noninvcount == 3) 
                     stop('\nEstimation halted during burn in stages, solution is unstable')
             }
-            correction <- as.vector(inv.ave.h %*% grad)
+            correction <- solve(ave.h, grad)
             correction[correction > .5] <- 1
             correction[correction < -.5] <- -1
             #prevent guessing/upper pars from moving more than .001 at all times
@@ -220,10 +210,8 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             if(length(constrain) > 0)
                 for(i in 1:length(constrain))
                     longpars[index %in% constrain[[i]][-1]] <- longpars[constrain[[i]][1]]           
-            if(verbose && (cycles + 1) %% 10 == 0){ 
-                cat(", Max Change =", sprintf("%.4f", max(abs(gamma*correction))), "\n")
-                flush.console()
-            }			            
+            if(verbose) 
+                cat(printmsg, sprintf(", Max Change = %.4f\r", max(abs(gamma*correction))), sep='')
             if(stagecycle == 2){
                 SEM.stores[[cycles - BURNIN]] <- longpars
                 SEM.stores2[[cycles - BURNIN]] <- ave.h
@@ -232,21 +220,20 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
         }	                 
         
         #Step 3. Update R-M step		
-        Tau <- Tau + gamma*(ave.h - Tau)        
-        inv.Tau <- try(solve(Tau), silent = TRUE)
-        if(class(inv.Tau) == 'try-error'){
+        Tau <- Tau + gamma*(ave.h - Tau)                
+        if(qr(Tau)$rank != ncol(Tau)){
             tmp <- Tau            
             while(1){
-                tmp <- tmp + .01*diag(diag(tmp))
+                tmp <- tmp + .001*diag(diag(tmp))
                 QR <- qr(tmp)
                 if(QR$rank == ncol(tmp)) break
             }
-            inv.Tau <- solve(tmp)           
+            Tau <- tmp
             noninvcount <- noninvcount + 1
             if(noninvcount == 5) 
                 stop('\nEstimation halted during stage 3, solution is unstable')
         }		
-        correction <- as.vector(inv.Tau %*% grad) 
+        correction <- solve(Tau, grad) 
         correction[gamma*correction > .25] <- .25/gamma
         correction[gamma*correction < -.25] <- -.25/gamma
         #prevent guessing/upper pars from moving more than .001 at all times
@@ -263,11 +250,9 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
         if(length(constrain) > 0)
             for(i in 1:length(constrain))
                 longpars[index %in% constrain[[i]][-1]] <- longpars[constrain[[i]][1]]
-        if(verbose && (cycles + 1) %% 10 == 0){ 
-            cat(", gam = ",sprintf("%.3f",gamma),", Max Change = ", 
-                sprintf("%.4f",max(abs(gamma*correction))), "\n", sep = '')
-            flush.console()		
-        }	
+        if(verbose)
+            cat(printmsg, sprintf(", gam = %.3f, Max Change = %.4f\r", 
+                                  gamma, max(abs(gamma*correction))), sep='')            
         if(all(abs(gamma*correction) < TOL)) conv <- conv + 1
         else conv <- 0		
         if(conv == 3) break        
@@ -276,13 +261,16 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
         if(gamma == .25){
             gamma <- 1	
             phi <- rep(0, length(grad))            
-            info <- matrix(0, length(grad), length(grad))
+            info <- Phi <- matrix(0, length(grad), length(grad))
         }
         phi <- phi + gamma*(grad - phi)
-        info <- info + gamma*(as.matrix(Tau) - phi %*% t(phi) - info)		
+        Phi <- Phi + gamma*(Tau - outer(grad,grad) - Phi)        
     } ###END BIG LOOP       
-    #Reload final pars list
-    if(cycles == NCYCLES + BURNIN + SEMCYCLES) converge <- 0
+    if(verbose) cat('\r\n')
+    info <- Phi - outer(phi,phi)
+    #Reload final pars list    
+    if(cycles == NCYCLES + BURNIN + SEMCYCLES) 
+        warning('MHRM iterations terminated after ', NCYCLES, ' iterations.') 
     if(list$USEEM) longpars <- list$startlongpars
     ind1 <- 1
     for(g in 1:ngroups){
@@ -301,11 +289,12 @@ MHRM.group <- function(pars, constrain, PrepList, list, debug)
             }
         }        
     }    
-    SEtmp <- diag(solve(info))        
+    SEtmp <- diag(qr.solve(info))        
     if(any(SEtmp < 0)){
-        warning("Information matrix is not positive definite, negative SEs set to 0.\n")
-        SEtmp <- rep(0, length(SEtmp))
-    } else SEtmp <- sqrt(SEtmp)
+        warning("Negative SEs set to NaN.\n")
+        SEtmp[SEtmp < 0 ] <- NaN
+    }
+    SEtmp <- sqrt(SEtmp)
     SE <- rep(NA, length(longpars))
     SE[estindex_unique] <- SEtmp
     if(length(constrain) > 0)

@@ -1,3 +1,53 @@
+Changes in mirt 0.7.0
+
+NEW FEATURES
+
+- new '#PLNRM' models to fit Suh & Bolt (2010) nested logistic models 
+
+- 'large' option added to estimation functions. Useful when the datasets being analysed are very 
+  large and organizing the data becomes a computationally burdensome task that should be avoided when
+  fitting new models. Also, overall faster handling of datasets  
+
+- plot(), fitted(), and residuals() generic support added for MultipleGroup objects
+
+- CFI and X2 model statistics added, and output now includes fit stats w.r.t. both G2 and X2
+
+- z stats added for itemfit/personfit infit and outfit statistics
+
+- supplemented EM ('SEM') added for calculating information matrix from EM history. By default 
+  the TOL value is dropped to help make the EM iterations longer and more stable. Supports
+  parallel computing
+
+- added return empirical reliability (returnER) option to fscores() 
+
+- plot() supports individual item information trace lines on the same graph (dichotomous items only) with
+  the option type = 'infotrace'
+
+- createItem() function available for defining item types that can be passed to estimation functions.
+  This can be used to model items not available in the package (or anywhere for that matter) with the
+  EM or MHRM. Derivatives are computed numerically by default using the numDeriv package for defining
+  item types on the fly
+
+- Mstep in EM moved to quasi-Newton instead of my home grown MV Newton-Raphson approach. Gives 
+  more stability during estimation when the Hessian is ill-conditioned, and will provide an easier 
+  front-end for defining user rolled IRT models
+
+BUG FIXES
+
+- small bias fix in Hessian and gradients in mirt() implementation causing the likelihood to not always be 
+  increasing near maximum
+
+- fix input to itemplot() when object is a list of model objects
+
+- fixed implementation of infit and outfit Rasch statistics
+
+- order of nominal category intercepts were sometimes backwards. Fixed now
+
+- S_X2 collapsed cells too much and caused negative df 
+
+- response.vector input now supports NA inputs (reported by Neil Rubens)
+
+
 Changes in mirt 0.6.0
 
 NEW FEATURES
