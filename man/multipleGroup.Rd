@@ -11,10 +11,10 @@
   multipleGroup(data, model, group, itemtype = NULL, guess
     = 0, upper = 1, SE = FALSE, SE.type = 'SEM', invariance
     = '', pars = NULL, method = 'EM', constrain = NULL,
-    parprior = NULL, calcNull = TRUE, draws = 3000, quadpts
-    = NULL, grsm.block = NULL, rsm.block = NULL, bfactor =
-    FALSE, key = NULL, D = 1.702, cl = NULL, technical =
-    list(), verbose = TRUE, ...)
+    parprior = NULL, calcNull = TRUE, draws = 5000, quadpts
+    = NULL, grsm.block = NULL, rsm.block = NULL, key =
+    NULL, cl = NULL, technical = list(), verbose = TRUE,
+    ...)
 
   \S4method{coef}{MultipleGroupClass}(object, digits = 3,
     verbose = TRUE, ...)
@@ -63,13 +63,14 @@
   \item{\code{'intercepts'}}{to constrain all the
   intercepts to be equal across all groups, note for
   nominal models this also includes the category specific
-  slope parameters}} Additionally, specifying specific item
-  name bundles (from \code{colnames(data)}) will constrain
-  all freely estimated parameters in each item to be equal
-  across groups. This is useful for selecting 'anchor'
-  items for vertical and horizontal scaling, and for
-  detecting differential item functioning (DIF) across
-  groups}
+  slope parameters}}
+
+  Additionally, specifying specific item name bundles (from
+  \code{colnames(data)}) will constrain all freely
+  estimated parameters in each item to be equal across
+  groups. This is useful for selecting 'anchor' items for
+  vertical and horizontal scaling, and for detecting
+  differential item functioning (DIF) across groups}
 
   \item{guess}{initial (or fixed) values for the
   pseudo-guessing parameter. Can be entered as a single
@@ -86,10 +87,6 @@
 
   \item{SE.type}{see \code{\link{mirt}} for more details}
 
-  \item{D}{a numeric value used to adjust the logistic
-  metric to be more similar to a normal cumulative density
-  curve. Default is 1.702}
-
   \item{verbose}{logical; display iteration history during
   estimation?}
 
@@ -105,19 +102,15 @@
   \item{cl}{a cluster object from the \code{parallel}
   package}
 
-  \item{bfactor}{logical; use the dimensional reduction
-  algorithm if the factor pattern is a bifactor model (has
-  exactly 1 general factor and 1 specific factor for each
-  item). Only applicable when \code{method = 'EM'}}
-
   \item{method}{a character indicating whether to use the
   EM (\code{'EM'}) or the MH-RM (\code{'MHRM'}) algorithm}
 
   \item{type}{type of plot to view; can be \code{'info'} to
   show the test information function, \code{'infocontour'}
   for the test information contours, \code{'SE'} for the
-  test standard error function, and \code{'RE'} for the
-  relative efficiency plot}
+  test standard error function, \code{'RE'} for the
+  relative efficiency plot, and \code{'score'} for the
+  expected total score plot}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
   used in \code{plot}}
@@ -159,42 +152,41 @@
   \item{technical}{list specifying subtle parameters that
   can be adjusted. These values are \describe{
   \item{NCYCLES}{max number of cycles; default 2000 for
-  MHRM and 300 for EM} \item{MAXQUAD}{maximum number of
-  quadratures; default 10000} \item{MSTEPTOL}{convergence
-  threshold for Mstep; default is \code{TOL/100}}
-  \item{BURNIN}{number of burn in cycles (stage 1); default
-  150} \item{SEMCYCLES}{number of SEM cycles (stage 2);
-  default 50} \item{KDRAWS}{number of parallel MH sets to
-  be drawn; default 1} \item{TOL}{minimum threshold
-  tolerance for convergence. If MH-RM, must occur on three
-  consecutive occations; default .001} \item{set.seed}{seed
-  number used during estimation. Default is 12345}
-  \item{gain}{a vector of three values specifying the
-  numerator, exponent, and subtracted values for the RM
-  gain value. Default is \code{c(0.05,0.5,0.004)}}
-  \item{return_newconstrain}{if \code{TRUE} returns a list
-  consisting of the constraints to be used just before
-  estimation begins} }}
+  MHRM and 500 for EM} \item{MAXQUAD}{maximum number of
+  quadratures; default 10000} \item{BURNIN}{number of burn
+  in cycles (stage 1); default 150} \item{SEMCYCLES}{number
+  of SEM cycles (stage 2); default 50} \item{TOL}{minimum
+  threshold tolerance for convergence. If MH-RM, must occur
+  on three consecutive occations; default is .001 for MH-RM
+  and .0001 for EM} \item{set.seed}{seed number used during
+  estimation. Default is 12345} \item{gain}{a vector of
+  three values specifying the numerator, exponent, and
+  subtracted values for the RM gain value. Default is
+  \code{c(0.05,0.5,0.004)}} \item{return_newconstrain}{if
+  \code{TRUE} returns a list consisting of the constraints
+  to be used just before estimation begins} }}
 }
 \description{
-  \code{multipleGroup} performes a full-information
+  \code{multipleGroup} performs a full-information
   maximum-likelihood multiple group analysis for
   dichotomous and polytomous data under the item response
   theory paradigm using either Cai's (2010)
   Metropolis-Hastings Robbins-Monro (MHRM) algorithm or
-  with an EM approach.
+  with an EM algorithm approach.
 }
 \details{
   By default the estimation in \code{multipleGroup} assumes
   that the models are maximally independent, and therefore
-  could initially be performed by sub setting the data and
+  could initially be performed by sub-setting the data and
   running identical models with \code{confmirt} or
   \code{mirt} and aggregating the results (e.g.,
   log-likelihood). However, constrains may be imposed
   across groups by invoking various \code{invariance}
-  keywords and \code{constrain = ...} arguments, and by
-  inputing user specified design matrix from
-  \code{mod2values} or from passing \code{pars = 'values'}.
+  keywords and \code{constrain = ...} arguments, by
+  inputting user specified design matrix from
+  \code{mod2values} or from passing \code{pars = 'values'},
+  or by supplying a \code{constrain} list for user defined
+  equality constraints between parameters.
 }
 \examples{
 \dontrun{
@@ -210,11 +202,12 @@ dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
 models <- confmirt.model('F1 = 1-15')
 
-mod_configural <- multipleGroup(dat, models, group = group) #completely seperate analyses
+mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
 
 # prev.mod can save precious iterations and help to avoid local minimums
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
-mod_scalar2 <- multipleGroup(dat, models, group = group, #equal intercepts, free variance and means
+#equal intercepts, free variance and means
+mod_scalar2 <- multipleGroup(dat, models, group = group,
                              invariance=c('slopes', 'intercepts', 'free_varcov','free_means'))
 mod_scalar1 <- multipleGroup(dat, models, group = group,  #fixed means
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
@@ -225,6 +218,7 @@ summary(mod_scalar2)
 coef(mod_scalar2)
 residuals(mod_scalar2)
 plot(mod_configural)
+plot(mod_configural, type = 'score')
 itemplot(mod_configural, 2)
 itemplot(mod_configural, 2, type = 'RE')
 
@@ -234,11 +228,11 @@ anova(mod_scalar1, mod_scalar2) #fix mean
 anova(mod_fullconstrain, mod_scalar1) #fix variance
 
 
-#test whether first 6 slopes should be equal accross groups
+#test whether first 6 slopes should be equal across groups
 values <- multipleGroup(dat, models, group = group, pars = 'values')
 values
 constrain <- list(c(1, 63), c(5,67), c(9,71), c(13,75), c(17,79), c(21,83))
-equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain, )
+equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain)
 anova(equalslopes, mod_configural)
 
 #############
@@ -260,10 +254,12 @@ p <- do.call(rbind, lapply(anovas, function(x) x[2,9]))
 p.adjust(p, method = 'BH')
 
 #same as above, except only test if slopes vary (1 df)
+#constrain all intercepts
 estmodels <- vector('list', ncol(dat))
 for(i in 1:ncol(dat))
-    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, #constrain all intercepts
-                             invariance=c('free_means', 'free_varcov', 'intercepts', itemnames[-i]))
+    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE,
+                             invariance=c('free_means', 'free_varcov', 'intercepts',
+                             itemnames[-i]))
 
 
 (anovas <- lapply(estmodels, anova, object2=refmodel))
@@ -284,23 +280,15 @@ dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
 
 #group models
-model1 <- confmirt.model()
+model <- confmirt.model()
    F1 = 1-5
    F2 = 6-10
    F3 = 11-15
 
-
-model2 <- confmirt.model()
-   F1 = 1-5
-   F2 = 6-10
-   F3 = 11-15
-   COV = F1*F2, F1*F3, F2*F3
-
-
-models <- list(D1=model1, D2=model2) #note the names match the groups
+models <- list(D1=model, D2=model) #note the names match the groups
 
 #EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
-mod_configural <- multipleGroup(dat, models, group = group) #completely seperate analyses
+mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
@@ -312,11 +300,15 @@ anova(mod_scalar, mod_metric)
 anova(mod_fullconstrain, mod_scalar)
 
 #same as above, but with MHRM (more accurate with 3 factors, but slower)
-mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM') #completely seperate analyses
-mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM') #equal slopes
-mod_scalar <- multipleGroup(dat, models, group = group, method = 'MHRM', #equal means, slopes, intercepts
+#completely separate analyses
+mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM')
+#equal slopes
+mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM')
+#equal means, slopes, intercepts
+mod_scalar <- multipleGroup(dat, models, group = group, method = 'MHRM',
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
-mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'MHRM', #equal means, slopes, intercepts
+#equal means, slopes, intercepts
+mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'MHRM',
                              invariance=c('slopes', 'intercepts'))
 
 anova(mod_metric, mod_configural)

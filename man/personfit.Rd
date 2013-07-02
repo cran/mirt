@@ -2,17 +2,18 @@
 \alias{personfit}
 \title{Person fit statistics}
 \usage{
-  personfit(x, method = "EAP")
+  personfit(x, method = "EAP", ...)
 }
 \arguments{
   \item{x}{a computed model object of class
   \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
   \code{MultipleGroupClass}}
 
-  \item{method}{type of factor score estimation method. Can
-  be expected a-posteriori (\code{"EAP"}), Bayes modal
-  (\code{"MAP"}), weighted likelihood estimation
-  (\code{"WLE"}), or maximum likelihood (\code{"ML"})}
+  \item{method}{type of factor score estimation method. See
+  \code{\link{fscores}} for more detail}
+
+  \item{...}{additional arguments to be passed to
+  \code{fscores()}}
 }
 \description{
   \code{personfit} calculates the Zh values from Drasgow,

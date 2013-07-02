@@ -2,8 +2,8 @@
 \alias{bfactor}
 \title{Full-Information Item Bi-factor Analysis}
 \usage{
-  bfactor(data, model, quadpts = 20, SE = FALSE, verbose =
-    TRUE, ...)
+  bfactor(data, model, SE = FALSE, SE.type = 'SEM', verbose
+    = TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -15,13 +15,15 @@
   with two specific factors, the first specific factor
   loads on the first two items and the second specific
   factor on the last two, then the vector is
-  \code{c(1,1,2,2)}.}
-
-  \item{quadpts}{number of quadrature points per dimension
-  (default 20).}
+  \code{c(1,1,2,2)}. For items that should only load on the
+  general factor (have no specific component) \code{NA}
+  values may be used as place-holders}
 
   \item{SE}{logical; calculate information matrix and
   standard errors?}
+
+  \item{SE.type}{type of standard errors to calculate. See
+  \code{\link{mirt}} for details}
 
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
@@ -33,15 +35,14 @@
 \description{
   \code{bfactor} fits a confirmatory maximum likelihood
   bi-factor model to dichotomous and polytomous data under
-  the item response theory paradigm. Fits univariate and
-  multivariate 1-4PL, graded, (generalized) partial credit,
-  nominal, multiple choice, and partially compensatory
-  models using a dimensional reduction EM algorithm so that
+  the item response theory paradigm. Fits the IRT models
+  using a dimensional reduction EM algorithm so that
   regardless of the number of specific factors estimated
   the model only uses a two-dimensional quadrature grid for
-  integration. See \code{\link{confmirt}} for appropriate
-  methods to be used on the objects returned from the
-  estimation.
+  integration (hence the maximum number of factors in
+  estimation is only 2). See \code{\link{confmirt}} for
+  appropriate methods to be used on the objects returned
+  from the estimation.
 }
 \details{
   \code{bfactor} follows the item factor analysis strategy
@@ -62,11 +63,25 @@ data <- key2binary(SAT12,
 specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
 mod1 <- bfactor(data, specific)
 summary(mod1)
+itemplot(mod1, 18, drop.zeros = TRUE) #drop the zero slopes to allow plotting
 
 ###Try with fixed guessing parameters added
 guess <- rep(.1,32)
 mod2 <- bfactor(data, specific, guess = guess)
 coef(mod2)
+anova(mod1, mod2)
+
+## don't estimate specific factor for item 32, and use estimated mod1 as starting values
+sv <- mod2values(mod1)
+sv$value[220] <- 0
+sv$est[220] <- FALSE
+mod3 <- bfactor(data, specific, pars = sv) #with excellent starting values
+
+#without using starting values (required if SE.type = 'SEM')
+specific[32] <- NA
+mod3 <- bfactor(data, specific)
+anova(mod1, mod3)
+
 
 #########
 #simulate data

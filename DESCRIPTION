@@ -1,6 +1,6 @@
 Package: mirt
-Version: 0.7.0
-Date: 2013-04-20
+Version: 0.8.0
+Date: 2013-07-02
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", "Chalmers", email =
@@ -18,7 +18,7 @@ Description: Analysis of dichotomous and polytomous response data using
         person covariates.
 Depends: R (>= 2.15), stats4, lattice, methods
 Imports: stats4, GPArotation, mvtnorm, Rcpp, numDeriv
-Suggests: plink, psych, boot, parallel
+Suggests: testthat, plink, psych, boot, parallel
 ByteCompile: yes
 LazyLoad: yes
 LazyData: yes
@@ -27,20 +27,20 @@ Repository: CRAN
 License: GPL (>= 2)
 URL: https://github.com/philchalmers/mirt
 Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
-        'fscores.R' 'mirt-package.R' 'confmirt.R' 'mirt.R' 'polymirt.R'
-        'simdata.R' '00-classes.R' 'utils.R' '01-itemtypes.R'
-        '02-item_methods.R' 'calcLogLik.R' 'LoadPars.R'
-        'confmirt.model.R' 'model.elements.R' 'PrepData.R'
-        'Confirmatory-methods.R' 'Exploratory-methods.R' 'MHRM.group.R'
+        'fscores.R' 'mirt-package.R' 'confmirt.R' 'mirt.R' 'simdata.R'
+        '00-classes.R' 'utils.R' '01-itemtypes.R' '02-item_methods.R'
+        'calcLogLik.R' 'LoadPars.R' 'confmirt.model.R'
+        'model.elements.R' 'PrepData.R' 'Confirmatory-methods.R'
+        'Exploratory-methods.R' 'MHRM.group.R'
         'MultipleGroup-methods.R' 'multipleGroup.R' 'wald.R'
         'EMstep.group.R' 'extract.item.R' 'iteminfo.R' 'itemfit.R'
         'personfit.R' '03-estimation.R' '04-derivatives.R'
         'read.mirt.R' 'fscores.internal.R' 'itemplot.internal.R'
-        'mixedmirt.R' 'MHRM.mixed.R' 'Mixed-methods.R' 'fitIndices.R'
-        'testinfo.R' 'imputeMissing.R' 'mod2values.R' 'probtrace.R'
-        'boot.mirt.R' 'createItem.R' 'zzz.R'
-Packaged: 2013-04-20 21:10:40 UTC; phil
+        'mixedmirt.R' 'Mixed-methods.R' 'fitIndices.R' 'testinfo.R'
+        'imputeMissing.R' 'mod2values.R' 'probtrace.R' 'boot.mirt.R'
+        'createItem.R' 'zzz.R' 'randef.R'
+Packaged: 2013-07-02 05:36:39 UTC; Phil
 Author: Phil Chalmers [aut, cre]
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
 NeedsCompilation: yes
-Date/Publication: 2013-04-21 07:42:11
+Date/Publication: 2013-07-02 11:19:38

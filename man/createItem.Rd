@@ -61,7 +61,7 @@
   return proper standardized loadings since the function is
   not sure how to handle them (no slopes could be defined
   at all!). Instead loadings of .001 are filled in as
-  placeholders.
+  place-holders.
 }
 \examples{
 \dontrun{
@@ -72,7 +72,7 @@ est <- c(TRUE, TRUE)
 P.old2PL <- function(par,Theta, ncat){
      a <- par[1]
      b <- par[2]
-     P1 <- 1 / (1 + exp(-1.702*a*(Theta - b)))
+     P1 <- 1 / (1 + exp(-1*a*(Theta - b)))
      cbind(1-P1, P1)
 }
 
@@ -87,7 +87,7 @@ coef(mod)
 mod2 <- confmirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), verbose = TRUE)
 coef(mod2)
 
-###nonlinear
+###non-linear
 name <- 'nonlin'
 par <- c(a1 = .5, a2 = .1, d = 0)
 est <- c(TRUE, TRUE, TRUE)
@@ -95,7 +95,7 @@ P.nonlin <- function(par,Theta, ncat=2){
      a1 <- par[1]
      a2 <- par[2]
      d <- par[3]
-     P1 <- 1 / (1 + exp(-1.702*(a1*Theta + a2*Theta^2 + d)))
+     P1 <- 1 / (1 + exp(-1*(a1*Theta + a2*Theta^2 + d)))
      cbind(1-P1, P1)
 }
 
@@ -114,7 +114,7 @@ P.mycov <- function(par,Theta, ncat){
      d <- par[3]
      #notice here that the covariate data is found in Theta,
      #    use browser() to jump in for debugging if needed
-     P1 <- 1 / (1 + exp(-1.702*(a1 * Theta[,1] + a2*Theta[,2] + d)))
+     P1 <- 1 / (1 + exp(-1*(a1 * Theta[,1] + a2*Theta[,2] + d)))
      cbind(1-P1, P1)
 }
 
@@ -122,6 +122,34 @@ covdata <- matrix(c(rep(0, 500), rep(1,500)), nrow=nrow(dat))
 x3 <- createItem(name, par=par, est=est, P=P.mycov, userdata=covdata)
 mod <- confmirt(dat, 1, c(rep('2PL',4), 'mycov'), customItems=list(mycov=x3))
 coef(mod)
+
+###nominal response model (Bock 1972 version)
+Tnom.dev <- function(ncat) {
+   T <- matrix(1/ncat, ncat, ncat - 1)
+   diag(T[-1, ]) <-  diag(T[-1, ]) - 1
+   return(T)
+}
+
+name <- 'nom'
+par <- c(alp=c(3,0,-3),gam=rep(.4,3))
+est <- rep(TRUE, length(par))
+P.nom <- function(par, Theta, ncat){
+   alp <- par[1:(ncat-1)]
+   gam <- par[ncat:length(par)]
+   a <- Tnom.dev(ncat) \%*\% alp
+   c <- Tnom.dev(ncat) \%*\% gam
+   z <- matrix(0, nrow(Theta), ncat)
+   for(i in 1:ncat)
+       z[,i] <- a[i] * Theta + c[i]
+   P <- exp(z) / rowSums(exp(z))
+   P
+}
+
+nom1 <- createItem(name, par=par, est=est, P=P.nom)
+nommod <- mirt(Science, 1, 'nom1', customItems=list(nom1=nom1))
+coef(nommod)
+Tnom.dev(4) \%*\% coef(nommod)[[1]][1:3] #a
+Tnom.dev(4) \%*\% coef(nommod)[[1]][4:6] #d
 
 }
 }
