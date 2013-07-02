@@ -11,9 +11,9 @@
   confmirt(data, model, itemtype = NULL, guess = 0, upper =
     1, pars = NULL, constrain = NULL, parprior = NULL,
     calcNull = TRUE, grsm.block = NULL, rsm.block = NULL,
-    verbose = TRUE, draws = 3000, rotate = 'oblimin',
-    Target = NULL, key = NULL, D = 1.702, cl = NULL,
-    technical = list(), ...)
+    verbose = TRUE, draws = 5000, rotate = 'oblimin',
+    Target = NULL, key = NULL, cl = NULL, technical =
+    list(), ...)
 
   \S4method{summary}{ConfirmatoryClass}(object, suppress =
     0, digits = 3, verbose = TRUE, ...)
@@ -110,10 +110,6 @@
   .3 in most statistical software. Default is 0 for no
   suppression}
 
-  \item{D}{a numeric value used to adjust the logistic
-  metric to be more similar to a normal cumulative density
-  curve. Default is 1.702}
-
   \item{cl}{a cluster object from the \code{parallel}
   package (set from using \code{makeCluster(ncores)})}
 
@@ -147,14 +143,13 @@
   \item{NCYCLES}{max number of MH-RM cycles; default 2000}
   \item{BURNIN}{number of burn in cycles (stage 1); default
   150} \item{SEMCYCLES}{number of SEM cycles (stage 2);
-  default 50} \item{KDRAWS}{number of parallel MH sets to
-  be drawn; default 1} \item{TOL}{minimum threshold
-  tolerance for convergence of MH-RM, must occur on three
-  consecutive occations; default .001} \item{set.seed}{seed
-  number used during estimation. Default is 12345}
-  \item{gain}{a vector of three values specifying the
-  numerator, exponent, and subtracted values for the RM
-  gain value. Default is \code{c(0.05,0.5,0.004)}} }}
+  default 50} \item{TOL}{minimum threshold tolerance for
+  convergence of MH-RM, must occur on three consecutive
+  occations; default .001} \item{set.seed}{seed number used
+  during estimation. Default is 12345} \item{gain}{a vector
+  of three values specifying the numerator, exponent, and
+  subtracted values for the RM gain value. Default is
+  \code{c(0.05,0.5,0.004)}} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -176,18 +171,14 @@
   \code{confmirt} follows a confirmatory and exploratory
   item factor analysis strategy that uses a stochastic
   version of maximum likelihood estimation described by Cai
-  (2010a, 2010b). The general equation used for
-  multidimensional item response theory in this function is
-  in the logistic form with a scaling correction of 1.702.
-  This correction is applied to allow comparison to
-  mainstream programs such as TESTFACT (2003) and POLYFACT.
-  Missing data are treated as 'missing at random' so that
-  each response vector is included in the estimation (i.e.,
-  full-information). Residuals are computed using the LD
-  statistic (Chen & Thissen, 1997) in the lower diagonal of
-  the matrix returned by \code{residuals}, and Cramer's V
-  above the diagonal. For computing the log-likelihood more
-  accurately see \code{\link{calcLogLik}}.
+  (2010a, 2010b). Missing data are treated as 'missing at
+  random' so that each response vector is included in the
+  estimation (i.e., full-information). Residuals are
+  computed using the LD statistic (Chen & Thissen, 1997) in
+  the lower diagonal of the matrix returned by
+  \code{residuals}, and Cramer's V above the diagonal. For
+  computing the log-likelihood more accurately see
+  \code{\link{calcLogLik}}.
 
   \code{coef} displays the item parameters with their
   associated standard errors, while use of \code{summary}
@@ -275,9 +266,9 @@ model.1 <- confmirt.model()
   COV = F1*F2
 
 
-#compute model, and use parallel computation of the log-likelhood
+#compute model, and use parallel computation of the log-likelihood
 library(parallel)
-cl <- makeCluster(4)
+cl <- makeCluster(detectCores())
 mod1 <- confmirt(dataset, model.1, cl=cl)
 coef(mod1)
 summary(mod1)
@@ -318,7 +309,7 @@ model.combo <- confmirt.model()
 (mod.combo <- confmirt(data, model.combo))
 anova(mod.quad, mod.combo)
 
-#nonlinear item and test plots
+#non-linear item and test plots
 plot(mod.quad)
 plot(mod.combo, type = 'SE')
 itemplot(mod.quad, 1, type = 'score')

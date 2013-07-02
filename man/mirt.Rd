@@ -13,16 +13,16 @@ Theory)}
     SE = FALSE, SE.type = 'SEM', pars = NULL, constrain =
     NULL, parprior = NULL, calcNull = TRUE, rotate =
     'oblimin', Target = NaN, quadpts = NULL, grsm.block =
-    NULL, rsm.block = NULL, key= NULL, D = 1.702, cl =
-    NULL, large = FALSE, verbose = TRUE, technical =
-    list(), ...)
+    NULL, rsm.block = NULL, key= NULL, nominal.highlow =
+    NULL, cl = NULL, large = FALSE, verbose = TRUE,
+    technical = list(), ...)
 
   \S4method{summary}{ExploratoryClass}(object, rotate = '',
     Target = NULL, suppress = 0, digits = 3, verbose =
     TRUE, ...)
 
   \S4method{coef}{ExploratoryClass}(object, rotate = '',
-    Target = NULL, digits = 3, ...)
+    Target = NULL, digits = 3, verbose = TRUE, ...)
 
   \S4method{anova}{ExploratoryClass}(object, object2)
 
@@ -54,17 +54,16 @@ Theory)}
   items follow a graded or 2PL structure, however they may
   be changed to the following: 'Rasch', '1PL', '2PL',
   '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'rsm',
-  'nominal', 'mcm', 'PC2PL', 'PC3PL', '2PLNRM', '3PLNRM',
+  'nominal', 'PC2PL', 'PC3PL', '2PLNRM', '3PLNRM',
   '3PLuNRM', and '4PLNRM', for the Rasch/partial credit, 1
   and 2 parameter logistic, 3 parameter logistic (lower
   asymptote and upper), 4 parameter logistic, graded
   response model, rating scale graded response model,
   generalized partial credit model, Rasch rating scale
-  model, nominal model, multiple choice model, and 2-3PL
-  partially compensatory model, and 2-4 parameter nested
-  logistic models, respectively. User defined item classes
-  can also be defined using the \code{\link{createItem}}
-  function}
+  model, nominal model, 2-3PL partially compensatory model,
+  and 2-4 parameter nested logistic models, respectively.
+  User defined item classes can also be defined using the
+  \code{\link{createItem}} function}
 
   \item{grsm.block}{an optional numeric vector indicating
   where the blocking should occur when using the grsm, NA
@@ -96,10 +95,12 @@ Theory)}
   calculating the parameter information matrix. Can be
   \code{'MHRM'} for stochastic estimation, \code{'BL'} for
   the Bock and Lieberman approach (EM only), or
-  \code{'SEM'} for the supplemented EM (TOL is
-  automatically reduced to .0001 to help the EM history).
-  Bootstrapped standard errors are also possible but must
-  be run with the \code{\link{boot.mirt}} function}
+  \code{'SEM'} for the supplemented EM. Note that for the
+  \code{'SEM'} option increasing the number of EM cycles
+  (\code{NCYCLES}, see below) will help to improve the
+  accuracy. Bootstrapped standard errors are also possible
+  but must be run with the \code{\link{boot.mirt}}
+  function}
 
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
@@ -113,15 +114,15 @@ Theory)}
 
   \item{rotate}{type of rotation to perform after the
   initial orthogonal parameters have been extracted by
-  using \code{summary}; default is \code{'oblimin'}. See
-  below for list of possible rotations. If \code{rotate !=
-  ''} in the \code{summary} input then the default from the
-  object is ignored and the new rotation from the list is
-  used instead}
-
-  \item{D}{a numeric value used to adjust the logistic
-  metric to be more similar to a normal cumulative density
-  curve. Default is 1.702}
+  using \code{summary}; default is \code{'oblimin'}. If
+  \code{rotate != ''} in the \code{summary} input then the
+  default from the object is ignored and the new rotation
+  from the list is used instead. Rotations currently
+  supported are: promax, oblimin, varimax, quartimin,
+  targetT, targetQ, pstT, pstQ, oblimax, entropy,
+  quartimax, simplimax, bentlerT, bentlerQ, tandemI,
+  tandemII, geominT, geominQ, cfT, cfQ, infomaxT, infomaxQ,
+  mccammon, bifactorT, bifactorQ}
 
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
@@ -161,7 +162,10 @@ Theory)}
   \item{cl}{a cluster object from the \code{parallel}
   package (set from using \code{makeCluster(ncores)})}
 
-  \item{quadpts}{number of quadrature points per dimension}
+  \item{quadpts}{number of quadrature points per dimension.
+  By default the number of quadrature uses the following
+  scheme: \code{switch(as.character(nfact), '1'=40, '2'=20,
+  '3'=10, '4'=7, '5'=5, 3)}}
 
   \item{printvalue}{a numeric value to be specified when
   using the \code{res='exp'} option. Only prints patterns
@@ -191,10 +195,12 @@ Theory)}
   \item{type}{type of plot to view; can be \code{'info'} to
   show the test information function, \code{'infocontour'}
   for the test information contours, \code{'SE'} for the
-  test standard error function, and \code{'trace'} and
+  test standard error function, \code{'trace'} and
   \code{'infotrace'} for all item probability information
   or trace lines (only available when all items are
-  dichotomous)}
+  dichotomous), \code{'infoSE'} for a combined test
+  information and standard error plot, and \code{'score'}
+  for the expected total score}
 
   \item{theta_angle}{numeric values ranging from 0 to 90
   used in \code{plot}. If a vector is used then a bubble
@@ -232,20 +238,30 @@ Theory)}
   \item{df.p}{logical; print the degrees of freedom and
   p-values?}
 
+  \item{nominal.highlow}{optional matrix indicating the
+  highest (row 1) and lowest (row 2) categories to be used
+  for the nominal response model. Using this input may
+  result in better numerical stability. The matrix input
+  should be a 2 by nitems numeric matrix, where each number
+  represents the \emph{reduced} category representation
+  (mirt omits categories that are missing, so if the unique
+  values for an item are c(1,2,5,6) they are treated as
+  being the same as c(1,2,3,4). Viewing the starting values
+  will help to identify the categories)}
+
   \item{verbose}{logical; print observed log-likelihood
   value at each iteration?}
 
   \item{technical}{a list containing lower level technical
   parameters for estimation. May be: \describe{
   \item{MAXQUAD}{maximum number of quadratures; default
-  10000} \item{TOL}{EM convergence threshold; default .001}
-  \item{MSTEPTOL}{convergence threshold for Mstep; default
-  is \code{TOL/100}} \item{SEtol}{tolerance value used to
-  stop the MHRM estimation when \code{SE = TRUE} and
-  \code{SE.type = 'MHRM'}. Lower values will take longer
-  but may be more stable for computing the information
-  matrix. Default is .001} \item{NCYCLES}{maximum number of
-  EM cycles; default 500} }}
+  10000} \item{TOL}{EM convergence threshold; default
+  .0001} \item{SEtol}{tolerance value used to stop the MHRM
+  estimation when \code{SE = TRUE} and \code{SE.type =
+  'MHRM'}. Lower values will take longer but may be more
+  stable for computing the information matrix. Default is
+  .0001} \item{NCYCLES}{maximum number of EM cycles;
+  default 500} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -254,14 +270,13 @@ Theory)}
   factor analysis model to dichotomous and polytomous data
   under the item response theory paradigm. Fits univariate
   and multivariate Rasch, 1-4PL, graded, (generalized)
-  partial credit, nominal, multiple choice, graded rating
-  scale, Rasch rating scale, nested logistic, and partially
-  compensatory models using the EM algorithm. User defined
-  item classes can also be defined using the
-  \code{\link{createItem}} function. Models may also
-  contain 'explanatory' person or item level predictors,
-  though these can only be included by using the
-  \code{\link{mixedmirt}} function.
+  partial credit, nominal, graded rating scale, Rasch
+  rating scale, nested logistic, and partially compensatory
+  models using the EM algorithm. User defined item classes
+  can also be defined using the \code{\link{createItem}}
+  function. Models may also contain 'explanatory' person or
+  item level predictors, though these can only be included
+  by using the \code{\link{mixedmirt}} function.
 }
 \details{
   \code{mirt} follows the item factor analysis strategy by
@@ -270,11 +285,7 @@ Theory)}
   and Muraki and Carlson (1995). Nested models may be
   compared via the approximate chi-squared difference test
   or by a reduction in AIC/BIC values (comparison via
-  \code{\link{anova}}). The general equation used for
-  multidimensional item response theory is a logistic form
-  with a scaling correction of 1.702. This correction is
-  applied to allow comparison to mainstream programs such
-  as TESTFACT (2003) and POLYFACT.
+  \code{\link{anova}}).
 
   \code{summary} and \code{coef} allow for all the
   rotations available from the \code{GPArotation} package
@@ -348,66 +359,82 @@ Theory)}
 \section{IRT Models}{
   The parameter labels use the follow convention, here
   using two factors and \eqn{k} as the number of
-  categories. Throughout all models D is a constant
-  (default 1.702):
+  categories.
 
-  \describe{ \item{Rasch}{ Only one intercept estimated.
-  \deqn{P(x = 1|\theta, d) = \frac{1}{1 + exp(-D*(\theta +
-  d))}} } \item{1-4PL}{ Depending on the model \eqn{u} may
-  be equal to 1 and \eqn{g} may be equal to 0. \deqn{P(x =
-  1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-D * (a_1 *
-  \theta_1 + a_2 * \theta_2 + d))}} For the 1PL model the
-  number of factors must equal 1, and all the \eqn{a_1}
-  values are constrained to be equal accross all items. }
-  \item{graded}{ The graded model consists of sequential
-  2PL models, and here \eqn{k} is the predicted category.
-  \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi)
-  - P(x \ge k + 1 | \theta, \phi)} } \item{grsm}{ A more
-  constrained version of the graded model where graded
-  spacing is equal accross item blocks and only adjusted by
-  a single 'difficulty' parameter (c). Again, \deqn{P(x = k
-  | \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k +
-  1 | \theta, \phi)} but now \deqn{P = \frac{1}{1 + exp(-D
-  * (a_1 * \theta_1 + a_2 * \theta_2 + d_k + c))}} }
+  \describe{ \item{Rasch}{ Only one intercept estimated,
+  and the latent variance of \eqn{\theta} is freely
+  estimated. If the data have more than two categories then
+  a partial credit model is used instead (see 'gpcm'
+  below). \deqn{P(x = 1|\theta, d) = \frac{1}{1 +
+  exp(-(\theta + d))}} } \item{1-4PL}{ Depending on the
+  model \eqn{u} may be equal to 1 and \eqn{g} may be equal
+  to 0. \deqn{P(x = 1|\theta, \psi) = g + \frac{(u - g)}{1
+  + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d))}} For the
+  1PL model the number of factors must equal 1, and if so
+  all the \eqn{a_1} values are constrained to be equal
+  accross all items and the latent variance of \eqn{\theta}
+  is freely estimated. } \item{graded}{ The graded model
+  consists of sequential 2PL models, and here \eqn{k} is
+  the predicted category. \deqn{P(x = k | \theta, \psi) =
+  P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
+  \phi)} } \item{grsm}{ A more constrained version of the
+  graded model where graded spacing is equal accross item
+  blocks and only adjusted by a single 'difficulty'
+  parameter (c) while the latent variance of \eqn{\theta}
+  is freely estimated. Again, \deqn{P(x = k | \theta, \psi)
+  = P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
+  \phi)} but now \deqn{P = \frac{1}{1 + exp(-(a_1 *
+  \theta_1 + a_2 * \theta_2 + d_k + c))}} }
   \item{gpcm/nominal}{For the gpcm the \eqn{d_k} values are
   treated as fixed and orderd values from 0:(k-1) (in the
   nominal model \eqn{d_0} is also set to 0). Additionally,
   for identification in the nominal model \eqn{ak_0 = 1},
   \eqn{ak_k = (k - 1)}. \deqn{P(x = k | \theta, \psi) =
-  \frac{exp(-D * ak_k * (a_1 * \theta_1 + a_2 * \theta_2) +
-  d_k)} {\sum_i^k exp(-D * ak_k * (a_1 * \theta_1 + a_2 *
-  \theta_2) + d_k)}} } \item{rsm}{ A more constrained
-  version of the generalized partial credit model where the
-  spacing is equal accross item blocks and only adjusted by
-  a single 'difficulty' parameter (c), and the
-  discrimination parameter is constrained to be a constant.
-  Note that this is analogous to the relationship between
-  the graded model and the grsm (with an additional
-  constraint regarding the discrimination parameters; the
-  discrimination constraint can, however, be relaxed by
-  adjusting the starting values manually). } \item{mcm}{For
-  identification \eqn{ak_0 = d_0 = 0} and \eqn{\sum_0^k t_k
-  = 1}. \deqn{P(x = k | \theta, \psi) = C_0 (\theta) * t_k
-  + (1 - C_0 (\theta)) * \frac{exp(-D * ak_k * (a_1 *
-  \theta_1 + a_2 * \theta_2) + d_k)} {\sum_i^k exp(-D *
-  ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}}
+  \frac{exp(ak_k * (a_1 * \theta_1 + a_2 * \theta_2) +
+  d_k)} {\sum_i^k exp(ak_k * (a_1 * \theta_1 + a_2 *
+  \theta_2) + d_k)}}
 
-  where \eqn{C_0 (\theta) = \frac{exp(-D * ak_0 * (a_1 *
-  \theta_1 + a_2 * \theta_2) + d_0)} {\sum_i^k exp(-D *
-  ak_k * (a_1 * \theta_1 + a_2 * \theta_2) + d_k)}} }
-  \item{partcomp}{Partially compensatory models consist of
-  the products of 2PL probability curves. \deqn{P(x = 1 |
-  \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-D * (a_1 *
-  \theta_1 + d_1))} * \frac{1}{1 + exp(-D * (a_2 * \theta_2
-  + d_2))})} } \item{1-4PLNRM}{Nested logistic curves for
-  modeling distractor items. Requires a scoring key. The
-  model is broken into two components for the probability
-  of endorment. For sucessful endorsement the probability
-  trace is the 1-4PL model, while for unsucessful
-  endormenent: \deqn{P(x = 0 | \theta, \psi) = (1 -
-  P_{1-4PL}(x = 1 | \theta, \psi)) * P_{nominal}(x = k |
-  \theta, \psi)} which is the product of the compliment of
-  the dichotomous trace line with the nominal response
+  For partial credit model (when \code{itemtype = 'Rasch'};
+  unidimenional only) the above model is further
+  constrained so that \eqn{ak_k = (0,1,\ldots, k-1)},
+  \eqn{a_1 = 1}, and the latent variance of \eqn{\theta_1}
+  is freely estimated.
+
+  In the nominal model this parametrizations helps to
+  identify the empirical ordering of the categories by
+  inspecting the \eqn{ak} values. Larger values indicate
+  that the item category is more positively related to the
+  latent trait(s) being measured. For instance, if an item
+  was truly ordinal (such as a Likert scale), and had 4
+  response categories, we would expect to see \eqn{ak_0 <
+  ak_1 < ak_2 < ak_3} following estimation. If on the other
+  hand \eqn{ak_0 > ak_1} then it would appear that the
+  second category is less related to to the trait than the
+  first, and therefore the second category should be
+  understood as the 'lowest score'.
+
+  } \item{rsm}{ A more constrained version of the partial
+  credit model where the spacing is equal accross item
+  blocks and only adjusted by a single 'difficulty'
+  parameter (c). Note that this is analogous to the
+  relationship between the graded model and the grsm (with
+  an additional constraint regarding the fixed
+  discrimination parameters; the discrimination constraint
+  can, however, be relaxed by adjusting the starting values
+  specifications manually and applying additional equality
+  constraints). } \item{partcomp}{Partially compensatory
+  models consist of the products of 2PL probability curves.
+  \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 +
+  exp(-(a_1 * \theta_1 + d_1))} * \frac{1}{1 + exp(-(a_2 *
+  \theta_2 + d_2))})} } \item{1-4PLNRM}{Nested logistic
+  curves for modeling distractor items. Requires a scoring
+  key. The model is broken into two components for the
+  probability of endorsement. For successful endorsement
+  the probability trace is the 1-4PL model, while for
+  unsuccessful endorsement: \deqn{P(x = 0 | \theta, \psi) =
+  (1 - P_{1-4PL}(x = 1 | \theta, \psi)) * P_{nominal}(x = k
+  | \theta, \psi)} which is the product of the compliment
+  of the dichotomous trace line with the nominal response
   model. In the nominal model, the slope parameters defined
   above are constrained to be 1's, while the last value of
   the \eqn{ak} is freely estimated. } }
@@ -419,10 +446,8 @@ data <- expand.table(LSAT7)
 
 (mod1 <- mirt(data, 1))
 coef(mod1)
-(mod1 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
-(mod1 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
-coef(mod1)
-summary(mod1)
+coef(mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
+coef(mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
 residuals(mod1)
 plot(mod1) #test information function
 plot(mod1, type = 'trace') #trace lines
@@ -431,7 +456,12 @@ plot(mod1, type = 'trace') #trace lines
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 coef(mod1.3PL)
 
-(mod2 <- mirt(data, 2))
+#two factors (exploratory)
+mod2 <- mirt(data, 2)
+
+#too few iterations, try running more using current model as new starting
+#   values (could also increase NCYCLES and rerun)
+mod2 <- mirt(data, 2, pars = mod2values(mod2))
 coef(mod2)
 summary(mod2, rotate = 'oblimin') #oblimin rotation
 residuals(mod2)
@@ -439,6 +469,7 @@ plot(mod2)
 
 anova(mod1, mod2) #compare the two models
 scores <- fscores(mod2) #save factor score table
+scoresfull <- fscores(mod2, full.scores = TRUE, scores.only = TRUE) #factor scores for original data
 
 #confirmatory
 cmodel <- confmirt.model()
@@ -455,29 +486,35 @@ anova(cmod, mod2)
 pmod1 <- mirt(Science, 1)
 plot(pmod1)
 summary(pmod1)
+fitIndices(pmod1) #M2 limited information statistic
 
-#Constrain all slopes to be equal
+#Constrain all slopes to be equal with the constrain = list() input
 #first obtain parameter index
 values <- mirt(Science,1, pars = 'values')
 values #note that slopes are numbered 1,5,9,13, or index with values$parnum[values$name == 'a1']
 (pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
-coef(pmod1_equalslopes)
-anova(pmod1_equalslopes, pmod1) #significantly worse fit with all criteria
 
-pmod2 <- mirt(Science, 2)
+coef(pmod1_equalslopes)
+anova(pmod1_equalslopes, pmod1) #significantly worse fit with almost all criteria
+
+pmod2 <- mirt(Science, 2, technical = list(NCYCLES = 1000))
 summary(pmod2)
-residuals(pmod2)
-plot(pmod2, theta_angle = seq(0,90, by = 5)) #sum across angles of theta 1
+plot(pmod2)
 itemplot(pmod2, 1)
 anova(pmod1, pmod2)
 
 #unidimensional fit with a generalized partial credit and nominal model
 (gpcmod <- mirt(Science, 1, 'gpcm'))
 coef(gpcmod)
+
+#for the nominal model the lowest and highest categories are assumed to be the
+#  theoretically lowest and highest categories that related to the latetent trait(s), however
+#  a custom nominal.highlow matrix can be passed to declare which item category should be
+#  treated as the 'highest' and 'lowest' instead
 (nomod <- mirt(Science, 1, 'nominal'))
+coef(nomod) #ordering of ak values suggest that the items are indeed ordinal
 anova(gpcmod, nomod)
 itemplot(nomod, 3)
-
 
 ###########
 #empirical dimensionality testing that includes 'guessing'
@@ -487,8 +524,8 @@ data <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 
 mod1 <- mirt(data, 1)
-mod2 <- mirt(data, 2, quadpts = 15)
-mod3 <- mirt(data, 3, quadpts = 10)
+mod2 <- mirt(data, 2)
+mod3 <- mirt(data, 3) #difficulty converging with reduced quadpts
 anova(mod1,mod2)
 anova(mod2, mod3) #negative AIC, 2 factors probably best
 
@@ -501,19 +538,22 @@ coef(mod1g)
 
 #make some data
 set.seed(1234)
-a <- matrix(rep(1/1.702, 10))
+a <- matrix(rep(1, 10))
 d <- matrix(c(1,0.5,-.5,-1), 10, 4, byrow = TRUE)
 c <- seq(-1, 1, length.out=10)
 data <- simdata(a, d + c, 2000, itemtype = rep('graded',10))
 
 #use much better start values to save iterations
 sv <- mirt(data, 1, itemtype = 'grsm', pars = 'values')
-sv[,5] <- c(as.vector(t(cbind(a,d,c))),0,1)
+sv[,'value'] <- c(as.vector(t(cbind(a,d,c))),0,1)
+
+#also possible to edit start values with a GUI approach with
+#   sv <- edit(sv)
 
 mod1 <- mirt(data, 1)
 mod2 <- mirt(data, 1, itemtype = 'grsm', pars = sv)
 coef(mod2)
-anova(mod2, mod1) #not sig, mod2 should be prefered
+anova(mod2, mod1) #not sig, mod2 should be preferred
 
 ###########
 # 2PL nominal response model example (Suh and Bolt, 2010)
@@ -521,6 +561,7 @@ data(SAT12)
 SAT12[SAT12 == 8] <- NA
 head(SAT12)
 
+#correct answer key
 key <- c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5)
 scoredSAT12 <- key2binary(SAT12, key)
 mod0 <- mirt(scoredSAT12, 1)
@@ -608,9 +649,6 @@ lines(Theta, testinfo(mod0, Theta), col = 'red')
   Thissen, D. (1982). Marginal maximum likelihood
   estimation for the one-parameter logistic model.
   \emph{Psychometrika, 47}, 175-186.
-
-  Thissen, D. & Steinberg, L. (1984). A response model for
-  multiple-choice items. \emph{Psychometrika, 49}, 501-519.
 
   Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S.
   G., Muraki, E., & Bock, R. D. (2003). \emph{TESTFACT 4

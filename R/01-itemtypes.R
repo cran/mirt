@@ -5,9 +5,9 @@ setClass("GroupPars",
                         SEpar='numeric',
                         est='logical',
                         parnum='numeric',
-                        nfact='numeric',
+                        nfact='integer',
                         gradient='numeric',
-                        hessian='matrix',                        
+                        hessian='matrix',
                         itemtrace='matrix',
                         lbound='numeric',
                         ubound='numeric',
@@ -17,22 +17,44 @@ setClass("GroupPars",
                         b.prior.beta='numeric')
 )
 
+setClass("RandomPars",
+         representation(par='numeric',
+                        SEpar='numeric',
+                        est='logical',
+                        between='logical',
+                        parnum='numeric',
+                        ndim='integer',  
+                        gframe='data.frame',                        
+                        gdesign='matrix',
+                        lbound='numeric',
+                        ubound='numeric',
+                        cand.t.var='numeric',
+                        drawvals='matrix',
+                        mtch='numeric',
+                        n.prior.mu='numeric',
+                        n.prior.sd='numeric',
+                        b.prior.alpha='numeric',
+                        b.prior.beta='numeric')
+)
+
 setClass("AllItemsClass",
          representation(par='numeric',
                         SEpar='numeric',
-                        est='logical', 
+                        est='logical',
                         constr='logical',
                         parnum='numeric',
-                        nfact='numeric',
+                        nfact='integer',
                         nfixedeffects='numeric', #number of fixed effect predictors
+                        fixed.design='matrix',
                         dat='matrix',
-                        ncat='numeric',
+                        ncat='integer',
                         rs='matrix',
                         gradient='numeric',
-                        hessian='matrix', 
+                        hessian='matrix',
                         itemtrace='matrix',
                         lbound='numeric',
                         ubound='numeric',
+                        any.prior='logical',
                         n.prior.mu='numeric',
                         n.prior.sd='numeric',
                         b.prior.alpha='numeric',
@@ -55,12 +77,10 @@ setClass("nominal", contains = 'AllItemsClass')
 
 setClass("partcomp", contains = 'AllItemsClass')
 
-setClass("mcm", contains = 'AllItemsClass')
-
 setClass("nestlogit", contains = 'AllItemsClass',
          representation = representation(correctcat='integer'))
 
-setClass('custom', contains = 'AllItemsClass', 
+setClass('custom', contains = 'AllItemsClass',
          representation = representation(name='character',
                                          P='function',
                                          gr='function',
@@ -68,7 +88,7 @@ setClass('custom', contains = 'AllItemsClass',
                                          hss='function',
                                          usehss='logical',
                                          userdata='matrix',
-                                         useuserdata='logical'))    
+                                         useuserdata='logical'))
 
 #--------------------------------------------------------------------------
 
@@ -86,10 +106,14 @@ setGeneric('Deriv', function(x, Theta, ...) standardGeneric("Deriv"))
 
 setGeneric('DerivTheta', function(x, Theta) standardGeneric("DerivTheta"))
 
-setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))         
+setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))
 
 setGeneric("itemplot.internal",  function(object, ...) standardGeneric("itemplot.internal"))
 
 setGeneric("fscores.internal", function(object, ...) standardGeneric("fscores.internal"))
 
 setGeneric("summary", function(object, ...) standardGeneric("summary"))
+
+setGeneric('DrawValues', function(x, Theta, ...) standardGeneric("DrawValues"))
+
+setGeneric('RandomDeriv', function(x, ...) standardGeneric("RandomDeriv"))

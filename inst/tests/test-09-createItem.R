@@ -7,22 +7,21 @@ test_that('old2PL', {
     P.old2PL <- function(par,Theta,ncat){
         a <- par[1]
         b <- par[2]
-        P1 <- 1 / (1 + exp(-1.702*a*(Theta - b)))
+        P1 <- 1 / (1 + exp(-1*a*(Theta - b)))
         cbind(1-P1, P1)
     }
     lbound <- c(-Inf, -Inf)
     ubound <- c(Inf, Inf)
     
     x <- createItem(name, par=par, est=est, lbound=lbound, ubound=ubound, P=P.old2PL)
-    
-    #So, let's estimate it!
+        
     dat <- expand.table(LSAT7)
     sv <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), pars = 'values', verbose=FALSE)    
     expect_is(sv, 'data.frame')          
     mod <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), verbose=FALSE)
     expect_is(mod, 'ConfirmatoryClass')          
     expect_is(coef(mod), 'list')
-    mod2 <- confmirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), verbose = FALSE)
+    mod2 <- confmirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), verbose = FALSE, draws = 10)
     expect_is(mod2, 'ConfirmatoryClass')          
     expect_is(coef(mod2), 'list')    
     
@@ -34,7 +33,7 @@ test_that('old2PL', {
       a1 <- par[1]
       a2 <- par[2] 
       d <- par[3]
-      P1 <- 1 / (1 + exp(-1.702*(a1*Theta + a2*Theta^2 + d)))
+      P1 <- 1 / (1 + exp(-1*(a1*Theta + a2*Theta^2 + d)))
       cbind(1-P1, P1)
     } 
      
