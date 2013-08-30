@@ -12,42 +12,38 @@
 #' @param ... additional arguments to be passed on to \code{boot(...)}
 #' @keywords bootstrapped standard errors
 #' @export boot.mirt
+#' @seealso
+#' \code{\link{PLCI.mirt}}
 #' @examples
 #'
 #' \dontrun{
 #' mod <- mirt(Science, 1)
 #' booted <- boot.mirt(mod)
 #' booted
-#' modwithboot <- boot.mirt(mod, return.boot = FALSE)
+#' 
+#' #run in parallel using snow backend
+#' modwithboot <- boot.mirt(mod, return.boot = FALSE, parallel = 'snow', ncpus = 4L)
 #' coef(modwithboot)
 #'
 #' }
 boot.mirt <- function(x, R = 100, return.boot = TRUE, ...){
     boot.draws <- function(orgdat, ind, npars, constrain, parprior, model, itemtype, group) {
         ngroup <- length(unique(group))
-        while(TRUE){
-            dat <- orgdat[ind, ]
-            g <- group[ind]
-            ind <- sample(1L:nrow(orgdat), nrow(orgdat), TRUE)
-            if(length(unique(g)) != ngroup) next
-            if(!is.null(group)){
-                mod <- try(multipleGroup(data=dat, model=model, itemtype=itemtype, group=g,
-                                     constrain=constrain, parprior=parprior, method='EM',
-                                     calcNull=FALSE, verbose = FALSE))
-            } else {
-                mod <- try(mirt(data=dat, model=model, itemtype=itemtype, constrain=constrain,
-                            parprior=parprior, calcNull=FALSE))
-            }
-            if(is(mod, 'try-error')) next
-            if(MG){
-                longpars <- c()
-                tmp <- coef(mod)
-                for(g in 1L:length(tmp))
-                    longpars <- c(longpars, do.call(c, tmp[[g]]))
-            } else longpars <- do.call(c, coef(mod))
-            if(length(longpars) != npars) next
-            break
+        dat <- orgdat[ind, ]
+        g <- group[ind]
+        if(length(unique(g)) != ngroup) return(rep(NA, npars))
+        if(!is.null(group)){
+            mod <- try(multipleGroup(data=dat, model=model, itemtype=itemtype, group=g,
+                                 constrain=constrain, parprior=parprior, method='EM',
+                                 calcNull=FALSE, verbose = FALSE))
+        } else {
+            mod <- try(mirt(data=dat, model=model, itemtype=itemtype, constrain=constrain,
+                        parprior=parprior, calcNull=FALSE, verbose=FALSE))
         }
+        if(is(mod, 'try-error')) return(rep(NA, npars))
+        structure <- mod2values(mod)
+        longpars <- structure$value
+        if(length(longpars) != npars) return(rep(NA, npars)) #in case intercepts dropped
         return(longpars)
     }
     loadSE <- function(pars, SEs, nfact, MG, explor){
@@ -86,15 +82,11 @@ boot.mirt <- function(x, R = 100, return.boot = TRUE, ...){
     if(length(constrain) == 0L) constrain <- NULL
     prodlist <- x@prodlist
     ret <- x
-    if(!require(boot)) require(boot)
-    if(MG){
-        longpars <- c()
-        tmp <- coef(x)
-        for(g in 1L:length(tmp))
-            longpars <- c(longpars, do.call(c, tmp[[g]]))
-    } else longpars <- do.call(c, coef(x))
+    if(!require(boot)) require('boot')
+    structure <- mod2values(x)
+    longpars <- structure$value
     npars <- length(longpars)
-    boots <- boot(dat, boot.draws, R=R, npars=npars, constrain=constrain,
+    boots <- boot::boot(dat, boot.draws, R=R, npars=npars, constrain=constrain,
                   parprior=parprior, model=model, itemtype=itemtype, group=group, ...)
     if(return.boot){
         if(explor) message('Note: bootstrapped standard errors for slope parameters for exploratory

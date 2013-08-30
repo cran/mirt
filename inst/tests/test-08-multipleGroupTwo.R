@@ -25,8 +25,8 @@ test_that('three factor', {
     COV = F1*F2, F1*F3, F2*F3'
     
     #group models
-    model1 <- confmirt.model(MGmodelg1, quiet = TRUE)    
-    model2 <- confmirt.model(MGmodelg1, quiet = TRUE)    
+    model1 <- mirt.model(MGmodelg1, quiet = TRUE)    
+    model2 <- mirt.model(MGmodelg1, quiet = TRUE)    
     models <- list(D1=model1, D2=model2)    
     
     suppressWarnings(mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM',
@@ -38,11 +38,9 @@ test_that('three factor', {
                  tollerance = 1e-2)
     mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM')
     expect_is(mod_configural, 'MultipleGroupClass')
-    cfs <- as.numeric(do.call(c, coef(mod_configural)[[1]]))
+    cfs <- as.numeric(do.call(c, coef(mod_configural, digits=4)[[1]]))
     cfs <- cfs[cfs != 0 & cfs != 1]    
-    expect_equal(cfs, c(1.297,  0.655,  1.242, -0.570,  0.931, -0.200,  0.821,  0.797,  1.075,  0.217,  0.483,  
-                        0.610,  1.181,  0.995,  0.948, -0.446,  1.080, -1.180,  0.870, -1.145,  0.890,  1.312, 
-                        1.500, -0.300,  1.057,  0.441,  1.065,  0.457,  0.886, -0.187),
+    expect_equal(cfs, c(1.2934, 0.655, 1.2387, -0.57, 0.9277, -0.1996, 0.8177, 0.7967, 1.0713, 0.2166, 0.4807, 0.6099, 1.1777, 0.9947, 0.9453, -0.4464, 1.0762, -1.1801, 0.8664, -1.1451, 0.8855, 1.3121, 1.4962, -0.3002, 1.0534, 0.4406, 1.0615, 0.4569, 0.8832, -0.1871),
                  tollerance = 1e-2)
     suppressWarnings(mod_scalar1 <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'MHRM',
                                  invariance=c('slopes', 'intercepts', 'free_varcov', draws = 10)))

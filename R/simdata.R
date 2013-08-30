@@ -33,7 +33,6 @@
 #' the dichotomous items, or a vector with as many values as to be simulated
 #' items
 #' @param upper same as \code{guess}, but for upper bound parameters
-#' @param D logistic scaling parameter, default is 1
 #' @param sigma a covariance matrix of the underlying distribution. Default is
 #' the identity matrix
 #' @param mu a mean vector of the underlying distribution. Default is a vector
@@ -95,7 +94,7 @@
 #' dataset1 <- simdata(a, d, 2000, itemtype = 'dich')
 #' dataset2 <- simdata(a, d, 2000, itemtype = 'dich', mu = mu, sigma = sigma)
 #'
-#' #mod <- confmirt(dataset1, 3)
+#' #mod <- mirt(dataset1, 3, method = 'MHRM')
 #' #coef(mod)
 #'
 #' ###An example of a mixed item, bifactor loadings pattern with correlated specific factors
@@ -146,10 +145,10 @@
 #'
 #' nonlindata <- simdata(a,d,2000,itemtype,Theta=Theta)
 #'
-#' #model <- confmirt.model('
+#' #model <- mirt.model('
 #' #F1 = 1-6
 #' #(F1 * F1) = 1-3')
-#' #mod <- confmirt(nonlindata, model)
+#' #mod <- mirt(nonlindata, model)
 #' #coef(mod)
 #'
 #' ####2PLNRM model for item 4 (with 4 categories), 2PL otherwise
@@ -179,7 +178,7 @@
 #'    }
 #'
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
-	upper = 1, nominal = NULL, Theta = NULL, D = 1)
+	upper = 1, nominal = NULL, Theta = NULL)
 {
     fn <- function(p, ns) sample(1L:ns, 1, prob = p)
 	nfact <- ncol(a)
@@ -213,10 +212,10 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	for(i in 1L:nitems){
 	    if(itemtype[i] == 'nestlogit'){
 	        par <- na.omit(c(a[i, ],d[i,1], guess[i], upper[i], nominal[i,-1L],d[i,-1L]))
-	        obj <- new(itemtype[i], par=par, nfact=nfact, D=D, correctcat=1L)
+	        obj <- new(itemtype[i], par=par, nfact=nfact, correctcat=1L)
 	    } else {
             par <- na.omit(c(a[i, ],nominal[i,],d[i,],guess[i],upper[i]))
-            obj <- new(itemtype[i], par=par, nfact=nfact, D=D)
+            obj <- new(itemtype[i], par=par, nfact=nfact)
 	    }
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit')))
             obj@ncat <- K[i]

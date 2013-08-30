@@ -7,63 +7,38 @@ RcppExport SEXP Estep(SEXP Ritemtrace, SEXP Rprior, SEXP RX,
 {
     BEGIN_RCPP
 
-    /*
-        Ritemtrace = numeric matrix. Probability traces
-        Rprior = numeric vector. Normalized prior
-        RX = integer matrix.
-        Rnfact = integer. Number of factors
-        Rr = integer vector.  Counts of same response vector
-    */
-    
     NumericVector prior(Rprior);
-    NumericVector log_prior(prior.length());
     IntegerVector nfact(Rnfact);
     IntegerVector r(Rr);
     IntegerMatrix data(RX);
     NumericMatrix itemtrace(Ritemtrace);
-    NumericMatrix log_itemtrace(itemtrace.nrow(), itemtrace.ncol());    
     const int nquad = prior.length();
     const int nitems = data.ncol();
-    const int npat = r.length();      
-    double expd = 0.0;
-    int i = 0, k = 0, item = 0;    
+    const int npat = r.length();          
     NumericMatrix r1(nquad, nitems);    
-    NumericVector expected(npat), posterior(nquad);
+    NumericVector expected(npat);
+    NumericVector posterior(nquad); 
     List ret;
-    for (item = 0; item < nitems; item++)
-        for (k = 0; k < nquad; k++)
-            log_itemtrace(k,item) = log(itemtrace(k,item));
-    for (k = 0; k < nquad; k++)
-        log_prior(k) = log(prior(k));
 	
     // Begin main function body 				
-	for (int pat = 0; pat < npat; pat++){		
-  	    for (k = 0; k < nquad; k++)
-		    posterior(k) = 0.0;
-			
-		for (item = 0; item < nitems; item++){
-            if (data(pat,item))
-                for (k = 0; k < nquad; k++)
-			        posterior(k) += log_itemtrace(k,item);
-		}    
-        for (i = 0; i < nquad; i++)
-            posterior(i) = exp(log_prior(i) + posterior(i));
-	    expd = 0.0;
-	    for (i = 0; i < nquad; i++)
-	        expd += posterior(i);	
-	    expected(pat) = expd;		
-		
-	    for (i = 0; i < nquad; i++)
-	        posterior(i) = r(pat) * posterior(i) / expd;	
-        for (item = 0; item < nitems; item++){              
-            if (data(pat,item))
-	            for (k = 0; k < nquad; k++)
-	                r1(k,item) += posterior(k);
-		    			
+	for (int pat = 0; pat < npat; pat++){		  	           
+        for(int q = 0; q < nquad; q++)
+            posterior(q) = prior(q);  
+		for (int item = 0; item < nitems; item++)
+            if(data(pat,item))
+                for(int q = 0; q < nquad; q++)
+                    posterior(q) = posterior(q) * itemtrace(q,item);
+	    double expd = sum(posterior);
+	    expected(pat) = expd;
+        for(int q = 0; q < nquad; q++)
+	        posterior(q) = r(pat) * posterior(q) / expd;	
+        for (int item = 0; item < nitems; item++){              
+            if (data(pat,item))	            
+                for(int q = 0; q < nquad; q++)
+	                r1(q,item) = r1(q,item) + posterior(q);		    			
 	    }
 	} //end main  		
- 
-    //return R list of length 3 with list("r1","r0","expected") 
+     
     ret["r1"] = r1;
     ret["expected"] = expected;
     return(ret);
@@ -73,100 +48,77 @@ RcppExport SEXP Estep(SEXP Ritemtrace, SEXP Rprior, SEXP RX,
 
 
 //Estep for bfactor
-RcppExport SEXP Estepbfactor(SEXP Ritemtrace, SEXP Rprior, SEXP RX, SEXP Rr, SEXP Rsitems) 
+RcppExport SEXP Estepbfactor(SEXP Ritemtrace, SEXP Rprior, SEXP RPriorbetween, SEXP RX, 
+    SEXP Rr, SEXP Rsitems) 
 {
     BEGIN_RCPP
-    /*
-        Ritemtrace = numeric matrix. Probability traces
-        Rprior = numeric vector. Normalized prior
-        RX = integer matrix. Response vector with 9's as missing
-        Rnfact = integer. Number of factors
-        Rr = integer vector. Counts of same response vector
-        Rsitems = integer matrix. Specific factor indicator
-    */
-    NumericMatrix itemtrace(Ritemtrace);
-    NumericMatrix log_itemtrace(itemtrace.nrow(), itemtrace.ncol()); 
+
+    List ret;
+    NumericMatrix itemtrace(Ritemtrace);    
     NumericVector prior(Rprior);
-    NumericVector log_prior(prior.length());
+    NumericVector Priorbetween(RPriorbetween);
     IntegerVector r(Rr);
     IntegerMatrix data(RX);
-    IntegerMatrix sitems(Rsitems);
-    const int nfact = sitems.ncol() + 1;
-    const int sfact = nfact - 1;
+    IntegerMatrix sitems(Rsitems);    
+    const int sfact = sitems.ncol();
     const int nitems = data.ncol();
     const int npquad = prior.length();
-    const int nquad = npquad * npquad;  
+    const int nbquad = Priorbetween.length();
+    const int nquad = nbquad * npquad;  
     const int npat = r.length();      
-    int i=0, j=0, k=0, item=0, fact=0;
-    for (item = 0; item < nitems; item++)
-        for (k = 0; k < nquad; k++)
-            log_itemtrace(k,item) = log(itemtrace(k,item));
-    for (k = 0; k < npquad; k++)
-        log_prior(k) = log(prior(k));
+    int i=0, j=0, k=0, q=0, item=0, fact=0;
         
-	//declare dependent arrays 
-	NumericVector tempsum(npquad), expected(npat), Pls(npquad);
-	NumericMatrix likelihoods(nquad,sfact), L(npquad,npquad), r1(nquad,nitems*sfact),
-		Plk(npquad,sfact), Elk(npquad,sfact), posterior(nquad,sfact);	
+	NumericVector expected(npat), Pls(nbquad);
+	NumericMatrix likelihoods(nquad,sfact), L(nbquad,npquad), r1(nquad,nitems*sfact),
+		Plk(nbquad,sfact), Elk(nbquad,sfact), posterior(nquad,sfact);	
 				
 	// Begin main function body here				
-	for (int pat = 0; pat < npat; pat++){		
+	for (int pat = 0; pat < npat; pat++){
+        likelihoods.fill(1.0);
 		for (fact = 0; fact < sfact; fact++){ 	
-			for (k = 0; k < nquad; k++)
-				likelihoods(k,fact) = 0;				
 			for (item = 0; item < nitems; item++){
-				if (data(pat,item))	
-					if(sitems(item,fact))
-					    for (k = 0; k < nquad; k++)
-					  	    likelihoods(k,fact) += log_itemtrace(k,item);					
+				if (data(pat,item) && sitems(item,fact))										    
+				    for (k = 0; k < nquad; k++)
+    				    likelihoods(k,fact) = likelihoods(k,fact)*itemtrace(k,item);					
 			}
 		}         					
 		for (fact = 0; fact < sfact; fact++){
 			k = 0;
-			for (j = 0; j < npquad; j++){
-				tempsum(j) = 0.0;
-			    for (i = 0; i < npquad; i++){
+			for (j = 0; j < npquad; j++){				
+			    for (i = 0; i < nbquad; i++){
 			  	    L(i,j) = likelihoods(k,fact);
 			  	    k++;
 			    }
 			}
-			for (j = 0; j < npquad; j++)				
-			    for (i = 0; i < npquad; i++)
-			  	    L(i,j) = exp(L(i,j) + log_prior(j));
-			for (j = 0; j < npquad; j++)				
-		        for (i = 0; i < npquad; i++)
-			        tempsum(j) += L(j,i);
+			for (i = 0; i < nbquad; i++)
+                for (q = 0; q < npquad; q++)
+			        L(i,q) = L(i,q) * prior(q);
+            NumericVector tempsum(nbquad);
 			for (i = 0; i < npquad; i++)
+                for (q = 0; q < nbquad; q++)
+			        tempsum(q) += L(q,i);
+			for (i = 0; i < nbquad; i++)
 			    Plk(i,fact) = tempsum(i);    			
-		}		
-        for (fact = 0; fact < sfact; fact++)
-            for (k = 0; k < nquad; k++)
-    	        likelihoods(k,fact) = exp(likelihoods(k,fact));
-		expected(pat) = 0.0;
-		for (i = 0; i < npquad; i++){
-		    Pls(i) = 1.0; 		  		
+		}
+        Pls.fill(1.0);
+		for (i = 0; i < nbquad; i++){		     		  		
 			for(fact = 0; fact < sfact; fact++)
 			    Pls(i) = Pls(i) * Plk(i,fact);			
-			expected(pat) += Pls(i) * prior(i);  
+			expected(pat) += Pls(i) * Priorbetween(i);  
 		}				
 		for (fact = 0; fact < sfact; fact++)
-		    for (i = 0; i < npquad; i++)
+		    for (i = 0; i < nbquad; i++)
 		  	    Elk(i,fact) = Pls(i) / Plk(i,fact);		  	
 		for (fact = 0; fact < sfact; fact++)
 		    for (i = 0; i < nquad; i++)  			  	
-		        posterior(i,fact) = likelihoods(i,fact) * r(pat) * Elk(i % npquad,fact) / expected(pat);
-		// ordered specific factor packets, each the size of itemtrace
-		for (fact = 0; fact < sfact; fact++){			
-			for (item = 0; item < nitems; item++)
-				if (data(pat,item))
-					for (k = 0; k < nquad; k++)
-						r1(k,item + nitems*fact) += posterior(k,fact);
-			
-		}	
+		        posterior(i,fact) = likelihoods(i,fact) * r(pat) * Elk(i % nbquad,fact) / expected(pat);		
+        for (item = 0; item < nitems; item++)
+    		if (data(pat,item))
+		        for (fact = 0; fact < sfact; fact++)
+                    for(q = 0; q < nquad; q++)
+					    r1(q,item + nitems*fact) = r1(q,item + nitems*fact) + posterior(q,fact);
 	}	//end main 
-	
-    //return R list of length 3 with list("r1","r0","expected") 
-    List ret;
+	    
     ret["r1"] = r1;
     ret["expected"] = expected;
     return(ret);
@@ -175,11 +127,11 @@ RcppExport SEXP Estepbfactor(SEXP Ritemtrace, SEXP Rprior, SEXP RX, SEXP Rr, SEX
 }
 
 //EAP estimates used in multipleGroup
-RcppExport SEXP EAPgroup(SEXP Rlog_itemtrace, SEXP Rtabdata, SEXP RTheta, SEXP Rprior, SEXP Rmu) 
+RcppExport SEXP EAPgroup(SEXP Ritemtrace, SEXP Rtabdata, SEXP RTheta, SEXP Rprior, SEXP Rmu) 
 {
     BEGIN_RCPP
 
-    NumericMatrix log_itemtrace(Rlog_itemtrace); 
+    NumericMatrix itemtrace(Ritemtrace); 
     NumericMatrix tabdata(Rtabdata); 
     NumericMatrix Theta(RTheta); 
     NumericVector prior(Rprior);
@@ -191,15 +143,15 @@ RcppExport SEXP EAPgroup(SEXP Rlog_itemtrace, SEXP Rtabdata, SEXP RTheta, SEXP R
 
     NumericVector L(n), thetas(nfact), thetas2(nfact*(nfact+1)/2); 
     NumericMatrix scores(tabdata.nrow(), nfact), scores2(tabdata.nrow(), nfact*(nfact + 1)/2);
-    double LL, denom;
+    double denom;
 
     for(int pat = 0; pat < tabdata.nrow(); pat++){
         
-        for(j = 0; j < n; j++){
-            LL = 0.0;
+        L.fill(1.0);
+        for(j = 0; j < n; j++){            
             for(i = 0; i < nitems; i++)
-               LL += tabdata(pat, i) * log_itemtrace(j, i); 
-            L(j) = exp(LL);
+                if(tabdata(pat, i))
+                    L(j) = L(j) * itemtrace(j, i);             
         }
         
         thetas.fill(0.0);
@@ -236,6 +188,3 @@ RcppExport SEXP EAPgroup(SEXP Rlog_itemtrace, SEXP Rtabdata, SEXP RTheta, SEXP R
 
     END_RCPP
 }
-
-
-

@@ -3,8 +3,7 @@
 \title{Simulate response patterns}
 \usage{
   simdata(a, d, N, itemtype, sigma = NULL, mu = NULL,
-    guess = 0, upper = 1, nominal = NULL, Theta = NULL,
-    D = 1)
+    guess = 0, upper = 1, nominal = NULL, Theta = NULL)
 }
 \arguments{
   \item{a}{a matrix of slope parameters. If slopes are to
@@ -51,8 +50,6 @@
 
   \item{upper}{same as \code{guess}, but for upper bound
   parameters}
-
-  \item{D}{logistic scaling parameter, default is 1}
 
   \item{sigma}{a covariance matrix of the underlying
   distribution. Default is the identity matrix}
@@ -122,7 +119,7 @@ sigma <- matrix(c(1.21,.297,1.232,.297,.81,.252,1.232,.252,1.96),3,3)
 dataset1 <- simdata(a, d, 2000, itemtype = 'dich')
 dataset2 <- simdata(a, d, 2000, itemtype = 'dich', mu = mu, sigma = sigma)
 
-#mod <- confmirt(dataset1, 3)
+#mod <- mirt(dataset1, 3, method = 'MHRM')
 #coef(mod)
 
 ###An example of a mixed item, bifactor loadings pattern with correlated specific factors
@@ -173,10 +170,10 @@ itemtype <- rep('dich',6)
 
 nonlindata <- simdata(a,d,2000,itemtype,Theta=Theta)
 
-#model <- confmirt.model('
+#model <- mirt.model('
 #F1 = 1-6
 #(F1 * F1) = 1-3')
-#mod <- confmirt(nonlindata, model)
+#mod <- mirt(nonlindata, model)
 #coef(mod)
 
 ####2PLNRM model for item 4 (with 4 categories), 2PL otherwise

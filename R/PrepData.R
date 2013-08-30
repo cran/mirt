@@ -22,7 +22,7 @@ PrepData <- function(data, model, itemtype, guess, upper,
         if(model != 1L) exploratory <- TRUE
         tmp <- tempfile('tempfile')
         cat(paste('F',1L:model,' = 1-', J, "\n", sep=''), file=tmp)
-        model <- confmirt.model(file=tmp, quiet = TRUE)
+        model <- mirt.model(file=tmp, quiet = TRUE)
         unlink(tmp)
     }
     if(exploratory && any(itemtype == c('PC2PL', 'PC3PL')))
@@ -52,6 +52,11 @@ PrepData <- function(data, model, itemtype, guess, upper,
     for(i in 1L:J) K[i] <- length(uniques[[i]])
     guess[K > 2L] <- 0
     upper[K > 2L] <- 1
+    if(!is.null(technical$customK)){
+        K <- technical$customK
+        for(i in 1L:J) 
+            uniques[[i]] <- 0L:(K[i]-1L)
+    }
     if(any(K < 2L))
         stop('The following items have only one response category and cannot be estimated: ',
              paste(itemnames[K < 2L], ''))

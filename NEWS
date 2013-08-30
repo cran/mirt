@@ -1,3 +1,58 @@
+Changes in mirt 0.9.0
+
+NEW FEATURES
+
+- PLCI.mirt() function added for computing profiled likelihood standard errors. Currenly only applicable
+  to unidimensional models
+
+- prior distributions returned in the pars = 'values' data.frame along with the input parameters, 
+  and can be edited and returned as well
+
+- full.scores option for residuals() to compute residuals for each row in the original data
+
+- bfactor() can include an additional model argument for modeling two-tier structures introduced
+  by Cai (2010), and now supports a 'group' input for multiple group analyses
+
+- added a general Ramsey (1975) acceleration to EM estimation by default. Can be disable with 
+  accelerate = FALSE (and is done so automatically when estimating SEM standard errors)
+
+- renamed response.vector to response.pattern in fscores(), and now supports matrix input for 
+  computing factor scores on larger data sets (suggested by Felix Hansen)
+
+- total.info logical added to iteminfo() to return either total item information or information 
+  from each category
+
+- mirt.model() supports the so-called Q-matrix input format, along with a matrix input for the
+  covariance terms
+
+- MH-RM algorithm now accessible by passing mirt(..., method = 'MHRM'), and confmirt() function 
+  removed completely. confmirt.model() also renamed to mirt.model()
+
+- support for polynomial and interaction terms in EM estimation
+
+- lognormal priors may now be passed to parprior
+
+- iterative computations in fscores() can now be run in parallel automatically following a 
+  mirtCluster() definition
+
+- mirtCluster() function added to make utilizing parallel cores more convenient. Globally removed
+  the cl argument for multi-core objects
+
+- updated documentation for data sets by adding relevant examples, and added Bock1997 data set
+  for replicating table 3 in van der Linden, W. J. & Hambleton, R. K.'s (1997)
+  Handbook of modern item response theory
+
+- general speed improvements in all functions
+
+BUG FIXES
+
+- WLE estimation fixed and now estimates extreme response patterns
+
+- exploratory starting values no longer crash in datasets with a huge number of NA's, which caused 
+  standard deviations to be zero
+
+- math fix for beta priors
+
 Changes in mirt 0.8.0
 
 NEW FEATURES

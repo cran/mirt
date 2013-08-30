@@ -13,8 +13,8 @@
     = '', pars = NULL, method = 'EM', constrain = NULL,
     parprior = NULL, calcNull = TRUE, draws = 5000, quadpts
     = NULL, grsm.block = NULL, rsm.block = NULL, key =
-    NULL, cl = NULL, technical = list(), verbose = TRUE,
-    ...)
+    NULL, technical = list(), accelerate = TRUE, verbose =
+    TRUE, ...)
 
   \S4method{coef}{MultipleGroupClass}(object, digits = 3,
     verbose = TRUE, ...)
@@ -38,11 +38,10 @@
   coded as \code{NA}}
 
   \item{model}{an object or named list of objects returned
-  from \code{confmirt.model()} declaring how the factor
-  model is to be estimated. The names of the list input
-  must correspond to the unique values in the \code{group}
-  variable. See \code{\link{confmirt.model}} for more
-  details}
+  from \code{mirt.model()} declaring how the factor model
+  is to be estimated. The names of the list input must
+  correspond to the unique values in the \code{group}
+  variable. See \code{\link{mirt.model}} for more details}
 
   \item{group}{a character vector indicating group
   membership}
@@ -82,6 +81,9 @@
   assign a global upper bound parameter or may be entered
   as a numeric vector corresponding to each item}
 
+  \item{accelerate}{see \code{\link{mirt}} for more
+  details}
+
   \item{SE}{logical; estimate the information matrix for
   standard errors?}
 
@@ -98,9 +100,6 @@
 
   \item{calcNull}{logical; calculate the Null model for fit
   statics (e.g., TLI)?}
-
-  \item{cl}{a cluster object from the \code{parallel}
-  package}
 
   \item{method}{a character indicating whether to use the
   EM (\code{'EM'}) or the MH-RM (\code{'MHRM'}) algorithm}
@@ -178,12 +177,11 @@
   By default the estimation in \code{multipleGroup} assumes
   that the models are maximally independent, and therefore
   could initially be performed by sub-setting the data and
-  running identical models with \code{confmirt} or
-  \code{mirt} and aggregating the results (e.g.,
-  log-likelihood). However, constrains may be imposed
-  across groups by invoking various \code{invariance}
-  keywords and \code{constrain = ...} arguments, by
-  inputting user specified design matrix from
+  running identical models with \code{mirt} and aggregating
+  the results (e.g., log-likelihood). However, constrains
+  may be imposed across groups by invoking various
+  \code{invariance} keywords and \code{constrain = ...}
+  arguments, by inputting user specified design matrix from
   \code{mod2values} or from passing \code{pars = 'values'},
   or by supplying a \code{constrain} list for user defined
   equality constraints between parameters.
@@ -200,11 +198,10 @@ dataset1 <- simdata(a, d, N, itemtype)
 dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
-models <- confmirt.model('F1 = 1-15')
+models <- mirt.model('F1 = 1-15')
 
 mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
 
-# prev.mod can save precious iterations and help to avoid local minimums
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #equal intercepts, free variance and means
 mod_scalar2 <- multipleGroup(dat, models, group = group,
@@ -280,7 +277,7 @@ dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
 
 #group models
-model <- confmirt.model()
+model <- mirt.model()
    F1 = 1-5
    F2 = 6-10
    F3 = 11-15
@@ -327,8 +324,8 @@ dataset1 <- simdata(a, d, N, itemtype)
 dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
-models <- confmirt.model('F1 = 1-15')
-models2 <- confmirt.model('
+models <- mirt.model('F1 = 1-15')
+models2 <- mirt.model('
    F1 = 1-10
    F2 = 10-15')
 
@@ -354,17 +351,17 @@ itemplot(mod_configural2, 10)
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt.model}}, \code{\link{mirt}},
-  \code{\link{confmirt}}, \code{\link{bfactor}},
-  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
-  \code{\link{wald}}, \code{\link{itemplot}},
-  \code{\link{fscores}}, \code{\link{fitIndices}},
-  \code{\link{extract.item}}, \code{\link{iteminfo}},
-  \code{\link{testinfo}}, \code{\link{probtrace}},
-  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
-  \code{\link{itemfit}}, \code{\link{mod2values}},
-  \code{\link{read.mirt}}, \code{\link{simdata}},
-  \code{\link{createItem}}
+  \code{\link{mirt.model}}, \code{\link{mirt}},
+  \code{\link{bfactor}}, \code{\link{multipleGroup}},
+  \code{\link{mixedmirt}}, \code{\link{wald}},
+  \code{\link{itemplot}}, \code{\link{fscores}},
+  \code{\link{fitIndices}}, \code{\link{extract.item}},
+  \code{\link{iteminfo}}, \code{\link{testinfo}},
+  \code{\link{probtrace}}, \code{\link{boot.mirt}},
+  \code{\link{imputeMissing}}, \code{\link{itemfit}},
+  \code{\link{mod2values}}, \code{\link{read.mirt}},
+  \code{\link{simdata}}, \code{\link{createItem}},
+  \code{\link{mirtCluster}}
 }
 \keyword{models}
 

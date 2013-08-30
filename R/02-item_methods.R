@@ -159,134 +159,6 @@ setMethod(
     }
 )
 
-
-#----------------------------------------------------------------------------
-#LogLik
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'custom', Theta = 'matrix'),
-    definition = function(x, Theta, EM=FALSE, prior=NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'dich', Theta = 'matrix'),
-    definition = function(x, Theta, EM=FALSE, prior=NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'nestlogit', Theta = 'matrix'),
-    definition = function(x, Theta, EM=FALSE, prior=NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'graded', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'rating', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'gpcm', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'rsm', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'nominal', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta, ot=ot)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'partcomp', Theta = 'matrix'),
-    definition = function(x, Theta, EM = FALSE, prior = NULL, ot=0){
-        itemtrace <- ProbTrace(x=x, Theta=Theta)
-        if(EM) LL <- (-1) * sum(x@rs * log(itemtrace) * prior)
-        else LL <- (-1) * sum(x@rs * log(itemtrace))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
-setMethod(
-    f = "LogLik",
-    signature = signature(x = 'GroupPars', Theta = 'matrix'),
-    definition = function(x, Theta, pars, tabdata, itemloc, EM = TRUE){
-        r <- tabdata[, ncol(tabdata)]
-        gpars <- ExtractGroupPars(x)
-        mu <- gpars$gmeans
-        sigma <- gpars$gcov
-        prior <- mvtnorm::dmvnorm(Theta, mean=mu, sigma=sigma)
-        prior <- prior/sum(prior)
-        rlist <- Estep.mirt(pars=pars, tabdata=tabdata, Theta=Theta, prior=prior, itemloc=itemloc)
-        LL <- (-1)*sum(r*log(rlist$expected))
-        LL <- LL.Priors(x=x, LL=LL)
-        return(LL)
-    }
-)
-
 #----------------------------------------------------------------------------
 
 setMethod(
@@ -445,14 +317,10 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'dich', Theta = 'matrix'),
-    definition = function(x, Theta, useDesign = TRUE, ot=0){
-        u <- x@par[length(x@par)]
-        g <- x@par[length(x@par)-1L]
-        d <- x@par[length(x@par)-2L]
-        a <- x@par[1L:x@nfact]        
+    definition = function(x, Theta, useDesign = TRUE, ot=0){     
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        P <- P.mirt(a=a, d=d, Theta=Theta, g=g, u=u, D=x@D, asMatrix=TRUE, ot=ot)        
+        P <- P.mirt(x@par, Theta=Theta, asMatrix=TRUE, ot=ot)        
         return(P)
     }
 )
@@ -460,29 +328,23 @@ setMethod(
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'nestlogit', Theta = 'matrix'),
-    definition = function(x, Theta, useDesign = TRUE, ot=0){
-        a <- x@par[1L:x@nfact]
-        d <- x@par[x@nfact+1L]
-        g <- x@par[x@nfact+2L]
-        u <- x@par[x@nfact+3L]
+    definition = function(x, Theta, useDesign = TRUE, ot=0){        
         ak <- x@par[(x@nfact+4L):(x@nfact+4L+x@ncat-2L)]
         dk <- x@par[(length(x@par)-length(ak)+1):length(x@par)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.nestlogit(a=a, d=d, Theta=Theta, g=g, u=u,
-                         ak=ak, dk=dk, correct=x@correctcat, D=x@D))
+        return(P.nestlogit(x@par[1L:(x@nfact+3L)], Theta=Theta, 
+                         ak=ak, dk=dk, correct=x@correctcat))
     }
 )
 
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'graded', Theta = 'matrix'),
-    definition = function(x, Theta, itemexp = TRUE, useDesign = TRUE, ot=0){
-        a <- x@par[1L:x@nfact]
-        d <- x@par[(x@nfact+1L):length(x@par)]
+    definition = function(x, Theta, itemexp = TRUE, useDesign = TRUE, ot=0){        
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.poly(a=a, d=d, Theta=Theta, itemexp=itemexp, D=x@D, ot=ot))
+        return(P.poly(x@par, Theta=Theta, itemexp=itemexp, ot=ot))
     }
 )
 
@@ -497,7 +359,7 @@ setMethod(
         t <- x@par[length(x@par)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.poly(a=a, d=(d + t), Theta=Theta, itemexp=itemexp, D=x@D, ot=ot))
+        return(P.poly(c(a=a, d=(d + t)), Theta=Theta, itemexp=itemexp, ot=ot))
     }
 )
 
@@ -509,7 +371,7 @@ setMethod(
         d <- x@par[-(1L:x@nfact)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, D=x@D, ot=ot))
+        return(P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, ot=ot))
     }
 )
 
@@ -523,7 +385,7 @@ setMethod(
         d[-1L] <- d[-1L] + t
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, D=x@D, ot=ot))
+        return(P.nominal(a=a, ak=0:(length(d)-1), d=d, Theta=Theta, ot=ot))
     }
 )
 
@@ -536,7 +398,7 @@ setMethod(
         d <- x@par[(length(x@par) - x@ncat + 1L):length(x@par)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.nominal(a=a, ak=ak, d=d, Theta=Theta, D=x@D, ot=ot))
+        return(P.nominal(a=a, ak=ak, d=d, Theta=Theta, ot=ot))
     }
 )
 
@@ -551,29 +413,29 @@ setMethod(
         u <- x@par[length(x@par)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.comp(a=a, d=d, Theta=Theta, g=g, u=u, D=x@D, asMatrix=TRUE))
+        return(P.comp(a=a, d=d, Theta=Theta, g=g, u=u, asMatrix=TRUE))
     }
 )
 
 ##Function passes
-P.poly <- function(a, d, Theta, itemexp = FALSE, D, ot = 0)
+P.poly <- function(par, Theta, itemexp = FALSE, ot = 0)
 {
-    return(.Call('gradedTraceLinePts', a, d, Theta, D, itemexp, ot))
+    return(.Call('gradedTraceLinePts', par, Theta, itemexp, ot))
 }
 
 # Trace lines for mirt models
-P.mirt <- function(a, d, Theta, g = 0, u = 1, D, asMatrix = FALSE, ot = 0)
+P.mirt <- function(par, Theta, asMatrix = FALSE, ot = 0)
 {
-    return(.Call("traceLinePts", a, d, g, u, Theta, D, asMatrix, ot))
+    return(.Call("traceLinePts", par, Theta, asMatrix, ot))
 }
 
 # Trace lines for partially compensetory models
-P.comp <- function(a, d, Theta, g, u = 1, D, asMatrix = FALSE)
+P.comp <- function(a, d, Theta, g, u = 1, asMatrix = FALSE)
 {
     nfact <- length(a)
     P <- rep(1,nrow(Theta))
     for(i in 1L:nfact)
-        P <- P * P.mirt(a[i], d[i], Theta[ ,i, drop=FALSE], g=0, u=1, D=D)
+        P <- P * P.mirt(c(a[i], d[i], g=0, u=1), Theta[ ,i, drop=FALSE])
     P <- g + (u - g) * P
     s.eps <- 1e-10
     P[P < s.eps] <- s.eps
@@ -583,16 +445,16 @@ P.comp <- function(a, d, Theta, g, u = 1, D, asMatrix = FALSE)
 }
 
 #d[1] == 0, ak[1] == 0, ak[length(ak)] == length(ak) - 1
-P.nominal <- function(a, ak, d, Theta, D, returnNum = FALSE, ot = 0){
-    return(.Call("nominalTraceLinePts", a, ak, d, Theta, D, returnNum, ot))
+P.nominal <- function(a, ak, d, Theta, returnNum = FALSE, ot = 0){
+    return(.Call("nominalTraceLinePts", a, ak, d, Theta, returnNum, ot))
 }
 
-P.nestlogit <- function(a, d, Theta, g, u, ak, dk, correct, D)
+P.nestlogit <- function(par, Theta, ak, dk, correct)
 {
     traces <- matrix(0, nrow(Theta), length(ak)+1L)
-    traces[ ,correct] <- P.mirt(a=a, d=d, Theta=Theta, g=g, u=u, D=D)
+    traces[ ,correct] <- P.mirt(par, Theta=Theta)
     Q <- 1 - traces[ ,correct]
-    Pn <- P.nominal(a=rep(1,ncol(Theta)), ak=ak, d=dk, Theta=Theta, D=D)
+    Pn <- P.nominal(a=rep(1,ncol(Theta)), ak=ak, d=dk, Theta=Theta)
     traces[ ,-correct] <- Q * Pn
     return(traces)
 }
@@ -636,8 +498,7 @@ setMethod("initialize",
 setMethod(
     f = "DrawValues",
     signature = signature(x = 'RandomPars', Theta = 'matrix'),
-    definition = function(x, Theta, pars, fulldata, itemloc, offterm0){
-        tol <- .Machine$double.eps
+    definition = function(x, Theta, pars, fulldata, itemloc, offterm0){        
         J <- length(pars) - 1L
         theta0 <- x@drawvals
         N <- nrow(theta0)
@@ -668,13 +529,17 @@ setMethod(
                 ProbTrace(x=pars[[i]], Theta=Theta, ot=offterm1[,i])
         }
         if(x@between){
-            total_0 <- rowSums(log(itemtrace0)*fulldata)
-            total_1 <- rowSums(log(itemtrace1)*fulldata)
+            totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, 
+                            rep(0, nrow(fulldata)), rep(0, nrow(fulldata)))    
+            total_0 <- totals[[1L]] 
+            total_1 <- totals[[2L]]            
             total_0 <- tapply(total_0, x@mtch, sum) + log_den0
             total_1 <- tapply(total_1, x@mtch, sum) + log_den1
         } else {
-            tmp0 <- colSums(log(itemtrace0)*fulldata)
-            tmp1 <- colSums(log(itemtrace1)*fulldata)
+            totals <- .Call('denRowSums', t(fulldata), t(itemtrace0), t(itemtrace1), 
+                            rep(0, ncol(fulldata)), rep(0, ncol(fulldata)))
+            tmp0 <- totals[[1L]]
+            tmp1 <- totals[[2L]]
             LL0 <- LL1 <- numeric(J)
             for(i in 1L:J){
                 LL0[i] <- sum(tmp0[itemloc[i]:(itemloc[i+1L] - 1L)])

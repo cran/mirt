@@ -12,7 +12,7 @@ thetaComb <- function(theta, nfact)
 	return(Theta)
 }
 
-# Product terms in confmirt
+# Product terms 
 prodterms <- function(theta0, prodlist)
 {
     products <- matrix(1, ncol = length(prodlist), nrow = nrow(theta0))
@@ -27,9 +27,8 @@ prodterms <- function(theta0, prodlist)
 
 # MH sampler for theta values
 draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var,
-                        prior.mu, prodlist, OffTerm)
+                        prior.mu, prodlist, OffTerm, PROBTRACE)
 {
-    tol <- .Machine$double.eps
     N <- nrow(fulldata)
     J <- length(pars) - 1L
     unif <- runif(N)
@@ -44,12 +43,13 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     itemtrace0 <- itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(theta0))
     for (i in 1L:J){
         itemtrace0[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-            ProbTrace(x=pars[[i]], Theta=theta0, ot=OffTerm[,i])
+            PROBTRACE[[i]](x=pars[[i]], Theta=theta0, ot=OffTerm[,i])
         itemtrace1[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-            ProbTrace(x=pars[[i]], Theta=theta1, ot=OffTerm[,i])
+            PROBTRACE[[i]](x=pars[[i]], Theta=theta1, ot=OffTerm[,i])
     }
-    total_0 <- rowSums(log(itemtrace0)*fulldata) + log_den0
-    total_1 <- rowSums(log(itemtrace1)*fulldata) + log_den1
+    totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, log_den0, log_den1)    
+    total_0 <- totals[[1L]] 
+    total_1 <- totals[[2L]] 
     diff <- total_1 - total_0
     accept <- diff > 0
     accept[unif < exp(diff)] <- TRUE
@@ -146,26 +146,13 @@ gamma.cor <- function(x)
 	gamma
 }
 
-# Beta prior for grad and hess
-betaprior <- function(g,a,b)
-{
-    if(g < .01) return(list(grad=0, hess=0))
-	grad <- ((a-1) * g^(a-1) * (1-g)^(b-1) - (b-1)*g^(a-1)*(1-g)^(b-1))/
-		(g^(a-1) * (1-g)^(b-1))
-	hess <- -((g^(a-1)*(a-1)^2*(1-g)^(b-1)/g^2 - g^(a-1)*(a-1)*(1-g)^(b-1)/g^2
-		- 2*g^(a-1)*(a-1)*(1-g)^(b-1)*(b-1)/(g*(1-g)) + g^(a-1)*(1-g)^(b-1)*(b-1)^2/(1-g)^2
-		- g^(a-1)*(1-g)^(b-1)*(b-1)/(1-g)^2)/(g^(a-1)*(1-g)^(b-1))
-		- ((g^(a-1)*(a-1)*(1-g)^(b-1)/g-g^(a-1)*(1-g)^(b-1)*(b-1)/(1-g))*(a-1)/(g^(a-1)*(1-g)^(b-1)*g))
-		+ ((g^(a-1)*(a-1)*(1-g)^(b-1)/g-g^(a-1)*(1-g)^(b-1)*(b-1)/(1-g))*(b-1)/(g^(a-1)*(1-g)^(b-1)*(1-g))))
-	return(list(grad=grad, hess=hess))
-}
-
 # Approximation to polychoric matrix for initial values
 cormod <- function(fulldata, K, guess, smooth = TRUE, use = 'pairwise.complete.obs')
 {
 	fulldata <- as.matrix(fulldata)
 	nitems <- ncol(fulldata)
 	cormat <- cor(fulldata, use=use)
+    cormat[is.na(cormat)] <- 0
 	cormat <- abs(cormat)^(1/1.15) * sign(cormat)
 	if(smooth){
 		eig <- eigen(cormat)
@@ -179,29 +166,6 @@ cormod <- function(fulldata, K, guess, smooth = TRUE, use = 'pairwise.complete.o
 		}
 	}
 	cormat
-}
-
-# Ramsey rate acceleration adjustment for EM
-rateChange <- function(longpars, listpars, lastpars1, lastpars2)
-{
-	p <- unlist(listpars)
-	lp1 <- unlist(lastpars1)
-	lp2 <- unlist(lastpars2)
-	rate <- rep(0, length(p))
-	d1 <- lp1 - p
-	d2 <- lp2 - p
-	rate <- ifelse(abs(d1) > 0.001 & (d1*d2 > 0.0) & (d1/d2 < 1.0),
-		(1 - (1 - rate) * (d1/d2)),
-		0)
-	rate[p > 4] <- 0
-	rate[p < -4] <- 0
-	p <- lp1*rate*(-2) + (1 - rate*(-2))*p
-    ind <- 1
-    for(i in 1L:length(pars)){
-        pars[[i]]@par <- p[ind:(ind + length(pars[[i]]@par) - 1L)]
-        ind <- ind + length(pars[[i]]@par)
-    }
-	pars
 }
 
 # Rotate lambda coefficients
@@ -276,33 +240,19 @@ bfactor2mod <- function(model, J){
     tmp <- tempfile('tempfile')
     unique <- sort(unique(model))
     index <- 1L:J
-    tmp2 <- sprintf(c('G =', paste('1-', J, sep='')))
+    tmp2 <- c()
     for(i in 1L:length(unique)){
-        ind <- index[model == unique[i]]
+        ind <- na.omit(index[model == unique[i]])
         comma <- rep(',', 2*length(ind))
         TF <- rep(c(TRUE,FALSE), length(ind))
         comma[TF] <- ind
         comma[length(comma)] <- ""
-        tmp2 <- c(tmp2, c(paste('\nF', i, ' =', sep=''), comma))
+        tmp2 <- c(tmp2, c(paste('\nS', i, ' =', sep=''), comma))
     }
     cat(tmp2, file=tmp)
-    model <- confmirt.model(file=tmp, quiet = TRUE)
+    model <- mirt.model(file=tmp, quiet = TRUE)
     unlink(tmp)
     return(model)
-}
-
-calcEMSE <- function(object, data, model, itemtype, fitvalues, constrain, parprior, verbose){
-    if(is(model, 'numeric') && length(model) > 1L)
-        model <- bfactor2mod(model, data)
-    pars <- confmirt(data, model, itemtype=itemtype, pars=fitvalues, constrain=constrain,
-                     parprior=parprior,
-                     technical = list(BURNIN = 1L, SEMCYCLES = 5L, TOL = .01,
-                                    EMSE = TRUE), verbose = verbose)
-    for(i in 1L:length(pars$pars))
-        object@pars[[i]]@SEpar <- pars$pars[[i]]@SEpar
-    object@information <- pars$info
-    object@longpars <- pars$longpars
-    return(object)
 }
 
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
@@ -409,7 +359,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
 
 ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
     parnum <- par <- est <- item <- parname <- gnames <- itemtype <-
-        lbound <- ubound <- c()
+        lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
     for(g in 1L:length(PrepList)){
         tmpgroup <- PrepList[[g]]$pars
@@ -422,6 +372,9 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
             est <- c(est, tmpgroup[[i]]@est)
             lbound <- c(lbound, tmpgroup[[i]]@lbound)
             ubound <- c(ubound, tmpgroup[[i]]@ubound)
+            prior.type <- c(prior.type, tmpgroup[[i]]@prior.type)
+            prior_1 <- c(prior_1, tmpgroup[[i]]@prior_1)
+            prior_2 <- c(prior_2, tmpgroup[[i]]@prior_2)
         }
         item <- c(item, rep('GROUP', length(tmpgroup[[i]]@parnum)))
     }
@@ -434,12 +387,16 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
             est <- c(est, random[[i]]@est)
             lbound <- c(lbound, random[[i]]@lbound)
             ubound <- c(ubound, random[[i]]@ubound)            
+            prior.type <- c(prior.type, random[[i]]@prior.type)
+            prior_1 <- c(prior_1, random[[i]]@prior_1)
+            prior_2 <- c(prior_2, random[[i]]@prior_2)
         }
         gnames <- rep('all', length(par))
         item <- c(item, rep('RANDOM',length(gnames)-length(item))) 
     }
     ret <- data.frame(group=gnames, item=item, name=parname, parnum=parnum, value=par,
-                      lbound=lbound, ubound=ubound, est=est)
+                      lbound=lbound, ubound=ubound, est=est, prior.type=prior.type,
+                      prior_1=prior_1, prior_2=prior_2)
     ret
 }
 
@@ -455,8 +412,13 @@ UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
                 PrepList[[g]]$pars[[i]]@est[j] <- as.logical(pars[ind,'est'])
                 PrepList[[g]]$pars[[i]]@lbound[j] <- pars[ind,'lbound']
                 PrepList[[g]]$pars[[i]]@ubound[j] <- pars[ind,'ubound']
+                PrepList[[g]]$pars[[i]]@prior.type[j] <- pars[ind,'prior.type']
+                PrepList[[g]]$pars[[i]]@prior_1[j] <- pars[ind,'prior_1']
+                PrepList[[g]]$pars[[i]]@prior_2[j] <- pars[ind,'prior_2']
                 ind <- ind + 1L
             }
+            PrepList[[g]]$pars[[i]]@any.prior <- any(c('norm','lnorm','beta') %in% 
+                                                         PrepList[[g]]$pars[[i]]@prior.type)
         }
     }
     if(length(random) > 0L){
@@ -477,64 +439,86 @@ UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
 
 #new gradient and hessian with priors
 DerivativePriors <- function(x, grad, hess){
-    if(any(!is.nan(x@n.prior.mu))){
-        ind <- !is.na(x@n.prior.mu)
+    if(any(x@prior.type %in% 'norm')){
+        ind <- x@prior.type %in% 'norm'
         val <- x@par[ind]
-        mu <- x@n.prior.mu[ind]
-        s <- x@n.prior.sd[ind]
-        h <- g <- rep(0, length(val))
-        for(i in 1L:length(val)){
-            g[i] <- -(val[i] - mu[i])/(s[i]^2)
-            h[i] <- -1/(s[i]^2)
-        }
+        mu <- x@prior_1[ind]
+        s <- x@prior_2[ind]
+        g <- -(val - mu)/(s^2)
+        h <- -1/(s^2)
         grad[ind] <- grad[ind] + g
         if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
         else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
     }
-    if(any(!is.nan(x@b.prior.alpha))){
-        ind <- !is.na(x@b.prior.alpha)
+    if(any(x@prior.type %in% 'lnorm')){
+        ind <- x@prior.type %in% 'lnorm'
         val <- x@par[ind]
-        a <- x@b.prior.alpha[ind]
-        b <- x@b.prior.beta[ind]
-        bphess <- bpgrad <- rep(0, length(val))
-        for(i in 1L:length(val)){
-            tmp <- betaprior(val[i], a[i], b[i])
-            bpgrad[i] <- tmp$grad
-            bphess[i] <- tmp$hess
-        }
-        if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + bpgrad
-        else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + bphess
+        val <- ifelse(val > 0, val, 1e-10)
+        lval <- log(val)
+        mu <- x@prior_1[ind]
+        s <- x@prior_2[ind]
+        g <- -(lval - mu)/(val * s^2) - 1/val 
+        h <- 1/(val^2) - 1/(val^2 * s^2) - (lval - mu)/(val^2 * s^2)
+        grad[ind] <- grad[ind] + g
+        if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
+        else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
+    }
+    if(any(x@prior.type %in% 'beta')){
+        ind <- x@prior.type %in% 'beta'
+        val <- x@par[ind]
+        val <- ifelse(val < 1e-10, 1e-10, val)
+        val <- ifelse(val > 1-1e-10, 1-1e-10, val)
+        a <- x@prior_1[ind]
+        b <- x@prior_2[ind]        
+        g <- (a - 1)/val - (b-1)/(1-val)
+        h <- -(a - 1)/(val^2) - (b-1) / (1-val)^2        
+        grad[ind] <- grad[ind] + g    
+        if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
+        else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
     }
     return(list(grad=grad, hess=hess))
 }
 
 #new likelihood with priors
 LL.Priors <- function(x, LL){
-    if(any(!is.nan(x@n.prior.mu))){
-        ind <- !is.nan(x@n.prior.mu)
+    if(any(x@prior.type %in% 'norm')){
+        ind <- x@prior.type %in% 'norm'
         val <- x@par[ind]
-        u <- x@n.prior.mu[ind]
-        s <- x@n.prior.sd[ind]
-        for(i in 1L:length(val))
-            LL <- LL - log(dnorm(val[i], u[i], s[i]))
-    }
-    if(any(!is.nan(x@b.prior.alpha))){
-        ind <- !is.nan(x@b.prior.alpha)
-        val <- x@par[ind]
-        a <- x@b.prior.alpha[ind]
-        b <- x@b.prior.beta[ind]
+        u <- x@prior_1[ind]
+        s <- x@prior_2[ind]
         for(i in 1L:length(val)){
-            tmp <- dbeta(val[i], a[i], b[i])
-            LL <- LL - log(ifelse(tmp == 0, 1, tmp))
+            tmp <- dnorm(val[i], u[i], s[i], log=TRUE)            
+            LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
+        }
+    }
+    if(any(x@prior.type %in% 'lnorm')){
+        ind <- x@prior.type %in% 'lnorm'
+        val <- x@par[ind]
+        val <- ifelse(val > 0, val, 1e-100)
+        u <- x@prior_1[ind]
+        s <- x@prior_2[ind]
+        for(i in 1L:length(val)){
+            tmp <- dlnorm(val[i], u[i], s[i], log=TRUE)
+            LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
+        }
+    }
+    if(any(x@prior.type %in% 'beta')){
+        ind <- x@prior.type %in% 'beta'
+        val <- x@par[ind]
+        a <- x@prior_1[ind]
+        b <- x@prior_2[ind]
+        for(i in 1L:length(val)){
+            tmp <- dbeta(val[i], a[i], b[i], log=TRUE)
+            LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
         }
     }
     return(LL)
 }
 
-ItemInfo <- function(x, Theta, cosangle){
+ItemInfo <- function(x, Theta, cosangle, total.info = TRUE){
     P <- ProbTrace(x, Theta)
     dx <- DerivTheta(x, Theta)
-    info <- 0
+    info <- matrix(0, nrow(Theta), ncol(P))
     cosanglefull <- matrix(cosangle, nrow(P), length(cosangle), byrow = TRUE)
     if(ncol(cosanglefull) < ncol(dx$grad[[1L]]))
         cosanglefull <- cbind(cosanglefull, matrix(1, nrow(cosanglefull),
@@ -544,7 +528,8 @@ ItemInfo <- function(x, Theta, cosangle){
         dx$hess[[i]] <- matrix(rowSums(dx$hess[[i]] * cosanglefull))
     }
     for(i in 1L:x@ncat)
-        info <- info + ( (dx$grad[[i]])^2 / P[ ,i] - dx$hess[[i]])
+        info[,i] <- (dx$grad[[i]])^2 / P[ ,i] - dx$hess[[i]]
+    if(total.info) info <- matrix(rowSums(info))
     return(info)
 }
 
@@ -579,6 +564,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     tabdata <- matrix(0, nrow(tabdata2), sum(K))
     for(i in 1L:nitem){
         uniq <- sort(na.omit(unique(tabdata2[,i])))
+        if(length(uniq) < K[i]) uniq <- 0L:(K[i]-1L)        
         for(j in 1L:length(uniq))
             tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
     }
@@ -600,9 +586,9 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
 makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN,
                      rotate = 'varimax', Target = NaN, SE = TRUE, verbose = TRUE,
                      SEtol = .0001, grsm.block = NULL, D = 1,
-                     rsm.block = NULL, calcNull = TRUE, cl = NULL, BFACTOR = FALSE,
+                     rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
                      technical = list(), use = 'pairwise.complete.obs',
-                     SE.type = 'MHRM', large = NULL, ...)
+                     SE.type = 'MHRM', large = NULL, accelerate = TRUE, ...)
 {
     opts <- list()
     D <- 1
@@ -619,10 +605,11 @@ makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN
     opts$grsm.block = grsm.block
     opts$D = D
     opts$rsm.block = rsm.block
-    opts$calcNull = calcNull
-    opts$cl = cl    
+    opts$calcNull = calcNull  
     opts$BFACTOR = BFACTOR
-    if(BFACTOR && is.nan(quadpts)) opts$quadpts <- 20
+    opts$accelerate = accelerate
+    if(SE.type == 'SEM' && SE) opts$accelerate <- FALSE
+    if(BFACTOR && is.nan(quadpts)) opts$quadpts <- 21
     opts$technical <- technical
     opts$use <- use
     opts$MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
@@ -650,8 +637,8 @@ makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN
         if(is.logical(large))
             if(large) opts$returnPrepList <- TRUE
         if(is.list(large)) opts$PrepList <- large
-    }
-    if(!is.null(cl)) require(parallel)
+    }    
+    if(!is.null(technical$customK)) opts$calcNull <- FALSE
     return(opts)
 }
 
@@ -659,17 +646,28 @@ reloadPars <- function(longpars, pars, ngroups, J){
     return(.Call('reloadPars', longpars, pars, ngroups, J))
 }
 
-computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0, 1, 1)){
+computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0, 1, 1), PROBTRACE=NULL){
     #compute itemtrace for 1 group
     J <- length(itemloc) - 1L
     itemtrace <- matrix(0, ncol=itemloc[length(itemloc)]-1L, nrow=nrow(Theta))
-    if(nrow(offterm) == 1L){
-        for (i in 1L:J)
-            itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+    if(!is.null(PROBTRACE)){
+        if(nrow(offterm) == 1L){
+            for (i in 1L:J)
+                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- PROBTRACE[[i]](x=pars[[i]], Theta=Theta)
+        } else {
+            for (i in 1L:J)
+                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- PROBTRACE[[i]](x=pars[[i]], Theta=Theta,
+                                                                          ot=offterm[,i])        
+        }
     } else {
-        for (i in 1L:J)
-            itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta,
-                                                                      ot=offterm[,i])        
+        if(nrow(offterm) == 1L){
+            for (i in 1L:J)
+                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta)
+        } else {
+            for (i in 1L:J)
+                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta,
+                                                                          ot=offterm[,i])        
+        }
     }
     itemtrace
 }
@@ -779,7 +777,8 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     return(ESTIMATE)
 }
 
-SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE){
+SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, 
+                   PROBTRACE, DERIV){
     TOL <- sqrt(list$TOL)
     itemloc <- list$itemloc
     J <- length(itemloc) - 1L
@@ -799,8 +798,14 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
     estindex <- estpars
     estindex[estpars] <- est
     rij <- 1
+    prodlist <- PrepList[[1L]]$prodlist
+    nfact <- ncol(Theta)
     gTheta <- vector('list', ngroups)
-    for(g in 1L:ngroups) gTheta[[g]] <- Theta
+    for(g in 1L:ngroups){
+        gTheta[[g]] <- Theta 
+        if(length(prodlist) > 0L)
+            gTheta[[g]] <- prodterms(gTheta[[g]],prodlist)
+    }
 
     for (cycles in 3L:NCYCLES){
 
@@ -812,16 +817,16 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
 
         for(g in 1L:ngroups){
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
-            gTheta[[g]] <- Theta %*% chol(gstructgrouppars[[g]]$gcov) + gstructgrouppars[[g]]$gmeans
-            gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=gTheta[[g]], itemloc=itemloc)
+            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])            
+            gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=gTheta[[g]], itemloc=itemloc,
+                                                PROBTRACE=PROBTRACE[[g]])
             if(BFACTOR){
                 prior[[g]] <- dnorm(theta, 0, 1)
                 prior[[g]] <- prior[[g]]/sum(prior[[g]])                
                 Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1, prod)
                 next
             }
-            Prior[[g]] <- mvtnorm::dmvnorm(gTheta[[g]],gstructgrouppars[[g]]$gmeans,
+            Prior[[g]] <- mvtnorm::dmvnorm(gTheta[[g]][ ,1L:nfact,drop=FALSE],gstructgrouppars[[g]]$gmeans,
                                            gstructgrouppars[[g]]$gcov)
             Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
@@ -829,7 +834,7 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
         for(g in 1L:ngroups){
             if(BFACTOR){
                 rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata,
-                                            Theta=gTheta[[g]], prior=prior[[g]],
+                                            Theta=gTheta[[g]], prior=prior[[g]], Prior=Prior[[g]],
                                             specific=list$specific, sitems=list$sitems,
                                             itemloc=itemloc, itemtrace=gitemtrace[[g]])
             } else {
@@ -845,12 +850,15 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
             }
         }
         longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
-                      gTheta=gTheta, Prior=Prior, BFACTOR=BFACTOR, itemloc=itemloc,
+                      gTheta=gTheta, itemloc=itemloc, Prior=Prior,
                       PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND,
-                      constrain=constrain, TOL=MSTEPTOL)
+                      constrain=constrain, cycle=cycles, PROBTRACE=PROBTRACE, DERIV=DERIV)
         rijlast <- rij
-        rij <- (longpars[estpars & !redun_constr] - MLestimates[estpars & !redun_constr]) /
-            (EMhistory[cycles, estindex] - MLestimates[estindex])
+        denom <- (EMhistory[cycles, estindex] - MLestimates[estindex])
+        sign <- sign(denom)
+        if(sign == 0) sign <- 1
+        if(abs(denom) < 1e-10) denom <- 1e-10 * sign
+        rij <- (longpars[estpars & !redun_constr] - MLestimates[estpars & !redun_constr]) / denom
         if(all(abs(rij - rijlast) < TOL)) break
     } #END EM
     return(rij)
@@ -905,10 +913,10 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
                         gdesign=gdesign,                        
                         between=between,
                         cand.t.var=.5,
-                        n.prior.mu=rep(NaN,length(par)),
-                        n.prior.sd=rep(NaN,length(par)),
-                        b.prior.alpha=rep(NaN,length(par)),
-                        b.prior.beta=rep(NaN,length(par)),
+                        any.prior=FALSE,
+                        prior.type=rep('none', length(par)),
+                        prior_1=rep(NaN,length(par)),
+                        prior_2=rep(NaN,length(par)),
                         drawvals=drawvals,
                         mtch=mtch)        
     }    
