@@ -45,48 +45,43 @@ test_that('confirmatory mods', {
     (F1*F2) = 1,5
     '    
         
-    model.1 <- confmirt.model(model1, quiet = TRUE)    
-    model.quad <- confmirt.model(modelquad, quiet = TRUE)
-    model.combo <- confmirt.model(modelcombo, quiet = TRUE)    
+    model.1 <- mirt.model(model1, quiet = TRUE)    
+    model.quad <- mirt.model(modelquad, quiet = TRUE)
+    model.combo <- mirt.model(modelcombo, quiet = TRUE)    
     
-    suppressWarnings(mod1 <- confmirt(dataset,model.1, verbose = FALSE, draws = 10))
+    suppressWarnings(mod1 <- mirt(dataset,model.1, verbose = FALSE, draws = 10, method = 'MHRM'))
     expect_is(mod1, 'ConfirmatoryClass')
     expect_equal(mod1@df, 588)
     cfs <- as.numeric(do.call(c, coef(mod1, digits=4)))
-    expect_equal(cfs, c(1.3154, 0.0715, 0, NA, -1.0109, 0.0642, 0, NA, 1, NA, 0.4721, 0.0591, 0,
-                        NA, -1.4871, 0.0598, 0, NA, 1, NA, 1.5082, 0.1189, 0, NA, 1.733, 0.0492, 
-                        0, NA, 1, NA, 0.9285, 0.0834, 0.5756, 0.057, 0.0239, 0.0576, 0, NA, 1, NA, 
-                        0, NA, 1.3883, 0.0906, 3.0442, 0.1097, 2.0589, 0.0754, -0.5301, 0.0617, 0, 
-                        NA, 0.5719, 0.0513, 2.5999, 0.0885, 1.0673, 0.0533, -0.9337, 0.0519, 0, NA, 
-                        1.0401, 0.0603, 2.0151, 0.0686, -0.0196, 0.0528, 0, NA, 1.0507, 0.072, 
-                        1.0352, 0.0582, 0, NA, 1, NA, 0, NA, 0, NA, 1, NA, 0.3926, 0.036, 1, NA),
+    expect_equal(cfs, c(1.3397, 0.2406, 0, NA, -1.0203, 0.0904, 0, NA, 1, NA, 0.4893, 0.0584, 0, NA, -1.4922, 0.0584, 0, NA, 1, NA, 1.5095, 0.1242, 0, NA, 1.7329, 0.025, 0, NA, 1, NA, 0.8927, 0.1551, 0.5822, 0.1019, 0.0222, 0.0747, 0, NA, 1, NA, 0, NA, 1.3949, 0.1412, 3.0503, 0.1187, 2.0627, 0.0965, -0.5311, 0.1134, 0, NA, 0.5654, 0.0808, 2.5973, 0.106, 1.0653, 0.071, -0.9324, 0.0571, 0, NA, 1.0509, 0.0851, 2.0222, 0.0914, -0.0196, 0.082, 0, NA, 1.0421, 0.166, 1.032, 0.1243, 0, NA, 1, NA, 0, NA, 0, NA, 1, NA, 0.3909, 0.0083, 1, NA),
                  tollerance = 1e-2)
     
-    mod.quad <- confmirt(dataset, model.quad, verbose = FALSE, draws = 10)
+    suppressWarnings(mod1b <- mirt(dataset,model.1, verbose = FALSE))
+    expect_is(mod1b, 'ConfirmatoryClass')
+    expect_equal(mod1b@df, 588)
+    cfs <- as.numeric(do.call(c, coef(mod1b, digits=4)))
+    expect_equal(cfs, c(1.3799, 0, -1.0412, 0, 1, 0.4931, 0, -1.4959, 0, 1, 1.4262, 0, 1.6824, 0, 1, 0.8877, 0.5976, 0.0155, 0, 1, 0, 1.3563, 3.012, 2.0348, -0.5284, 0, 0.5736, 2.5993, 1.0654, -0.9359, 0, 1.061, 2.0249, -0.0222, 0, 1.0538, 1.0328, 0, 1, 0, 0, 1, 0.3749, 1),
+                 tollerance = 1e-2)
+    
+    mod.quad <- mirt(dataset, model.quad, verbose = FALSE, draws = 10, method = 'MHRM')
     expect_is(mod.quad, 'ConfirmatoryClass')
     expect_equal(mod.quad@df, 586)
     cfs <- as.numeric(do.call(c, coef(mod.quad, digits=4)))
-    expect_equal(cfs, c(0.7297, 0.0984, 0.115, 0.0459, -0.9579, 0.0785, 0, NA, 1, NA, 0.1942, 
-                        0.0697, 0.1086, 0.14, -1.5497, 0.1617, 0, NA, 1, NA, 0.92, 0.0652, 0.1914, 
-                        0.053, 1.2679, 0.0981, 0, NA, 1, NA, 1.1917, 0.0763, 0.1858, 0.1028, 
-                        -0.1045, 0.1062, 0, NA, 1, NA, 1.1021, 0.0904, 0, NA, 2.8099, 0.0909, 
-                        1.8838, 0.0643, -0.4929, 0.056, 0.5526, 0.0712, 0, NA, 2.5894, 0.0892, 
-                        1.0583, 0.0544, -0.9314, 0.0514, 0.9057, 0.1425, 0, NA, 1.9411, 0.0862, 
-                        -0.0213, 0.048, 0.9999, 0.1004, 0, NA, 1.0138, 0.0635, 0, NA, 1, NA, 0, NA, 1, NA),
+    expect_equal(cfs, c(0.7133, 0.0306, 0.215, 0.0315, -1.0448, 0.0602, 0, NA, 1, NA, 0.1703, 0.0548, 0.1674, 0.0193, -1.6138, 0.0579, 0, NA, 1, NA, 0.9461, 0.111, 0.2572, 0.0507, 1.218, 0.0633, 0, NA, 1, NA, 1.2201, 0.118, 0.3083, 0.0796, -0.187, 0.0711, 0, NA, 1, NA, 1.0956, 0.0407, 0, NA, 2.8043, 0.1013, 1.878, 0.0781, -0.4944, 0.05, 0.5466, 0.0715, 0, NA, 2.5857, 0.0884, 1.0563, 0.0534, -0.931, 0.0522, 0.9073, 0.0645, 0, NA, 1.9394, 0.075, -0.0254, 0.0487, 1.0116, 0.105, 0, NA, 1.0154, 0.0615, 0, NA, 1, NA, 0, NA, 1, NA),
                  tollerance = 1e-2)
     
-    suppressWarnings(mod.combo <- confmirt(dataset, model.combo, verbose = FALSE, draws = 10))
+    suppressWarnings(mod.combo <- mirt(dataset, model.combo, verbose = FALSE, draws = 10, method = 'MHRM'))
     expect_is(mod.combo, 'ConfirmatoryClass')
     expect_equal(mod.combo@df, 588)
     cfs <- as.numeric(do.call(c, coef(mod.combo, digits=4)))
-    expect_equal(cfs, c(1.4545, 0.1909, 0, NA, 0.3825, 0.2138, -1.0907, 0.0429, 0, NA, 1, NA, 
-                        0.5299, 0.1255, 0, NA, 0, NA, -1.5074, 0.0693, 0, NA, 1, NA, 1.3929, 
-                        0.1927, 0, NA, 0, NA, 1.6616, 0.1127, 0, NA, 1, NA, 1.0435, 0.1415, 0, NA, 
-                        0, NA, 0.0126, 0.0545, 0, NA, 1, NA, 0, NA, 1.4504, 0.0718, -0.1897, 0.0854,
-                        3.1346, 0.0725, 2.1209, 0.0609, -0.5221, 0.07, 0, NA, 0.5433, 0.0709, 0, NA,
-                        2.5888, 0.0892, 1.063, 0.0565, -0.9248, 0.0525, 0, NA, 1.0544, 0.0935, 0, NA,
-                        2.0273, 0.0637, -0.0158, 0.0569, 0, NA, 1.0067, 0.1038, 0, NA, 1.0244, 0.0639,
-                        0, NA, 1, NA, 0, NA, 0, NA, 1, NA, 0, NA, 1, NA),
+    expect_equal(cfs, c(1.3897, 0.1406, 0, NA, 0.323, 0.1207, -1.0661, 0.0656, 0, NA, 1, NA, 0.5282, 0.1996, 0, NA, 0, NA, -1.5064, 0.0772, 0, NA, 1, NA, 1.4684, 0.328, 0, NA, 0, NA, 1.7016, 0.1507, 0, NA, 1, NA, 1.0604, 0.1277, 0, NA, 0, NA, 0.0135, 0.0588, 0, NA, 1, NA, 0, NA, 1.4235, 0.4811, -0.18, 0.1285, 3.1183, 0.3407, 2.1112, 0.2518, -0.5154, 0.1253, 0, NA, 0.5449, 0.1713, 0, NA, 2.5908, 0.1023, 1.0641, 0.0606, -0.9248, 0.0679, 0, NA, 1.0619, 0.0961, 0, NA, 2.0342, 0.1171, -0.014, 0.0647, 0, NA, 1.0206, 0.1878, 0, NA, 1.0312, 0.1039, 0, NA, 1, NA, 0, NA, 0, NA, 1, NA, 0, NA, 1, NA),
+                 tollerance = 1e-2)
+    
+    suppressWarnings(mod.combob <- mirt(dataset, model.combo, verbose = FALSE))
+    expect_is(mod.combob, 'ConfirmatoryClass')
+    expect_equal(mod.combob@df, 588)
+    cfs <- as.numeric(do.call(c, coef(mod.combob, digits=4)))
+    expect_equal(cfs, c(1.5249, 0, 0.4488, -1.1222, 0, 1, 0.5352, 0, 0, -1.5111, 0, 1, 1.3661, 0, 0, 1.6435, 0, 1, 1.0015, 0, 0, 0.0085, 0, 1, 0, 1.4237, -0.1974, 3.1168, 2.1096, -0.5172, 0, 0.5498, 0, 2.5916, 1.0638, -0.9272, 0, 1.0643, 0, 2.0327, -0.0166, 0, 1.0047, 0, 1.0242, 0, 1, 0, 0, 1, 0, 1),
                  tollerance = 1e-2)
         
     fs1 <- fscores(mod1, verbose = FALSE)

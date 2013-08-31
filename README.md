@@ -1,7 +1,5 @@
 # mirt
 
-[![Build Status](https://travis-ci.org/philchalmers/mirt.png)](https://travis-ci.org/philchalmers/mirt)
-
 Multidimensional item response theory in R. 
 
 ## Description
@@ -21,7 +19,7 @@ functioning and modelling item and person covariates.
 It's recommended to use the development version of this package since it is more likely to be up to date 
 than the version on CRAN. To install this package from source: 
 
-1) Obtain recent gcc and g++ compilers. Windows users can install the
+1) Obtain recent gcc, g++, and gfortran compilers. Windows users can install the
    [Rtools](http://cran.r-project.org/bin/windows/Rtools/) suite while Mac users will have to
    download the necessary tools from the [Xcode](https://itunes.apple.com/ca/app/xcode/id497799835?mt=12) suite and its
    related command line tools (found within Xcode's Preference Pane under Downloads/Components); most Linux
@@ -40,25 +38,15 @@ library('devtools')
 install_github('mirt', 'philchalmers')
 ```
 
-## Installing from a binary (Windows only)
-
-For those having difficulty installing the package on Windows, binary installation (.zip) files 
-for 32- or 64-bit Windows may be installed with:
-
-```r
-download.file('http://dl.dropbox.com/u/10780530/mirt/mirt.zip', 'mirt.zip')
-install.packages('mirt.zip', repos=NULL)
-```
-
-Note that this binary file is updated periodically and is not guaranteed to be in sync with 
-the source code. 
-
-# Presentations and Workshops
+# Presentations, Workshops, and Other Things
 
 Below are some presentation/workshop files for `mirt` that I have written and presented, and 
 may be helpful in understanding the package. 
 
 - 2013 workshop in Klagenfurt, Austria (coming soon)
+- a Shiny application is available here to show how modifying item parameters in `mirt` will affect
+  tracelines, information curves, etc. To run the application you must have `shiny` installed, and use
+  the following syntax in R to launch the application in a web browser: `shiny::runGist('6337165')`
 - [2012 presentation](https://dl.dropboxusercontent.com/u/10780530/mirt/mirt-presentation-2012.pdf) at 
   York University, Toronto
 

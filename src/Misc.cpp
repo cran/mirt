@@ -45,7 +45,7 @@ NumericMatrix polyOuter(NumericMatrix Thetas, NumericVector Pk,
 }
 
 NumericVector itemTrace(NumericVector a, const double *d, 
-        NumericMatrix Theta, const double *g, const double *u, const double *D, NumericVector ot)
+        NumericMatrix Theta, const double *g, const double *u, NumericVector ot)
 {	
 	int i, j;
     const int nquad = Theta.nrow();
@@ -55,9 +55,9 @@ NumericVector itemTrace(NumericVector a, const double *d,
 	for (i = 0; i <	nquad; i++){
 	    z(i) = 0.0;
 		for (j = 0; j <	Theta.ncol(); j++){		
-			z(i) += *D * a(j) * Theta(i,j);  		
+			z(i) += a(j) * Theta(i,j);  		
 		}
-		z(i) += *d * *D;
+		z(i) += *d;
 	}	
     if(USEOT){
         for (i = 0; i < nquad; i++)
@@ -98,6 +98,39 @@ RcppExport SEXP reloadPars(SEXP Rlongpars, SEXP Rpars, SEXP Rngroups, SEXP RJ)
     }
 	
     return(pars);
+	END_RCPP
+}
+
+RcppExport SEXP denRowSums(SEXP Rfulldata, SEXP Ritemtrace0, SEXP Ritemtrace1, 
+    SEXP Rlog_den0, SEXP Rlog_den1)
+{    
+    BEGIN_RCPP
+    
+    IntegerMatrix fulldata(Rfulldata);
+    NumericMatrix itemtrace0(Ritemtrace0);    
+    NumericMatrix itemtrace1(Ritemtrace1);    
+    NumericVector log_den0(Rlog_den0);
+    NumericVector log_den1(Rlog_den1);
+    List ret;
+    NumericVector Sum0(fulldata.nrow()), Sum1(fulldata.nrow());;
+    
+    
+    for(int i = 0; i < fulldata.nrow(); i++){
+        double rs0 = 0.0;
+        double rs1 = 0.0;
+        for(int j = 0; j < fulldata.ncol(); j++){
+            if(fulldata(i,j)){
+                rs0 += log(itemtrace0(i,j));
+                rs1 += log(itemtrace1(i,j));
+            }
+        }
+        Sum0(i) = rs0 + log_den0(i);
+        Sum1(i) = rs1 + log_den1(i);
+    }
+	
+    ret["total_0"] = Sum0;
+    ret["total_1"] = Sum1;
+    return(ret);
 	END_RCPP
 }
 

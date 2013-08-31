@@ -111,7 +111,7 @@ setMethod(
             rotname <- ifelse(rotate == '', object@rotate, rotate)
             if(verbose) cat("\nRotation: ", rotname, "\n\n")
             so <- summary(object, rotate=rotate, Target=Target, verbose=FALSE, digits=digits, ...)
-            a <- rotateLambdas(so) * 1.702/object@pars[[1]]@D
+            a <- rotateLambdas(so) * 1.702
             for(i in 1:J)
                 object@pars[[i]]@par[1:nfact] <- a[i, ]            
             if(rotname != 'none')
@@ -168,8 +168,8 @@ setMethod(
 setMethod(
     f = "residuals",
     signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, printvalue = NULL,
-                          verbose = TRUE, ...)
+    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE, 
+                          printvalue = NULL, verbose = TRUE, ...)
     {
         K <- object@K
         data <- object@data
@@ -215,22 +215,38 @@ setMethod(
             res <- round(res,digits)
             return(res)
         }
-        if(restype == 'exp'){
+        if(restype == 'exp'){            
             r <- object@tabdata[ ,ncol(object@tabdata)]
             res <- round((r - object@Pl * nrow(object@data)) /
-                sqrt(object@Pl * nrow(object@data)),digits)
-            expected <- round(N * object@Pl/sum(object@Pl),digits)
+                             sqrt(object@Pl * nrow(object@data)),digits)
+            expected <- round(N * object@Pl,digits)
             tabdata <- object@tabdata
+            rownames(tabdata) <- NULL
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,expected,res)
-            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")
-            tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
-            if(!is.null(printvalue)){
-                if(!is.numeric(printvalue)) stop('printvalue is not a number.')
-                tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
+            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")            
+            if(full.scores){
+                tabdata[, 'exp'] <- object@Pl / r * N
+                tabdata2 <- object@tabdatalong
+                tabdata2 <- tabdata2[,-ncol(tabdata2)]
+                stabdata2 <- apply(tabdata2, 1, paste, sep='', collapse = '/')
+                sfulldata <- apply(object@fulldata, 1, paste, sep='', collapse = '/')
+                scoremat <- tabdata[match(sfulldata, stabdata2), 'exp', drop = FALSE]                
+                res <- (1-scoremat) / sqrt(scoremat)
+                colnames(res) <- 'res'
+                ret <- cbind(object@data, scoremat, res)
+                ret[is.na(rowSums(ret)), c('exp', 'res')] <- NA
+                rownames(ret) <- NULL
+                return(ret)
+            } else {
+                tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
+                if(!is.null(printvalue)){
+                    if(!is.numeric(printvalue)) stop('printvalue is not a number.')
+                    tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
+                }                
+                return(tabdata)
             }
-            return(tabdata)
         }
     }
 )
@@ -275,7 +291,7 @@ setMethod(
         if (x@nfact > 1 && !is(tmp,'try-error')){
             rotname <- x@rotate
             so <- summary(x, rotate=x@rotate, Target=NULL, verbose=FALSE, digits=5, ...)
-            a <- rotateLambdas(so) * 1.702/x@pars[[1]]@D
+            a <- rotateLambdas(so) * 1.702
             for(i in 1:J)
                 x@pars[[i]]@par[1:nfact] <- a[i, ]
         }
@@ -324,7 +340,7 @@ setMethod(
                                xlab = expression(theta), ylab=expression(I(theta)))
                 obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)))
                 if(!require(latticeExtra)) require(latticeExtra)
-                return(latticeExtra::doubleYScale(obj1, obj2, add.ylab2 = TRUE))
+                return(doubleYScale(obj1, obj2, add.ylab2 = TRUE))
             }
             if(type == 'trace'){
                 if(!all(x@K == 2)) stop('trace line plot only available for tests
@@ -334,7 +350,7 @@ setMethod(
                     P[,i] <- probtrace(extract.item(x, i), ThetaFull)[,2]
                 items <- gl(n=J, k=nrow(Theta), labels = paste('Item', 1:J))
                 plotobj <- data.frame(P = as.numeric(P), Theta=Theta, item=items)
-                return(xyplot(P ~ Theta, plotobj, group = item, ylim = c(0,1),
+                return(xyplot(P ~ Theta, plotobj, group = item, ylim = c(-0.1,1.1),,
                        xlab = expression(theta), ylab = expression(P(theta)),
                        auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
             }

@@ -1,9 +1,10 @@
 \name{bfactor}
 \alias{bfactor}
-\title{Full-Information Item Bi-factor Analysis}
+\title{Full-Information Item Bi-factor and Two-Tier Analysis}
 \usage{
-  bfactor(data, model, SE = FALSE, SE.type = 'SEM', verbose
-    = TRUE, ...)
+  bfactor(data, model, model2 = mirt.model(paste0('G = 1-',
+    ncol(data)), quiet = TRUE), SE = FALSE, SE.type =
+    'SEM', group = NULL, verbose = TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -16,8 +17,20 @@
   loads on the first two items and the second specific
   factor on the last two, then the vector is
   \code{c(1,1,2,2)}. For items that should only load on the
-  general factor (have no specific component) \code{NA}
-  values may be used as place-holders}
+  second-tier factors (have no specific component)
+  \code{NA} values may be used as place-holders. These
+  numbers will be translated into a format suitable for
+  \code{mirt.model()}, combined with the definition in
+  \code{model2}, with the letter 'S' added to the
+  respective factor number}
+
+  \item{model2}{a two-tier model specification object
+  defined by \code{mirt.model()}. By default the model will
+  fit a unidimensional model in the second-tier, and
+  therefore be equivalent to the bifactor model}
+
+  \item{group}{a factor variable indicating group
+  membership used for multiple group analyses}
 
   \item{SE}{logical; calculate information matrix and
   standard errors?}
@@ -34,24 +47,33 @@
 }
 \description{
   \code{bfactor} fits a confirmatory maximum likelihood
-  bi-factor model to dichotomous and polytomous data under
-  the item response theory paradigm. Fits the IRT models
-  using a dimensional reduction EM algorithm so that
-  regardless of the number of specific factors estimated
-  the model only uses a two-dimensional quadrature grid for
-  integration (hence the maximum number of factors in
-  estimation is only 2). See \code{\link{confmirt}} for
-  appropriate methods to be used on the objects returned
-  from the estimation.
+  two-tier/bifactor model to dichotomous and polytomous
+  data under the item response theory paradigm. The IRT
+  models are fit using a dimensional reduction EM algorithm
+  so that regardless of the number of specific factors
+  estimated the model only uses the number of factors in
+  the second-tier structure plus 1. For the bifactor model
+  the maximum number of dimensions is only 2 since the
+  second-tier only consists of a ubiquitous unidimensional
+  factor. See \code{\link{mirt}} for appropriate methods to
+  be used on the objects returned from the estimation.
 }
 \details{
   \code{bfactor} follows the item factor analysis strategy
-  explicated by Gibbons and Hedeker (1992) and Gibbons et
-  al. (2007). Nested models may be compared via an
-  approximate chi-squared difference test or by a reduction
-  in AIC or BIC (accessible via \code{\link{anova}}). See
-  \code{\link{mirt}} for more details regarding the IRT
-  estimation approach used in this package.
+  explicated by Gibbons and Hedeker (1992), Gibbons et al.
+  (2007), and Cai (2010). Nested models may be compared via
+  an approximate chi-squared difference test or by a
+  reduction in AIC or BIC (accessible via
+  \code{\link{anova}}). See \code{\link{mirt}} for more
+  details regarding the IRT estimation approach used in
+  this package. The default is to use 21 quadrature for
+  each dimensions, but this can be over-written by passing
+  a \code{quadpts = #} argument.
+
+  Note: for multiple group two-tier analyses only the
+  second-tier means and variances should be freed since the
+  specific factors are not treated independently due to the
+  dimension reduction technique.
 }
 \examples{
 \dontrun{
@@ -126,12 +148,56 @@ specific <- c(rep(1,7),rep(2,7))
 simmod <- bfactor(dataset, specific)
 coef(simmod)
 
+#########
+# Two-tier model
+
+#simulate data
+a <- matrix(c(
+0,1,0.5,NA,NA,
+0,1,0.5,NA,NA,
+0,1,0.5,NA,NA,
+0,1,0.5,NA,NA,
+0,1,0.5,NA,NA,
+0,1,NA,0.5,NA,
+0,1,NA,0.5,NA,
+0,1,NA,0.5,NA,
+1,0,NA,0.5,NA,
+1,0,NA,0.5,NA,
+1,0,NA,0.5,NA,
+1,0,NA,NA,0.5,
+1,0,NA,NA,0.5,
+1,0,NA,NA,0.5,
+1,0,NA,NA,0.5,
+1,0,NA,NA,0.5),ncol=5,byrow=TRUE)
+
+d <- matrix(rnorm(16))
+items <- rep('dich', 16)
+
+sigma <- diag(5)
+sigma[1,2] <- sigma[2,1] <- .4
+set.seed(1234)
+dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
+
+specific <- c(rep(1,5),rep(2,6),rep(3,5))
+model <- mirt.model('
+    G1 = 1-8
+    G2 = 9-16
+    COV = G1*G2')
+
+simmod <- bfactor(dataset, specific, model, quadpts = 15)
+coef(simmod)
+summary(simmod)
+
     }
 }
 \author{
   Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
+  Cai, L. (2010). A two-tier full-information item factor
+  analysis model with applications. \emph{Psychometrika,
+  75}, 581-612.
+
   Chalmers, R., P. (2012). mirt: A Multidimensional Item
   Response Theory Package for the R Environment.
   \emph{Journal of Statistical Software, 48}(6), 1-29.
@@ -149,17 +215,16 @@ coef(simmod)
 }
 \seealso{
   \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{confmirt.model}}, \code{\link{mirt}},
-  \code{\link{confmirt}}, \code{\link{bfactor}},
-  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
-  \code{\link{wald}}, \code{\link{itemplot}},
-  \code{\link{fscores}}, \code{\link{fitIndices}},
-  \code{\link{extract.item}}, \code{\link{iteminfo}},
-  \code{\link{testinfo}}, \code{\link{probtrace}},
-  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
-  \code{\link{itemfit}}, \code{\link{mod2values}},
-  \code{\link{read.mirt}}, \code{\link{simdata}},
-  \code{\link{createItem}}
+  \code{\link{mirt.model}}, \code{\link{mirt}},
+  \code{\link{bfactor}}, \code{\link{multipleGroup}},
+  \code{\link{mixedmirt}}, \code{\link{wald}},
+  \code{\link{itemplot}}, \code{\link{fscores}},
+  \code{\link{fitIndices}}, \code{\link{extract.item}},
+  \code{\link{iteminfo}}, \code{\link{testinfo}},
+  \code{\link{probtrace}}, \code{\link{boot.mirt}},
+  \code{\link{imputeMissing}}, \code{\link{itemfit}},
+  \code{\link{mod2values}}, \code{\link{read.mirt}},
+  \code{\link{simdata}}, \code{\link{createItem}}
 }
 \keyword{models}
 

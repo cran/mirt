@@ -11,7 +11,7 @@ test_that('mixed dich', {
     data <- simdata(a,d,N, itemtype = rep('dich',10), Theta=Theta)
     covdata <- data.frame(group, pseudoIQ)
     mixedmirt1 <- 'Theta = 1-10'
-    model <- confmirt.model(mixedmirt1, quiet = TRUE)  
+    model <- mirt.model(mixedmirt1, quiet = TRUE)  
     
     #group as a fixed effect predictor (aka, uniform dif)
     mod1 <- suppressWarnings(mixedmirt(data, covdata, model, fixed = ~ 0 + items + group, 
@@ -38,17 +38,7 @@ test_that('mixed dich', {
     expect_is(mod1b, 'MixedClass')
     expect_equal(mod1b@df, 293) 
     cfs <- as.numeric(do.call(c, coef(mod1b, digits=4)))
-    expect_equal(cfs, c(1.2178, 0.0749, 2.4259, 0.0768, 0.0153, 0.1275, -1.799, 0.0991, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, 0.1055, 0.134, -2.2187, 0.1045, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, 0.0269, 0.1054, -1.8061, 0.0992, 0, NA, 1, NA, 
-                        1.2178, 0.0749, 2.4259, 0.0768, -3.5963, 0.421, -1.0678, 0.2463, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, 0.0266, 0.1191, -0.394, 0.0936, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, 0.0562, 0.1098, -1.3398, 0.0955, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, -0.0605, 0.1402, -1.7845, 0.0988, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, 0.2487, 0.1416, -2.2434, 0.1057, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, -0.1546, 0.1194, -2.1332, 0.1029, 0, NA, 1, NA,
-                        1.2178, 0.0749, 2.4259, 0.0768, -0.1044, 0.1937, 1.5493, 0.138, 0, NA, 1, NA,
-                        0, NA, 1, NA),
+    expect_equal(cfs, c(1.2194, 0.0771, 2.4284, 0.0819, 0.0223, 0.132, -1.8006, 0.1008, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, 0.0998, 0.1398, -2.2197, 0.1058, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, 0.0239, 0.1075, -1.8075, 0.1009, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, -3.7769, 1.4659, -1.062, 0.2292, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, 0.0333, 0.1118, -0.3949, 0.0946, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, 0.0534, 0.1591, -1.3411, 0.0971, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, -0.0495, 0.1242, -1.7863, 0.1004, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, 0.2393, 0.1574, -2.2432, 0.1066, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, -0.1436, 0.137, -2.1353, 0.1042, 0, NA, 1, NA, 1.2194, 0.0771, 2.4284, 0.0819, -0.125, 0.2006, 1.5501, 0.1381, 0, NA, 1, NA, 0, NA, 1, NA),
                  tollerance = 1e-2)
     
     covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
@@ -57,19 +47,14 @@ test_that('mixed dich', {
     expect_is(rmod1, 'MixedClass')
     expect_equal(rmod1@df, 303) 
     cfs <- as.numeric(do.call(c, coef(rmod1, digits=4)))
-    expect_equal(cfs, c(1, NA, -0.5526, 0.0745, 0, NA, 1, NA, 1, NA, -0.9644, 0.0808, 0, NA, 1, NA,
-                        1, NA, -0.5594, 0.0746, 0, NA, 1, NA, 1, NA, 0.0897, 0.0552, 0, NA, 1, NA, 
-                        1, NA, 0.8181, 0.0283, 0, NA, 1, NA, 1, NA, -0.1041, 0.0627, 0, NA, 1, NA, 
-                        1, NA, -0.539, 0.0742, 0, NA, 1, NA, 1, NA, -0.9794, 0.0809, 0, NA, 1, NA, 
-                        1, NA, -0.883, 0.0798, 0, NA, 1, NA, 1, NA, 2.7863, 0.0376, 0, NA, 1, NA, 0, 
-                        NA, 0.2861, 0.0158, 0.6167, 0.323),
+    expect_equal(cfs, c(1, NA, -0.5571, 0.0747, 0, NA, 1, NA, 1, NA, -0.9704, 0.0706, 0, NA, 1, NA, 1, NA, -0.5639, 0.0747, 0, NA, 1, NA, 1, NA, 0.0885, 0.0728, 0, NA, 1, NA, 1, NA, 0.8219, 0.0507, 0, NA, 1, NA, 1, NA, -0.1064, 0.0747, 0, NA, 1, NA, 1, NA, -0.5435, 0.0748, 0, NA, 1, NA, 1, NA, -0.9855, 0.0704, 0, NA, 1, NA, 1, NA, -0.8888, 0.0717, 0, NA, 1, NA, 1, NA, 2.8103, 0.0961, 0, NA, 1, NA, 0, NA, 0.3497, 0.0126, 0.5906, 0.2777),
                  tollerance = 1e-2)
 })   
 
 test_that('item and group predictors', {    
     data <- key2binary(SAT12,
                        key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
-    model <- confmirt.model('Theta = 1-32', quiet = TRUE)
+    model <- mirt.model('Theta = 1-32', quiet = TRUE)
     
     itemdesign <- data.frame(itemorder = factor(c(rep('easier', 16), rep('harder', 16))))
     fs <- scale(rowSums(data))
@@ -82,9 +67,7 @@ test_that('item and group predictors', {
                       itemdesign = itemdesign, verbose = FALSE, draws = 10))
     expect_is(LLTM, 'MixedClass')
     cfs <- na.omit(as.numeric(do.call(c, coef(LLTM, digits=4))))[1:20]
-    expect_equal(cfs, c(-0.0593,  0.0225,  0.2315,  0.0229,  1.4996,  0.0592,  1.0000,  0.0000, 
-                        0.0000,  1.0000, -0.0593,  0.0225,  0.2315,  0.0229,  1.4996,
-                        0.0592,  1.0000,  0.0000,  0.0000,  1.0000),
+    expect_equal(cfs, c(-0.0622, 0.0252, 0.2288, 0.0252, 1.5037, 0.0615, 1, 0, 0, 1, -0.0622, 0.0252, 0.2288, 0.0252, 1.5037, 0.0615, 1, 0, 0, 1),
                  tollerance = 1e-2)
     
     sv2 <- suppressWarnings(mixedmirt(data, covdata, model = model, fixed = ~ itemorder * gender,
@@ -95,15 +78,13 @@ test_that('item and group predictors', {
     expect_is(LLTM2, 'MixedClass')
     expect_equal(LLTM@df - LLTM2@df, 1)
     cfs <- na.omit(as.numeric(do.call(c, coef(LLTM2, digits=4))))[1:20]
-    expect_equal(cfs, c(-0.0606,  0.0176,  0.2867,  0.0214,  1.5025,  0.0553,  0.0101,  0.0722,
-                        1.0000,  0.0000,  0.0000,  1.0000, -0.0606,  0.0176,  0.2867,
-                         0.0214,  1.5025,  0.0553,  0.0101,  0.0722),
+    expect_equal(cfs, c(-0.0623, 0.0254, 0.2903, 0.0319, 1.5023, 0.0747, 0.0031, 0.1021, 1, 0, 0, 1, -0.0623, 0.0254, 0.2903, 0.0319, 1.5023, 0.0747, 0.0031, 0.1021),
                  tollerance = 1e-2)
 }) 
 
 test_that('polytomous', {
     covdat <- data.frame(group = rep(c('m', 'f'), nrow(Science)/2))
-    model <- confmirt.model('F1 = 1-4', quiet = TRUE)
+    model <- mirt.model('F1 = 1-4', quiet = TRUE)
     suppressWarnings(mod <- mixedmirt(Science, covdat, model=model,
                                        fixed = ~ 0 + group, verbose = FALSE, draws = 10))
     expect_is(mod, 'MixedClass')
@@ -132,11 +113,7 @@ test_that('polytomous', {
     expect_is(mod3, 'MixedClass')   
     expect_equal(mod3@df, 72) 
     cfs <- as.numeric(do.call(c, coef(mod3, digits=4)))
-    expect_equal(cfs, c(-0.1946, 0.1112, 1.0097, 0.1616, 4.9276, 0.5265, 2.7051, 0.1617, -1.3612,
-                        0.1532, -0.1946, 0.1112, 1.2311, 0.1682, 3.0152, 0.2178, 0.9913, 0.1198, 
-                        -2.1766, 0.2151, -0.1946, 0.1112, 2.5012, 0.3056, 5.5945, 0.6328, 2.422, 
-                        0.067, -1.9886, 0.2961, -0.1946, 0.1112, 1.0689, 0.1736, 3.416, 0.2762, 
-                        1.0757, 0.1185, -1.5828, 0.1721, 0, NA, 1, NA),
+    expect_equal(cfs, c(-0.187, 0.1597, 1.0007, 0.1825, 4.9121, 0.4907, 2.7, 0.2279, -1.3589, 0.1982, -0.187, 0.1597, 1.2157, 0.1985, 3.0005, 0.2589, 0.985, 0.176, -2.1672, 0.2286, -0.187, 0.1597, 2.5263, 0.7053, 5.6266, 1.0828, 2.4402, 0.5751, -1.9992, 0.3701, -0.187, 0.1597, 1.07, 0.1718, 3.4151, 0.2832, 1.0721, 0.1672, -1.5855, 0.1997, 0, NA, 1, NA),
                  tollerance = 1e-2)
     
     covdat$group <- factor(rep(paste0('G',1:20), length.out = nrow(Science)))
@@ -145,10 +122,7 @@ test_that('polytomous', {
     expect_is(rmod1, 'MixedClass')
     expect_equal(rmod1@df, 72) 
     cfs <- as.numeric(do.call(c, coef(rmod1, digits=4)))
-    expect_equal(cfs, c(1.0235, 0.1758, 4.8438, 0.4848, 2.6275, 0.2173, -1.4587, 0.1566, 1.2404, 
-                        0.1975, 2.9387, 0.251, 0.9072, 0.1487, -2.2741, 0.2114, 2.3052, 0.3405, 
-                        5.2567, 0.5408, 2.2194, 0.2729, -1.9701, 0.2844, 1.072, 0.1553, 3.3285, 
-                        0.2697, 0.9862, 0.141, -1.6771, 0.1598, 0, NA, 1, NA, 1e-04, 1e-04),
+    expect_equal(cfs, c(1.0028, 0.1687, 4.827, 0.4797, 2.6162, 0.2109, -1.4461, 0.1523, 1.2369, 0.1639, 2.9335, 0.241, 0.905, 0.1453, -2.2685, 0.1903, 2.5053, 0.4909, 5.539, 0.742, 2.3496, 0.3533, -2.0704, 0.349, 1.0646, 0.1701, 3.325, 0.269, 0.9861, 0.1363, -1.669, 0.1635, 0, NA, 1, NA, 1e-04, 1e-04),
                  tollerance = 1e-2)
     
     re <- randef(rmod1, ndraws=100)

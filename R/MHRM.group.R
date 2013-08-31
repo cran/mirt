@@ -1,4 +1,4 @@
-MHRM.group <- function(pars, constrain, PrepList, list, random = list())
+MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRACE, DERIV)
 {     
     if(is.null(random)) random <- list()
     RAND <- length(random) > 0L
@@ -44,7 +44,8 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
             gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]],
                                         itemloc=itemloc, cand.t.var=cand.t.var,
                                         prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)
+                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
+                                        PROBTRACE=PROBTRACE[[g]])
             if(i > 5L){
                 if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
                 else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
@@ -126,7 +127,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
             LBOUND <- c(LBOUND, random[[i]]@lbound)
             UBOUND <- c(UBOUND, random[[i]]@ubound)            
         }
-    }    
+    }
 
     ####Big MHRM loop
     for(cycles in 1L:(NCYCLES + BURNIN + SEMCYCLES))
@@ -156,6 +157,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
                                         parstart=max(pars[[1L]][[J+1L]]@parnum) + 1L)
         
         if(RAND && cycles == 100){
+            for(g in 1L:ngroups) gtheta0[[g]] <- matrix(0, nrow(gfulldata[[g]]), nfact)
             OffTerm <- OffTerm(random, J=J, N=N)
             for(j in 1L:length(random)){
                 tmp <- .1
@@ -182,12 +184,14 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
                 tmp <- cov(random[[j]]@drawvals) * (tmp / (tmp-1L))
                 random[[j]]@par[random[[j]]@est] <- tmp[lower.tri(tmp, TRUE)][random[[j]]@est]
             }
+            cand.t.var <- .5
             tmp <- .1
-            for(i in 1L:10L){
+            for(i in 1L:30L){
                 gtheta0[[1L]] <- draw.thetas(theta0=gtheta0[[1L]], pars=pars[[1L]], fulldata=gfulldata[[1L]],
                                              itemloc=itemloc, cand.t.var=cand.t.var,
                                              prior.t.var=gstructgrouppars[[1L]]$gcov, OffTerm=OffTerm,
-                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist)
+                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist,
+                                             PROBTRACE=PROBTRACE[[1L]])
                 if(i > 5L){
                     if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
                     else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
@@ -216,7 +220,8 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
                 gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]],
                                       itemloc=itemloc, cand.t.var=cand.t.var,
                                       prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)            
+                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
+                                            PROBTRACE=PROBTRACE[[g]])            
             LL <- LL + attr(gtheta0[[g]], "log.lik")
         }
         if(RAND && cycles > 100){
@@ -239,11 +244,12 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
             thetatemp <- gtheta0[[group]]
             if(length(prodlist) > 0L) thetatemp <- prodterms(thetatemp,prodlist)
             gitemtrace[[group]] <- computeItemtrace(pars=pars[[group]], offterm=OffTerm,
-                                                Theta=thetatemp, itemloc=itemloc)
+                                                Theta=thetatemp, itemloc=itemloc,
+                                                    PROBTRACE=PROBTRACE[[group]])
             pars[[group]] <- assignItemtrace(pars=pars[[group]], itemtrace=gitemtrace[[group]],
                                          itemloc=itemloc)
             for (i in 1L:J){
-                deriv <- Deriv(x=pars[[group]][[i]], Theta=thetatemp, 
+                deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=thetatemp, 
                                estHess=TRUE, offterm=OffTerm[,i])
                 ind2 <- ind1 + length(deriv$grad) - 1L
                 longpars[ind1:ind2] <- pars[[group]][[i]]@par
@@ -301,13 +307,13 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
             correction <- solve(ave.h, grad)
             correction[correction > .5] <- 1
             correction[correction < -.5] <- -1
-            #prevent guessing/upper pars from moving more than .001 at all times
+            #prevent guessing/upper pars from moving more than .01 at all times
             names(correction) <- names(estpars[estpars & !redun_constr])
             tmp <- correction[names(correction) == 'g']
-            tmp[abs(tmp) > .001] <- sign(tmp[abs(tmp) > .001]) * .001/gamma
+            tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
             correction[names(correction) == 'g'] <- tmp
             tmp <- correction[names(correction) == 'u']
-            tmp[abs(tmp*gamma) > .001] <- sign(tmp[abs(tmp*gamma) > .001]) * .001/gamma
+            tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
             correction[names(correction) == 'u'] <- tmp
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
             longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
@@ -341,13 +347,13 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list())
         correction <- solve(Tau, grad)
         correction[gamma*correction > .25] <- .25/gamma
         correction[gamma*correction < -.25] <- -.25/gamma
-        #prevent guessing/upper pars from moving more than .001 at all times
+        #prevent guessing/upper pars from moving more than .01 at all times
         names(correction) <- names(estpars[estpars & !redun_constr])
         tmp <- correction[names(correction) == 'g']
-        tmp[abs(tmp*gamma) > .001] <- sign(tmp[abs(tmp*gamma) > .001]) * .001/gamma
+        tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
         correction[names(correction) == 'g'] <- tmp
         tmp <- correction[names(correction) == 'u']
-        tmp[abs(tmp*gamma) > .001] <- sign(tmp[abs(tmp*gamma) > .001]) * .001/gamma
+        tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
         correction[names(correction) == 'u'] <- tmp
         longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
         longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]

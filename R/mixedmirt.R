@@ -4,7 +4,8 @@
 #' IRT models conditional on fixed and random effect of person and item level covariates. 
 #' This can also be understood as 'expalanatory IRT' if only fixed effects are modeled, or 
 #' multilevel/mixed IRT if random and fixed effects are included. The method uses the MH-RM
-#' algorithm exclusively. 
+#' algorithm exclusively. Additionally, computation of the log-likelihood can be sped up by
+#' using parallel estimation via \code{\link{mirtCluster}}.
 #' 
 #' For dichotomous response models, \code{mixedmirt} follows the general form
 #' 
@@ -31,8 +32,8 @@
 #' numerically ordered data, with missing data coded as \code{NA}
 #' @param covdata a \code{data.frame} that consists of the \code{nrow(data)} by \code{K}
 #' 'person level' fixed and random predictors
-#' @param model an object returned from \code{confmirt.model()} declaring how
-#' the factor model is to be estimated. See \code{\link{confmirt.model}} for
+#' @param model an object returned from \code{mirt.model()} declaring how
+#' the factor model is to be estimated. See \code{\link{mirt.model}} for
 #' more details
 #' @param fixed a right sided R formula for specifying the fixed effect (aka 'explanatory') 
 #' predictors from \code{covdata} and \code{itemdesign}. To estimate the intercepts for 
@@ -57,11 +58,13 @@
 #' @param pars used for parameter starting values. See \code{\link{mirt}} for more detail
 #' @param return.design logical; return the design matrices before they have (potentially) 
 #' been reassigned? 
+#' @param draws the number of Monte Carlo draws to estimate the log-likelihood for the MH-RM algorithm. Default
+#' is 5000
 #' @param ... additional arguments to be passed to the MH-RM estimation engine. See 
-#' \code{\link{confmirt}} for more detail
+#' \code{\link{mirt}} for more detail
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
-#' @seealso \code{\link{randef}}, \code{\link{calcLogLik}}
+#' @seealso \code{\link{randef}}, \code{\link{calcLogLik}}, \code{\link{mirtCluster}}
 #' @export mixedmirt
 #' @examples
 #'
@@ -77,18 +80,17 @@
 #' group <- factor(rep(c('G1','G2','G3'), each = N/3))
 #' data <- simdata(a,d,N, itemtype = rep('dich',10), Theta=Theta)
 #' covdata <- data.frame(group, pseudoIQ)
-#' #use cl for parallel computing
-#' library(parallel)
-#' cl <- makeCluster(detectCores())
+#' #use parallel computing
+#' mirtCluster()
 #'
 #' #specify IRT model
-#' model <- confmirt.model('Theta = 1-10')
+#' model <- mirt.model('Theta = 1-10')
 #'
 #' #model with no person predictors
 #' mod0 <- mirt(data, model, itemtype = 'Rasch')
 #'
 #' #group as a fixed effect predictor (aka, uniform dif) 
-#' mod1 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items, cl=cl)
+#' mod1 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items)
 #' anova(mod0, mod1)
 #' summary(mod1)
 #' coef(mod1)
@@ -102,12 +104,12 @@
 #' anova(lmod0, lmod1)
 #'
 #' #model using 2PL items instead of Rasch
-#' mod1b <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items, itemtype = '2PL', cl=cl)
+#' mod1b <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items, itemtype = '2PL')
 #' anova(mod1, mod1b) #much better with 2PL models using all criteria (as expected, given simdata pars)
 #'
 #' #continuous predictor and interaction model with group 
-#' mod2 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + pseudoIQ, cl=cl)
-#' mod3 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group * pseudoIQ, cl=cl)
+#' mod2 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + pseudoIQ)
+#' mod3 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group * pseudoIQ)
 #' summary(mod2)
 #' anova(mod1b, mod2)
 #' anova(mod2, mod3)
@@ -123,18 +125,38 @@
 #' tail(withoutint$X)  
 #' 
 #' ###################################################
+#' ### random effects
+#' #make the number of groups much larger
+#' covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
+#' 
+#' #random groups
+#' rmod1 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group)
+#' summary(rmod1)
+#' coef(rmod1)
+#' 
+#' #random groups and random items 
+#' rmod2 <- mixedmirt(data, covdata, 1, random = list(~ 1|group, ~ 1|items))
+#' summary(rmod2)
+#' eff <- randef(rmod2) #estimate random effects
+#' 
+#' #random slopes with fixed intercepts (suppressed correlation)
+#' rmod3 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group)
+#' summary(rmod3)
+#' (eff <- randef(rmod3)) 
+#' 
+#' ###################################################
 #' ##LLTM, and 2PL version of LLTM
 #' data(SAT12)
 #' data <- key2binary(SAT12,
 #'                    key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
-#' model <- confmirt.model('Theta = 1-32')
+#' model <- mirt.model('Theta = 1-32')
 #'
 # #Suppose that the first 16 items were suspected to be easier than the last 16 items, and we wish
 # #to test this item structure hypothesis (more intercept designs are possible by including more columns).
 #' itemdesign <- data.frame(itemorder = factor(c(rep('easier', 16), rep('harder', 16))))
 #'
 #' #notice that the 'fixed = ~ ... + items' argument is ommited
-#' LLTM <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, itemdesign = itemdesign, cl=cl)
+#' LLTM <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, itemdesign = itemdesign)
 #' summary(LLTM)
 #' coef(LLTM)
 #' wald(LLTM)
@@ -143,7 +165,7 @@
 #'
 #' #compare to items with estimated slopes (2PL)
 #' twoPL <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, itemtype = '2PL', 
-#'                    itemdesign = itemdesign, cl=cl)
+#'                    itemdesign = itemdesign)
 #' anova(twoPL, LLTM) #much better fit
 #' summary(twoPL)
 #' coef(twoPL)
@@ -158,30 +180,10 @@
 #' 
 #' ##LLTM with item error term 
 #' LLTMwithError <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, random = ~ 1|items,
-#'     itemdesign = itemdesign, cl=cl)
+#'     itemdesign = itemdesign)
 #' summary(LLTMwithError) 
 #' #large item level variance after itemorder is regressed; not a great predictor of item difficulty
 #' coef(LLTMwithError) 
-#' 
-#' ###################################################
-#' ### random effects
-#' #make the number of groups much larger
-#' covdata$group <- factor(rep(paste0('G',1:50), each = N/50))
-#' 
-#' #random groups
-#' rmod1 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group, cl=cl)
-#' summary(rmod1)
-#' coef(rmod1)
-#' 
-#' #random groups and random items 
-#' rmod2 <- mixedmirt(data, covdata, 1, random = list(~ 1|group, ~ 1|items), cl=cl)
-#' summary(rmod2)
-#' eff <- randef(rmod2) #estimate random effects
-#' 
-#' #random slopes with fixed intercepts (suppressed correlation)
-#' rmod3 <- mixedmirt(data, covdata, 1, fixed = ~ 0 + items, random = ~ -1 + pseudoIQ|group, cl=cl)
-#' summary(rmod3)
-#' (eff <- randef(rmod3)) 
 #' 
 #' ###################################################
 #' ### Polytomous example
@@ -206,7 +208,8 @@
 #' 
 #' }
 mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, itemtype = 'Rasch',
-                      itemdesign = NULL, constrain = NULL, pars = NULL, return.design = FALSE, ...)
+                      itemdesign = NULL, constrain = NULL, pars = NULL, return.design = FALSE, 
+                      draws = 5000, ...)
 {
     Call <- match.call()       
     svinput <- pars
@@ -280,7 +283,8 @@ mixedmirt <- function(data, covdata = NULL, model, fixed = ~ 1, random = NULL, i
     }
     if(is.data.frame(svinput)) pars <- svinput
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)), itemtype=itemtype,
-                      mixed.design=mixed.design, method='MIXED', constrain=constrain, pars=pars, ...)
+                      mixed.design=mixed.design, method='MIXED', constrain=constrain, pars=pars,
+                      draws=draws, ...)
     if(is(mod, 'MixedClass'))
         mod@Call <- Call
     return(mod)

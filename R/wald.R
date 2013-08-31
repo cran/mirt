@@ -12,7 +12,7 @@
 #' @param L a coefficient matrix with dimensions nconstrasts x npars, or a vector if only one
 #' set of contrasts is being tested. Omitting this value will return the column names of the
 #' information matrix used to identify the (potentially constrained) parameters
-#' @param object estimated object from \code{mirt}, \code{bfactor}, \code{confmirt},
+#' @param object estimated object from \code{mirt}, \code{bfactor},
 #' \code{multipleGroup}, or \code{mixedmirt}
 #' @param C a constant vector/matrix to be compared along side L
 #' @keywords wald
@@ -49,6 +49,9 @@
 #' anova(mod2, mod)
 #' }
 wald <- function(object, L, C = 0){
+    if(all(dim(object@information) == c(1,1)))
+        if(object@information[1,1] == 0L)
+            stop('No information matrix has been calculated for the model')
     Names <- colnames(object@information)
     if(missing(L)){
         names(Names) <- 1:length(Names)
@@ -73,11 +76,13 @@ wald <- function(object, L, C = 0){
         }
     }
     if(is(object, 'MixedClass')){
-        for(i in 1L:length(object@random)){
-            B <- c(B, object@random[[i]]@par)
-            tmp <- object@random[[i]]@parnum
-            names(tmp) <- names(object@random[[i]]@est)
-            parnum <- c(parnum, tmp)
+        if(length(object@random)){
+            for(i in 1L:length(object@random)){
+                B <- c(B, object@random[[i]]@par)
+                tmp <- object@random[[i]]@parnum
+                names(tmp) <- names(object@random[[i]]@est)
+                parnum <- c(parnum, tmp)
+            }
         }
     }
     keep <- c()
