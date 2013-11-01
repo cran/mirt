@@ -1,4 +1,4 @@
-MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRACE, DERIV)
+MHRM.group <- function(pars, constrain, PrepList, list, random = list(), DERIV)
 {     
     if(is.null(random)) random <- list()
     RAND <- length(random) > 0L
@@ -10,6 +10,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     SEMCYCLES <- list$SEMCYCLES
     KDRAWS <- list$KDRAWS
     TOL <- list$TOL
+    NO.CUSTOM <- !any(sapply(pars[[1L]], class) %in% 'custom')
     gain <- list$gain
     itemloc <- list$itemloc
     ngroups <- length(pars)
@@ -42,10 +43,9 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     for(g in 1L:ngroups){
         for(i in 1L:30L){
             gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]],
-                                        itemloc=itemloc, cand.t.var=cand.t.var,
+                                        itemloc=itemloc, cand.t.var=cand.t.var, NO.CUSTOM=NO.CUSTOM,
                                         prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
-                                        PROBTRACE=PROBTRACE[[g]])
+                                        prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)
             if(i > 5L){
                 if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
                 else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
@@ -60,7 +60,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                 }
             }
         }
-    }    
+    }
     if(RAND) OffTerm <- OffTerm(random, J=J, N=N)    
     m.thetas <- grouplist <- SEM.stores <- SEM.stores2 <- m.list <- list()
     conv <- 0L
@@ -82,6 +82,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             }
         }
     }
+    names(longpars) <- names(estpars)
     stagecycle <- 1L
     converge <- 1L
     noninvcount <- 0L
@@ -97,7 +98,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     redun_constr <- rep(FALSE, length(estpars))
     if(length(constrain) > 0L){
         for(i in 1L:length(constrain)){
-            L[constrain[[i]], constrain[[i]]] <- 1L
+            L[constrain[[i]], constrain[[i]]] <- 1L/length(constrain[[i]])
             for(j in 2L:length(constrain[[i]]))
                 redun_constr[constrain[[i]][j]] <- TRUE
         }
@@ -110,11 +111,11 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
                  estimated parameters. Please fix!')
     }
     #make sure constrained pars are equal
-    tmp <- rowSums(L)
-    tmp[tmp == 0] <- 1
-    tmp <- matrix(1/tmp, length(longpars), length(longpars), byrow = TRUE)
-    tmp2 <- abs(diag(L) - 1)
-    longpars <- diag((tmp * L) * longpars) + tmp2 * longpars
+    tmp <- L
+    tmp2 <- diag(tmp)
+    tmp2[tmp2 == 0L] <- 1L
+    diag(tmp) <- tmp2
+    longpars <- as.numeric(tmp %*% longpars)
     LBOUND <- UBOUND <- c()
     for(g in 1L:ngroups){
         for(i in 1L:(J+1L)){
@@ -134,7 +135,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     {
         if(cycles == BURNIN + 1L) stagecycle <- 2L
         if(stagecycle == 3L)
-            gamma <- (gain[1L] / (cycles - SEMCYCLES - BURNIN - 1L))^(gain[2L]) - gain[3L]
+            gamma <- (gain[1L] / (cycles - SEMCYCLES - BURNIN - 1L))^(gain[2L])
         if(cycles == (BURNIN + SEMCYCLES + 1L)){
             stagecycle <- 3L
             longpars <- SEM.stores[[1L]]
@@ -153,10 +154,10 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
         for(g in 1L:ngroups)
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
-        if(RAND && cycles > 100) random <- reloadRandom(random=random, longpars=longpars, 
+        if(RAND && cycles > 100L) random <- reloadRandom(random=random, longpars=longpars, 
                                         parstart=max(pars[[1L]][[J+1L]]@parnum) + 1L)
         
-        if(RAND && cycles == 100){
+        if(RAND && cycles == 100L){
             for(g in 1L:ngroups) gtheta0[[g]] <- matrix(0, nrow(gfulldata[[g]]), nfact)
             OffTerm <- OffTerm(random, J=J, N=N)
             for(j in 1L:length(random)){
@@ -188,10 +189,9 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             tmp <- .1
             for(i in 1L:30L){
                 gtheta0[[1L]] <- draw.thetas(theta0=gtheta0[[1L]], pars=pars[[1L]], fulldata=gfulldata[[1L]],
-                                             itemloc=itemloc, cand.t.var=cand.t.var,
+                                             itemloc=itemloc, cand.t.var=cand.t.var, NO.CUSTOM=NO.CUSTOM,
                                              prior.t.var=gstructgrouppars[[1L]]$gcov, OffTerm=OffTerm,
-                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist,
-                                             PROBTRACE=PROBTRACE[[1L]])
+                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist)
                 if(i > 5L){
                     if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
                     else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
@@ -218,13 +218,12 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         for(g in 1L:ngroups){
             for(i in 1L:5L)
                 gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=gfulldata[[g]],
-                                      itemloc=itemloc, cand.t.var=cand.t.var,
+                                      itemloc=itemloc, cand.t.var=cand.t.var, NO.CUSTOM=NO.CUSTOM,
                                       prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist,
-                                            PROBTRACE=PROBTRACE[[g]])            
+                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)            
             LL <- LL + attr(gtheta0[[g]], "log.lik")
         }
-        if(RAND && cycles > 100){
+        if(RAND && cycles > 100L){
             for(j in 1:length(random)){
                 for(i in 1L:5L){                
                     random[[j]]@drawvals <- DrawValues(random[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
@@ -244,8 +243,7 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
             thetatemp <- gtheta0[[group]]
             if(length(prodlist) > 0L) thetatemp <- prodterms(thetatemp,prodlist)
             gitemtrace[[group]] <- computeItemtrace(pars=pars[[group]], offterm=OffTerm,
-                                                Theta=thetatemp, itemloc=itemloc,
-                                                    PROBTRACE=PROBTRACE[[group]])
+                                                Theta=thetatemp, itemloc=itemloc, NO.CUSTOM=NO.CUSTOM)
             pars[[group]] <- assignItemtrace(pars=pars[[group]], itemtrace=gitemtrace[[group]],
                                          itemloc=itemloc)
             for (i in 1L:J){
@@ -284,37 +282,27 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         if(is.na(attr(gtheta0[[1L]],"log.lik")))
             stop('Estimation halted. Model did not converge.')
         if(verbose){
-            if(cycles < BURNIN)
+            if(cycles <= BURNIN)
                 printmsg <- sprintf("\rStage 1: Cycle = %i, Log-Lik = %.1f", cycles, LL)
-            if(cycles > BURNIN && cycles < BURNIN + SEMCYCLES)
+            if(cycles > BURNIN && cycles <= BURNIN + SEMCYCLES)
                 printmsg <- sprintf("\rStage 2: Cycle = %i, Log-Lik = %.1f", cycles-BURNIN, LL)
             if(cycles > BURNIN + SEMCYCLES)
                 printmsg <- sprintf("\rStage 3: Cycle = %i, Log-Lik = %.1f", cycles-BURNIN-SEMCYCLES, LL)
         }
         if(stagecycle < 3L){
             if(qr(ave.h)$rank != ncol(ave.h)){
-                tmp <- ave.h
-                while(1L){
-                    tmp <- tmp + .001*diag(diag(tmp))
-                    QR <- qr(tmp)
-                    if(QR$rank == ncol(tmp)) break
-                }
-                ave.h <- tmp
+                ev <- eigen(ave.h)
+                eval <- ev$values 
+                eval[eval < 0] <- 100*.Machine$double.eps
+                eval <- eval / sum(eval) * sum(ev$values)
+                ave.h <- ev$vectors %*% diag(eval) %*% t(ev$vectors)
                 noninvcount <- noninvcount + 1L
                 if(noninvcount == 3L)
                     stop('\nEstimation halted during burn in stages, solution is unstable')
             }
             correction <- solve(ave.h, grad)
-            correction[correction > .5] <- 1
-            correction[correction < -.5] <- -1
-            #prevent guessing/upper pars from moving more than .01 at all times
-            names(correction) <- names(estpars[estpars & !redun_constr])
-            tmp <- correction[names(correction) == 'g']
-            tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
-            correction[names(correction) == 'g'] <- tmp
-            tmp <- correction[names(correction) == 'u']
-            tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
-            correction[names(correction) == 'u'] <- tmp
+            correction[correction > 1] <- 1
+            correction[correction < -1] <- -1
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
             longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
             longpars[longpars > UBOUND] <- UBOUND[longpars > UBOUND]
@@ -333,28 +321,18 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
         #Step 3. Update R-M step
         Tau <- Tau + gamma*(ave.h - Tau)
         if(qr(Tau)$rank != ncol(Tau)){
-            tmp <- Tau
-            while(1L){
-                tmp <- tmp + .001*diag(diag(tmp))
-                QR <- qr(tmp)
-                if(QR$rank == ncol(tmp)) break
-            }
-            Tau <- tmp
+            ev <- eigen(Tau)
+            eval <- ev$values 
+            eval[eval < 0] <- 100*.Machine$double.eps
+            eval <- eval / sum(eval) * sum(ev$values)
+            Tau <- ev$vectors %*% diag(eval) %*% t(ev$vectors)
             noninvcount <- noninvcount + 1L
-            if(noninvcount == 5L)
-                stop('\nEstimation halted during stage 3, solution is unstable')
+            if(noninvcount == 3L)
+                stop('\nEstimation halted during burn in stages, solution is unstable')
         }
         correction <- solve(Tau, grad)
         correction[gamma*correction > .25] <- .25/gamma
         correction[gamma*correction < -.25] <- -.25/gamma
-        #prevent guessing/upper pars from moving more than .01 at all times
-        names(correction) <- names(estpars[estpars & !redun_constr])
-        tmp <- correction[names(correction) == 'g']
-        tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
-        correction[names(correction) == 'g'] <- tmp
-        tmp <- correction[names(correction) == 'u']
-        tmp[abs(tmp) > .01] <- sign(tmp[abs(tmp) > .01]) * .01
-        correction[names(correction) == 'u'] <- tmp
         longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
         longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
         longpars[longpars > UBOUND] <- UBOUND[longpars > UBOUND]
@@ -381,8 +359,10 @@ MHRM.group <- function(pars, constrain, PrepList, list, random = list(), PROBTRA
     info <- Phi - outer(phi,phi)
     diag(info) <- abs(diag(info)) #diag of latent variances neg sometimes, why?
     #Reload final pars list
-    if(cycles == NCYCLES + BURNIN + SEMCYCLES && !list$USEEM)
+    if(cycles == NCYCLES + BURNIN + SEMCYCLES && !list$USEEM){
         message('MHRM iterations terminated after ', NCYCLES, ' iterations.')
+        converge <- 0L
+    }
     if(list$USEEM) longpars <- list$startlongpars
     ind1 <- 1L
     for(g in 1L:ngroups){

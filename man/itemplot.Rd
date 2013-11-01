@@ -4,7 +4,8 @@
 \usage{
   itemplot(object, item, type = "trace", degrees = 45,
     CE = FALSE, CEalpha = 0.05, CEdraws = 1000,
-    drop.zeros = FALSE, ...)
+    drop.zeros = FALSE,
+    rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
 }
 \arguments{
   \item{object}{a computed model object of class
@@ -36,6 +37,9 @@
   \item{CEdraws}{draws number of draws to use for
   confidence envelope}
 
+  \item{rot}{a list of rotation coordinates to be used for
+  3 dimensional plots}
+
   \item{drop.zeros}{logical; drop slope values that are
   numerically close to zero to reduce dimensionality?
   Useful in objects returned from \code{\link{bfactor}} or
@@ -55,7 +59,7 @@
 data(LSAT7)
 fulldata <- expand.table(LSAT7)
 mod1 <- mirt(fulldata,1,SE=TRUE)
-mod2 <- mirt(fulldata,1, itemtype = '1PL')
+mod2 <- mirt(fulldata,1, itemtype = 'Rasch')
 mod3 <- mirt(fulldata,2)
 
 itemplot(mod1, 2)

@@ -2,7 +2,7 @@
 \alias{boot.mirt}
 \title{Calculate bootstrapped standard errors for estimated models}
 \usage{
-  boot.mirt(x, R = 100, return.boot = TRUE, ...)
+  boot.mirt(x, R = 100, ...)
 }
 \arguments{
   \item{x}{an estimated object from \code{mirt},
@@ -11,29 +11,29 @@
   \item{R}{number of draws to use (passed to the
   \code{boot()} function)}
 
-  \item{return.boot}{logical; return the estimated object
-  from the \code{boot} package? If \code{FALSE} the
-  estimated model is returned with the bootstrapped
-  standard errors}
-
   \item{...}{additional arguments to be passed on to
   \code{boot(...)}}
 }
 \description{
   Given an internal mirt object estimate the bootstrapped
   standard errors. It may be beneficial to run the
-  computations using multicore architecture (e.g., the
+  computations using multi-core architecture (e.g., the
   \code{parallel} package).
 }
 \examples{
 \dontrun{
+
+#standard
 mod <- mirt(Science, 1)
 booted <- boot.mirt(mod)
+plot(booted)
 booted
 
-#run in parallel using snow backend
-modwithboot <- boot.mirt(mod, return.boot = FALSE, parallel = 'snow', ncpus = 4L)
-coef(modwithboot)
+#run in parallel using snow back-end using all available cores
+mod <- mirt(Science, 1)
+booted <- boot.mirt(mod, parallel = 'snow', ncpus = parallel::detectCores())
+booted
+
 
 }
 }

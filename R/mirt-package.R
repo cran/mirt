@@ -1,14 +1,12 @@
 #' Full information maximum likelihood estimation of multidimensional IRT models
 #'
-#' Analysis of dichotomous and polytomous response data using latent
-#' trait models under the Item Response Theory paradigm. Exploratory models can be
-#' estimated via quadrature or stochastic methods, a generalized confirmatory bi-factor
-#' analysis is included, and confirmatory models can be fit with a
-#' Metropolis-Hastings Robbins-Monro algorithm which can include polynomial or
-#' product constructed latent traits. Multiple group analysis
-#' and mixed effects designs may be performed for unidimensional or
-#' multidimensional item response models for detecting differential item
-#' functioning and modelling item and person covariates.
+#' Analysis of dichotomous and polytomous response data using unidimensional and 
+#' multidimensional latent trait models under the Item Response Theory paradigm. 
+#' Exploratory and confirmatory models can be estimated with quadrature (EM) or 
+#' stochastic (MHRM) methods. Confirmatory bi-factor and two-tier analyses are available 
+#' for modeling item testlets. Multiple group analysis and mixed effects designs also 
+#' are available for detecting differential item functioning and modelling item and 
+#' person covariates.
 #'
 #' Users interested in the most recent version of this package can visit
 #' \url{https://github.com/philchalmers/mirt} and follow the instructions
@@ -24,6 +22,7 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @useDynLib mirt
 #' @importFrom stats anova fitted residuals
+#' @importFrom MASS ginv
 #' @import lattice GPArotation mvtnorm Rcpp stats4 methods
 #' @exportMethod anova
 #' @exportMethod fitted
@@ -50,7 +49,8 @@ NULL
 #' scored items for a grade 12 science assessment test (SAT) measuring topics of chemistry,
 #' biology, and physics. The scoring key for these data is
 #' [1, 4, 5, 2, 3, 1, 2, 1, 3, 1, 2, 4, 2, 1, 5, 3, 4, 4, 1, 4, 3, 3, 4, 1, 3, 5, 1, 3, 1, 5, 4, 5],
-#' respectively.
+#' respectively. However, careful analysis using the nominal response model suggests that the 
+#' scoring key for item 32 may be incorrect, and should be changed from 5 to 3.
 #'
 #'
 #' @name SAT12
@@ -75,6 +75,10 @@ NULL
 #' SAT12missing[SAT12missing == '8'] <- NA
 #' data <- key2binary(SAT12missing,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#'     
+#' #potentially better scoring for item 32
+#' data <- key2binary(SAT12,
+#'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,3))   
 #' }
 NULL
 
@@ -97,6 +101,8 @@ NULL
 #' \dontrun{
 #' dat <- expand.table(LSAT7)
 #' head(dat)
+#' (mod <- mirt(dat, 1))
+#' coef(mod)
 #' }
 NULL
 
@@ -119,6 +125,12 @@ NULL
 #' \dontrun{
 #' dat <- expand.table(LSAT6)
 #' head(dat)
+#' model <- mirt.model('F = 1-5
+#'                      CONSTRAIN = (1-5, a1)')
+#' (mod <- mirt(dat, model))
+#' coef(mod)
+#' 
+#' 
 #' }
 NULL
 
@@ -161,7 +173,7 @@ NULL
 #' head(dat)
 #' mod <- mirt(dat, 1, 'nominal')
 #' 
-#' #reproduce table 3
+#' #reproduce table 3 in Bock (1997)
 #' fs <- round(fscores(mod, verbose = FALSE)[,c('F1','SE_F1')],2)
 #' fttd <- round(fitted(mod),1)
 #' table <- data.frame(fttd, fs)

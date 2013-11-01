@@ -91,32 +91,47 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'MixedClass',
-    definition = function(object, digits = 3, ...)
+    definition = function(object, CI = .95, digits = 3, rawug = FALSE, ...)
     {
+        if(CI >= 1 || CI <= 0)
+            stop('CI must be between 0 and 1')
+        z <- abs(qnorm((1 - CI)/2))
+        SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
         J <- length(K)
         nLambdas <- ncol(object@F)
         allPars <- list()
         if(length(object@pars[[1]]@SEpar) > 0){
             for(i in 1:(J+1)){
-                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar),
-                                             2, byrow = TRUE), digits)
-                rownames(allPars[[i]]) <- c('pars', 'SE')
+                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, 
+                                               object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
+                                               object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
+                                             3, byrow = TRUE), digits)
+                rownames(allPars[[i]]) <- c('par', SEnames)
                 colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
             }
         } else {
             for(i in 1:(J+1)){
-                allPars[[i]] <- round(object@pars[[i]]@par, digits)
-                names(allPars[[i]]) <- names(object@pars[[i]]@est)
+                allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
+                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                rownames(allPars[[i]]) <- 'par'
             }
+        }
+        if(!rawug){
+            allPars <- lapply(allPars, function(x, digits){
+                x[ , colnames(x) %in% c('g', 'u')] <- round(antilogit(x[ , colnames(x) %in% c('g', 'u')]), digits)
+                x
+            },  digits=digits)
         }
         listnames <- c(colnames(object@data), 'GroupPars')
         if(length(object@random) > 0L){            
             for(i in 1L:length(object@random)){
                 allPars[[length(allPars) + 1L]] <- 
-                    round(matrix(c(object@random[[i]]@par, object@random[[i]]@SEpar),
-                                 2, byrow = TRUE), digits)
-                rownames(allPars[[length(allPars)]]) <- c('pars', 'SE')
+                    round(matrix(c(object@random[[i]]@par, 
+                                   object@random[[i]]@par - z*object@random[[i]]@SEpar,
+                                   object@random[[i]]@par + z*object@random[[i]]@SEpar),
+                                 3, byrow = TRUE), digits)
+                rownames(allPars[[length(allPars)]]) <- c('par', SEnames)
                 colnames(allPars[[length(allPars)]]) <- names(object@random[[i]]@est)
                 listnames <- c(listnames, colnames(object@random[[i]]@gframe)[1L])
             }            

@@ -16,8 +16,8 @@
     NULL, technical = list(), accelerate = TRUE, verbose =
     TRUE, ...)
 
-  \S4method{coef}{MultipleGroupClass}(object, digits = 3,
-    verbose = TRUE, ...)
+  \S4method{coef}{MultipleGroupClass}(object, CI = .95,
+    digits = 3, verbose = TRUE, ...)
 
   \S4method{summary}{MultipleGroupClass}(object, digits =
     3, verbose = TRUE, ...)
@@ -37,11 +37,10 @@
   consists of numerically ordered data, with missing data
   coded as \code{NA}}
 
-  \item{model}{an object or named list of objects returned
-  from \code{mirt.model()} declaring how the factor model
-  is to be estimated. The names of the list input must
-  correspond to the unique values in the \code{group}
-  variable. See \code{\link{mirt.model}} for more details}
+  \item{model}{a single model object returned from
+  \code{mirt.model()} declaring how the factor model is to
+  be estimated. See \code{\link{mirt.model}} for more
+  details}
 
   \item{group}{a character vector indicating group
   membership}
@@ -50,19 +49,17 @@
   following possible options: \describe{
   \item{\code{'free_means'}}{for freely estimating all
   latent means (reference group constrained to 0)}
-  \item{\code{'free_varcov'}}{for freely estimating the
-  variance-covariance matrix across groups (reference group
-  has variances equal to 1, but freely estimated covariance
-  terms if specified in the model)}
-  \item{\code{'covariances'}}{to constrain all the
-  covariance parameters to be equal, note that this only
-  makes sense if the factor variances are the same (i.e.,
-  unity)} \item{\code{'slopes'}}{to constrain all the
-  slopes to be equal across all groups}
-  \item{\code{'intercepts'}}{to constrain all the
-  intercepts to be equal across all groups, note for
-  nominal models this also includes the category specific
-  slope parameters}}
+  \item{\code{'free_var'}}{for freely estimating all latent
+  variances (reference group constrained to 1's)}
+  \item{\code{'free_cov'}}{for freely estimating all latent
+  covariances (reference group constrained to an Identity
+  matrix)} \item{\code{'free_varcov'}}{calls both
+  \code{'free_var'} and \code{'free_cov'}}
+  \item{\code{'slopes'}}{to constrain all the slopes to be
+  equal across all groups} \item{\code{'intercepts'}}{to
+  constrain all the intercepts to be equal across all
+  groups, note for nominal models this also includes the
+  category specific slope parameters}}
 
   Additionally, specifying specific item name bundles (from
   \code{colnames(data)}) will constrain all freely
@@ -129,6 +126,8 @@
 
   \item{itemtype}{see \code{\link{mirt}} for details}
 
+  \item{CI}{see \code{\link{mirt}} for details}
+
   \item{constrain}{see \code{\link{mirt}} for details}
 
   \item{grsm.block}{see \code{\link{mirt}} for details}
@@ -149,21 +148,7 @@
   \item{...}{additional arguments to be passed}
 
   \item{technical}{list specifying subtle parameters that
-  can be adjusted. These values are \describe{
-  \item{NCYCLES}{max number of cycles; default 2000 for
-  MHRM and 500 for EM} \item{MAXQUAD}{maximum number of
-  quadratures; default 10000} \item{BURNIN}{number of burn
-  in cycles (stage 1); default 150} \item{SEMCYCLES}{number
-  of SEM cycles (stage 2); default 50} \item{TOL}{minimum
-  threshold tolerance for convergence. If MH-RM, must occur
-  on three consecutive occations; default is .001 for MH-RM
-  and .0001 for EM} \item{set.seed}{seed number used during
-  estimation. Default is 12345} \item{gain}{a vector of
-  three values specifying the numerator, exponent, and
-  subtracted values for the RM gain value. Default is
-  \code{c(0.05,0.5,0.004)}} \item{return_newconstrain}{if
-  \code{TRUE} returns a list consisting of the constraints
-  to be used just before estimation begins} }}
+  can be adjusted. See \code{\link{mirt}} for details}
 }
 \description{
   \code{multipleGroup} performs a full-information
@@ -205,9 +190,9 @@ mod_configural <- multipleGroup(dat, models, group = group) #completely separate
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #equal intercepts, free variance and means
 mod_scalar2 <- multipleGroup(dat, models, group = group,
-                             invariance=c('slopes', 'intercepts', 'free_varcov','free_means'))
+                             invariance=c('slopes', 'intercepts', 'free_var','free_means'))
 mod_scalar1 <- multipleGroup(dat, models, group = group,  #fixed means
-                             invariance=c('slopes', 'intercepts', 'free_varcov'))
+                             invariance=c('slopes', 'intercepts', 'free_var'))
 mod_fullconstrain <- multipleGroup(dat, models, group = group,
                              invariance=c('slopes', 'intercepts'))
 
@@ -232,6 +217,13 @@ constrain <- list(c(1, 63), c(5,67), c(9,71), c(13,75), c(17,79), c(21,83))
 equalslopes <- multipleGroup(dat, models, group = group, constrain = constrain)
 anova(equalslopes, mod_configural)
 
+#same as above, but using mirt.model syntax
+newmodel <- mirt.model('
+    F = 1-15
+    CONSTRAINB = (1-6, a1)')
+equalslopes <- multipleGroup(dat, newmodel, group = group)
+coef(equalslopes)
+
 #############
 #DIF test for each item (using all other items as anchors)
 itemnames <- colnames(dat)
@@ -241,7 +233,7 @@ refmodel <- multipleGroup(dat, models, group = group,
 #loop over items (in practice, run in parallel to increase speed)
 estmodels <- vector('list', ncol(dat))
 for(i in 1:ncol(dat))
-    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE,
+    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, calcNull=FALSE,
                              invariance=c('free_means', 'free_varcov', itemnames[-i]))
 
 (anovas <- lapply(estmodels, anova, object2=refmodel))
@@ -254,7 +246,7 @@ p.adjust(p, method = 'BH')
 #constrain all intercepts
 estmodels <- vector('list', ncol(dat))
 for(i in 1:ncol(dat))
-    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE,
+    estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, calcNull=FALSE,
                              invariance=c('free_means', 'free_varcov', 'intercepts',
                              itemnames[-i]))
 
@@ -277,19 +269,17 @@ dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
 
 #group models
-model <- mirt.model()
+model <- mirt.model('
    F1 = 1-5
    F2 = 6-10
-   F3 = 11-15
-
-models <- list(D1=model, D2=model) #note the names match the groups
+   F3 = 11-15')
 
 #EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
-mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
-mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
-mod_scalar <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
+mod_configural <- multipleGroup(dat, model, group = group) #completely separate analyses
+mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes')) #equal slopes
+mod_scalar <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts', 'free_varcov'))
-mod_fullconstrain <- multipleGroup(dat, models, group = group, #equal means, slopes, intercepts
+mod_fullconstrain <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts'))
 
 anova(mod_metric, mod_configural)
@@ -297,6 +287,9 @@ anova(mod_scalar, mod_metric)
 anova(mod_fullconstrain, mod_scalar)
 
 #same as above, but with MHRM (more accurate with 3 factors, but slower)
+#define mirt cluster to compute log-likelihoods faster
+mirtCluster()
+
 #completely separate analyses
 mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM')
 #equal slopes
@@ -359,9 +352,8 @@ itemplot(mod_configural2, 10)
   \code{\link{iteminfo}}, \code{\link{testinfo}},
   \code{\link{probtrace}}, \code{\link{boot.mirt}},
   \code{\link{imputeMissing}}, \code{\link{itemfit}},
-  \code{\link{mod2values}}, \code{\link{read.mirt}},
-  \code{\link{simdata}}, \code{\link{createItem}},
-  \code{\link{mirtCluster}}
+  \code{\link{mod2values}}, \code{\link{simdata}},
+  \code{\link{createItem}}, \code{\link{mirtCluster}}
 }
 \keyword{models}
 

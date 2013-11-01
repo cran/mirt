@@ -27,35 +27,32 @@ test_that('three factor', {
     #group models
     model1 <- mirt.model(MGmodelg1, quiet = TRUE)    
     model2 <- mirt.model(MGmodelg1, quiet = TRUE)    
-    models <- list(D1=model1, D2=model2)    
+    models <- model1
     
     suppressWarnings(mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM',
                                 verbose = FALSE, draws = 10))
     expect_is(mod_metric, 'MultipleGroupClass') 
     cfs <- as.numeric(do.call(c, coef(mod_metric, digits=4)[[1]]))[1:20]
-    expect_equal(cfs, c(1.3003, 0.1238, 0, NA, 0, NA, 0.6606, 0.0731, 0, NA, 1, NA, 
-                        1.2537, 0.0371, 0, NA, 0, NA, -0.5673, 0.0748),
+    expect_equal(cfs, c(1.3033, 0.8185, 1.788, 0, NA, NA, 0, NA, NA, 0.6597, 0.4677, 0.8516, 0, NA, NA, 1, NA, NA, 1.2852, 0.7614),
                  tollerance = 1e-2)
     mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM')
     expect_is(mod_configural, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_configural, digits=4)[[1]]))
     cfs <- cfs[cfs != 0 & cfs != 1]    
-    expect_equal(cfs, c(1.2934, 0.655, 1.2387, -0.57, 0.9277, -0.1996, 0.8177, 0.7967, 1.0713, 0.2166, 0.4807, 0.6099, 1.1777, 0.9947, 0.9453, -0.4464, 1.0762, -1.1801, 0.8664, -1.1451, 0.8855, 1.3121, 1.4962, -0.3002, 1.0534, 0.4406, 1.0615, 0.4569, 0.8832, -0.1871),
+    expect_equal(cfs, c(1.2934, 0.655, 1.2387, -0.57, 0.9276, -0.1996, 0.8177, 0.7967, 1.0713, 0.2166, 0.4807, 0.61, 1.1778, 0.9948, 0.9453, -0.4464, 1.0761, -1.18, 0.8664, -1.1451, 0.8854, 1.3121, 1.4964, -0.3002, 1.0534, 0.4406, 1.0614, 0.4569, 0.8831, -0.1871),
                  tollerance = 1e-2)
     suppressWarnings(mod_scalar1 <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'MHRM',
                                  invariance=c('slopes', 'intercepts', 'free_varcov', draws = 10)))
     expect_is(mod_scalar1, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_scalar1, digits=4)[[1]]))[1:20]
-    expect_equal(cfs, c(1.214, 0.0852, 0, NA, 0, NA, 0.3883, 0.0513, 0, NA, 1, NA, 1.1956, 0.0775, 
-                        0, NA, 0, NA, -0.8127, 0.0521),
+    expect_equal(cfs, c(1.1907, 0.6966, 1.6848, 0, NA, NA, 0, NA, NA, 0.3851, 0.0887, 0.6815, 0, NA, NA, 1, NA, NA, 1.1926, 0.6811),
                  tollerance = 1e-2)
     
     fs1 <- fscores(mod_metric, verbose = FALSE)
     fs2 <- fscores(mod_scalar1, full.scores = TRUE)    
     expect_is(fs1, 'list')
     expect_is(fs2, 'data.frame')    
-    expect_true(mirt:::closeEnough(fs2[1:6, 'F1'] - c(0.8035599,  0.8035599,  0.2855899, 
-                                                      -0.1416255, -0.2674919,  0.8035599), -1e-4, 1e-4))     
+    expect_true(mirt:::closeEnough(fs2[1:6, 'F1'] - c(0.8076989,  0.8076989,  0.2915864, -0.1365438, -0.2653481,  0.8076989), -1e-4, 1e-4))     
 })
 
 
