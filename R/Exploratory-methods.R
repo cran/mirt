@@ -19,11 +19,9 @@ setMethod(
             cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
-                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4),
-                    "\nX2 (", x@df,") = ", round(x@X2,2), ", p = ", round(x@p.X2,4), sep='')
-                cat("\nRMSEA (G2) = ", round(x@RMSEA,3), "; RMSEA (X2) = ", round(x@RMSEA.X2,3), sep='')
-                cat("\nCFI (G2) = ", round(x@CFI,3), "; CFI (X2) = ", round(x@CFI.X2,3), sep='')
-                cat("\nTLI (G2) = ", round(x@TLI,3), "; TLI (X2) = ", round(x@TLI.X2,3), '\n', sep='')
+                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
+                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3), 
+                    ", TLI = ", round(x@TLI,3), sep='')
             }
         }
     }
@@ -100,7 +98,12 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'ExploratoryClass',
-    definition = function(object, rotate = '', Target = NULL, digits = 3, verbose = TRUE, ...){
+    definition = function(object, CI = .95, rotate = '', Target = NULL, digits = 3, 
+                          rawug = FALSE, verbose = TRUE, ...){
+        if(CI >= 1 || CI <= 0)
+            stop('CI must be between 0 and 1')
+        z <- abs(qnorm((1 - CI)/2))
+        SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
         J <- length(K)
         nfact <- ncol(object@F)
@@ -120,16 +123,25 @@ setMethod(
         allPars <- list()
         if(length(object@pars[[1]]@SEpar) > 0){
             for(i in 1:(J+1)){
-                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar),
-                                             2, byrow = TRUE), digits)
-                rownames(allPars[[i]]) <- c('pars', 'SE')
+                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, 
+                                               object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
+                                               object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
+                                             3, byrow = TRUE), digits)
+                rownames(allPars[[i]]) <- c('par', SEnames)
                 colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
             }
         } else {
             for(i in 1:(J+1)){
-                allPars[[i]] <- round(object@pars[[i]]@par, digits)
-                names(allPars[[i]]) <- names(object@pars[[i]]@est)
+                allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
+                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                rownames(allPars[[i]]) <- 'par'
             }
+        }
+        if(!rawug){
+            allPars <- lapply(allPars, function(x, digits){
+                x[ , colnames(x) %in% c('g', 'u')] <- round(antilogit(x[ , colnames(x) %in% c('g', 'u')]), digits)
+                x
+            },  digits=digits)
         }
         names(allPars) <- c(colnames(object@data), 'GroupPars')
         return(allPars)
@@ -199,9 +211,8 @@ setMethod(
                                 Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)
                         s <- gamma.cor(tab) - gamma.cor(Etab)
                         if(s == 0) s <- 1
-                        res[j,i] <- sum(((tab - Etab)^2)/Etab) /
-                            ((K[i] - 1) * (K[j] - 1)) * sign(s)
-                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))
+                        res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
+                        res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (N*min(c(K[i],K[j]) - 1L)))
                         df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                     }
                 }
@@ -254,7 +265,8 @@ setMethod(
 setMethod(
     f = "plot",
     signature = signature(x = 'ExploratoryClass', y = 'missing'),
-    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
+    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45, 
+                          which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           auto.key = TRUE, ...)
     {
@@ -343,26 +355,34 @@ setMethod(
                 return(doubleYScale(obj1, obj2, add.ylab2 = TRUE))
             }
             if(type == 'trace'){
-                if(!all(x@K == 2)) stop('trace line plot only available for tests
-                                        with dichotomous items')
-                P <- matrix(NA, nrow(Theta), J)
-                for(i in 1:J)
-                    P[,i] <- probtrace(extract.item(x, i), ThetaFull)[,2]
-                items <- gl(n=J, k=nrow(Theta), labels = paste('Item', 1:J))
-                plotobj <- data.frame(P = as.numeric(P), Theta=Theta, item=items)
+                P <- vector('list', length(which.items))
+                names(P) <- colnames(x@data)[which.items]
+                for(i in which.items){
+                    tmp <- probtrace(extract.item(x, i), ThetaFull)
+                    if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
+                    tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta), 
+                                                           labels=paste0('cat', 1L:ncol(tmp))))
+                    P[[i]] <- tmp2
+                }
+                nrs <- sapply(P, nrow)                
+                Pstack <- do.call(rbind, P)
+                names <- c()
+                for(i in 1L:length(nrs))
+                    names <- c(names, rep(names(P)[i], nrs[i]))
+                plotobj <- data.frame(Pstack, item=names, Theta=Theta)
                 return(xyplot(P ~ Theta, plotobj, group = item, ylim = c(-0.1,1.1),,
                        xlab = expression(theta), ylab = expression(P(theta)),
                        auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
             }
-            if(type == 'infotrace'){
-                if(!all(x@K == 2)) stop('infotrace plot only available for tests
-                                        with dichotomous items')
+            if(type == 'infotrace'){                
                 I <- matrix(NA, nrow(Theta), J)
-                for(i in 1:J)
+                for(i in which.items)
                     I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
-                items <- gl(n=J, k=nrow(Theta), labels = paste('Item', 1:J))
+                I <- t(na.omit(t(I)))
+                items <- gl(n=length(unique(which.items)), k=nrow(Theta), 
+                            labels = paste('Item', which.items))
                 plotobj <- data.frame(I = as.numeric(I), Theta=Theta, item=items)
-                return(xyplot(I ~ Theta, plotobj, group = item, ylim = c(0,1),
+                return(xyplot(I ~ Theta, plotobj, group = item, 
                               xlab = expression(theta), ylab = expression(I(theta)),
                               auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
             }

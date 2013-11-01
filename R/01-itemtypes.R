@@ -42,6 +42,7 @@ setClass("AllItemsClass",
                         SEpar='numeric',
                         est='logical',
                         constr='logical',
+                        itemclass='integer',
                         parnum='numeric',
                         nfact='integer',
                         nfixedeffects='numeric', #number of fixed effect predictors
@@ -113,3 +114,5 @@ setGeneric("summary", function(object, ...) standardGeneric("summary"))
 setGeneric('DrawValues', function(x, Theta, ...) standardGeneric("DrawValues"))
 
 setGeneric('RandomDeriv', function(x, ...) standardGeneric("RandomDeriv"))
+
+setGeneric('GenRandomPars', function(x) standardGeneric("GenRandomPars"))

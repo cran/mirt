@@ -4,15 +4,13 @@ Multidimensional item response theory in R.
 
 ## Description
 
-Analysis of dichotomous and polytomous response data using latent
-trait models under the Item Response Theory paradigm. Exploratory models
-can be estimated via quadrature or stochastic methods, a generalized
-confirmatory bi-factor analysis is included, and confirmatory models can be
-fit with a Metropolis-Hastings Robbins-Monro algorithm which may include
-polynomial or product constructed latent traits. Multiple group analysis
-and mixed effects designs may be performed for unidimensional or
-multidimensional item response models for detecting differential item
-functioning and modelling item and person covariates.
+Analysis of dichotomous and polytomous response data using unidimensional and 
+multidimensional latent trait models under the Item Response Theory paradigm. 
+Exploratory and confirmatory models can be estimated with quadrature (EM) or 
+stochastic (MHRM) methods. Confirmatory bi-factor and two-tier analyses are available 
+for modeling item testlets. Multiple group analysis and mixed effects designs also 
+are available for detecting differential item functioning and modelling item and 
+person covariates.
 
 ## Installing from source
 
@@ -37,17 +35,19 @@ install.packages('devtools')
 library('devtools')
 install_github('mirt', 'philchalmers')
 ```
-
 # Presentations, Workshops, and Other Things
 
 Below are some presentation/workshop files for `mirt` that I have written and presented, and 
 may be helpful in understanding the package. 
 
-- 2013 workshop in Klagenfurt, Austria (coming soon)
+- [2013 workshop](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/mirt.pdf) in 
+  Klagenfurt, Austria, along with the 
+  [Examples presented](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/Examples.zip) and 
+  [Exercises provided](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/Exercises.zip)
 - a Shiny application is available here to show how modifying item parameters in `mirt` will affect
   tracelines, information curves, etc. To run the application you must have `shiny` installed, and use
   the following syntax in R to launch the application in a web browser: `shiny::runGist('6337165')`
-- [2012 presentation](https://dl.dropboxusercontent.com/u/10780530/mirt/mirt-presentation-2012.pdf) at 
+- [2012 presentation](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2012/mirt-presentation-2012.pdf) at 
   York University, Toronto
 
 # Bugs and Questions

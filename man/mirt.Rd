@@ -28,14 +28,16 @@ Theory)}
     Target = NULL, suppress = 0, digits = 3, verbose =
     TRUE, ...)
 
-  \S4method{coef}{ExploratoryClass}(object, rotate = '',
-    Target = NULL, digits = 3, verbose = TRUE, ...)
+  \S4method{coef}{ExploratoryClass}(object, CI = .95,
+    rotate = '', Target = NULL, digits = 3, rawug = FALSE,
+    verbose = TRUE, IRTpars = FALSE, ...)
 
   \S4method{anova}{ExploratoryClass}(object, object2)
 
   \S4method{plot}{ExploratoryClass}(x, y, type = 'info',
-    npts = 50, theta_angle = 45, rot = list(xaxis = -70,
-    yaxis = 30, zaxis = 10), ...)
+    npts = 50, theta_angle = 45, which.items =
+    1:ncol(x@data), rot = list(xaxis = -70, yaxis = 30,
+    zaxis = 10), ...)
 
   \S4method{residuals}{ExploratoryClass}(object, restype =
     'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
@@ -59,17 +61,17 @@ Theory)}
   a vector for each item or a single value which will be
   repeated globally. The NULL default assumes that the
   items follow a graded or 2PL structure, however they may
-  be changed to the following: 'Rasch', '1PL', '2PL',
-  '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'rsm',
+  be changed to the following: 'Rasch', '2PL', '3PL',
+  '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'rsm',
   'nominal', 'PC2PL', 'PC3PL', '2PLNRM', '3PLNRM',
-  '3PLuNRM', and '4PLNRM', for the Rasch/partial credit, 1
-  and 2 parameter logistic, 3 parameter logistic (lower
-  asymptote and upper), 4 parameter logistic, graded
-  response model, rating scale graded response model,
-  generalized partial credit model, Rasch rating scale
-  model, nominal model, 2-3PL partially compensatory model,
-  and 2-4 parameter nested logistic models, respectively.
-  User defined item classes can also be defined using the
+  '3PLuNRM', and '4PLNRM', for the Rasch/partial credit, 2
+  parameter logistic, 3 parameter logistic (lower or upper
+  asymptote upper), 4 parameter logistic, graded response
+  model, rating scale graded response model, generalized
+  partial credit model, Rasch rating scale model, nominal
+  model, 2-3PL partially compensatory model, and 2-4
+  parameter nested logistic models, respectively. User
+  defined item classes can also be defined using the
   \code{\link{createItem}} function}
 
   \item{method}{a character object specifying the
@@ -146,6 +148,18 @@ Theory)}
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
 
+  \item{which.items}{a numeric vector indicating which
+  items to be used when plotting. Default is to use all
+  available items}
+
+  \item{CI}{the amount of converged used to compute
+  confidence intervals in \code{coef()}; default is .95 for
+  95 percent confidence intervals}
+
+  \item{IRTpars}{logical; convert slope intercept
+  parameters into traditional IRT parameters? Only
+  applicable to unidimensional models}
+
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
   correctly use \code{pars = 'values'} initially to see how
@@ -154,20 +168,23 @@ Theory)}
   signifying which parameters to constrain. For example, to
   set parameters 1 and 5 equal, and also set parameters 2,
   6, and 10 equal use \code{constrain = list(c(1,5),
-  c(2,6,10))}}
+  c(2,6,10))}. Constraints can also be specified using the
+  \code{\link{mirt.model}} syntax}
 
   \item{parprior}{a list of user declared prior item
   probabilities. To see how to define the parameters
   correctly use \code{pars = 'values'} initially to see how
   the parameters are labeled. Can define either normal
-  (normally for intercepts), log-normal (for mutivariate
-  slopes or interecpts), or beta (for guessing and upper
-  bounds) prior probabilities. To specify a prior the form
-  is c('priortype', ...), where normal priors are
+  (e.g., intercepts, lower/guessing and upper bounds),
+  log-normal (e.g., for univariate slopes), or beta prior
+  probabilities. To specify a prior the form is
+  c('priortype', ...), where normal priors are
   \code{parprior = list(c(parnumbers, 'norm', mean, sd))},
   \code{parprior = list(c(parnumbers, 'lnorm', log_mean,
   log_sd))} for log-normal, and \code{parprior =
-  list(c(parnumbers, 'beta', alpha, beta))} for beta}
+  list(c(parnumbers, 'beta', alpha, beta))} for beta.
+  Priors can also be specified using
+  \code{\link{mirt.model}} syntax}
 
   \item{pars}{a data.frame with the structure of how the
   starting values, parameter numbers, estimation logical
@@ -175,6 +192,11 @@ Theory)}
   model defines the values by using \code{pars = 'values'},
   and this object can in turn be modified and input back
   into the estimation with \code{pars = mymodifiedpars}}
+
+  \item{rawug}{logical; return the untranformed internal g
+  and u parameters? If \code{FALSE}, g and u's are
+  converted with the original format along with delta
+  standard errors}
 
   \item{calcNull}{logical; calculate the Null model for fit
   statics (e.g., TLI)? Only applicable if the data contains
@@ -292,20 +314,19 @@ Theory)}
   in cycles (stage 1) in MH-RM; default 150}
   \item{SEMCYCLES}{number of SEM cycles (stage 2) in MH-RM;
   default 50} \item{set.seed}{seed number used during
-  estimation. Default is 12345} \item{gain}{a vector of
-  three values specifying the numerator, exponent, and
-  subtracted values for the RM gain value. Default is
-  \code{c(0.05,0.5,0.004)}} \item{customK}{a numeric value
-  to be used to explicitly declare the number of response
+  estimation. Default is 12345} \item{gain}{a vector of two
+  values specifying the numerator and exponent values for
+  the RM gain function \eqn{(val1 / cycle)^val2}. Default
+  is \code{c(0.15,0.65)}} \item{customK}{a numeric value to
+  be used to explicitly declare the number of response
   categories for each item. This should only be used when
   constructing mirt model for reasons other than parameter
   estimation (such as to obtain factor scores), and
   requires that the input data all have 0 as the lowest
-  category. The format is the same as the mod@K slot in all
-  converged models} \item{override.df}{logical; set the
-  total degrees of freedom to 1e10? Not recommended for
-  serious use, but can be used to estimate models that have
-  negative degrees of freedom} }}
+  category. The format is the same as the \code{mod@K} slot
+  in all converged models} \item{GenRandomPars}{logical;
+  generate random starting values prior to optimatization
+  instead of using the fixed internal starting values?} }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -313,7 +334,7 @@ Theory)}
   \code{mirt} fits an unconditional maximum likelihood
   factor analysis model to dichotomous and polytomous data
   under the item response theory paradigm. Fits univariate
-  and multivariate Rasch, 1-4PL, graded, (generalized)
+  and multivariate Rasch, 2-4PL, graded, (generalized)
   partial credit, nominal, graded rating scale, Rasch
   rating scale, nested logistic, and partially compensatory
   models using the traditional EM algorithm or Cai's (2010)
@@ -322,7 +343,13 @@ Theory)}
   \code{\link{createItem}} function. Models may also
   contain 'explanatory' person or item level predictors,
   though these can only be included by using the
-  \code{\link{mixedmirt}} function.
+  \code{\link{mixedmirt}} function. Tests that form a
+  two-tier or bi-factor structure should be estimated with
+  the \code{\link{bfactor}} function, which uses a
+  dimension reduction EM algorithm for modeling item
+  parcels. Multiple group analyses (useful for DIF testing)
+  are also available using the \code{\link{multipleGroup}}
+  function.
 }
 \details{
   \code{mirt} follows the item factor analysis strategy by
@@ -384,6 +411,14 @@ Theory)}
   (i.e., item easiness), \eqn{q_j}, to obtain \eqn{d_j =
   q_j / u_j}. A similar implementation is also used for
   obtaining initial values for polytomous items.
+
+  Note that internally, the \eqn{g} and \eqn{u} parameters
+  are transformed using a logit transformation
+  (\eqn{log(x/(1-x))}), and can be reversed by using \eqn{1
+  / (1 + exp(-x))} following convergence. This also applies
+  when computing confidence intervals for these parameters,
+  and is done so automatically if \code{coef(mod, rawug =
+  FALSE)}.
 }
 
 \section{Convergence for quadrature methods}{
@@ -394,10 +429,14 @@ Theory)}
   with means greater than .95, or items that are only .05
   greater than the guessing parameter, should be considered
   for removal from the analysis or treated with prior
-  distributions. The same type of reasoning is applicable
-  when including upper bound parameters as well. Also,
-  increasing the number of quadrature points per dimension
-  may help to stabilize the estimation process.
+  parameter distributions. The same type of reasoning is
+  applicable when including upper bound parameters as well.
+  Also, increasing the number of quadrature points per
+  dimension may help to stabilize the estimation process in
+  higher dimensions. Finally, solutions that are not well
+  defined also will have difficulty converging, and can
+  indicate that the model has been misspecified (e.g.,
+  extracting too many dimensions).
 }
 
 \section{Convergence for MH-RM method}{
@@ -422,37 +461,33 @@ Theory)}
   estimated. If the data have more than two categories then
   a partial credit model is used instead (see 'gpcm'
   below). \deqn{P(x = 1|\theta, d) = \frac{1}{1 +
-  exp(-(\theta + d))}} } \item{1-4PL}{ Depending on the
+  exp(-(\theta + d))}} } \item{2-4PL}{ Depending on the
   model \eqn{u} may be equal to 1 and \eqn{g} may be equal
   to 0. \deqn{P(x = 1|\theta, \psi) = g + \frac{(u - g)}{1
-  + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d))}} For the
-  1PL model the number of factors must equal 1, and if so
-  all the \eqn{a_1} values are constrained to be equal
-  accross all items and the latent variance of \eqn{\theta}
-  is freely estimated. } \item{graded}{ The graded model
-  consists of sequential 2PL models, and here \eqn{k} is
-  the predicted category. \deqn{P(x = k | \theta, \psi) =
-  P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
-  \phi)} } \item{grsm}{ A more constrained version of the
-  graded model where graded spacing is equal accross item
-  blocks and only adjusted by a single 'difficulty'
-  parameter (c) while the latent variance of \eqn{\theta}
-  is freely estimated. Again, \deqn{P(x = k | \theta, \psi)
-  = P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta,
-  \phi)} but now \deqn{P = \frac{1}{1 + exp(-(a_1 *
-  \theta_1 + a_2 * \theta_2 + d_k + c))}} }
-  \item{gpcm/nominal}{For the gpcm the \eqn{d_k} values are
-  treated as fixed and orderd values from 0:(k-1) (in the
-  nominal model \eqn{d_0} is also set to 0). Additionally,
-  for identification in the nominal model \eqn{ak_0 = 1},
-  \eqn{ak_k = (k - 1)}. \deqn{P(x = k | \theta, \psi) =
-  \frac{exp(ak_k * (a_1 * \theta_1 + a_2 * \theta_2) +
-  d_k)} {\sum_i^k exp(ak_k * (a_1 * \theta_1 + a_2 *
-  \theta_2) + d_k)}}
+  + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d))}} }
+  \item{graded}{ The graded model consists of sequential
+  2PL models, and here \eqn{k} is the predicted category.
+  \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi)
+  - P(x \ge k + 1 | \theta, \phi)} } \item{grsm}{ A more
+  constrained version of the graded model where graded
+  spacing is equal accross item blocks and only adjusted by
+  a single 'difficulty' parameter (c) while the latent
+  variance of \eqn{\theta} is freely estimated. Again,
+  \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi)
+  - P(x \ge k + 1 | \theta, \phi)} but now \deqn{P =
+  \frac{1}{1 + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d_k
+  + c))}} } \item{gpcm/nominal}{For the gpcm the \eqn{d}
+  values are treated as fixed and orderd values from
+  0:(k-1) (in the nominal model \eqn{d_0} is also set to
+  0). Additionally, for identification in the nominal model
+  \eqn{ak_0 = 0}, \eqn{ak_{(k-1)} = (k - 1)}. \deqn{P(x = k
+  | \theta, \psi) = \frac{exp(ak_{k-1} * (a_1 * \theta_1 +
+  a_2 * \theta_2) + d_{k-1})} {\sum_1^k exp(ak_{k-1} * (a_1
+  * \theta_1 + a_2 * \theta_2) + d_{k-1})}}
 
   For partial credit model (when \code{itemtype = 'Rasch'};
   unidimenional only) the above model is further
-  constrained so that \eqn{ak_k = (0,1,\ldots, k-1)},
+  constrained so that \eqn{ak = (0,1,\ldots, k-1)},
   \eqn{a_1 = 1}, and the latent variance of \eqn{\theta_1}
   is freely estimated.
 
@@ -491,7 +526,7 @@ Theory)}
   models consist of the products of 2PL probability curves.
   \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 +
   exp(-(a_1 * \theta_1 + d_1))} * \frac{1}{1 + exp(-(a_2 *
-  \theta_2 + d_2))})} } \item{1-4PLNRM}{Nested logistic
+  \theta_2 + d_2))})} } \item{2-4PLNRM}{Nested logistic
   curves for modeling distractor items. Requires a scoring
   key. The model is broken into two components for the
   probability of endorsement. For successful endorsement
@@ -520,10 +555,18 @@ plot(mod1, type = 'trace') #trace lines
 #estimated 3PL model for item 5 only
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 coef(mod1.3PL)
-#usually a good idea to include a beta prior for lower asymtote parameters
-(mod1.3PL.beta <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'),
-    parprior = list(c(19, 'beta', 5, 20))))
-coef(mod1.3PL.beta)
+#internally g and u pars are stored as logits, so usually a good idea to include normal prior
+#  to help stabilize the paramteres. For a value around .182 use a mean
+#  of -1.5 (since 1 / (1 + exp(-(-1.5))) == .182)
+(mod1.3PL.norm <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'),
+    parprior = list(c(19, 'norm', -1.5, 3))))
+coef(mod1.3PL.norm)
+
+#could also define priors using mirt.model() syntax
+model <- mirt.model('F = 1-5
+                     PRIOR = (5, g, norm, -1.5, 3)')
+mod1.3PL.norm2 <- mirt(data, model, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'))
+coef(mod1.3PL.norm2)
 
 #two factors (exploratory)
 mod2 <- mirt(data, 2)
@@ -553,18 +596,24 @@ plot(pmod1)
 summary(pmod1)
 fitIndices(pmod1) #M2 limited information statistic
 
-#Constrain all slopes to be equal with the constrain = list() input
+#Constrain all slopes to be equal with the constrain = list() input or mirt.model() syntax
 #first obtain parameter index
 values <- mirt(Science,1, pars = 'values')
 values #note that slopes are numbered 1,5,9,13, or index with values$parnum[values$name == 'a1']
 (pmod1_equalslopes <- mirt(Science, 1, constrain = list(c(1,5,9,13))))
+coef(pmod1_equalslopes)
+
+# using mirt.model syntax, constrain all item slopes to be equal
+model <- mirt.model('
+   F = 1-4
+   CONSTRAIN = (1-4, a1)')
+(pmod1_equalslopes <- mirt(Science, model))
+coef(pmod1_equalslopes)
 
 coef(pmod1_equalslopes)
 anova(pmod1_equalslopes, pmod1) #significantly worse fit with almost all criteria
 
 pmod2 <- mirt(Science, 2)
-#too few iterations, re-estimate with the current models as starting values and more iterations
-pmod2 <- mirt(Science, 2, pars = mod2values(pmod2), technical = list(NCYCLES = 1000))
 summary(pmod2)
 plot(pmod2)
 itemplot(pmod2, 1)
@@ -697,10 +746,10 @@ dataset <- simdata(a,d,2000,items,sigma)
 #analyses
 #CIFA for 2 factor crossed structure
 
-model.1 <- mirt.model()
+model.1 <- mirt.model('
   F1 = 1-4
   F2 = 4-8
-  COV = F1*F2
+  COV = F1*F2')
 
 
 #compute model, and use parallel computation of the log-likelihood
@@ -712,10 +761,10 @@ residuals(mod1)
 
 #####
 #bifactor
-model.3 <- mirt.model()
+model.3 <- mirt.model('
   G = 1-8
   F1 = 1-4
-  F2 = 5-8
+  F2 = 5-8')
 
 
 mod3 <- mirt(dataset,model.3, method = 'MHRM')
@@ -730,15 +779,15 @@ data(SAT12)
 data <- key2binary(SAT12,
                   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 
-model.quad <- mirt.model()
+model.quad <- mirt.model('
        F1 = 1-32
-  (F1*F1) = 1-32
+  (F1*F1) = 1-32')
 
 
-model.combo <- mirt.model()
+model.combo <- mirt.model('
        F1 = 1-16
        F2 = 17-32
-  (F1*F2) = 1-8
+  (F1*F2) = 1-8')
 
 
 (mod.quad <- mirt(data, model.quad))
@@ -845,8 +894,8 @@ itemplot(mod.combo, 2, type = 'infocontour')
   \code{\link{testinfo}}, \code{\link{probtrace}},
   \code{\link{boot.mirt}}, \code{\link{PLCI.mirt}},
   \code{\link{imputeMissing}}, \code{\link{itemfit}},
-  \code{\link{read.mirt}}, \code{\link{simdata}},
-  \code{\link{createItem}}, \code{\link{mirtCluster}}
+  \code{\link{simdata}}, \code{\link{createItem}},
+  \code{\link{mirtCluster}}
 }
 \keyword{models}
 

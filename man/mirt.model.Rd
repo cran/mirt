@@ -2,7 +2,8 @@
 \alias{mirt.model}
 \title{Specify model loadings}
 \usage{
-  mirt.model(input = NULL, file = "", COV = NULL, ...)
+  mirt.model(input = NULL, file = "", COV = NULL,
+    quiet = TRUE, ...)
 }
 \arguments{
   \item{input}{input for writing out the model syntax. Can
@@ -10,13 +11,16 @@
   so-called Q-matrix or class \code{matrix} that specifies
   the model either with integer or logical values. If the
   Q-matrix method is chosen covariances terms can be
-  sepcified with the \code{COV} input}
+  specified with the \code{COV} input}
 
   \item{file}{a input specifying an external file that
   declares the input.}
 
   \item{COV}{a symmetric, logical matrix used to declare
   which covariance terms are estimated}
+
+  \item{quiet}{logical argument passed to \code{scan()} to
+  suppress console read message}
 
   \item{...}{additional arguments for \code{scan()}}
 }
@@ -37,7 +41,7 @@
   by enclosing the left hand term within brackets. To
   finish the declaration of a model simply enter a blank
   line with only a carriage return (i.e., the 'enter' or
-  'return' key), or instead read in a input version of the
+  'return' key), or instead read in an input version of the
   model syntax.
 
   There is an optional keyword for specifying the
@@ -50,7 +54,37 @@
   \describe{ \item{COV}{Specify the relationship between
   the latent factors. Estimating a correlation between
   factors is declared by joining the two factors with an
-  asterisk (e.g., F1*F2).} }
+  asterisk (e.g., F1*F2).} \item{CONSTRAIN}{A bracketed,
+  comma separated list specifying equality constrains
+  between items. The input format is \code{CONSTRAIN =
+  (items, ..., parameterName, OptionalGroup), (items, ...,
+  parameterName, OptionalGroup)}. If \code{OptionalGroup}
+  is omitted then the constraints are applied within all
+  groups. For example, in a single group 10-item
+  dichotomous tests, using the default 2PL model, the first
+  and last 5 item slopes (a1) can be constrained to be
+  equal by using \code{CONSTRAIN = (1-5, a1), (6-10, a1)},
+  or some combination such as \code{CONSTRAIN =
+  (1-3,4,5,a1), (6,7,8-10,a1)}} \item{CONSTRAINB}{A
+  bracketed, comma separate list specifying equality
+  constrains between groups. The input format is
+  \code{CONSTRAINB = (items, ..., parameterName), (items,
+  ..., parameterName)}. For example, in a two group 10-item
+  dichotomous tests, using the default 2PL model, the first
+  5 item slopes (a1) can be constrained to be equal across
+  both groups by using \code{CONSTRAINB = (1-5, a1)}, or
+  some combination such as \code{CONSTRAINB =
+  (1-3,4,5,a1)}} \item{PRIOR}{A bracketed, comma separate
+  list specifying prior parameter distributions. The input
+  format is \code{PRIOR = (items, ..., parameterName,
+  priorType, val1, val2, OptionalGroup), (items, ...,
+  parameterName, priorType, val1, val2, OptionalGroup)}. If
+  \code{OptionalGroup} is omitted then the priors are
+  defined for all groups. For example, in a single group
+  10-item dichotomous tests, using the default 2PL model,
+  defining a normal prior of N(0,2) for the first 5 item
+  intercepts (d) can be defined by \code{PRIOR = (1-5, d,
+  norm, 0, 2)}} }
 }
 \examples{
 \dontrun{
@@ -74,6 +108,21 @@ model <- mirt.model(s)
 Q <- matrix(c(1,1,1,0,0,0,0,0,0,1,1,1), ncol=2, dimnames = list(NULL, c('Factor1', 'Factor2')))
 COV <- matrix(c(FALSE, TRUE, TRUE, FALSE), 2)
 model <- mirt.model(Q, COV=COV)
+
+## constrain various items slopes and all intercepts in single group model to be equal,
+#   and use a lognormal prior for all the slopes
+s <- 'F = 1-10
+      CONSTRAIN = (1-3, 5, 6, a1), (1-10, d)
+      PRIOR = (1-10, a1, lnorm, .2, .2)'
+model <- mirt.model(s)
+
+
+## constrain various items slopes and intercepts accross groups for use in multipleGroup(),
+#  and constrain first two slopes within 'group1' to be equal
+s <- 'F = 1-10
+      CONSTRAIN = (1-2, a1)
+      CONSTRAINB = (1-3, 5, 6, a1), (1-10, d)'
+model <- mirt.model(s)
 
     }
 }

@@ -1,8 +1,8 @@
 #' Define a parallel cluster object to be used in internal functions
 #'
 #' This function defines a object that is placed in the users workspace 
-#' (i.e., the\code{.GlobalEnv}). Relavent internal functions such as \code{calcLogLik},
-#' \code{fscores}, etc, will utilize this object automatically to capitilze on parallel
+#' (i.e., the\code{.GlobalEnv}). Relevant internal functions such as \code{calcLogLik},
+#' \code{fscores}, etc, will utilize this object automatically to capitalize on parallel
 #' processing architecture. The object defined is a call from \code{parallel::makeCluster()} and 
 #' defines an object called \code{MIRTCLUSTER}.
 #' @aliases mirtCluster
@@ -30,14 +30,18 @@
 mirtCluster <- function(ncores, remove = FALSE){
     if(!require(parallel)) require(parallel)    
     if(remove){
-        if(is.null(globalenv()$MIRTCLUSTER))
-            stop('No MIRTCLUSTER object in workspace')
+        if(is.null(globalenv()$MIRTCLUSTER)){
+            message('No MIRTCLUSTER object in workspace')
+            return(invisible())
+        }
         stopCluster(.GlobalEnv$MIRTCLUSTER)        
         .GlobalEnv$MIRTCLUSTER <- NULL
         return(invisible())
     }
-    if(!is.null(globalenv()$MIRTCLUSTER))
-        stop('MIRTCLUSTER object already defined')    
+    if(!is.null(globalenv()$MIRTCLUSTER)){
+        message('MIRTCLUSTER object already defined')    
+        return(invisible())
+    }
     if(missing(ncores))
         ncores <- detectCores()
     if(!is.numeric(ncores)) 

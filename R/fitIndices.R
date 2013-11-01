@@ -1,13 +1,14 @@
 #' Compute Extra Model Fit Indices
 #'
 #' Compute additional model fit indices that do not come as direct results following parameter
-#' convergence. Will only compute the M2 (Maydeu-Olivares & Joe, 2006) statistic by default, and
-#' returns a list containing the requested statistics.
-#'
+#' convergence. Will compute the M2 (Maydeu-Olivares & Joe, 2006) statistic by default, and
+#' returns a data.frame containing various model fit statistics.
 #'
 #'
 #' @aliases fitIndices
 #' @param obj an estimated model object from the mirt package
+#' @param calcNull logical; calculate statistics for the null model as well? 
+#' Allows for statistics such as the limited information TLI and CFI
 #' @param prompt logical; prompt user for input if the internal matrices are too large?
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -19,14 +20,14 @@
 #' \dontrun{
 #' #LSAT6 example
 #' dat <- expand.table(LSAT6)
-#' (mod1 <- mirt(dat, 1, itemtype = '1PL'))
+#' (mod1 <- mirt(dat, 1, itemtype = '2PL', constrain = list(c(1,5,9,13,17))))
 #' fitIndices(mod1)
 #'
-#' #Science data, much more sparse so M2 would be more informative
+#' #Science data with computing the null model M2 stat
 #' (mod2 <- mirt(Science, 1))
-#' fitIndices(mod2)
+#' fitIndices(mod2, calcNull = TRUE)
 #' }
-fitIndices <- function(obj, prompt = TRUE){
+fitIndices <- function(obj, calcNull = FALSE, prompt = TRUE){
     #if MG loop
     if(is(obj, 'MixedClass'))
         stop('mixedmirt objects not yet supported')
@@ -44,14 +45,28 @@ fitIndices <- function(obj, prompt = TRUE){
         names(newret$M2) <- obj@groupNames
         for(g in 1L:ngroups)
             newret$M2[g] <- ret[[g]]$M2
-        newret$M2Total <- sum(newret$M2)
+        newret$Total.M2 <- sum(newret$M2)
         Tsum <- 0
         for(g in 1L:ngroups) Tsum <- Tsum + ret[[g]]$nrowT
-        newret$df.M2 <- obj@df - (nrow(obj@tabdata) - Tsum) + 1L
-        newret$p.M2 <- 1 - pchisq(newret$M2Total, newret$df.M2)
-        newret$RMSEA.M2 <- ifelse((newret$M2Total - newret$df.M2) > 0,
-                           sqrt(newret$M2Total - newret$df.M2) / sqrt(newret$df.M2 * (sum(r)-1)), 0)
-        return(newret)
+        newret$df.M2 <- Tsum - obj@nest
+        newret$p.M2 <- 1 - pchisq(newret$Total.M2, newret$df.M2)
+        newret$RMSEA.M2 <- ifelse((newret$Total.M2 - newret$df.M2) > 0,
+                           sqrt(newret$Total.M2 - newret$df.M2) / sqrt(newret$df.M2 * (sum(r)-1)), 0)
+        if(calcNull){
+            null.mod <- try(multipleGroup(obj@data, 1, group=obj@group,
+                                          technical=list(NULL.MODEL=TRUE, TOL=1e-3), 
+                                          verbose=FALSE))            
+            null.fit <- fitIndices(null.mod, prompt=FALSE)
+            newret$TLI.M2 <- (null.fit$Total.M2 / null.fit$df.M2 - newret$Total.M2/newret$df.M2) / 
+                (null.fit$Total.M2 / null.fit$df.M2 - 1)           
+            newret$CFI.M2 <- 1 - (newret$Total.M2 - newret$df.M2) / (null.fit$Total.M2 - null.fit$df.M2)
+            if(newret$CFI.M2 > 1) newret$CFI.M2 <- 1
+            if(newret$CFI.M2 < 0 ) newret$CFI.M2 <- 0
+        }
+        M2s <- as.numeric(newret$M2)
+        names(M2s) <- paste0(obj@groupNames, '.M2')
+        newret$M2 <- NULL
+        return(data.frame(as.list(M2s), newret))
     }
     ret <- list()
     tabdata <- obj@tabdatalong
@@ -65,7 +80,7 @@ fitIndices <- function(obj, prompt = TRUE){
     N <- sum(r)
     p <- r/N
     p_theta <- obj@Pl[NOROWNA]
-    p_theta <- p_theta/sum(p_theta)
+    p_theta <- p_theta
     tabdata <- tabdata[, -ncol(tabdata)]
     itemloc <- obj@itemloc
     T <- matrix(NA, sum(K) + sum(K*(sum(K))), nrow(tabdata))
@@ -102,18 +117,13 @@ fitIndices <- function(obj, prompt = TRUE){
             amount of time and require large amounts of RAM. The largest matrix has', nrow(T), 'columns.
             Do you wish to continue anyways?')
         input <- readline("(yes/no): ")
-        if(input == 'no' || input == 'n') stop('Execution halted.')
-        if(input != 'yes' || input != 'y') stop('Illegal user input')
+        if(input == 'no') stop('Execution halted.')
+        if(input != 'yes') stop('Illegal user input')
     }
     Eta <- T %*% Gamma %*% t(T)
     T.p <- T %*% p
     T.p_theta <- T %*% p_theta
-    Etarank <- qr(Eta)$rank
-    while(Etarank < ncol(Eta)){
-        diag(Eta) <- diag(Eta) + .001 * diag(Eta)
-        Etarank <- qr(Eta)$rank
-    }
-    inv.Eta <- solve(Eta)
+    inv.Eta <- ginv(Eta)
     pars <- obj@pars
     quadpts <- ceiling(40/(obj@nfact^1.5))
     theta <- seq(-4, 4, length.out = quadpts)
@@ -138,23 +148,29 @@ fitIndices <- function(obj, prompt = TRUE){
         if(is.null(delta)) delta <- matrix(NA, nrow(tabdata), length(DX), byrow = TRUE)
         delta[pat, ] <- DX
     }
-    deltarank <- qr(delta)$rank
-    while(deltarank < ncol(delta)){
-        diag(delta) <- diag(delta) + .001 * diag(delta)
-        deltarank <- qr(delta)$rank
-    }
     delta2 <- T %*% delta
-    C2 <- inv.Eta - inv.Eta %*% delta2 %*% solve(t(delta2) %*% inv.Eta %*% delta2) %*%
+    delta2.invEta.delta2 <- t(delta2) %*% inv.Eta %*% delta2
+    C2 <- inv.Eta - inv.Eta %*% delta2 %*% solve(delta2.invEta.delta2) %*%
         t(delta2) %*% inv.Eta
     M2 <- N * t(T.p - T.p_theta) %*% C2 %*% (T.p - T.p_theta)
     ret$M2 <- M2
     if(is.null(attr(obj, 'MG'))){
-        ret$df.M2 <- obj@df - (nrow(tabdata) -  nrow(T)) + 1
+        ret$df.M2 <- nrow(T) - obj@nest
         ret$p.M2 <- 1 - pchisq(M2, ret$df.M2)
         ret$RMSEA.M2 <- ifelse((M2 - ret$df.M2) > 0,
                         sqrt(M2 - ret$df.M2) / sqrt(ret$df.M2 * (sum(r)-1)), 0)
+        if(calcNull){
+            null.mod <- try(mirt(obj@data, 1, technical=list(NULL.MODEL=TRUE, TOL=1e-3), 
+                                 verbose=FALSE))            
+            null.fit <- fitIndices(null.mod, prompt=FALSE)            
+            ret$TLI.M2 <- (null.fit$M2 / null.fit$df.M2 - ret$M2/ret$df.M2) / 
+                (null.fit$M2 / null.fit$df.M2 - 1)           
+            ret$CFI.M2 <- 1 - (ret$M2 - ret$df.M2) / (null.fit$M2 - null.fit$df.M2)
+            if(ret$CFI.M2 > 1) ret$CFI.M2 <- 1
+            if(ret$CFI.M2 < 0) ret$CFI.M2 <- 0
+        }
     } else {
         ret$nrowT <- nrow(T)
     }
-    ret
+    return(as.data.frame(ret))
 }

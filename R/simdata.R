@@ -21,7 +21,8 @@
 #' however to parametrized them for meaningful interpretation the first category intercept should
 #' equal 0 for these models (second column for \code{'nestlogit'}, since first column is for the
 #' correct item traceline). For nested logit models the 'correct' category is always the lowest category
-#' (i.e., == 1)
+#' (i.e., == 1). It may be helpful to use \code{\link{mod2values}} on data-sets that have already been 
+#' estimated to understand the itemtypes more intimately
 #' @param nominal a matrix of specific item category slopes for nominal models.
 #' Should be the dimensions as the intercept specification with one less column, with \code{NA}
 #' in locations where not applicable. Note that during estimation the first slope will be constrained
@@ -195,6 +196,10 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         if(any(itemtype[i] == c('gpcm', 'nominal', 'nestlogit'))) K[i] <- K[i] - 1L
     }
     K <- as.integer(K)
+    if(any(guess > 1 | guess < 0)) stop('guess input must be between 0 and 1')
+    if(any(upper > 1 | upper < 0)) stop('upper input must be between 0 and 1')
+    guess <- logit(guess)
+    upper <- logit(upper)
     oldguess <- guess
     oldupper <- upper
     guess[K > 2L] <- upper[K > 2L] <- NA

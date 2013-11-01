@@ -27,7 +27,7 @@ prodterms <- function(theta0, prodlist)
 
 # MH sampler for theta values
 draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var,
-                        prior.mu, prodlist, OffTerm, PROBTRACE)
+                        prior.mu, prodlist, OffTerm, NO.CUSTOM=FALSE)
 {
     N <- nrow(fulldata)
     J <- length(pars) - 1L
@@ -40,13 +40,10 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)
     }
-    itemtrace0 <- itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(theta0))
-    for (i in 1L:J){
-        itemtrace0[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-            PROBTRACE[[i]](x=pars[[i]], Theta=theta0, ot=OffTerm[,i])
-        itemtrace1[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-            PROBTRACE[[i]](x=pars[[i]], Theta=theta1, ot=OffTerm[,i])
-    }
+    itemtrace0 <- computeItemtrace(pars=pars, Theta=theta0, itemloc=itemloc, 
+                                   offterm=OffTerm, NO.CUSTOM=NO.CUSTOM)
+    itemtrace1 <- computeItemtrace(pars=pars, Theta=theta1, itemloc=itemloc, 
+                                   offterm=OffTerm, NO.CUSTOM=NO.CUSTOM)    
     totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, log_den0, log_den1)    
     total_0 <- totals[[1L]] 
     total_1 <- totals[[2L]] 
@@ -181,6 +178,20 @@ d2r <-function(d) pi*d/180
 
 closeEnough <- function(x, low, up) all(x >= low & x <= up)
 
+logit <- function(x){
+    ret <- log(x / (1 - x))
+    ret <- ifelse(x == 0, -999, ret)
+    ret <- ifelse(x == 1, 999, ret)
+    ret
+}
+
+antilogit <- function(x){
+    ret <- 1 / (1 + exp(-x))
+    ret <- ifelse(x == -999, 0, ret)
+    ret <- ifelse(x == 999, 1, ret)
+    ret
+}
+
 test_info <- function(pars, Theta, Alist, K){
     infolist <- list()
     for(cut in 1L:length(Alist)){
@@ -256,8 +267,111 @@ bfactor2mod <- function(model, J){
 }
 
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
-                            method, itemnames)
+                            method, itemnames, model, groupNames)
 {
+    if(!is.numeric(model[[1L]])){
+        if(any(model[[1L]]$x[,1L] == 'CONSTRAIN')){
+            groupNames <- as.character(groupNames)
+            names(pars) <- groupNames
+            input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'CONSTRAIN', 2L]
+            input <- gsub(' ', replacement='', x=input)        
+            elements <- strsplit(input, '\\),\\(')[[1L]]
+            elements <- gsub('\\(', replacement='', x=elements)        
+            elements <- gsub('\\)', replacement='', x=elements)        
+            esplit <- strsplit(elements, ',')
+            esplit <- lapply(esplit, function(x, groupNames)
+                if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
+                             groupNames=as.character(groupNames))
+            esplit <- lapply(esplit, function(x){                
+                            newx <- c()
+                            if(length(x) < 3L)
+                                stop('PRIOR = ... has not been supplied enough arguments')
+                            for(i in 1L:(length(x)-2L)){
+                                if(grepl('-', x[i])){
+                                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                                    newx <- c(newx, tmp[1L]:tmp[2L])
+                                } else newx <- c(newx, x[i])                  
+                            }
+                            x <- c(newx, x[length(x)-1L], x[length(x)])
+                            x
+                        })
+            for(i in 1L:length(esplit)){
+                if(!(esplit[[i]][length(esplit[[i]])] %in% c(groupNames, 'all')))
+                    stop('Invalid group name passed to CONSTRAIN = ... syntax.')
+                if(esplit[[i]][length(esplit[[i]])] == 'all'){
+                    for(g in 1L:ngroups){
+                        constr <- c()
+                        p <- pars[[g]]
+                        sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
+                        for(j in 1L:length(sel)){
+                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                                                           esplit[[i]][length(esplit[[i]])-1L]]
+                            if(!length(pick)) 
+                                stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
+                            constr <- c(constr, pick) 
+                        }
+                        constrain[[length(constrain) + 1L]] <- constr
+                    }
+                } else {
+                    constr <- c()
+                    p <- pars[[esplit[[i]][length(esplit[[i]])]]]
+                    sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
+                    for(j in 1L:length(sel)){
+                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                                                       esplit[[i]][length(esplit[[i]])-1L]]
+                        if(!length(pick)) 
+                            stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
+                        constr <- c(constr, pick) 
+                    }
+                    constrain[[length(constrain) + 1L]] <- constr
+                }
+            }
+        }
+        if(any(model[[1L]]$x[,1L] == 'CONSTRAINB')){
+            if(length(unique(groupNames)) == 1L)
+                stop('CONSTRAINB model argument not valid for single group models')
+            groupNames <- as.character(groupNames)
+            names(pars) <- groupNames
+            input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'CONSTRAINB', 2L]
+            input <- gsub(' ', replacement='', x=input)        
+            elements <- strsplit(input, '\\),\\(')[[1L]]
+            elements <- gsub('\\(', replacement='', x=elements)        
+            elements <- gsub('\\)', replacement='', x=elements)        
+            esplit <- strsplit(elements, ',')
+            esplit <- lapply(esplit, function(x, groupNames)
+                if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
+                             groupNames=as.character(groupNames))
+            esplit <- lapply(esplit, function(x){                
+                newx <- c()
+                if(length(x) < 3L)
+                    stop('PRIOR = ... has not been supplied enough arguments')
+                for(i in 1L:(length(x)-2L)){
+                    if(grepl('-', x[i])){
+                        tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                        newx <- c(newx, tmp[1L]:tmp[2L])
+                    } else newx <- c(newx, x[i])                  
+                }
+                x <- c(newx, x[length(x)-1L], x[length(x)])
+                x
+            })            
+            for(i in 1L:length(esplit)){
+                sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
+                for(j in 1L:length(sel)){
+                    constr <- c()
+                    for(g in 1L:ngroups){
+                        p <- pars[[g]]
+                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                                                       esplit[[i]][length(esplit[[i]])-1L]]
+                        if(!length(pick)) 
+                            stop('CONSTRAINB = ... indexed a parameter that was not relavent accross groups')
+                        constr <- c(constr, pick)
+                    }
+                    constrain[[length(constrain) + 1L]] <- constr
+                }
+            }
+        }
+    }
+
     #within group item constraints only
     for(g in 1L:ngroups)
         if(length(PrepList[[g]]$constrain) > 0L)
@@ -357,8 +471,85 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
     return(constrain)
 }
 
+UpdatePrior <- function(PrepList, model, groupNames){
+    if(!is.numeric(model[[1L]])){
+        if(!length(model[[1L]]$x[model[[1L]]$x[,1L] == 'PRIOR', 2L])) return(PrepList)
+        groupNames <- as.character(groupNames)
+        ngroups <- length(groupNames)
+        pars <- vector('list', length(PrepList))
+        for(g in 1L:length(PrepList))
+            pars[[g]] <- PrepList[[g]]$pars
+        names(pars) <- groupNames
+        input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'PRIOR', 2L]
+        input <- gsub(' ', replacement='', x=input)        
+        elements <- strsplit(input, '\\),\\(')[[1L]]
+        elements <- gsub('\\(', replacement='', x=elements)        
+        elements <- gsub('\\)', replacement='', x=elements)        
+        esplit <- strsplit(elements, ',')
+        esplit <- lapply(esplit, function(x, groupNames)
+            if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
+                         groupNames=as.character(groupNames))
+        esplit <- lapply(esplit, function(x){                
+            newx <- c()
+            if(length(x) < 5L)
+                stop('PRIOR = ... has not been supplied enough arguments')
+            for(i in 1L:(length(x)-5L)){
+                if(grepl('-', x[i])){
+                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                    newx <- c(newx, tmp[1L]:tmp[2L])
+                } else newx <- c(newx, x[i])                  
+            }
+            x <- c(newx, x[(length(x)-4L):length(x)])
+            x
+        })    
+        for(i in 1L:length(esplit)){
+            if(!(esplit[[i]][length(esplit[[i]])] %in% c(groupNames, 'all')))
+                stop('Invalid group name passed to PRIOR = ... syntax.')
+            if(esplit[[i]][length(esplit[[i]])] == 'all'){
+                for(g in 1L:ngroups){
+                    sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-5L)])
+                    name <- esplit[[i]][length(esplit[[i]])-4L]
+                    type <- esplit[[i]][length(esplit[[i]])-3L]
+                    if(!(type %in% c('norm', 'beta', 'lnorm')))
+                        stop('Prior type specified in PRIOR = ... not available')
+                    val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
+                    val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
+                    for(j in 1L:length(sel)){
+                        which <- names(pars[[g]][[j]]@est) == name
+                        if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j)
+                        pars[[g]][[sel[j]]]@any.prior <- TRUE
+                        pars[[g]][[sel[j]]]@prior.type[which] <- type
+                        pars[[g]][[sel[j]]]@prior_1[which] <- val1
+                        pars[[g]][[sel[j]]]@prior_2[which] <- val2
+                    }
+                }
+            } else {
+                sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-5L)])
+                gname <- esplit[[i]][length(esplit[[i]])]
+                name <- esplit[[i]][length(esplit[[i]])-4L]
+                type <- esplit[[i]][length(esplit[[i]])-3L]
+                if(!(type %in% c('norm', 'beta', 'lnorm')))
+                    stop('Prior type specified in PRIOR = ... not available')
+                val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
+                val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
+                for(j in 1L:length(sel)){
+                    which <- names(pars[[gname]][[j]]@est) == name
+                    if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j)
+                    pars[[gname]][[sel[j]]]@any.prior <- TRUE
+                    pars[[gname]][[sel[j]]]@prior.type[which] <- type
+                    pars[[gname]][[sel[j]]]@prior_1[which] <- val1
+                    pars[[gname]][[sel[j]]]@prior_2[which] <- val2
+                }
+            }
+        }
+        for(g in 1L:length(PrepList))
+            PrepList[[g]]$pars <- pars[[g]]
+    }
+    return(PrepList)
+}
+
 ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
-    parnum <- par <- est <- item <- parname <- gnames <- itemtype <-
+    parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
     for(g in 1L:length(PrepList)){
@@ -366,6 +557,7 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
         for(i in 1L:length(tmpgroup)){
             if(i <= length(itemnames))
                 item <- c(item, rep(itemnames[i], length(tmpgroup[[i]]@parnum)))
+            class <- c(class, rep(class(tmpgroup[[i]]), length(tmpgroup[[i]]@parnum)))
             parname <- c(parname, names(tmpgroup[[i]]@par))
             parnum <- c(parnum, tmpgroup[[i]]@parnum)
             par <- c(par, tmpgroup[[i]]@par)
@@ -378,8 +570,7 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
         }
         item <- c(item, rep('GROUP', length(tmpgroup[[i]]@parnum)))
     }
-    gnames <- rep(names(PrepList), each = length(est)/length(PrepList))     
-    if(length(random) > 0L){        
+    if(length(random) > 0L){
         for(i in 1L:length(random)){            
             parname <- c(parname, names(random[[i]]@par))
             parnum <- c(parnum, random[[i]]@parnum)
@@ -390,29 +581,46 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
             prior.type <- c(prior.type, random[[i]]@prior.type)
             prior_1 <- c(prior_1, random[[i]]@prior_1)
             prior_2 <- c(prior_2, random[[i]]@prior_2)
+            class <- c(class, rep('RandomPars', length(random[[i]]@parnum)))
+            item <- c(item, rep('RANDOM', length(random[[i]]@parnum))) 
         }
-        gnames <- rep('all', length(par))
-        item <- c(item, rep('RANDOM',length(gnames)-length(item))) 
     }
-    ret <- data.frame(group=gnames, item=item, name=parname, parnum=parnum, value=par,
+    gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
+    par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
+    ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum, value=par,
                       lbound=lbound, ubound=ubound, est=est, prior.type=prior.type,
                       prior_1=prior_1, prior_2=prior_2)
     ret
 }
 
 UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
+    currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random, MG = TRUE)
+    if(!all(as.matrix(currentDesign[,c('group', 'item', 'class', 'name', 'parnum')]) == 
+                as.matrix(pars[,c('group', 'item', 'class', 'name', 'parnum')])))
+        stop('Critical internal parameter labels do not match those returned from pars = \'values\'')
+    if(!all(sapply(currentDesign, class) == sapply(pars, class)))
+        stop('pars input does not contain the appropriate classes, which should match pars = \'values\'')
+    if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm'))) 
+        stop('prior.type input in pars contains invalid prior types')
     if(!MG) PrepList <- list(PrepList)    
     len <- length(PrepList[[length(PrepList)]]$pars)
     maxparnum <- max(PrepList[[length(PrepList)]]$pars[[len]]@parnum)
+    pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
     ind <- 1L
     for(g in 1L:length(PrepList)){
         for(i in 1L:length(PrepList[[g]]$pars)){
             for(j in 1L:length(PrepList[[g]]$pars[[i]]@par)){
                 PrepList[[g]]$pars[[i]]@par[j] <- pars[ind,'value']
+                if(is(PrepList[[g]]$pars[[i]], 'graded')){
+                    tmp <- ExtractZetas(PrepList[[g]]$pars[[i]])
+                    if(!all(tmp == sort(tmp, decreasing=TRUE)) || length(unique(tmp)) != length(tmp)) 
+                        stop('Graded model intercepts for item ', i, ' in group ', g, 
+                             ' do not descend from highest to lowest. Please fix')
+                }
                 PrepList[[g]]$pars[[i]]@est[j] <- as.logical(pars[ind,'est'])
                 PrepList[[g]]$pars[[i]]@lbound[j] <- pars[ind,'lbound']
                 PrepList[[g]]$pars[[i]]@ubound[j] <- pars[ind,'ubound']
-                PrepList[[g]]$pars[[i]]@prior.type[j] <- pars[ind,'prior.type']
+                PrepList[[g]]$pars[[i]]@prior.type[j] <- as.character(pars[ind,'prior.type'])
                 PrepList[[g]]$pars[[i]]@prior_1[j] <- pars[ind,'prior_1']
                 PrepList[[g]]$pars[[i]]@prior_2[j] <- pars[ind,'prior_2']
                 ind <- ind + 1L
@@ -560,22 +768,22 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
                         Names, itemnames){
     tabdata2 <- lapply(strsplit(stringtabdata, split='/'), as.integer)
     tabdata2 <- do.call(rbind, tabdata2)
-    tabdata2[tabdata2 == 99999] <- NA
-    tabdata <- matrix(0, nrow(tabdata2), sum(K))
+    tabdata2[tabdata2 == 99999L] <- NA
+    tabdata <- matrix(0L, nrow(tabdata2), sum(K))
     for(i in 1L:nitem){
         uniq <- sort(na.omit(unique(tabdata2[,i])))
         if(length(uniq) < K[i]) uniq <- 0L:(K[i]-1L)        
         for(j in 1L:length(uniq))
             tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
     }
-    tabdata[is.na(tabdata)] <- 0
+    tabdata[is.na(tabdata)] <- 0L
     colnames(tabdata) <- Names
     colnames(tabdata2) <- itemnames
     ret1 <- ret2 <- vector('list', length(groupNames))
     for(g in 1L:length(groupNames)){
-        Freq <- numeric(length(stringtabdata))
+        Freq <- integer(length(stringtabdata))
         tmpstringdata <- stringfulldata[group == groupNames[g]]
-        Freq[stringtabdata %in% tmpstringdata] <- table(match(tmpstringdata, stringtabdata))
+        Freq[stringtabdata %in% tmpstringdata] <- as.integer(table(match(tmpstringdata, stringtabdata)))
         ret1[[g]] <- cbind(tabdata, Freq)
         ret2[[g]] <- cbind(tabdata2, Freq)
     }
@@ -583,7 +791,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     ret
 }
 
-makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN,
+makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NaN,
                      rotate = 'varimax', Target = NaN, SE = TRUE, verbose = TRUE,
                      SEtol = .0001, grsm.block = NULL, D = 1,
                      rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
@@ -609,24 +817,24 @@ makeopts <- function(method = 'MHRM', draws = 2000, calcLL = TRUE, quadpts = NaN
     opts$BFACTOR = BFACTOR
     opts$accelerate = accelerate
     if(SE.type == 'SEM' && SE) opts$accelerate <- FALSE
-    if(BFACTOR && is.nan(quadpts)) opts$quadpts <- 21
+    if(BFACTOR && is.nan(quadpts)) opts$quadpts <- 21L
     opts$technical <- technical
     opts$use <- use
-    opts$MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000, technical$MAXQUAD)
-    opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000, technical$NCYCLES)
+    opts$MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000L, technical$MAXQUAD)
+    opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000L, technical$NCYCLES)
     if(opts$method == 'EM')
-        opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 500, technical$NCYCLES)
-    opts$BURNIN <- ifelse(is.null(technical$BURNIN), 150, technical$BURNIN)
+        opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 500L, technical$NCYCLES)
+    opts$BURNIN <- ifelse(is.null(technical$BURNIN), 150L, technical$BURNIN)
     opts$SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
     opts$KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1L, technical$KDRAWS)
     opts$TOL <- ifelse(is.null(technical$TOL), if(method == 'EM') 1e-4 else 1e-3, technical$TOL)        
     opts$MSTEPTOL <- ifelse(is.null(technical$MSTEPTOL), opts$TOL/1000, technical$MSTEPTOL)
     if(opts$method == 'MHRM' || opts$method =='MIXED' || SE.type == 'MHRM')
-        set.seed(12345)
+        set.seed(12345L)
     if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
-    opts$gain <- c(0.05,0.5,0.004)
+    opts$gain <- c(0.15,0.65)
     if(!is.null(technical$gain)){
-        if(length(technical$gain) == 3 && is.numeric(technical$gain))
+        if(length(technical$gain) == 2L && is.numeric(technical$gain))
             opts$gain <- technical$gain
     }
     opts$NULL.MODEL <- ifelse(is.null(technical$NULL.MODEL), FALSE, TRUE)
@@ -646,30 +854,21 @@ reloadPars <- function(longpars, pars, ngroups, J){
     return(.Call('reloadPars', longpars, pars, ngroups, J))
 }
 
-computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0, 1, 1), PROBTRACE=NULL){
-    #compute itemtrace for 1 group
-    J <- length(itemloc) - 1L
-    itemtrace <- matrix(0, ncol=itemloc[length(itemloc)]-1L, nrow=nrow(Theta))
-    if(!is.null(PROBTRACE)){
-        if(nrow(offterm) == 1L){
-            for (i in 1L:J)
-                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- PROBTRACE[[i]](x=pars[[i]], Theta=Theta)
+computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L), 
+                             NO.CUSTOM=FALSE){
+    if(!NO.CUSTOM){
+        if(any(sapply(pars, class) %in% 'custom')){ #sanity check, not important for custom anyway
+            itemtrace <- .Call('computeItemTrace', pars, Theta, itemloc, offterm)
+            for(i in 1L:(length(pars)-1L))
+                if(class(pars[[i]]) == 'custom')
+                    itemtrace[,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(pars[[i]], Theta=Theta)
+            return(itemtrace)
         } else {
-            for (i in 1L:J)
-                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- PROBTRACE[[i]](x=pars[[i]], Theta=Theta,
-                                                                          ot=offterm[,i])        
+            return(.Call('computeItemTrace', pars, Theta, itemloc, offterm))
         }
     } else {
-        if(nrow(offterm) == 1L){
-            for (i in 1L:J)
-                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta)
-        } else {
-            for (i in 1L:J)
-                itemtrace[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(x=pars[[i]], Theta=Theta,
-                                                                          ot=offterm[,i])        
-        }
+        return(.Call('computeItemTrace', pars, Theta, itemloc, offterm))
     }
-    itemtrace
 }
 
 assignItemtrace <- function(pars, itemtrace, itemloc){
@@ -681,7 +880,8 @@ assignItemtrace <- function(pars, itemtrace, itemloc){
 
 BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMATE, constrain,
                   specific=NULL, sitems=NULL){
-    LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems){
+    LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
+                   NO.CUSTOM){
         longpars[est] <- p
         pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
         gstructgrouppars <- prior <- Prior <- vector('list', ngroups)
@@ -690,7 +890,7 @@ BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
             if(BFACTOR){
                 prior[[g]] <- dnorm(theta, 0, 1)
                 prior[[g]] <- prior[[g]]/sum(prior[[g]])                
-                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1, prod)
+                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
                 next
             }
             Prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
@@ -703,16 +903,17 @@ BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
                 expected <- Estep.bfactor(pars=pars2[[g]], tabdata=PrepList[[g]]$tabdata,
                                             Theta=Theta, prior=prior[[g]],
                                             specific=specific, sitems=sitems,
-                                            itemloc=itemloc)$expected
+                                            itemloc=itemloc, NO.CUSTOM=NO.CUSTOM)$expected
             } else {
                 expected <- Estep.mirt(pars=pars2[[g]], tabdata=PrepList[[g]]$tabdata,
-                                         Theta=Theta, prior=Prior[[g]], itemloc=itemloc)$expected
+                                       Theta=Theta, prior=Prior[[g]], itemloc=itemloc, 
+                                       NO.CUSTOM=NO.CUSTOM)$expected
             }
             LL <- LL + sum(PrepList[[g]]$tabdata[,ncol(PrepList[[g]]$tabdata)] * log(expected))
         }
-
         LL
     }
+    
     L <- ESTIMATE$L
     longpars <- ESTIMATE$longpars
     rlist <- ESTIMATE$rlist
@@ -721,22 +922,23 @@ BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
     J <- length(pars[[1L]]) - 1L
     est <- c()
     for(g in 1L:ngroups)
-            for(j in 1L:(J+1L))
-                    est <- c(est, pars[[g]][[j]]@est)
+        for(j in 1L:(J+1L))
+            est <- c(est, pars[[g]][[j]]@est)
     shortpars <- longpars[est]
     gstructgrouppars <- vector('list', ngroups)
     for(g in 1L:ngroups)
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
     for(g in 1L:ngroups){
-            for(i in 1L:J){
-                    tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
-                    pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]
-                }
+        for(i in 1L:J){
+            tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
+            pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]
         }
+    }
+    NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
     hess <- numDeriv::hessian(LL, x=shortpars, est=est, longpars=longpars,
                               pars=pars, ngroups=ngroups, J=J,
                               Theta=Theta, PrepList=PrepList,
-                              specific=specific, sitems=sitems)
+                              specific=specific, sitems=sitems, NO.CUSTOM=NO.CUSTOM)
     Hess <- matrix(0, length(longpars), length(longpars))
     Hess[est, est] <- -hess
     Hess <- L %*% Hess %*% L
@@ -762,7 +964,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     SE <- rep(NA, length(longpars))
     SE[ESTIMATE$estindex_unique] <- SEtmp
     index <- 1L:length(longpars)
-    if(length(constrain) > 0)
+    if(length(constrain) > 0L)
         for(i in 1L:length(constrain))
             SE[index %in% constrain[[i]][-1L]] <- SE[constrain[[i]][1L]]
     ind1 <- 1L
@@ -777,8 +979,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     return(ESTIMATE)
 }
 
-SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, 
-                   PROBTRACE, DERIV){
+SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV){
     TOL <- sqrt(list$TOL)
     itemloc <- list$itemloc
     J <- length(itemloc) - 1L
@@ -801,12 +1002,15 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
     prodlist <- PrepList[[1L]]$prodlist
     nfact <- ncol(Theta)
     gTheta <- vector('list', ngroups)
+    ANY.PRIOR <- rep(FALSE, ngroups)
+    NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
     for(g in 1L:ngroups){
         gTheta[[g]] <- Theta 
         if(length(prodlist) > 0L)
             gTheta[[g]] <- prodterms(gTheta[[g]],prodlist)
+        ANY.PRIOR[g] <- any(sapply(pars[[g]], function(x) x@any.prior))
     }
-
+    
     for (cycles in 3L:NCYCLES){
 
         longpars <- MLestimates
@@ -817,13 +1021,11 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
 
         for(g in 1L:ngroups){
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])            
-            gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=gTheta[[g]], itemloc=itemloc,
-                                                PROBTRACE=PROBTRACE[[g]])
+            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
             if(BFACTOR){
                 prior[[g]] <- dnorm(theta, 0, 1)
                 prior[[g]] <- prior[[g]]/sum(prior[[g]])                
-                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1, prod)
+                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
                 next
             }
             Prior[[g]] <- mvtnorm::dmvnorm(gTheta[[g]][ ,1L:nfact,drop=FALSE],gstructgrouppars[[g]]$gmeans,
@@ -836,11 +1038,11 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
                 rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata,
                                             Theta=gTheta[[g]], prior=prior[[g]], Prior=Prior[[g]],
                                             specific=list$specific, sitems=list$sitems,
-                                            itemloc=itemloc, itemtrace=gitemtrace[[g]])
+                                            itemloc=itemloc, NO.CUSTOM=NO.CUSTOM)
             } else {
                 rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata,
                                          Theta=gTheta[[g]], prior=Prior[[g]], itemloc=itemloc,
-                                         itemtrace=gitemtrace[[g]])
+                                         NO.CUSTOM=NO.CUSTOM)
             }
         }
         for(g in 1L:ngroups){
@@ -849,10 +1051,10 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
                 pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]
             }
         }
-        longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
-                      gTheta=gTheta, itemloc=itemloc, Prior=Prior,
-                      PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND,
-                      constrain=constrain, cycle=cycles, PROBTRACE=PROBTRACE, DERIV=DERIV)
+        longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J, rlist=rlist,
+                          gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR, 
+                          NO.CUSTOM=NO.CUSTOM, PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND,
+                          constrain=constrain, cycle=cycles, DERIV=DERIV)
         rijlast <- rij
         denom <- (EMhistory[cycles, estindex] - MLestimates[estindex])
         sign <- sign(denom)
@@ -879,8 +1081,8 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
             between <- FALSE
         } else stop('grouping variable not in itemdesign or covdata')
         if(between){            
-            gframe <- gframe[1:N, , drop=FALSE]            
-            sframe <- sframe[1:N, , drop=FALSE]
+            gframe <- gframe[1L:N, , drop=FALSE]            
+            sframe <- sframe[1L:N, , drop=FALSE]
         } else {
             gframe <- itemdesign[, which(colnames(gframe) == itemcovnames), drop=FALSE]
             sframe <- itemdesign[, which(colnames(sframe) == itemcovnames), drop=FALSE]
@@ -899,7 +1101,8 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
                            dimnames=list(unique(gframe)[[1L]], NULL))        
         mtch <- match(gframe[[1L]], rownames(drawvals))
         gdesign <- matrix(1, nrow(gframe), 1L, dimnames = list(NULL, colnames(gframe))) 
-        if(ncol(sframe) != 0L) gdesign <- model.matrix(as.formula(paste0('~',splt[1L])), sframe)
+        if(ncol(sframe) != 0L) 
+            gdesign <- cbind(model.matrix(as.formula(paste0('~',splt[1L])), sframe), gdesign)
         tmp <- matrix(-Inf, ndim, ndim)
         diag(tmp) <- 1e-4
         lbound <- tmp[lower.tri(tmp, diag=TRUE)]
@@ -947,4 +1150,17 @@ reloadRandom <- function(random, longpars, parstart){
         ind1 <- ind2 + 1L
     }
     random
+}
+
+smooth.cov <- function(x){
+    eigens <- eigen(x)
+    if(min(eigens$values) < .Machine$double.eps){
+        eigens$values[eigens$values < .Machine$double.eps] <- 100 * 
+            .Machine$double.eps
+        nvar <- dim(x)[1L]
+        tot <- sum(eigens$values)
+        eigens$values <- eigens$values * nvar/tot
+        x <- eigens$vectors %*% diag(eigens$values) %*% t(eigens$vectors)
+    }
+    x
 }

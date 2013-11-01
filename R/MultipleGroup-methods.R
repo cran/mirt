@@ -20,14 +20,11 @@ setMethod(
             cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
-                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4),
-                    "\nX2 (", x@df,") = ", round(x@X2,2), ", p = ", round(x@p.X2,4), sep='')
-                cat("\nRMSEA (G2) = ", round(x@RMSEA,3), "; RMSEA (X2) = ", round(x@RMSEA.X2,3), sep='')
-                cat("\nCFI (G2) = ", round(x@CFI,3), "; CFI (X2) = ", round(x@CFI.X2,3), sep='')
-                cat("\nTLI (G2) = ", round(x@TLI,3), "; TLI (X2) = ", round(x@TLI.X2,3), '\n\n', sep='')
+                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
+                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3), 
+                    ", TLI = ", round(x@TLI,3), '\n\n', sep='')
                 for(g in 1:length(x@cmods))
-                    cat(as.character(x@groupNames[g]), " group: G2 = ", round(x@cmods[[g]]@G2,2),
-                        ", X2 = ", round(x@cmods[[g]]@X2,2), '\n', sep='')
+                    cat(as.character(x@groupNames[g]), " group: G2 = ", round(x@cmods[[g]]@G2,2), '\n', sep='')
             }
         }
     }
@@ -44,8 +41,12 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'MultipleGroupClass',
-    definition = function(object, digits = 3, verbose = TRUE, ...)
+    definition = function(object, CI = .95, digits = 3, rawug = FALSE, verbose = TRUE, ...)
     {
+        if(CI >= 1 || CI <= 0)
+            stop('CI must be between 0 and 1')
+        z <- abs(qnorm((1 - CI)/2))
+        SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         ngroups <- length(object@cmods)
         allPars <- vector('list', ngroups)
         names(allPars) <- object@groupNames
@@ -55,19 +56,31 @@ setMethod(
             allPars[[g]] <- list()
             if(length(object@cmods[[1]]@pars[[1]]@SEpar) > 0){
                 for(i in 1:(J+1)){
-                    allPars[[g]][[i]] <- round(matrix(c(object@cmods[[g]]@pars[[i]]@par,
-                                                   object@cmods[[g]]@pars[[i]]@SEpar),
-                                             2, byrow = TRUE), digits)
-                    rownames(allPars[[g]][[i]]) <- c('pars', 'SE')
-                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[g]]@pars[[i]]@parnum)
+                    allPars[[g]][[i]] <- round(
+                        matrix(c(object@cmods[[g]]@pars[[i]]@par,
+                                 object@cmods[[g]]@pars[[i]]@par - z*object@cmods[[g]]@pars[[i]]@SEpar,
+                                 object@cmods[[g]]@pars[[i]]@par + z*object@cmods[[g]]@pars[[i]]@SEpar),
+                               3, byrow = TRUE), digits)
+                    rownames(allPars[[g]][[i]]) <- c('par', SEnames)
+                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[1L]]@pars[[i]]@parnum)
                 }
             } else {
                 for(i in 1:(J+1)){
-                    allPars[[g]][[i]] <- round(object@cmods[[g]]@pars[[i]]@par, digits)
-                    names(allPars[[g]][[i]]) <- names(object@cmods[[g]]@pars[[i]]@parnum)
+                    allPars[[g]][[i]] <- matrix(round(object@cmods[[g]]@pars[[i]]@par, digits), 1L)
+                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[1L]]@pars[[i]]@parnum)
+                    rownames(allPars[[g]][[i]]) <- 'par'
+                    
                 }
             }
             names(allPars[[g]]) <- c(itemnames, 'GroupPars')
+        }
+        if(!rawug){
+            for(g in 1:ngroups){
+                allPars[[g]] <- lapply(allPars[[g]], function(x, digits){
+                    x[ , colnames(x) %in% c('g', 'u')] <- round(antilogit(x[ , colnames(x) %in% c('g', 'u')]), digits)
+                    x
+                }, digits=digits)
+            }
         }
         return(allPars)
     }

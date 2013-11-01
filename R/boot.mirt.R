@@ -1,14 +1,12 @@
 #' Calculate bootstrapped standard errors for estimated models
 #'
 #' Given an internal mirt object estimate the bootstrapped standard errors. It may
-#' be beneficial to run the computations using multicore architecture (e.g., the \code{parallel}
+#' be beneficial to run the computations using multi-core architecture (e.g., the \code{parallel}
 #' package).
 #'
 #' @aliases boot.mirt
 #' @param x an estimated object from \code{mirt}, \code{bfactor}, or \code{multipleGroup}
 #' @param R number of draws to use (passed to the \code{boot()} function)
-#' @param return.boot logical; return the estimated object from the \code{boot} package? If \code{FALSE}
-#' the estimated model is returned with the bootstrapped standard errors
 #' @param ... additional arguments to be passed on to \code{boot(...)}
 #' @keywords bootstrapped standard errors
 #' @export boot.mirt
@@ -17,17 +15,22 @@
 #' @examples
 #'
 #' \dontrun{
+#' 
+#' #standard
 #' mod <- mirt(Science, 1)
 #' booted <- boot.mirt(mod)
+#' plot(booted)
 #' booted
 #' 
-#' #run in parallel using snow backend
-#' modwithboot <- boot.mirt(mod, return.boot = FALSE, parallel = 'snow', ncpus = 4L)
-#' coef(modwithboot)
-#'
+#' #run in parallel using snow back-end using all available cores
+#' mod <- mirt(Science, 1)
+#' booted <- boot.mirt(mod, parallel = 'snow', ncpus = parallel::detectCores())
+#' booted
+#' 
+#' 
 #' }
-boot.mirt <- function(x, R = 100, return.boot = TRUE, ...){
-    boot.draws <- function(orgdat, ind, npars, constrain, parprior, model, itemtype, group) {
+boot.mirt <- function(x, R = 100, ...){
+    boot.draws <- function(orgdat, ind, npars, constrain, parprior, model, itemtype, group, ...) {
         ngroup <- length(unique(group))
         dat <- orgdat[ind, ]
         g <- group[ind]
@@ -35,10 +38,10 @@ boot.mirt <- function(x, R = 100, return.boot = TRUE, ...){
         if(!is.null(group)){
             mod <- try(multipleGroup(data=dat, model=model, itemtype=itemtype, group=g,
                                  constrain=constrain, parprior=parprior, method='EM',
-                                 calcNull=FALSE, verbose = FALSE))
+                                 calcNull=FALSE, verbose = FALSE, ...))
         } else {
             mod <- try(mirt(data=dat, model=model, itemtype=itemtype, constrain=constrain,
-                        parprior=parprior, calcNull=FALSE, verbose=FALSE))
+                        parprior=parprior, calcNull=FALSE, verbose=FALSE, ...))
         }
         if(is(mod, 'try-error')) return(rep(NA, npars))
         structure <- mod2values(mod)
@@ -68,6 +71,7 @@ boot.mirt <- function(x, R = 100, return.boot = TRUE, ...){
     }
     if(is(x, 'MixedClass'))
         stop('Bootstapped standard errors not supported for MixedClass objects')
+    return.boot <- TRUE
     dat <- x@data
     method <- x@method
     itemtype <- x@itemtype

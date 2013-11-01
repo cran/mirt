@@ -20,11 +20,9 @@ setMethod(
             cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
-                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4),
-                    "\nX2 (", x@df,") = ", round(x@X2,2), ", p = ", round(x@p.X2,4), sep='')
-                cat("\nRMSEA (G2) = ", round(x@RMSEA,3), "; RMSEA (X2) = ", round(x@RMSEA.X2,3), sep='')
-                cat("\nCFI (G2) = ", round(x@CFI,3), "; CFI (X2) = ", round(x@CFI.X2,3), sep='')
-                cat("\nTLI (G2) = ", round(x@TLI,3), "; TLI (X2) = ", round(x@TLI.X2,3), '\n', sep='')
+                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
+                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3), 
+                    ", TLI = ", round(x@TLI,3), sep='')
             }
         }
     }
@@ -68,24 +66,44 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'ConfirmatoryClass',
-    definition = function(object, digits = 3, ...)
+    definition = function(object, CI = .95, digits = 3, IRTpars = FALSE, rawug = FALSE, ...)
     {
+        if(CI >= 1 || CI <= 0)
+            stop('CI must be between 0 and 1')
+        z <- abs(qnorm((1 - CI)/2))
+        SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
         J <- length(K)
         nLambdas <- ncol(object@F)
         allPars <- list()
-        if(length(object@pars[[1]]@SEpar) > 0){
-            for(i in 1:(J+1)){
-                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, object@pars[[i]]@SEpar),
-                                         2, byrow = TRUE), digits)
-                rownames(allPars[[i]]) <- c('pars', 'SE')
-                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
-            }
+        if(IRTpars){
+            if(object@nfact > 1L) 
+                stop('traditional parameterization is only available for unidimensional models')
+            for(i in 1:(J+1))
+                allPars[[i]] <- round(mirt2traditional(object@pars[[i]]), digits)
         } else {
-            for(i in 1:(J+1)){
-                allPars[[i]] <- round(object@pars[[i]]@par, digits)
-                names(allPars[[i]]) <- names(object@pars[[i]]@est)
+            if(length(object@pars[[1]]@SEpar) > 0){
+                for(i in 1:(J+1)){
+                    allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, 
+                                                   object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
+                                                   object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
+                                             3, byrow = TRUE), digits)
+                    rownames(allPars[[i]]) <- c('par', SEnames)
+                    colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                }
+            } else {
+                for(i in 1:(J+1)){
+                    allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
+                    colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                    rownames(allPars[[i]]) <- 'par'
+                }
             }
+        }
+        if(!rawug){
+            allPars <- lapply(allPars, function(x, digits){
+                x[ , colnames(x) %in% c('g', 'u')] <- round(antilogit(x[ , colnames(x) %in% c('g', 'u')]), digits)
+                x
+            },  digits=digits)
         }
         names(allPars) <- c(colnames(object@data), 'GroupPars')
         return(allPars)
@@ -130,9 +148,8 @@ setMethod(
                                 Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)
                         s <- gamma.cor(tab) - gamma.cor(Etab)
                         if(s == 0) s <- 1
-                        res[j,i] <- sum(((tab - Etab)^2)/Etab) /
-                            ((K[i] - 1) * (K[j] - 1)) * sign(s)
-                        res[i,j] <- sqrt( abs(res[j,i]) / (N - min(c(K[i],K[j]) - 1)))
+                        res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
+                        res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (N*min(c(K[i],K[j]) - 1L)))
                         df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                     }
                 }
@@ -221,7 +238,7 @@ setMethod(
     definition = function(object, digits = 3, ...){
         tabdata <- object@tabdata
         N <- nrow(object@data)
-        expected <- round(N * object@Pl/sum(object@Pl),digits)
+        expected <- round(N * object@Pl,digits)
         return(cbind(tabdata,expected))
     }
 )
@@ -238,3 +255,47 @@ setMethod(
     }
 )
 
+mirt2traditional <- function(x){
+    cls <- class(x)
+    par <- x@par
+    if(cls != 'GroupPars')
+        ncat <- x@ncat
+    if(cls == 'dich'){
+        par[2] <- -par[2]/par[1]
+        names(par) <- c('a', 'b', 'g', 'u')
+    } else if(cls == 'graded'){
+        for(i in 2:ncat)
+            par[i] <- -par[i]/par[1]
+        names(par) <- c('a', paste0('b', 1:(length(par)-1)))
+    } else if(cls == 'gpcm'){
+        ds <- par[-1]/par[1]        
+        newd <- numeric(length(ds)-1)
+        for(i in 1:length(newd))
+            newd[i] <- -(ds[i+1] - ds[i])
+        par <- c(par[1], newd)
+        names(par) <- c('a', paste0('b', 1:length(newd)))
+    } else if(cls == 'nominal'){
+        as <- par[2:(ncat+1)] * par[1] 
+        as <- as - mean(as)
+        ds <- par[(ncat+2):length(par)]
+        ds <- ds - mean(ds)
+        par <- c(as, ds)
+        names(par) <- c(paste0('a', 1:ncat), paste0('c', 1:ncat))
+    } else if(cls == 'nestlogit'){
+        par1 <- par[1:4]
+        par1[2] <- -par1[2]/par1[1]
+        names(par1) <- c('a', 'b', 'g', 'u')
+        par2 <- par[5:length(par)]        
+        as <- par2[1:(ncat-1)]
+        as <- as - mean(as)
+        ds <- par2[-c(1:(ncat-1))]
+        ds <- ds - mean(ds)
+        names(as) <- paste0('a', 1:(ncat-1))
+        names(ds) <- paste0('c', 1:(ncat-1))        
+        par <- c(par1, as, ds)
+    } else {
+        names(par) <- names(x@est)
+    }    
+    ret <- matrix(par, 1L, dimnames=list('par', names(par)))
+    ret
+}

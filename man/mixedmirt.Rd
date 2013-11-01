@@ -33,7 +33,7 @@
   intercept parameters are freely estimated and identified
   with the parameterizations found in \code{\link{mirt}},
   and the first column in the fixed design matrix (commonly
-  the intercept or a reference group) is ommited}
+  the intercept or a reference group) is omitted}
 
   \item{random}{a right sided formula or list of formulas
   containing crossed random effects of the form \code{v1 +
@@ -41,7 +41,7 @@
   \code{v_n} are random numeric predictors within each
   group. If no intercept value is specified then by default
   the correlations between the \code{v}'s and \code{G} are
-  estimated, but can be supressed by including the \code{~
+  estimated, but can be suppressed by including the \code{~
   -1 + ...} constant}
 
   \item{itemtype}{same as itemtype in \code{\link{mirt}},
@@ -78,7 +78,7 @@
   \code{mixedmirt} fits MIRT models using FIML estimation
   to dichotomous and polytomous IRT models conditional on
   fixed and random effect of person and item level
-  covariates. This can also be understood as 'expalanatory
+  covariates. This can also be understood as 'explanatory
   IRT' if only fixed effects are modeled, or
   multilevel/mixed IRT if random and fixed effects are
   included. The method uses the MH-RM algorithm
@@ -107,7 +107,7 @@
   Polytomous IRT models follow a similar format except the
   item intercepts are automatically estimated internally,
   rendering the \code{items} argument in the fixed formula
-  redundent and therefore must be ommited from the
+  redundant and therefore must be omitted from the
   specification. If there are a mixture of dichotomous and
   polytomous items the intercepts for the dichotomous
   models are also estimated for consistency.
@@ -147,20 +147,18 @@ coef(mod1)
 wide <- data.frame(id=1:nrow(data),data,covdata)
 long <- reshape2::melt(wide, id.vars = c('id', 'group', 'pseudoIQ'))
 library(lme4)
-lmod0 <- lmer(value ~ 0 + variable + (1|id), long, family = binomial)
-lmod1 <- lmer(value ~ 0 + group + variable + (1|id), long, family = binomial)
+lmod0 <- glmer(value ~ 0 + variable + (1|id), long, family = binomial)
+lmod1 <- glmer(value ~ 0 + group + variable + (1|id), long, family = binomial)
 anova(lmod0, lmod1)
 
 #model using 2PL items instead of Rasch
 mod1b <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items, itemtype = '2PL')
 anova(mod1, mod1b) #much better with 2PL models using all criteria (as expected, given simdata pars)
 
-#continuous predictor and interaction model with group
+#continuous predictor with group
 mod2 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + pseudoIQ)
-mod3 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group * pseudoIQ)
 summary(mod2)
 anova(mod1b, mod2)
-anova(mod2, mod3)
 
 #view fixed design matrix with and without unique item level intercepts
 withint <- mixedmirt(data, covdata, model, fixed = ~ 0 + items + group, return.design = TRUE)
