@@ -1,36 +1,15 @@
 \name{multipleGroup}
-\alias{anova,MultipleGroupClass-method}
-\alias{coef,MultipleGroupClass-method}
-\alias{fitted,MultipleGroupClass-method}
 \alias{multipleGroup}
-\alias{plot,MultipleGroupClass-method}
-\alias{residuals,MultipleGroupClass-method}
-\alias{summary,MultipleGroupClass-method}
 \title{Multiple Group Estimation}
 \usage{
-  multipleGroup(data, model, group, itemtype = NULL, guess
-    = 0, upper = 1, SE = FALSE, SE.type = 'SEM', invariance
-    = '', pars = NULL, method = 'EM', constrain = NULL,
-    parprior = NULL, calcNull = TRUE, draws = 5000, quadpts
-    = NULL, grsm.block = NULL, rsm.block = NULL, key =
-    NULL, technical = list(), accelerate = TRUE, verbose =
-    TRUE, ...)
-
-  \S4method{coef}{MultipleGroupClass}(object, CI = .95,
-    digits = 3, verbose = TRUE, ...)
-
-  \S4method{summary}{MultipleGroupClass}(object, digits =
-    3, verbose = TRUE, ...)
-
-  \S4method{anova}{MultipleGroupClass}(object, object2)
-
-  \S4method{residuals}{MultipleGroupClass}(object, ...)
-
-  \S4method{fitted}{MultipleGroupClass}(object, ...)
-
-  \S4method{plot}{MultipleGroupClass}(x, y, type = 'info',
-    npts = 50, theta_angle = 45, rot = list(xaxis = -70,
-    yaxis = 30, zaxis = 10), ...)
+  multipleGroup(data, model, group, itemtype = NULL,
+    guess = 0, upper = 1, SE = FALSE, SE.type = "SEM",
+    invariance = "", pars = NULL, method = "EM",
+    constrain = NULL, parprior = NULL, calcNull = TRUE,
+    draws = 5000, quadpts = NULL, grsm.block = NULL,
+    rsm.block = NULL, key = NULL, technical = list(),
+    accelerate = TRUE, empiricalhist = FALSE,
+    verbose = TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -59,7 +38,7 @@
   equal across all groups} \item{\code{'intercepts'}}{to
   constrain all the intercepts to be equal across all
   groups, note for nominal models this also includes the
-  category specific slope parameters}}
+  category specific slope parameters} }
 
   Additionally, specifying specific item name bundles (from
   \code{colnames(data)}) will constrain all freely
@@ -108,25 +87,13 @@
   relative efficiency plot, and \code{'score'} for the
   expected total score plot}
 
-  \item{theta_angle}{numeric values ranging from 0 to 90
-  used in \code{plot}}
-
-  \item{npts}{number of quadrature points to be used for
-  plotting features. Larger values make plots look
-  smoother}
-
-  \item{rot}{allows rotation of the 3D graphics}
-
-  \item{x}{an object of class \code{mirt} to be plotted or
-  printed}
-
-  \item{y}{an unused variable to be ignored}
+  \item{empiricalhist}{logical; estimate prior distribution
+  using an empirical histogram approach.  see \code{mirt}
+  for details}
 
   \item{key}{see \code{\link{mirt}} for details}
 
   \item{itemtype}{see \code{\link{mirt}} for details}
-
-  \item{CI}{see \code{\link{mirt}} for details}
 
   \item{constrain}{see \code{\link{mirt}} for details}
 
@@ -137,13 +104,6 @@
   \item{parprior}{see \code{\link{mirt}} for details}
 
   \item{pars}{see \code{\link{mirt}} for details}
-
-  \item{object}{an object of class \code{confmirtClass}}
-
-  \item{object2}{an object of class \code{confmirtClass}}
-
-  \item{digits}{the number of significant digits to be
-  rounded}
 
   \item{...}{additional arguments to be passed}
 
@@ -156,7 +116,10 @@
   dichotomous and polytomous data under the item response
   theory paradigm using either Cai's (2010)
   Metropolis-Hastings Robbins-Monro (MHRM) algorithm or
-  with an EM algorithm approach.
+  with an EM algorithm approach. This function may be used
+  for detecting differential item functioning (DIF),
+  thought the \code{\link{DIF}} function may provide a more
+  convenient approach.
 }
 \details{
   By default the estimation in \code{multipleGroup} assumes
@@ -201,6 +164,8 @@ coef(mod_scalar2)
 residuals(mod_scalar2)
 plot(mod_configural)
 plot(mod_configural, type = 'score')
+plot(mod_configural, type = 'trace')
+plot(mod_configural, type = 'trace', which.items = 1:4)
 itemplot(mod_configural, 2)
 itemplot(mod_configural, 2, type = 'RE')
 
@@ -230,16 +195,16 @@ itemnames <- colnames(dat)
 refmodel <- multipleGroup(dat, models, group = group,
                              invariance=c('free_means', 'free_varcov', itemnames))
 
-#loop over items (in practice, run in parallel to increase speed)
+#loop over items (in practice, run in parallel to increase speed). May be better to use ?DIF
 estmodels <- vector('list', ncol(dat))
 for(i in 1:ncol(dat))
     estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, calcNull=FALSE,
                              invariance=c('free_means', 'free_varcov', itemnames[-i]))
 
-(anovas <- lapply(estmodels, anova, object2=refmodel))
+(anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
 
 #family-wise error control
-p <- do.call(rbind, lapply(anovas, function(x) x[2,9]))
+p <- do.call(rbind, lapply(anovas, function(x) x[2, 'p']))
 p.adjust(p, method = 'BH')
 
 #same as above, except only test if slopes vary (1 df)
@@ -251,7 +216,7 @@ for(i in 1:ncol(dat))
                              itemnames[-i]))
 
 
-(anovas <- lapply(estmodels, anova, object2=refmodel))
+(anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
 
 #############
 #multiple factors
@@ -317,12 +282,9 @@ dataset1 <- simdata(a, d, N, itemtype)
 dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 dat <- rbind(dataset1, dataset2)
 group <- c(rep('D1', N), rep('D2', N))
-models <- mirt.model('F1 = 1-15')
-models2 <- mirt.model('
-   F1 = 1-10
-   F2 = 10-15')
+model <- mirt.model('F1 = 1-15')
 
-mod_configural <- multipleGroup(dat, models, group = group)
+mod_configural <- multipleGroup(dat, model, group = group)
 plot(mod_configural)
 plot(mod_configural, type = 'SE')
 itemplot(mod_configural, 1)
@@ -331,11 +293,33 @@ fs <- fscores(mod_configural)
 head(fs[["D1"]])
 fscores(mod_configural, method = 'EAPsum')
 
-mod_configural2 <- multipleGroup(dat, models2, group = group)
+# constrain slopes within each group to be equal (but not accross groups)
+model2 <- mirt.model('F1 = 1-15
+                      CONSTRAIN = (1-15, a1)')
+mod_configural2 <- multipleGroup(dat, model2, group = group)
 plot(mod_configural2, type = 'infocontour')
 plot(mod_configural2, type = 'SE')
 plot(mod_configural2, type = 'RE')
 itemplot(mod_configural2, 10)
+
+############
+## empical histogram example (normal and bimodal groups)
+set.seed(1234)
+a <- matrix(rlnorm(50, .2, .2))
+d <- matrix(rnorm(50))
+ThetaNormal <- matrix(rnorm(2000))
+ThetaBimodal <- scale(matrix(c(rnorm(1000, -2), rnorm(1000,2)))) #bimodal
+Theta <- rbind(ThetaNormal, ThetaBimodal)
+dat <- simdata(a, d, 4000, itemtype = 'dich', Theta=Theta)
+group <- rep(c('G1', 'G2'), each=2000)
+
+EH <- multipleGroup(dat, 1, group=group, empiricalhist = TRUE, invariance = colnames(dat))
+coef(EH)
+plot(EH, type = 'empiricalhist', npts = 60)
+
+#dif test for item 1
+EH1 <- multipleGroup(dat, 1, group=group, empiricalhist = TRUE, invariance = colnames(dat)[-1])
+anova(EH, EH1)
 
 }
 }
@@ -343,6 +327,10 @@ itemplot(mod_configural2, 10)
   Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \seealso{
+  \code{\link{anova-method}}, \code{\link{coef-method}},
+  \code{\link{summary-method}},
+  \code{\link{residuals-method}},
+  \code{\link{plot-method}}, \code{\link{fitted-method}},
   \code{\link{expand.table}}, \code{\link{key2binary}},
   \code{\link{mirt.model}}, \code{\link{mirt}},
   \code{\link{bfactor}}, \code{\link{multipleGroup}},
@@ -353,7 +341,8 @@ itemplot(mod_configural2, 10)
   \code{\link{probtrace}}, \code{\link{boot.mirt}},
   \code{\link{imputeMissing}}, \code{\link{itemfit}},
   \code{\link{mod2values}}, \code{\link{simdata}},
-  \code{\link{createItem}}, \code{\link{mirtCluster}}
+  \code{\link{createItem}}, \code{\link{mirtCluster}},
+  \code{\link{DIF}}
 }
 \keyword{models}
 

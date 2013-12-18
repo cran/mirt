@@ -8,11 +8,11 @@ thetaComb <- function(theta, nfact)
         for(i in 1L:nfact)
             thetalist[[i]] <- theta
         Theta <- as.matrix(expand.grid(thetalist))
-    }	
+    }
 	return(Theta)
 }
 
-# Product terms 
+# Product terms
 prodterms <- function(theta0, prodlist)
 {
     products <- matrix(1, ncol = length(prodlist), nrow = nrow(theta0))
@@ -40,13 +40,13 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)
     }
-    itemtrace0 <- computeItemtrace(pars=pars, Theta=theta0, itemloc=itemloc, 
+    itemtrace0 <- computeItemtrace(pars=pars, Theta=theta0, itemloc=itemloc,
                                    offterm=OffTerm, NO.CUSTOM=NO.CUSTOM)
-    itemtrace1 <- computeItemtrace(pars=pars, Theta=theta1, itemloc=itemloc, 
-                                   offterm=OffTerm, NO.CUSTOM=NO.CUSTOM)    
-    totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, log_den0, log_den1)    
-    total_0 <- totals[[1L]] 
-    total_1 <- totals[[2L]] 
+    itemtrace1 <- computeItemtrace(pars=pars, Theta=theta1, itemloc=itemloc,
+                                   offterm=OffTerm, NO.CUSTOM=NO.CUSTOM)
+    totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, log_den0, log_den1)
+    total_0 <- totals[[1L]]
+    total_1 <- totals[[2L]]
     diff <- total_1 - total_0
     accept <- diff > 0
     accept[unif < exp(diff)] <- TRUE
@@ -274,15 +274,15 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             groupNames <- as.character(groupNames)
             names(pars) <- groupNames
             input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'CONSTRAIN', 2L]
-            input <- gsub(' ', replacement='', x=input)        
+            input <- gsub(' ', replacement='', x=input)
             elements <- strsplit(input, '\\),\\(')[[1L]]
-            elements <- gsub('\\(', replacement='', x=elements)        
-            elements <- gsub('\\)', replacement='', x=elements)        
+            elements <- gsub('\\(', replacement='', x=elements)
+            elements <- gsub('\\)', replacement='', x=elements)
             esplit <- strsplit(elements, ',')
             esplit <- lapply(esplit, function(x, groupNames)
                 if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
                              groupNames=as.character(groupNames))
-            esplit <- lapply(esplit, function(x){                
+            esplit <- lapply(esplit, function(x){
                             newx <- c()
                             if(length(x) < 3L)
                                 stop('PRIOR = ... has not been supplied enough arguments')
@@ -290,7 +290,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                                 if(grepl('-', x[i])){
                                     tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
                                     newx <- c(newx, tmp[1L]:tmp[2L])
-                                } else newx <- c(newx, x[i])                  
+                                } else newx <- c(newx, x[i])
                             }
                             x <- c(newx, x[length(x)-1L], x[length(x)])
                             x
@@ -304,11 +304,11 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                         p <- pars[[g]]
                         sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
                         for(j in 1L:length(sel)){
-                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) ==
                                                            esplit[[i]][length(esplit[[i]])-1L]]
-                            if(!length(pick)) 
+                            if(!length(pick))
                                 stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
-                            constr <- c(constr, pick) 
+                            constr <- c(constr, pick)
                         }
                         constrain[[length(constrain) + 1L]] <- constr
                     }
@@ -317,11 +317,11 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                     p <- pars[[esplit[[i]][length(esplit[[i]])]]]
                     sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
                     for(j in 1L:length(sel)){
-                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) ==
                                                        esplit[[i]][length(esplit[[i]])-1L]]
-                        if(!length(pick)) 
+                        if(!length(pick))
                             stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
-                        constr <- c(constr, pick) 
+                        constr <- c(constr, pick)
                     }
                     constrain[[length(constrain) + 1L]] <- constr
                 }
@@ -333,15 +333,15 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             groupNames <- as.character(groupNames)
             names(pars) <- groupNames
             input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'CONSTRAINB', 2L]
-            input <- gsub(' ', replacement='', x=input)        
+            input <- gsub(' ', replacement='', x=input)
             elements <- strsplit(input, '\\),\\(')[[1L]]
-            elements <- gsub('\\(', replacement='', x=elements)        
-            elements <- gsub('\\)', replacement='', x=elements)        
+            elements <- gsub('\\(', replacement='', x=elements)
+            elements <- gsub('\\)', replacement='', x=elements)
             esplit <- strsplit(elements, ',')
             esplit <- lapply(esplit, function(x, groupNames)
                 if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
                              groupNames=as.character(groupNames))
-            esplit <- lapply(esplit, function(x){                
+            esplit <- lapply(esplit, function(x){
                 newx <- c()
                 if(length(x) < 3L)
                     stop('PRIOR = ... has not been supplied enough arguments')
@@ -349,20 +349,20 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                     if(grepl('-', x[i])){
                         tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
                         newx <- c(newx, tmp[1L]:tmp[2L])
-                    } else newx <- c(newx, x[i])                  
+                    } else newx <- c(newx, x[i])
                 }
                 x <- c(newx, x[length(x)-1L], x[length(x)])
                 x
-            })            
+            })
             for(i in 1L:length(esplit)){
                 sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
                 for(j in 1L:length(sel)){
                     constr <- c()
                     for(g in 1L:ngroups){
                         p <- pars[[g]]
-                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == 
+                        pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) ==
                                                        esplit[[i]][length(esplit[[i]])-1L]]
-                        if(!length(pick)) 
+                        if(!length(pick))
                             stop('CONSTRAINB = ... indexed a parameter that was not relavent accross groups')
                         constr <- c(constr, pick)
                     }
@@ -450,7 +450,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             }
         }
     }
-    #remove redundent constraints    
+    #remove redundent constraints
     if(TRUE){
         redun <- rep(FALSE, length(constrain))
         if(length(constrain) > 0L){
@@ -481,15 +481,15 @@ UpdatePrior <- function(PrepList, model, groupNames){
             pars[[g]] <- PrepList[[g]]$pars
         names(pars) <- groupNames
         input <- model[[1L]]$x[model[[1L]]$x[,1L] == 'PRIOR', 2L]
-        input <- gsub(' ', replacement='', x=input)        
+        input <- gsub(' ', replacement='', x=input)
         elements <- strsplit(input, '\\),\\(')[[1L]]
-        elements <- gsub('\\(', replacement='', x=elements)        
-        elements <- gsub('\\)', replacement='', x=elements)        
+        elements <- gsub('\\(', replacement='', x=elements)
+        elements <- gsub('\\)', replacement='', x=elements)
         esplit <- strsplit(elements, ',')
         esplit <- lapply(esplit, function(x, groupNames)
             if(!(x[length(x)] %in% c(groupNames, 'all'))) c(x, 'all') else x,
                          groupNames=as.character(groupNames))
-        esplit <- lapply(esplit, function(x){                
+        esplit <- lapply(esplit, function(x){
             newx <- c()
             if(length(x) < 5L)
                 stop('PRIOR = ... has not been supplied enough arguments')
@@ -497,11 +497,11 @@ UpdatePrior <- function(PrepList, model, groupNames){
                 if(grepl('-', x[i])){
                     tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
                     newx <- c(newx, tmp[1L]:tmp[2L])
-                } else newx <- c(newx, x[i])                  
+                } else newx <- c(newx, x[i])
             }
             x <- c(newx, x[(length(x)-4L):length(x)])
             x
-        })    
+        })
         for(i in 1L:length(esplit)){
             if(!(esplit[[i]][length(esplit[[i]])] %in% c(groupNames, 'all')))
                 stop('Invalid group name passed to PRIOR = ... syntax.')
@@ -558,7 +558,7 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
             if(i <= length(itemnames))
                 item <- c(item, rep(itemnames[i], length(tmpgroup[[i]]@parnum)))
             class <- c(class, rep(class(tmpgroup[[i]]), length(tmpgroup[[i]]@parnum)))
-            parname <- c(parname, names(tmpgroup[[i]]@par))
+            parname <- c(parname, names(tmpgroup[[i]]@est))
             parnum <- c(parnum, tmpgroup[[i]]@parnum)
             par <- c(par, tmpgroup[[i]]@par)
             est <- c(est, tmpgroup[[i]]@est)
@@ -571,18 +571,18 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
         item <- c(item, rep('GROUP', length(tmpgroup[[i]]@parnum)))
     }
     if(length(random) > 0L){
-        for(i in 1L:length(random)){            
-            parname <- c(parname, names(random[[i]]@par))
+        for(i in 1L:length(random)){
+            parname <- c(parname, names(random[[i]]@est))
             parnum <- c(parnum, random[[i]]@parnum)
             par <- c(par, random[[i]]@par)
             est <- c(est, random[[i]]@est)
             lbound <- c(lbound, random[[i]]@lbound)
-            ubound <- c(ubound, random[[i]]@ubound)            
+            ubound <- c(ubound, random[[i]]@ubound)
             prior.type <- c(prior.type, random[[i]]@prior.type)
             prior_1 <- c(prior_1, random[[i]]@prior_1)
             prior_2 <- c(prior_2, random[[i]]@prior_2)
             class <- c(class, rep('RandomPars', length(random[[i]]@parnum)))
-            item <- c(item, rep('RANDOM', length(random[[i]]@parnum))) 
+            item <- c(item, rep('RANDOM', length(random[[i]]@parnum)))
         }
     }
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
@@ -595,14 +595,14 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
 
 UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
     currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random, MG = TRUE)
-    if(!all(as.matrix(currentDesign[,c('group', 'item', 'class', 'name', 'parnum')]) == 
+    if(!all(as.matrix(currentDesign[,c('group', 'item', 'class', 'name', 'parnum')]) ==
                 as.matrix(pars[,c('group', 'item', 'class', 'name', 'parnum')])))
         stop('Critical internal parameter labels do not match those returned from pars = \'values\'')
     if(!all(sapply(currentDesign, class) == sapply(pars, class)))
         stop('pars input does not contain the appropriate classes, which should match pars = \'values\'')
-    if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm'))) 
+    if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm')))
         stop('prior.type input in pars contains invalid prior types')
-    if(!MG) PrepList <- list(PrepList)    
+    if(!MG) PrepList <- list(PrepList)
     len <- length(PrepList[[length(PrepList)]]$pars)
     maxparnum <- max(PrepList[[length(PrepList)]]$pars[[len]]@parnum)
     pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
@@ -611,12 +611,6 @@ UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
         for(i in 1L:length(PrepList[[g]]$pars)){
             for(j in 1L:length(PrepList[[g]]$pars[[i]]@par)){
                 PrepList[[g]]$pars[[i]]@par[j] <- pars[ind,'value']
-                if(is(PrepList[[g]]$pars[[i]], 'graded')){
-                    tmp <- ExtractZetas(PrepList[[g]]$pars[[i]])
-                    if(!all(tmp == sort(tmp, decreasing=TRUE)) || length(unique(tmp)) != length(tmp)) 
-                        stop('Graded model intercepts for item ', i, ' in group ', g, 
-                             ' do not descend from highest to lowest. Please fix')
-                }
                 PrepList[[g]]$pars[[i]]@est[j] <- as.logical(pars[ind,'est'])
                 PrepList[[g]]$pars[[i]]@lbound[j] <- pars[ind,'lbound']
                 PrepList[[g]]$pars[[i]]@ubound[j] <- pars[ind,'ubound']
@@ -625,7 +619,13 @@ UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
                 PrepList[[g]]$pars[[i]]@prior_2[j] <- pars[ind,'prior_2']
                 ind <- ind + 1L
             }
-            PrepList[[g]]$pars[[i]]@any.prior <- any(c('norm','lnorm','beta') %in% 
+            if(is(PrepList[[g]]$pars[[i]], 'graded')){
+                tmp <- ExtractZetas(PrepList[[g]]$pars[[i]])
+                if(!all(tmp == sort(tmp, decreasing=TRUE)) || length(unique(tmp)) != length(tmp))
+                    stop('Graded model intercepts for item ', i, ' in group ', g,
+                         ' do not descend from highest to lowest. Please fix')
+            }
+            PrepList[[g]]$pars[[i]]@any.prior <- any(c('norm','lnorm','beta') %in%
                                                          PrepList[[g]]$pars[[i]]@prior.type)
         }
     }
@@ -665,7 +665,7 @@ DerivativePriors <- function(x, grad, hess){
         lval <- log(val)
         mu <- x@prior_1[ind]
         s <- x@prior_2[ind]
-        g <- -(lval - mu)/(val * s^2) - 1/val 
+        g <- -(lval - mu)/(val * s^2) - 1/val
         h <- 1/(val^2) - 1/(val^2 * s^2) - (lval - mu)/(val^2 * s^2)
         grad[ind] <- grad[ind] + g
         if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
@@ -677,10 +677,10 @@ DerivativePriors <- function(x, grad, hess){
         val <- ifelse(val < 1e-10, 1e-10, val)
         val <- ifelse(val > 1-1e-10, 1-1e-10, val)
         a <- x@prior_1[ind]
-        b <- x@prior_2[ind]        
+        b <- x@prior_2[ind]
         g <- (a - 1)/val - (b-1)/(1-val)
-        h <- -(a - 1)/(val^2) - (b-1) / (1-val)^2        
-        grad[ind] <- grad[ind] + g    
+        h <- -(a - 1)/(val^2) - (b-1) / (1-val)^2
+        grad[ind] <- grad[ind] + g
         if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
         else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
     }
@@ -695,7 +695,7 @@ LL.Priors <- function(x, LL){
         u <- x@prior_1[ind]
         s <- x@prior_2[ind]
         for(i in 1L:length(val)){
-            tmp <- dnorm(val[i], u[i], s[i], log=TRUE)            
+            tmp <- dnorm(val[i], u[i], s[i], log=TRUE)
             LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
         }
     }
@@ -749,6 +749,7 @@ nameInfoMatrix <- function(info, correction, L, npars){
     matind[lower.tri(matind, diag = TRUE)] <- tmp[lower.tri(tmp, diag = TRUE)]
     matind <- matind * L
     matind[matind == 0 ] <- NA
+    matind[!is.na(matind)] <- tmp[!is.na(matind)]
     shortnames <- c()
     for(i in 1L:length(correction)){
         keep <- is.na(matind[ , 1L])
@@ -772,7 +773,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     tabdata <- matrix(0L, nrow(tabdata2), sum(K))
     for(i in 1L:nitem){
         uniq <- sort(na.omit(unique(tabdata2[,i])))
-        if(length(uniq) < K[i]) uniq <- 0L:(K[i]-1L)        
+        if(length(uniq) < K[i]) uniq <- 0L:(K[i]-1L)
         for(j in 1L:length(uniq))
             tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
     }
@@ -792,11 +793,12 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
 }
 
 makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NaN,
-                     rotate = 'varimax', Target = NaN, SE = TRUE, verbose = TRUE,
+                     rotate = 'varimax', Target = NaN, SE = FALSE, verbose = TRUE,
                      SEtol = .0001, grsm.block = NULL, D = 1,
                      rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
                      technical = list(), use = 'pairwise.complete.obs',
-                     SE.type = 'MHRM', large = NULL, accelerate = TRUE, ...)
+                     SE.type = 'MHRM', large = NULL, accelerate = TRUE, empiricalhist = FALSE,
+                     ...)
 {
     opts <- list()
     D <- 1
@@ -813,7 +815,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$grsm.block = grsm.block
     opts$D = D
     opts$rsm.block = rsm.block
-    opts$calcNull = calcNull  
+    opts$calcNull = calcNull
+    opts$customPriorFun = technical$customPriorFun
     opts$BFACTOR = BFACTOR
     opts$accelerate = accelerate
     if(SE.type == 'SEM' && SE) opts$accelerate <- FALSE
@@ -827,7 +830,15 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$BURNIN <- ifelse(is.null(technical$BURNIN), 150L, technical$BURNIN)
     opts$SEMCYCLES <- ifelse(is.null(technical$SEMCYCLES), 50, technical$SEMCYCLES)
     opts$KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1L, technical$KDRAWS)
-    opts$TOL <- ifelse(is.null(technical$TOL), if(method == 'EM') 1e-4 else 1e-3, technical$TOL)        
+    opts$TOL <- ifelse(is.null(technical$TOL), if(method == 'EM') 1e-4 else 1e-3, technical$TOL)
+    opts$empiricalhist <- empiricalhist
+    if(empiricalhist){
+        if(opts$method != 'EM')
+            stop('empirical histogram method only applicable when method = \'EM\' ')
+        if(opts$TOL == 1e-4) opts$TOL <- 3e-5
+        if(is.null(opts$quadpts)) opts$quadpts <- 199L
+        if(opts$NCYCLES == 500L) opts$NCYCLES <- 2000L
+    }
     opts$MSTEPTOL <- ifelse(is.null(technical$MSTEPTOL), opts$TOL/1000, technical$MSTEPTOL)
     if(opts$method == 'MHRM' || opts$method =='MIXED' || SE.type == 'MHRM')
         set.seed(12345L)
@@ -845,7 +856,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
         if(is.logical(large))
             if(large) opts$returnPrepList <- TRUE
         if(is.list(large)) opts$PrepList <- large
-    }    
+    }
     if(!is.null(technical$customK)) opts$calcNull <- FALSE
     return(opts)
 }
@@ -854,7 +865,7 @@ reloadPars <- function(longpars, pars, ngroups, J){
     return(.Call('reloadPars', longpars, pars, ngroups, J))
 }
 
-computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L), 
+computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L),
                              NO.CUSTOM=FALSE){
     if(!NO.CUSTOM){
         if(any(sapply(pars, class) %in% 'custom')){ #sanity check, not important for custom anyway
@@ -879,23 +890,27 @@ assignItemtrace <- function(pars, itemtrace, itemloc){
 }
 
 BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMATE, constrain,
-                  specific=NULL, sitems=NULL){
+                  specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL){
     LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
-                   NO.CUSTOM){
+                   NO.CUSTOM, EH, EHPrior){
         longpars[est] <- p
         pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
         gstructgrouppars <- prior <- Prior <- vector('list', ngroups)
-        for(g in 1L:ngroups){
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars2[[g]][[J+1L]])
-            if(BFACTOR){
-                prior[[g]] <- dnorm(theta, 0, 1)
-                prior[[g]] <- prior[[g]]/sum(prior[[g]])                
-                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
-                next
+        if(EH){
+            Prior[[1L]] <- EHPrior[[1L]]
+        } else {
+            for(g in 1L:ngroups){
+                gstructgrouppars[[g]] <- ExtractGroupPars(pars2[[g]][[J+1L]])
+                if(BFACTOR){
+                    prior[[g]] <- dnorm(theta, 0, 1)
+                    prior[[g]] <- prior[[g]]/sum(prior[[g]])
+                    Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
+                    next
+                }
+                Prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
+                                               gstructgrouppars[[g]]$gcov)
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
             }
-            Prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
-                                           gstructgrouppars[[g]]$gcov)
-            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
         LL <- 0
         for(g in 1L:ngroups){
@@ -906,14 +921,14 @@ BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
                                             itemloc=itemloc, NO.CUSTOM=NO.CUSTOM)$expected
             } else {
                 expected <- Estep.mirt(pars=pars2[[g]], tabdata=PrepList[[g]]$tabdata,
-                                       Theta=Theta, prior=Prior[[g]], itemloc=itemloc, 
+                                       Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
                                        NO.CUSTOM=NO.CUSTOM)$expected
             }
             LL <- LL + sum(PrepList[[g]]$tabdata[,ncol(PrepList[[g]]$tabdata)] * log(expected))
         }
         LL
     }
-    
+
     L <- ESTIMATE$L
     longpars <- ESTIMATE$longpars
     rlist <- ESTIMATE$rlist
@@ -931,14 +946,15 @@ BL.SE <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
     for(g in 1L:ngroups){
         for(i in 1L:J){
             tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
-            pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]
+            pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
         }
     }
     NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
     hess <- numDeriv::hessian(LL, x=shortpars, est=est, longpars=longpars,
                               pars=pars, ngroups=ngroups, J=J,
                               Theta=Theta, PrepList=PrepList,
-                              specific=specific, sitems=sitems, NO.CUSTOM=NO.CUSTOM)
+                              specific=specific, sitems=sitems, NO.CUSTOM=NO.CUSTOM,
+                              EH=EH, EHPrior=EHPrior)
     Hess <- matrix(0, length(longpars), length(longpars))
     Hess[est, est] <- -hess
     Hess <- L %*% Hess %*% L
@@ -979,7 +995,9 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     return(ESTIMATE)
 }
 
-SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV){
+SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV,
+                   collectLL, from = 3L){
+    
     TOL <- sqrt(list$TOL)
     itemloc <- list$itemloc
     J <- length(itemloc) - 1L
@@ -1005,13 +1023,13 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
     ANY.PRIOR <- rep(FALSE, ngroups)
     NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
     for(g in 1L:ngroups){
-        gTheta[[g]] <- Theta 
+        gTheta[[g]] <- Theta
         if(length(prodlist) > 0L)
             gTheta[[g]] <- prodterms(gTheta[[g]],prodlist)
         ANY.PRIOR[g] <- any(sapply(pars[[g]], function(x) x@any.prior))
     }
-    
-    for (cycles in 3L:NCYCLES){
+
+    for (cycles in from:NCYCLES){
 
         longpars <- MLestimates
         longpars[estindex] <- EMhistory[cycles, estindex]
@@ -1019,18 +1037,21 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
             for(i in 1L:length(constrain))
                 longpars[constrain[[i]][-1L]] <- longpars[[constrain[[i]][1L]]]
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-
-        for(g in 1L:ngroups){
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
-            if(BFACTOR){
-                prior[[g]] <- dnorm(theta, 0, 1)
-                prior[[g]] <- prior[[g]]/sum(prior[[g]])                
-                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
-                next
+        if(list$EH){
+            Prior[[1L]] <- list$EHPrior[[1L]]
+        } else {
+            for(g in 1L:ngroups){
+                gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
+                if(BFACTOR){
+                    prior[[g]] <- dnorm(theta, 0, 1)
+                    prior[[g]] <- prior[[g]]/sum(prior[[g]])
+                    Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
+                    next
+                }
+                Prior[[g]] <- mvtnorm::dmvnorm(gTheta[[g]][ ,1L:nfact,drop=FALSE],gstructgrouppars[[g]]$gmeans,
+                                               gstructgrouppars[[g]]$gcov)
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
             }
-            Prior[[g]] <- mvtnorm::dmvnorm(gTheta[[g]][ ,1L:nfact,drop=FALSE],gstructgrouppars[[g]]$gmeans,
-                                           gstructgrouppars[[g]]$gcov)
-            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
         #Estep
         for(g in 1L:ngroups){
@@ -1048,11 +1069,11 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
         for(g in 1L:ngroups){
             for(i in 1L:J){
                 tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
-                pars[[g]][[i]]@rs <- rlist[[g]]$r1[, tmp]
+                pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
             }
         }
         longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J, rlist=rlist,
-                          gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR, 
+                          gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
                           NO.CUSTOM=NO.CUSTOM, PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND,
                           constrain=constrain, cycle=cycles, DERIV=DERIV)
         rijlast <- rij
@@ -1066,54 +1087,54 @@ SEM.SE <- function(est, pars, constrain, PrepList, list, Theta, theta, BFACTOR, 
     return(rij)
 }
 
-make.randomdesign <- function(random, longdata, covnames, itemdesign, N){    
+make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
     itemcovnames <- colnames(itemdesign)
-    J <- nrow(itemdesign)    
+    J <- nrow(itemdesign)
     ret <- vector('list', length(random))
     for(i in 1L:length(random)){
         f <- gsub(" ", "", as.character(random[[i]])[2L])
         splt <- strsplit(f, '\\|')[[1L]]
-        gframe <- model.frame(as.formula(paste0('~',splt[2L])), longdata)        
+        gframe <- model.frame(as.formula(paste0('~',splt[2L])), longdata)
         sframe <- model.frame(as.formula(paste0('~',splt[1L])), longdata)
         if(colnames(gframe) %in% covnames){
             between <- TRUE
         } else if(colnames(gframe) %in% itemcovnames){
             between <- FALSE
         } else stop('grouping variable not in itemdesign or covdata')
-        if(between){            
-            gframe <- gframe[1L:N, , drop=FALSE]            
+        if(between){
+            gframe <- gframe[1L:N, , drop=FALSE]
             sframe <- sframe[1L:N, , drop=FALSE]
         } else {
             gframe <- itemdesign[, which(colnames(gframe) == itemcovnames), drop=FALSE]
             sframe <- itemdesign[, which(colnames(sframe) == itemcovnames), drop=FALSE]
-        }        
+        }
         matpar <- diag(ncol(gframe) + ncol(sframe))
         estmat <- lower.tri(matpar, diag=TRUE)
         ndim <- ncol(matpar)
-        if(strsplit(f, '+')[[1L]][[1L]] == '-') 
-            estmat[lower.tri(estmat)] <- FALSE        
+        if(strsplit(f, '+')[[1L]][[1L]] == '-')
+            estmat[lower.tri(estmat)] <- FALSE
         fn <- paste0('COV_', c(colnames(gframe), colnames(sframe)))
         FNCOV <- outer(fn, c(colnames(gframe), colnames(sframe)), FUN=paste, sep='_')
         par <- matpar[lower.tri(matpar, diag=TRUE)]
         est <- estmat[lower.tri(estmat, diag=TRUE)]
-        names(par) <- names(est) <- FNCOV[lower.tri(FNCOV, diag=TRUE)]     
-        drawvals <- matrix(0, length(unique(gframe)[[1L]]), ndim, 
-                           dimnames=list(unique(gframe)[[1L]], NULL))        
+        names(par) <- names(est) <- FNCOV[lower.tri(FNCOV, diag=TRUE)]
+        drawvals <- matrix(0, length(unique(gframe)[[1L]]), ndim,
+                           dimnames=list(unique(gframe)[[1L]], NULL))
         mtch <- match(gframe[[1L]], rownames(drawvals))
-        gdesign <- matrix(1, nrow(gframe), 1L, dimnames = list(NULL, colnames(gframe))) 
-        if(ncol(sframe) != 0L) 
+        gdesign <- matrix(1, nrow(gframe), 1L, dimnames = list(NULL, colnames(gframe)))
+        if(ncol(sframe) != 0L)
             gdesign <- cbind(model.matrix(as.formula(paste0('~',splt[1L])), sframe), gdesign)
         tmp <- matrix(-Inf, ndim, ndim)
         diag(tmp) <- 1e-4
         lbound <- tmp[lower.tri(tmp, diag=TRUE)]
-        ret[[i]] <- new('RandomPars', 
+        ret[[i]] <- new('RandomPars',
                         par=par,
                         est=est,
                         ndim=ndim,
                         lbound=lbound,
                         ubound=rep(Inf, length(par)),
                         gframe=gframe,
-                        gdesign=gdesign,                        
+                        gdesign=gdesign,
                         between=between,
                         cand.t.var=.5,
                         any.prior=FALSE,
@@ -1121,8 +1142,8 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
                         prior_1=rep(NaN,length(par)),
                         prior_2=rep(NaN,length(par)),
                         drawvals=drawvals,
-                        mtch=mtch)        
-    }    
+                        mtch=mtch)
+    }
     ret
 }
 
@@ -1142,7 +1163,7 @@ OffTerm <- function(random, J, N){
     ret
 }
 
-reloadRandom <- function(random, longpars, parstart){    
+reloadRandom <- function(random, longpars, parstart){
     ind1 <- parstart
     for(i in 1L:length(random)){
         ind2 <- ind1 + length(random[[i]]@par) - 1L
@@ -1155,7 +1176,7 @@ reloadRandom <- function(random, longpars, parstart){
 smooth.cov <- function(x){
     eigens <- eigen(x)
     if(min(eigens$values) < .Machine$double.eps){
-        eigens$values[eigens$values < .Machine$double.eps] <- 100 * 
+        eigens$values[eigens$values < .Machine$double.eps] <- 100 *
             .Machine$double.eps
         nvar <- dim(x)[1L]
         tot <- sum(eigens$values)
@@ -1163,4 +1184,342 @@ smooth.cov <- function(x){
         x <- eigens$vectors %*% diag(eigens$values) %*% t(eigens$vectors)
     }
     x
+}
+
+SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, N, simple=TRUE){
+    pars <- ESTIMATE$pars
+    itemloc <- PrepList[[1L]]$itemloc
+    ngroups <- length(pars)
+    nitems <- length(pars[[1L]]) - 1L
+    L <- ESTIMATE$L
+    DX <- numeric(ncol(L))
+    Prior <- ESTIMATE$Prior
+    Igrad <- Ihess <- matrix(0, length(DX), length(DX))
+    tabdata <- PrepList[[1L]]$tabdata
+    if(!simple){
+        K <- PrepList[[1L]]$K
+        resp <- vector('list', nitems)
+        for(i in 1L:nitems)
+            resp[[i]] <- 0L:(K[i]-1L)
+        resp <- expand.grid(resp)
+        stringfulldata <- apply(resp, 1L, paste, sep='', collapse = '/')
+        stringtabdata <- unique(stringfulldata)
+        tabdata2 <- lapply(strsplit(stringtabdata, split='/'), as.integer)
+        tabdata2 <- do.call(rbind, tabdata2)
+        tabdata2[tabdata2 == 99999L] <- NA
+        tabdata <- matrix(0L, nrow(tabdata2), sum(K))
+        for(i in 1L:nitems){
+            uniq <- sort(na.omit(unique(tabdata2[,i])))
+            if(length(uniq) < K[i]) uniq <- 0L:(K[i]-1L)
+            for(j in 1L:length(uniq))
+                tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
+        }
+        tabdata <- cbind(tabdata, 1L)
+        collectL <- numeric(nrow(tabdata))
+        collectgrad <- matrix(0, nrow(tabdata), length(DX))
+        for(g in 1L:ngroups)
+            PrepList[[g]]$tabdata <- tabdata
+    }
+    for(pat in 1L:nrow(tabdata)){
+        for(g in 1L:ngroups){
+            gtabdata <- PrepList[[g]]$tabdata[pat, , drop=FALSE]
+            rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata,
+                                Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
+            for(i in 1L:nitems){
+                tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
+                pars[[g]][[i]]@dat <- rlist$r1[, tmp]
+                pars[[g]][[i]]@itemtrace <- rlist$itemtrace[, tmp]
+                tmp <- Deriv(pars[[g]][[i]], Theta=Theta, EM = TRUE, estHess=FALSE)
+                dx <- tmp$grad
+                DX[pars[[g]][[i]]@parnum] <- dx
+            }
+        }
+        if(simple){
+            out <- L %*% outer(DX, DX) %*% L
+            Igrad <- Igrad + out
+        } else {
+            collectL[pat] <- rlist$expected
+            DX <- as.numeric(L %*% DX)
+            DX[DX != 0] <-  rlist$expected - exp(log(rlist$expected) - DX[DX != 0])
+            collectgrad[pat, ] <- DX
+        }
+    }
+    Igrad <- Igrad[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
+    colnames(Igrad) <- rownames(Igrad) <- names(ESTIMATE$correction)
+    if(simple){
+        info <- Igrad * nrow(tabdata) / N    
+    } else {
+        collectgrad <- collectgrad[, ESTIMATE$estindex_unique]
+        info <- N * t(collectgrad) %*% diag(1/collectL) %*% collectgrad
+    }
+    colnames(info) <- rownames(info) <- names(ESTIMATE$correction)
+    lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
+    lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
+    info[lengthsplit > 2L, lengthsplit > 2L] <- 1
+    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain)
+    if(any(lengthsplit > 2L)){
+        for(g in 1L:ngroups){
+            tmp <- ESTIMATE$pars[[g]][[nitems+1L]]@SEpar
+            tmp[!is.na(tmp)] <- NaN
+            ESTIMATE$pars[[g]][[nitems+1L]]@SEpar <- tmp
+        }
+    }
+    return(ESTIMATE)
+}
+
+mirtClusterEnv <- new.env()
+mirtClusterEnv$ncores <- 1L
+
+shinyItemplot <- function(){
+    require(latticeExtra)
+
+    ret <- list(
+
+        ui = pageWithSidebar(
+
+                    # Application title
+                    headerPanel("Item plots in mirt"),
+
+                    sidebarPanel(
+
+                        h5('Select an internal mirt item class, the type of plot to display, the number of factors,
+                           and use the checkbox to include sliders for adjusting multiple item parameters.
+                           Note that if the slider label you choose does not appear in the output box then the
+                           associated slider will have no effect on the graphic.
+                           See ?mirt::mirt and ?mirt::simdata for more details.'),
+
+                        selectInput(inputId = "itemclass",
+                                    label = "Class of mirt item:",
+                                    choices = c('dich', 'graded', 'nominal', 'gpcm', 'partcomp', 'nestlogit'),
+                                    selected = 'dich'),
+
+                        h6('Note: for nestlogit the first category is assumed to be the correct response option.'),
+
+                        selectInput(inputId = "plottype",
+                                    label = "Type of plot to display:",
+                                    choices = c('trace', 'info', 'score', 'infocontour', 'SE', 'infoSE'),
+                                    selected = 'trace'),
+
+                        checkboxInput(inputId = "nfact",
+                                      label = "Multidimensional?",
+                                      value = FALSE),
+
+                        #         conditionalPanel(condition = "input.nfact == true",
+                        #                          h5('Rotate axis:'),
+                        #
+                        #                          sliderInput(inputId = "zaxis",
+                        #                                      label = "z-axis:",
+                        #                                      min = -180, max = 180, value = 10, step = 5)
+                        #         ),
+
+                        h5('Check the boxes below to make sliders appear for editing parameters.'),
+
+                        checkboxInput(inputId = "a1",
+                                      label = "a1",
+                                      value = TRUE),
+                        conditionalPanel(condition = "input.a1 == true",
+                                         sliderInput(inputId = "a1par",
+                                                     label = "a1 value:",
+                                                     min = -3, max = 3, value = 1, step = 0.2)
+                        ),
+
+                        checkboxInput(inputId = "a2",
+                                      label = "a2",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.a2 == true",
+                                         sliderInput(inputId = "a2par",
+                                                     label = "a2 value:",
+                                                     min = -3, max = 3, value = 1, step = 0.2)
+                        ),
+
+                        checkboxInput(inputId = "d",
+                                      label = "d",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.d == true",
+                                         sliderInput(inputId = "dpar",
+                                                     label = "d value:",
+                                                     min = -5, max = 5, value = 0, step = 0.25)
+                        ),
+
+                        checkboxInput(inputId = "g",
+                                      label = "g",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.g == true",
+                                         sliderInput(inputId = "gpar",
+                                                     label = "g value:",
+                                                     min = 0, max = 1, value = 0, step = 0.05)
+                        ),
+
+                        checkboxInput(inputId = "u",
+                                      label = "u",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.u == true",
+                                         sliderInput(inputId = "upar",
+                                                     label = "u value:",
+                                                     min = 0, max = 1, value = 1, step = 0.05)
+                        ),
+
+                        checkboxInput(inputId = "d0",
+                                      label = "d0",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.d0 == true",
+                                         sliderInput(inputId = "d0par",
+                                                     label = "d0 value:",
+                                                     min = -5, max = 5, value = 0, step = 0.25)
+                        ),
+
+                        checkboxInput(inputId = "d1",
+                                      label = "d1",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.d1 == true",
+                                         sliderInput(inputId = "d1par",
+                                                     label = "d1 value:",
+                                                     min = -5, max = 5, value = 1, step = 0.25)
+                        ),
+
+                        checkboxInput(inputId = "d2",
+                                      label = "d2",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.d2 == true",
+                                         sliderInput(inputId = "d2par",
+                                                     label = "d2 value:",
+                                                     min = -5, max = 5, value = 0, step = 0.25)
+                        ),
+
+                        checkboxInput(inputId = "d3",
+                                      label = "d3",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.d3 == true",
+                                         sliderInput(inputId = "d3par",
+                                                     label = "d3 value:",
+                                                     min = -5, max = 5, value = -1, step = 0.25)
+                        ),
+
+                        checkboxInput(inputId = "ak0",
+                                      label = "ak0",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.ak0 == true",
+                                         sliderInput(inputId = "ak0par",
+                                                     label = "ak0 value:",
+                                                     min = -3, max = 3, value = 0, step = 0.2)
+                        ),
+
+                        checkboxInput(inputId = "ak1",
+                                      label = "ak1",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.ak1 == true",
+                                         sliderInput(inputId = "ak1par",
+                                                     label = "ak0 value:",
+                                                     min = -3, max = 3, value = 1, step = 0.2)
+                        ),
+
+                        checkboxInput(inputId = "ak2",
+                                      label = "ak2",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.ak2 == true",
+                                         sliderInput(inputId = "ak2par",
+                                                     label = "ak2 value:",
+                                                     min = -3, max = 3, value = 2, step = 0.2)
+                        ),
+
+                        checkboxInput(inputId = "ak3",
+                                      label = "ak3",
+                                      value = FALSE),
+                        conditionalPanel(condition = "input.ak3 == true",
+                                         sliderInput(inputId = "ak3par",
+                                                     label = "ak3 value:",
+                                                     min = -3, max = 3, value = 3, step = 0.2)
+                        )
+
+                        ),
+
+                    mainPanel(
+                        verbatimTextOutput("coefs"),
+                        plotOutput(outputId = "main_plot", height = "700px", width = "700px")
+                    )
+
+                ),
+
+        server = function(input, output) {
+
+                    genmod <- function(input){
+                        set.seed(1234)
+                        itemclass <- c(input$itemclass, input$itemclass)
+                        itemtype <- switch(input$itemclass,
+                                           dich='2PL',
+                                           graded='graded',
+                                           nominal='nominal',
+                                           nestlogit='2PLNRM',
+                                           partcomp='PC2PL',
+                                           nestlogit='2PLNRM')
+                        nominal <- NULL
+                        model <- 1
+                        if(input$nfact) model <- 2
+                        if(model == 2 && input$plottype == 'infoSE')
+                            stop('infoSE only available for single dimensional models')
+                        a <- matrix(1,2)
+                        d <- matrix(0,2)
+                        if(input$itemclass == 'graded'){
+                            d <- matrix(c(1,0,-1), 2, 3, byrow=TRUE)
+                        } else if(input$itemclass == 'gpcm'){
+                            d <- matrix(c(0,1,0,-1), 2, 4, byrow=TRUE)
+                        } else if(input$itemclass == 'nominal'){
+                            nominal <- matrix(c(0,1,2,3), 2, 4, byrow=TRUE)
+                            d <- matrix(c(0,1,0,-1), 2, 4, byrow=TRUE)
+                        } else if(input$itemclass == 'nestlogit'){
+                            nominal <- matrix(c(0,1,2), 2, 3, byrow=TRUE)
+                            d <- matrix(c(0,0,1,-1), 2, 4, byrow=TRUE)
+                        } else if(input$itemclass == 'partcomp'){
+                            if(model != 2) stop('partcomp models require more than 1 dimension')
+                            if(input$plottype == 'info' || input$plottype == 'infocontour')
+                                stop('information based plots not currently supported for partcomp items')
+                            a <- matrix(c(1,1), 2, 2, byrow=TRUE)
+                            d <- matrix(c(1,1,1,NA), 2, 2, byrow=TRUE)
+                            itemtype[2] <- '2PL'
+                            itemclass[2] <- 'dich'
+                            model <- mirt.model('F1 = 1,2
+                                                F2 = 1', quiet=TRUE)
+                        }
+                        dat <- simdata(a=a, d=d, N=100,
+                                       itemtype=itemclass, nominal=nominal)
+                        sv <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars = 'values', key=c(1, NA)))
+                        sv$est <- FALSE
+                        mod <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars=sv, key=c(1, NA)))
+                        par <- mod@pars[[1]]@par
+                        if(input$a1) par[names(par) == 'a1'] <- input$a1par
+                        if(input$a2) par[names(par) == 'a2'] <- input$a2par
+                        if(input$d) par[names(par) == 'd'] <- input$dpar
+                        if(input$g) par[names(par) == 'g'] <- logit(input$gpar)
+                        if(input$u) par[names(par) == 'u'] <- logit(input$upar)
+                        if(input$d0) par[names(par) == 'd0'] <- input$d0par
+                        if(input$d1) par[names(par) == 'd1'] <- input$d1par
+                        if(input$d2) par[names(par) == 'd2'] <- input$d2par
+                        if(input$d3) par[names(par) == 'd3'] <- input$d3par
+                        if(input$ak0) par[names(par) == 'ak0'] <- input$ak0par
+                        if(input$ak1) par[names(par) == 'ak1'] <- input$ak1par
+                        if(input$ak2) par[names(par) == 'ak2'] <- input$ak2par
+                        if(input$ak3) par[names(par) == 'ak3'] <- input$ak3par
+                        mod@pars[[1]]@par <- par
+                        mod
+                        }
+
+                    output$main_plot <- renderPlot({
+                        mod <- genmod(input)
+                        print(itemplot(mod, 1, type=input$plottype, rotate = 'none'))
+                    })
+
+                    output$coefs <- renderPrint({
+                        mod <- genmod(input)
+                        cat('Item parameters: \n\n')
+                        print(coef(mod, rotate = 'none')[[1L]])
+                        if(mod@nfact == 1L && !is(mod@pars[[1L]], 'nestlogit')){
+                            cat('\n\nItem parameters (traditional IRT metric): \n\n')
+                            print(coef(mod, IRTpars = TRUE)[[1L]])
+                        }
+                    })
+
+                }
+    )
+
+    return(ret)
 }

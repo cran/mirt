@@ -1,50 +1,17 @@
 \name{mirt}
-\alias{anova,ConfirmatoryClass-method}
-\alias{anova,ExploratoryClass-method}
-\alias{coef,ConfirmatoryClass-method}
-\alias{coef,ExploratoryClass-method}
-\alias{fitted,ConfirmatoryClass-method}
-\alias{fitted,ExploratoryClass-method}
 \alias{mirt}
-\alias{plot,ConfirmatoryClass-method}
-\alias{plot,ExploratoryClass-method}
-\alias{residuals,ConfirmatoryClass-method}
-\alias{residuals,ExploratoryClass-method}
-\alias{summary,ConfirmatoryClass-method}
-\alias{summary,ExploratoryClass-method}
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
   mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-    SE = FALSE, SE.type = 'SEM', method = 'EM', pars =
-    NULL, constrain = NULL, parprior = NULL, calcNull =
-    TRUE, draws = 5000, rotate = 'oblimin', Target = NaN,
-    quadpts = NULL, grsm.block = NULL, rsm.block = NULL,
-    key= NULL, nominal.highlow = NULL, large = FALSE,
-    accelerate = TRUE, verbose = TRUE, technical = list(),
-    ...)
-
-  \S4method{summary}{ExploratoryClass}(object, rotate = '',
-    Target = NULL, suppress = 0, digits = 3, verbose =
-    TRUE, ...)
-
-  \S4method{coef}{ExploratoryClass}(object, CI = .95,
-    rotate = '', Target = NULL, digits = 3, rawug = FALSE,
-    verbose = TRUE, IRTpars = FALSE, ...)
-
-  \S4method{anova}{ExploratoryClass}(object, object2)
-
-  \S4method{plot}{ExploratoryClass}(x, y, type = 'info',
-    npts = 50, theta_angle = 45, which.items =
-    1:ncol(x@data), rot = list(xaxis = -70, yaxis = 30,
-    zaxis = 10), ...)
-
-  \S4method{residuals}{ExploratoryClass}(object, restype =
-    'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
-    printvalue = NULL, verbose = TRUE, ...)
-
-  \S4method{fitted}{ExploratoryClass}(object, digits = 3,
-    ...)
+    SE = FALSE, SE.type = "SEM", method = "EM",
+    pars = NULL, constrain = NULL, parprior = NULL,
+    calcNull = TRUE, draws = 5000, rotate = "oblimin",
+    Target = NaN, quadpts = NULL, grsm.block = NULL,
+    rsm.block = NULL, key = NULL, nominal.highlow = NULL,
+    large = FALSE, accelerate = TRUE,
+    empiricalhist = FALSE, verbose = TRUE,
+    technical = list(), ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -99,25 +66,36 @@ Theory)}
   are not nested logit will ignore this vector, so use
   \code{NA} in item locations that are not applicable}
 
-  \item{SE}{logical; estimate the standard errors?
-  Calculates the information matrix from MHRM subroutine
-  for stochastic approximation, Bock and Lieberman style
-  information (use only with small number of items), or
-  supplemented EM (SEM) computations for Bock and Lieberman
-  style information matrix}
+  \item{SE}{logical; estimate the standard errors? See
+  \code{SE.type} for the type of estimates available. Using
+  \code{SE = TRUE} when \code{method = 'MHRM'} will force
+  the estimation to terminate no earlier than 400
+  iterations to ensure that the information matrix is well
+  approximated}
 
   \item{SE.type}{type of estimation method to use for
-  calculating the parameter information matrix. Can be
-  \code{'MHRM'} for stochastic estimation, \code{'BL'} for
-  the Bock and Lieberman approach (EM only), or
+  calculating the parameter information matrix for
+  computing standard errors and \code{\link{wald}} tests.
+  Can be \code{'MHRM'} for stochastic approximation,
+  \code{'BL'} for the Bock and Lieberman approach
+  (numerical evaluation of observed Hessian),
+  \code{'Fisher'} for the expected information,
+  \code{'complete'} for information based on the
+  complete-data Hessian used in EM algorithm (EM only),
   \code{'SEM'} for the supplemented EM (disables the
-  \code{accelerate} option). Note that for the \code{'SEM'}
-  option increasing the number of EM cycles
-  (\code{NCYCLES}, see below) will help to improve the
-  accuracy, and will be run in parallel if a
+  \code{accelerate} option; EM only), and
+  \code{'crossprod'} for standard error computations based
+  on the variance of the Fisher scores.
+
+  Note that for \code{'SEM'} and \code{'MHRM'} option
+  increasing the number of iterations (\code{NCYCLES} and
+  \code{TOL}, see below) will help to improve the accuracy,
+  and will be run in parallel if a
   \code{\link{mirtCluster}} object has been defined.
-  Bootstrapped standard errors are also possible but must
-  be run with the \code{\link{boot.mirt}} function}
+  Bootstrapped and profiled-likelihood standard errors are
+  also possible, but must be run with the
+  \code{\link{boot.mirt}} and \code{\link{PLCI.mirt}}
+  functions, respectively}
 
   \item{guess}{fixed pseudo-guessing parameters. Can be
   entered as a single value to assign a global guessing
@@ -135,36 +113,25 @@ Theory)}
 
   \item{rotate}{type of rotation to perform after the
   initial orthogonal parameters have been extracted by
-  using \code{summary}; default is \code{'oblimin'}. If
+  using \code{summary}; default is \code{'oblimin'}.  If
   \code{rotate != ''} in the \code{summary} input then the
   default from the object is ignored and the new rotation
-  from the list is used instead. Rotations currently
-  supported are: promax, oblimin, varimax, quartimin,
-  targetT, targetQ, pstT, pstQ, oblimax, entropy,
-  quartimax, simplimax, bentlerT, bentlerQ, tandemI,
-  tandemII, geominT, geominQ, cfT, cfQ, infomaxT, infomaxQ,
-  mccammon, bifactorT, bifactorQ}
+  from the list is used instead.
+
+  Rotations currently supported are: promax, oblimin,
+  varimax, quartimin, targetT, targetQ, pstT, pstQ,
+  oblimax, entropy, quartimax, simplimax, bentlerT,
+  bentlerQ, tandemI, tandemII, geominT, geominQ, cfT, cfQ,
+  infomaxT, infomaxQ, mccammon, bifactorT, bifactorQ}
 
   \item{Target}{a dummy variable matrix indicting a target
   rotation pattern}
 
-  \item{which.items}{a numeric vector indicating which
-  items to be used when plotting. Default is to use all
-  available items}
-
-  \item{CI}{the amount of converged used to compute
-  confidence intervals in \code{coef()}; default is .95 for
-  95 percent confidence intervals}
-
-  \item{IRTpars}{logical; convert slope intercept
-  parameters into traditional IRT parameters? Only
-  applicable to unidimensional models}
-
   \item{constrain}{a list of user declared equality
   constraints. To see how to define the parameters
   correctly use \code{pars = 'values'} initially to see how
-  the parameters are labeled. To constrain parameters to be
-  equal create a list with separate concatenated vectors
+  the parameters are labeled.  To constrain parameters to
+  be equal create a list with separate concatenated vectors
   signifying which parameters to constrain. For example, to
   set parameters 1 and 5 equal, and also set parameters 2,
   6, and 10 equal use \code{constrain = list(c(1,5),
@@ -174,10 +141,10 @@ Theory)}
   \item{parprior}{a list of user declared prior item
   probabilities. To see how to define the parameters
   correctly use \code{pars = 'values'} initially to see how
-  the parameters are labeled. Can define either normal
+  the parameters are labeled.  Can define either normal
   (e.g., intercepts, lower/guessing and upper bounds),
   log-normal (e.g., for univariate slopes), or beta prior
-  probabilities. To specify a prior the form is
+  probabilities.  To specify a prior the form is
   c('priortype', ...), where normal priors are
   \code{parprior = list(c(parnumbers, 'norm', mean, sd))},
   \code{parprior = list(c(parnumbers, 'lnorm', log_mean,
@@ -193,67 +160,15 @@ Theory)}
   and this object can in turn be modified and input back
   into the estimation with \code{pars = mymodifiedpars}}
 
-  \item{rawug}{logical; return the untranformed internal g
-  and u parameters? If \code{FALSE}, g and u's are
-  converted with the original format along with delta
-  standard errors}
-
   \item{calcNull}{logical; calculate the Null model for fit
   statics (e.g., TLI)? Only applicable if the data contains
   no NA's}
 
   \item{quadpts}{number of quadrature points per dimension
-  (must be an odd number). By default the number of
+  (must be an odd number).  By default the number of
   quadrature uses the following scheme:
   \code{switch(as.character(nfact), '1'=41, '2'=21, '3'=11,
   '4'=7, '5'=5, 3)}}
-
-  \item{printvalue}{a numeric value to be specified when
-  using the \code{res='exp'} option. Only prints patterns
-  that have standardized residuals greater than
-  \code{abs(printvalue)}. The default (NULL) prints all
-  response patterns}
-
-  \item{x}{an object of class \code{mirt} to be plotted or
-  printed}
-
-  \item{y}{an unused variable to be ignored}
-
-  \item{object}{a model estimated from \code{mirt} of class
-  \code{ExploratoryClass} or \code{ConfirmatoryClass}}
-
-  \item{object2}{a second model estimated from any of the
-  mirt package estimation methods \code{ExploratoryClass}
-  with more estimated parameters than \code{object}}
-
-  \item{suppress}{a numeric value indicating which
-  (possibly rotated) factor loadings should be suppressed.
-  Typical values are around .3 in most statistical
-  software. Default is 0 for no suppression}
-
-  \item{digits}{number of significant digits to be rounded}
-
-  \item{type}{type of plot to view; can be \code{'info'} to
-  show the test information function, \code{'infocontour'}
-  for the test information contours, \code{'SE'} for the
-  test standard error function, \code{'trace'} and
-  \code{'infotrace'} for all item probability information
-  or trace lines (only available when all items are
-  dichotomous), \code{'infoSE'} for a combined test
-  information and standard error plot, and \code{'score'}
-  for the expected total score}
-
-  \item{theta_angle}{numeric values ranging from 0 to 90
-  used in \code{plot}. If a vector is used then a bubble
-  plot is created with the summed information across the
-  angles specified (e.g., \code{theta_angle = seq(0, 90,
-  by=10)})}
-
-  \item{npts}{number of quadrature points to be used for
-  plotting features. Larger values make plots look
-  smoother}
-
-  \item{rot}{allows rotation of the 3D graphics}
 
   \item{large}{a logical, indicating whether the internal
   collapsed data should be returned, or list of internally
@@ -263,29 +178,27 @@ Theory)}
   then be passed back into \code{large} to avoid
   reorganizing the data in every estimation (useful when
   the dataset are very large and computing the tabularized
-  data is computationally burdensome). Therefore, the best
-  strategy for large data is to always pass the internal
-  data to the estimation function, shown below: \describe{
-  \item{Compute organized data}{e.g., \code{internaldat <-
-  mirt(Science, 1, large = TRUE)}} \item{Pass the organized
-  data to all estimation functions}{e.g., \code{mod <-
-  mirt(Science, 1, large = internaldat)}} }}
+  data is computationally burdensome).
 
-  \item{restype}{type of residuals to be displayed. Can be
-  either \code{'LD'} for a local dependence matrix (Chen &
-  Thissen, 1997) or \code{'exp'} for the expected values
-  for the frequencies of every response pattern}
+  The best strategy for large data is to always pass the
+  internal data to the estimation function, shown below:
+  \describe{ \item{Compute organized data}{e.g.,
+  \code{internaldat <- mirt(Science, 1, large = TRUE)}}
+  \item{Pass the organized data to all estimation
+  functions}{e.g., \code{mod <- mirt(Science, 1, large =
+  internaldat)}} }}
 
-  \item{df.p}{logical; print the degrees of freedom and
-  p-values?}
-
-  \item{full.scores}{logical; compute relavent statistics
-  for each subject in the original data?}
+  \item{empiricalhist}{logical; estimate prior distribution
+  using an empirical histogram approach.  Only applicable
+  for unidimensional models estimated with the EM
+  algorithm.  The number of cycles, TOL, and quadpts are
+  adjusted accomodate for less precision during estimation
+  (TOL = 3e-5, NCYCLES = 2000, quadpts = 199)}
 
   \item{nominal.highlow}{optional matrix indicating the
   highest (row 1) and lowest (row 2) categories to be used
   for the nominal response model. Using this input may
-  result in better numerical stability. The matrix input
+  result in better numerical stability.  The matrix input
   should be a 2 by nitems numeric matrix, where each number
   represents the \emph{reduced} category representation
   (mirt omits categories that are missing, so if the unique
@@ -325,8 +238,14 @@ Theory)}
   requires that the input data all have 0 as the lowest
   category. The format is the same as the \code{mod@K} slot
   in all converged models} \item{GenRandomPars}{logical;
-  generate random starting values prior to optimatization
-  instead of using the fixed internal starting values?} }}
+  generate random starting values prior to optimization
+  instead of using the fixed internal starting values?}
+  \item{customPriorFun}{a custom function used to determine
+  the normalized density for integration in the EM
+  algorithm. Must be of the form
+  \code{function(Theta){...}}, and return a numeric vector
+  with the same length as number of rows in \code{Theta}}
+  }}
 
   \item{...}{additional arguments to be passed}
 }
@@ -448,7 +367,11 @@ Theory)}
   steps greater than 0.25) then the model may either be ill
   defined or have a very flat likelihood surface, and
   genuine maximum-likelihood parameter estimates may be
-  difficult to find.
+  difficult to find. Additionally, it is recommended that
+  at least 400 cycles are run through to approximate the
+  obsevered information matrix accurately, which can be
+  accomplished either by decreasing the \code{TOL} criteria
+  or setting \code{SE = TRUE}.
 }
 
 \section{IRT Models}{
@@ -486,7 +409,7 @@ Theory)}
   * \theta_1 + a_2 * \theta_2) + d_{k-1})}}
 
   For partial credit model (when \code{itemtype = 'Rasch'};
-  unidimenional only) the above model is further
+  unidimensional only) the above model is further
   constrained so that \eqn{ak = (0,1,\ldots, k-1)},
   \eqn{a_1 = 1}, and the latent variance of \eqn{\theta_1}
   is freely estimated.
@@ -624,7 +547,7 @@ anova(pmod1, pmod2)
 coef(gpcmod)
 
 #for the nominal model the lowest and highest categories are assumed to be the
-#  theoretically lowest and highest categories that related to the latetent trait(s), however
+#  theoretically lowest and highest categories that related to the latent trait(s), however
 #  a custom nominal.highlow matrix can be passed to declare which item category should be
 #  treated as the 'highest' and 'lowest' instead
 (nomod <- mirt(Science, 1, 'nominal'))
@@ -801,6 +724,31 @@ itemplot(mod.quad, 1, type = 'score')
 itemplot(mod.combo, 2, type = 'score')
 itemplot(mod.combo, 2, type = 'infocontour')
 
+## empical histogram examples (normal, skew and bimodality)
+#make some data
+set.seed(1234)
+a <- matrix(rlnorm(50, .2, .2))
+d <- matrix(rnorm(50))
+ThetaNormal <- matrix(rnorm(2000))
+ThetaBimodal <- scale(matrix(c(rnorm(1000, -2), rnorm(1000,2)))) #bimodal
+ThetaSkew <- scale(matrix(rchisq(2000, 5))) #positive skew
+datNormal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaNormal)
+datBimodal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaBimodal)
+datSkew <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaSkew)
+
+normal <- mirt(datNormal, 1, empiricalhist = TRUE)
+plot(normal, type = 'empiricalhist')
+histogram(ThetaNormal, breaks=30)
+
+bimodal <- mirt(datBimodal, 1, empiricalhist = TRUE)
+plot(bimodal, type = 'empiricalhist')
+histogram(ThetaBimodal, breaks=30)
+
+skew <- mirt(datSkew, 1, empiricalhist = TRUE)
+plot(skew, type = 'empiricalhist')
+histogram(ThetaSkew, breaks=30)
+
+
 }
 }
 \author{
@@ -884,6 +832,10 @@ itemplot(mod.combo, 2, type = 'infocontour')
   International.
 }
 \seealso{
+  \code{\link{anova-method}}, \code{\link{coef-method}},
+  \code{\link{summary-method}},
+  \code{\link{residuals-method}},
+  \code{\link{plot-method}}, \code{\link{fitted-method}},
   \code{\link{expand.table}}, \code{\link{key2binary}},
   \code{\link{mirt.model}}, \code{\link{mirt}},
   \code{\link{bfactor}}, \code{\link{multipleGroup}},
