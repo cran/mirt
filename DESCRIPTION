@@ -1,6 +1,6 @@
 Package: mirt
-Version: 1.0
-Date: 2013-11-01
+Version: 1.1
+Date: 2013-12-18
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", "Chalmers", email = "rphilip.chalmers@gmail.com",
@@ -15,7 +15,7 @@ Description: Analysis of dichotomous and polytomous response data using
     covariates.
 Depends: R (>= 2.15), stats4, lattice, methods
 Imports: MASS, GPArotation, mvtnorm, Rcpp, numDeriv
-Suggests: testthat, plink, boot, latticeExtra, parallel
+Suggests: testthat, plink, boot, latticeExtra, shiny, parallel
 ByteCompile: yes
 LazyLoad: yes
 LazyData: yes
@@ -35,10 +35,10 @@ Collate: 'bfactor.R' 'expand.table.R' 'itemplot.R' 'key2binary.R'
         'Mixed-methods.R' 'fitIndices.R' 'testinfo.R' 'imputeMissing.R'
         'mod2values.R' 'probtrace.R' 'boot.mirt.R' 'createItem.R'
         'randef.R' 'mirtCluster.R' 'mirt.model.R' 'expected.item.R'
-        'PLCI.mirt.R'
-Packaged: 2013-11-01 14:31:02 UTC; phil
+        'PLCI.mirt.R' 'read.mirt.R' 'DIF.R'
+Packaged: 2013-12-20 07:00:19 UTC; ripley
 Author: Phil Chalmers [aut, cre],
   Joshua Pritikin [ctb]
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
 NeedsCompilation: yes
-Date/Publication: 2013-11-01 17:35:17
+Date/Publication: 2013-12-20 08:03:57

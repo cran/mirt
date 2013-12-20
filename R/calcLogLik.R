@@ -1,7 +1,7 @@
 #' Monte Carlo Log-Likelihood Calculation
 #'
 #' Calculates a new object that contain the Monte Carlo estimated observed
-#' log-likelihood values for mirt objects estimated with the MH-RM algorithm. 
+#' log-likelihood values for mirt objects estimated with the MH-RM algorithm.
 #' Can be estimated in parallel automatically by defining a parallel object with
 #' \code{\link{mirtCluster}}.
 #'
@@ -25,14 +25,14 @@
 #' \describe{ \item{calcLogLik}{\code{signature(object = "ConfirmatoryClass")},
 #' \code{signature(object = "ExploratoryClass")}, \code{signature(object = "MixedClass")} }
 #' }
-#' @return Returns an object with the log-likelihood and Monte Carlo standard errors, 
+#' @return Returns an object with the log-likelihood and Monte Carlo standard errors,
 #' and (possibly) the G^2 and other model fit statistic if there is no missing data.
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @docType methods
-#' @rdname calcLogLik-methods
+#' @rdname calcLogLik-method
 #' @export calcLogLik
 #' @seealso
-#' \code{\link{mirt}}, \code{\link{multipleGroup}}
+#' \code{\link{mirt}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}}
 #' @keywords calcLogLik
 #' @examples
 #'
@@ -53,22 +53,22 @@ setMethod(
 	signature = signature(object = 'ExploratoryClass'),
 	definition = function(object, draws = 5000, G2 = TRUE)
 	{
-        LLdraws <- function(LLDUMMY=NULL, nfact, N, grp, prodlist, fulldata, object, J, random, ot, 
+        LLdraws <- function(LLDUMMY=NULL, nfact, N, grp, prodlist, fulldata, object, J, random, ot,
                             NO.CUSTOM){
-            theta <- mvtnorm::rmvnorm(N,grp$gmeans, grp$gcov)            
+            theta <- mvtnorm::rmvnorm(N,grp$gmeans, grp$gcov)
             if(length(prodlist) > 0L)
-                theta <- prodterms(theta,prodlist)            
-            if(length(random) > 0L){                                
+                theta <- prodterms(theta,prodlist)
+            if(length(random) > 0L){
                 for(i in 1L:length(random)){
-                    random[[i]]@drawvals <- DrawValues(x=random[[i]], Theta=theta, pars=pars, 
+                    random[[i]]@drawvals <- DrawValues(x=random[[i]], Theta=theta, pars=pars,
                                                 fulldata=fulldata, itemloc=itemloc, offterm0=ot)
                 }
-                ot <- OffTerm(random, J=J, N=N)                
+                ot <- OffTerm(random, J=J, N=N)
             }
-            itemtrace <- computeItemtrace(pars=pars, Theta=theta, itemloc=itemloc, offterm=ot, 
+            itemtrace <- computeItemtrace(pars=pars, Theta=theta, itemloc=itemloc, offterm=ot,
                                           NO.CUSTOM=NO.CUSTOM)
             return(exp(rowSums(log(itemtrace)*fulldata)))
-        }           
+        }
         pars <- object@pars
 	    tol <- .Machine$double.eps
         fulldata <- object@fulldata
@@ -83,9 +83,9 @@ setMethod(
             ot <- matrix(0, 1, J)
         } else ot <- OffTerm(object@random, J=J, N=N)
         NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
-        if(!is.null(globalenv()$MIRTCLUSTER)){
-            LL <- parallel::parApply(cl=globalenv()$MIRTCLUSTER, LL, MARGIN=1, FUN=LLdraws, nfact=nfact, 
-                                     N=N, grp=grp, prodlist=prodlist, fulldata=fulldata, object=object, J=J, 
+        if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
+            LL <- parallel::parApply(cl=mirtClusterEnv$MIRTCLUSTER, LL, MARGIN=1, FUN=LLdraws, nfact=nfact,
+                                     N=N, grp=grp, prodlist=prodlist, fulldata=fulldata, object=object, J=J,
                                      random=object@random, ot=ot, NO.CUSTOM=NO.CUSTOM)
         } else for(draw in 1L:draws)
             LL[ ,draw] <- LLdraws(nfact=nfact, N=N, grp=grp, prodlist=prodlist, NO.CUSTOM=NO.CUSTOM,
@@ -134,6 +134,7 @@ setMethod(
                 r <- r[!is.na(expected)]
                 expected <- expected[!is.na(expected)]
 				G2 <- 2 * sum(r*log(r/(sum(r)*expected)))
+                df <- object@df
 				object@G2 <- G2
                 if(logLikpre == 0){
     				null.mod <- object@null.mod
@@ -170,6 +171,6 @@ setMethod(
         ret <- calcLogLik(object, draws=draws, G2=FALSE)
         class(ret) <- 'MixedClass'
         return(ret)
-        
+
     }
 )

@@ -41,7 +41,7 @@ mod2values <- function(x){
             if(i <= length(itemnames))
                 item <- c(item, rep(itemnames[i], length(tmpgroup[[i]]@parnum)))
             class <- c(class, rep(class(tmpgroup[[i]]), length(tmpgroup[[i]]@parnum)))
-            parname <- c(parname, names(tmpgroup[[i]]@par))
+            parname <- c(parname, names(tmpgroup[[i]]@est))
             parnum <- c(parnum, tmpgroup[[i]]@parnum)
             par <- c(par, tmpgroup[[i]]@par)
             est <- c(est, tmpgroup[[i]]@est)
@@ -56,7 +56,7 @@ mod2values <- function(x){
     if(is(x, 'MixedClass')){
         tmpgroup <- x@random
         if(length(tmpgroup)){
-            for(i in 1L:length(tmpgroup)){            
+            for(i in 1L:length(tmpgroup)){
                 parname <- c(parname, names(tmpgroup[[i]]@est))
                 parnum <- c(parnum, tmpgroup[[i]]@parnum)
                 par <- c(par, tmpgroup[[i]]@par)
@@ -74,7 +74,7 @@ mod2values <- function(x){
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
     ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum, value=par,
-                      lbound=lbound, ubound=ubound, est=est, prior.type=prior.type, 
+                      lbound=lbound, ubound=ubound, est=est, prior.type=prior.type,
                       prior_1=prior_1, prior_2=prior_2)
     ret
 }

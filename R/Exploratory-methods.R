@@ -1,4 +1,23 @@
-#Methods
+#' Print the model objects
+#'
+#' \code{print(x)}
+#'
+#' Print model object summaries to the console.
+#'
+#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#'
+#' @name print-method
+#' @aliases print,ExploratoryClass-method print,ConfirmatoryClass-method
+#'   print,MultipleGroupClass-method print,MixedClass-method
+#' @docType methods
+#' @rdname print-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' print(x)
+#' }
 setMethod(
     f = "print",
     signature = signature(x = 'ExploratoryClass'),
@@ -20,13 +39,33 @@ setMethod(
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
                 cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
-                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3), 
+                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3),
                     ", TLI = ", round(x@TLI,3), sep='')
             }
         }
     }
 )
 
+#' Show model object
+#'
+#' \code{show(object)}
+#'
+#' Print model object summaries to the console.
+#'
+#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#'
+#' @name show-method
+#' @aliases show,ExploratoryClass-method show,ConfirmatoryClass-method
+#'   show,MultipleGroupClass-method show,MixedClass-method
+#' @docType methods
+#' @rdname show-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' show(x)
+#' }
 setMethod(
     f = "show",
     signature = signature(object = 'ExploratoryClass'),
@@ -35,6 +74,37 @@ setMethod(
     }
 )
 
+#' Summary of model object
+#'
+#' \code{summary(object, rotate = '', Target = NULL, suppress = 0, digits = 3, verbose = TRUE, ...)}
+#'
+#' Tranforms coefficients into a standardized factor loading's metric. For \code{MixedClass} objects,
+#' the fixed and random coeffiicents are printed.
+#'
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#' @param rotate see \code{\link{mirt}} for details
+#' @param Target a dummy variable matrix indicting a target rotation pattern
+#' @param suppress a numeric value indicating which (possibly rotated) factor
+#'   loadings should be suppressed. Typical values are around .3 in most
+#'   statistical software. Default is 0 for no suppression
+#' @param digits number of significant digits to be rounded
+#' @param verbose logical; allow information to be printed to the console?
+#' @param ... additional arguments to be passed
+#'
+#' @name summary-method
+#' @aliases summary,ExploratoryClass-method summary,ConfirmatoryClass-method
+#'   summary,MultipleGroupClass-method summary,MixedClass-method
+#' @docType methods
+#' @rdname summary-method
+#' @seealso \code{\link{coef-method}}
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 2)
+#' summary(x)
+#' summary(x, rotate = 'varimax')
+#' }
 setMethod(
     f = "summary",
     signature = 'ExploratoryClass',
@@ -49,15 +119,15 @@ setMethod(
             Phi <- diag(ncol(F))
             colnames(h2) <- "h2"
             rownames(Phi) <- colnames(Phi) <- names(SS) <- colnames(F)
-            loads <- round(cbind(F,h2),digits)            
-            rownames(loads) <- colnames(object@data)            
+            loads <- round(cbind(F,h2),digits)
+            rownames(loads) <- colnames(object@data)
             if(verbose){
                 cat("\nUnrotated factor loadings: \n\n")
                 print(loads)
                 cat("\nSS loadings: ",round(SS,digits), "\n")
                 cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
                 cat("\nFactor correlations: \n\n")
-                print(Phi)                
+                print(Phi)
             }
             invisible(list(rotF=F,h2=h2,fcor=matrix(1)))
         } else {
@@ -85,7 +155,7 @@ setMethod(
                 cat("\nRotated factor loadings: \n\n")
                 print(loads,digits)
                 cat("\nRotated SS loadings: ",round(SS,digits), "\n")
-                cat("\nFactor correlations: \n\n")                
+                cat("\nFactor correlations: \n\n")
                 print(Phi)
             }
             if(any(h2 > 1))
@@ -95,10 +165,50 @@ setMethod(
     }
 )
 
+#' Extract raw coefs from model object
+#'
+#' \code{coef(object, CI = .95, rotate = '', Target = NULL, digits = 3, IRTpars = FALSE,
+#'    rawug = FALSE, verbose = TRUE, ...)}
+#'
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#' @param CI the amount of converged used to compute confidence intervals; default is
+#'   95 percent confidence intervals
+#' @param IRTpars logical; convert slope intercept parameters into traditional IRT parameters?
+#'   Only applicable to unidimensional models
+#' @param rotate see \code{\link{mirt}} for details
+#' @param Target a dummy variable matrix indicting a target rotation pattern
+#' @param suppress a numeric value indicating which (possibly rotated) factor
+#'   loadings should be suppressed. Typical values are around .3 in most
+#'   statistical software. Default is 0 for no suppression
+#' @param digits number of significant digits to be rounded
+#' @param verbose logical; allow information to be printed to the console?
+#' @param rawug logical; return the untranformed internal g and u parameters?
+#'   If \code{FALSE}, g and u's are converted with the original format along with delta standard errors
+#' @param ... additional arguments to be passed
+#'
+#' @name coef-method
+#' @aliases coef,ExploratoryClass-method coef,ConfirmatoryClass-method
+#'   coef,MultipleGroupClass-method coef,MixedClass-method
+#' @docType methods
+#' @rdname coef-method
+#' @seealso \code{\link{summary-method}}
+#' @examples
+#'
+#' \dontrun{
+#' dat <- expand.table(LSAT7)
+#' x <- mirt(dat, 1)
+#' coef(x)
+#' coef(x, IRTpars = TRUE)
+#' 
+#' x2 <- mirt(Science, 2)
+#' coef(x2)
+#' coef(x2, rotate = 'varimax')
+#' }
 setMethod(
     f = "coef",
     signature = 'ExploratoryClass',
-    definition = function(object, CI = .95, rotate = '', Target = NULL, digits = 3, 
+    definition = function(object, CI = .95, rotate = '', Target = NULL, digits = 3,
                           rawug = FALSE, verbose = TRUE, ...){
         if(CI >= 1 || CI <= 0)
             stop('CI must be between 0 and 1')
@@ -110,20 +220,20 @@ setMethod(
         a <- matrix(0, J, nfact)
         for(i in 1:J)
             a[i, ] <- ExtractLambdas(object@pars[[i]])
-        if (ncol(a) > 1){
+        if (ncol(a) > 1 && rotate != 'none'){
             rotname <- ifelse(rotate == '', object@rotate, rotate)
             if(verbose) cat("\nRotation: ", rotname, "\n\n")
             so <- summary(object, rotate=rotate, Target=Target, verbose=FALSE, digits=digits, ...)
             a <- rotateLambdas(so) * 1.702
             for(i in 1:J)
-                object@pars[[i]]@par[1:nfact] <- a[i, ]            
+                object@pars[[i]]@par[1:nfact] <- a[i, ]
             if(rotname != 'none')
                 object@pars[[J + 1]]@par[-c(1:nfact)] <- so$fcor[lower.tri(so$fcor, TRUE)]
         }
         allPars <- list()
         if(length(object@pars[[1]]@SEpar) > 0){
             for(i in 1:(J+1)){
-                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par, 
+                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
                                                object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
                                                object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
                                              3, byrow = TRUE), digits)
@@ -148,10 +258,31 @@ setMethod(
     }
 )
 
+#' Compare nested models
+#'
+#' \code{anova(object, object2, verbose = TRUE)}
+#'
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#' @param object2 a second model estimated from any of the mirt package estimation methods
+#' @param verbose logical; print additional information to console?
+#'
+#' @name anova-method
+#' @aliases anova,ExploratoryClass-method anova,ConfirmatoryClass-method
+#'   anova,MultipleGroupClass-method anova,MixedClass-method
+#' @docType methods
+#' @rdname anova-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' x2 <- mirt(Science, 2)
+#' anova(x, x2)
+#' }
 setMethod(
     f = "anova",
     signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, object2){
+    definition = function(object, object2, verbose = TRUE){
         df <- object@df - object2@df
         if(df < 0){
             temp <- object
@@ -159,16 +290,17 @@ setMethod(
             object2 <- temp
         }
         X2 <- round(2*object2@logLik - 2*object@logLik, 3)
-        cat('\nModel 1: ')
-        print(object@Call)
-        cat('Model 2: ')
-        print(object2@Call)
-        cat('\n')
-        ret <- data.frame(Df = c(object@df, object2@df),
-                          AIC = c(object@AIC, object2@AIC),
+        if(verbose){
+            cat('\nModel 1: ')
+            print(object@Call)
+            cat('Model 2: ')
+            print(object2@Call)
+            cat('\n')
+        }
+        ret <- data.frame(AIC = c(object@AIC, object2@AIC),
                           AICc = c(object@AICc, object2@AICc),
-                          BIC = c(object@BIC, object2@BIC),
                           SABIC = c(object@SABIC, object2@SABIC),
+                          BIC = c(object@BIC, object2@BIC),
                           logLik = c(object@logLik, object2@logLik),
                           X2 = c('', X2),
                           df = c('', abs(df)),
@@ -177,10 +309,42 @@ setMethod(
     }
 )
 
+#' Compute model residuals
+#'
+#' \code{residuals(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
+#'                          printvalue = NULL, verbose = TRUE, ...)}
+#'
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
+#'   \code{MultipleGroupClass}
+#' @param restype type of residuals to be displayed.
+#'   Can be either \code{'LD'} for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
+#'   expected values for the frequencies of every response pattern
+#' @param digits number of significant digits to be rounded
+#' @param df.p logical; print the degrees of freedom and p-values?
+#' @param full.scores logical; compute relavent statistics
+#'  for each subject in the original data?
+#' @param printvalue a numeric value to be specified when using the \code{res='exp'}
+#'   option. Only prints patterns that have standardized residuals greater than
+#'   \code{abs(printvalue)}. The default (NULL) prints all response patterns
+#' @param verbose logical; allow information to be printed to the console?
+#' @param ... additional arguments to be passed
+#'
+#' @name residuals-method
+#' @aliases residuals,ExploratoryClass-method residuals,ConfirmatoryClass-method
+#'   residuals,MultipleGroupClass-method
+#' @docType methods
+#' @rdname residuals-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' residuals(x)
+#' residuals(x, restype = 'exp')
+#' }
 setMethod(
     f = "residuals",
     signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE, 
+    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
                           printvalue = NULL, verbose = TRUE, ...)
     {
         K <- object@K
@@ -226,7 +390,7 @@ setMethod(
             res <- round(res,digits)
             return(res)
         }
-        if(restype == 'exp'){            
+        if(restype == 'exp'){
             r <- object@tabdata[ ,ncol(object@tabdata)]
             res <- round((r - object@Pl * nrow(object@data)) /
                              sqrt(object@Pl * nrow(object@data)),digits)
@@ -236,14 +400,14 @@ setMethod(
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,expected,res)
-            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")            
+            colnames(tabdata) <- c(colnames(object@tabdata),"exp","res")
             if(full.scores){
                 tabdata[, 'exp'] <- object@Pl / r * N
                 tabdata2 <- object@tabdatalong
                 tabdata2 <- tabdata2[,-ncol(tabdata2)]
                 stabdata2 <- apply(tabdata2, 1, paste, sep='', collapse = '/')
                 sfulldata <- apply(object@fulldata, 1, paste, sep='', collapse = '/')
-                scoremat <- tabdata[match(sfulldata, stabdata2), 'exp', drop = FALSE]                
+                scoremat <- tabdata[match(sfulldata, stabdata2), 'exp', drop = FALSE]
                 res <- (1-scoremat) / sqrt(scoremat)
                 colnames(res) <- 'res'
                 ret <- cbind(object@data, scoremat, res)
@@ -255,22 +419,79 @@ setMethod(
                 if(!is.null(printvalue)){
                     if(!is.numeric(printvalue)) stop('printvalue is not a number.')
                     tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
-                }                
+                }
                 return(tabdata)
             }
         }
     }
 )
 
+#' Plot various test implied functions from models
+#'
+#' \code{plot(x, y, type = 'info', npts = 50, theta_angle = 45,
+#'                          which.items = 1:ncol(x@@data),
+#'                          rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
+#'                          facet_items = FALSE, auto.key = TRUE, ...)}
+#'
+#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
+#'   \code{MultipleGroupClass}
+#' @param type type of plot to view; can be \code{'info'} to show the test
+#'   information function, \code{'infocontour'} for the test information contours,
+#'   \code{'SE'} for the test standard error function, \code{'trace'} and \code{'infotrace'}
+#'   for all item probability information or trace lines (only available when all items are dichotomous),
+#'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} for
+#'   the expected total score. If \code{empiricalhist = TRUE} was used then the type \code{'empiricalhist'}
+#'   also will be available to generate the empirical histogram plot
+#' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}.
+#'   If a vector is used then a bubble plot is created with the summed information across the angles specified
+#'   (e.g., \code{theta_angle = seq(0, 90, by=10)})
+#' @param npts number of quadrature points to be used for plotting features.
+#'   Larger values make plots look smoother
+#' @param rot allows rotation of the 3D graphics
+#' @param which.items numeric vector indicating which items to be used when plotting. Default is
+#'   to use all available items
+#' @param facet_items logical; apply grid of plots accross items? If \code{FALSE}, items will be 
+#'   placed in one plot for each group 
+#' @param auto.key logical parameter passed to the \code{lattice} package
+#' @param ... additional arguments to be passed
+#'
+#' @name plot-method
+#' @aliases plot,ExploratoryClass-method plot,ConfirmatoryClass-method
+#'   plot,MultipleGroupClass-method
+#' @docType methods
+#' @rdname plot-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' plot(x)
+#' plot(x, type = 'trace')
+#' plot(x, type = 'infotrace')
+#' plot(x, type = 'infotrace', facet_items = TRUE)
+#' plot(x, type = 'infoSE')
+#' 
+#' set.seed(1234)
+#' group <- sample(c('g1','g2'), nrow(Science), TRUE)
+#' x2 <- multipleGroup(Science, 1, group)
+#' plot(x2)
+#' plot(x2, type = 'trace')
+#' plot(x2, type = 'trace', which.items = 1:2)
+#' plot(x2, type = 'score')
+#' 
+#' x3 <- mirt(Science, 2)
+#' plot(x3)
+#' plot(x3, type = 'SE')
+#' 
+#' }
 setMethod(
     f = "plot",
     signature = signature(x = 'ExploratoryClass', y = 'missing'),
-    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45, 
+    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
                           which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-                          auto.key = TRUE, ...)
+                          facet_items = FALSE, auto.key = TRUE, ...)
     {
-        if (!type %in% c('info','infocontour', 'SE', 'trace', 'infotrace', 'infoSE', 'score'))
+        if (!type %in% c('info','infocontour', 'SE', 'trace', 'infotrace', 'infoSE', 'score', 'empiricalhist'))
             stop(type, " is not a valid plot type.")
         if (any(theta_angle > 90 | theta_angle < 0))
             stop('Improper angle specifed. Must be between 0 and 90.')
@@ -360,40 +581,83 @@ setMethod(
                 for(i in which.items){
                     tmp <- probtrace(extract.item(x, i), ThetaFull)
                     if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
-                    tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta), 
+                    tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta),
                                                            labels=paste0('cat', 1L:ncol(tmp))))
                     P[[i]] <- tmp2
                 }
-                nrs <- sapply(P, nrow)                
+                nrs <- sapply(P, nrow)
                 Pstack <- do.call(rbind, P)
                 names <- c()
                 for(i in 1L:length(nrs))
                     names <- c(names, rep(names(P)[i], nrs[i]))
                 plotobj <- data.frame(Pstack, item=names, Theta=Theta)
-                return(xyplot(P ~ Theta, plotobj, group = item, ylim = c(-0.1,1.1),,
-                       xlab = expression(theta), ylab = expression(P(theta)),
-                       auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+                return(xyplot(P ~ Theta|item, plotobj, ylim = c(-0.1,1.1), group = cat,
+                              xlab = expression(theta), ylab = expression(P(theta)),
+                              auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+                
             }
-            if(type == 'infotrace'){                
+            if(type == 'infotrace'){
                 I <- matrix(NA, nrow(Theta), J)
                 for(i in which.items)
                     I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
                 I <- t(na.omit(t(I)))
-                items <- gl(n=length(unique(which.items)), k=nrow(Theta), 
+                items <- gl(n=length(unique(which.items)), k=nrow(Theta),
                             labels = paste('Item', which.items))
                 plotobj <- data.frame(I = as.numeric(I), Theta=Theta, item=items)
-                return(xyplot(I ~ Theta, plotobj, group = item, 
-                              xlab = expression(theta), ylab = expression(I(theta)),
-                              auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                if(facet_items){
+                    return(xyplot(I ~ Theta|item, plotobj, 
+                                  xlab = expression(theta), ylab = expression(I(theta)),
+                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                } else {
+                    return(xyplot(I ~ Theta, plotobj, group = item,
+                                  xlab = expression(theta), ylab = expression(I(theta)),
+                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                }
             }
             if(type == 'score')
                 return(xyplot(score ~ Theta, plt,
                               xlab = expression(theta), ylab = expression(Total(theta)),
                               type = 'l', main = 'Expected Total Score', ...))
+            if(type == 'empiricalhist'){
+                if(all(is.nan(x@Prior))) stop('Empirical histogram was not estimated for this object')
+                Theta <- as.matrix(seq(-(.8 * sqrt(x@quadpts)), .8 * sqrt(x@quadpts),
+                                    length.out = x@quadpts))
+                Prior <- x@Prior * nrow(x@data)
+                cuts <- cut(Theta, floor(npts/2))
+                Prior <- do.call(c, lapply(split(Prior, cuts), mean))
+                Theta <- do.call(c, lapply(split(Theta, cuts), mean))
+                keep1 <- min(which(Prior > 1e-10))
+                keep2 <- max(which(Prior > 1e-10))
+                plt <- data.frame(Theta = Theta, Prior = Prior)
+                plt <- plt[keep1:keep2, , drop=FALSE]
+                return(xyplot(Prior ~ Theta, plt,
+                              xlab = expression(theta), ylab = 'Expected Frequency',
+                              type = 'b', main = 'Empirical Histogram', ...))
+            }
         }
     }
 )
 
+#' Compute fitted values
+#'
+#' \code{fitted(object, digits = 3, ...)}
+#'
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
+#'   \code{MultipleGroupClass}
+#' @param digits number of significant digits to be rounded
+#' @param ... additional arguments to be passed
+#'
+#' @name fitted-method
+#' @aliases fitted,ExploratoryClass-method fitted,ConfirmatoryClass-method
+#'   fitted,MultipleGroupClass-method
+#' @docType methods
+#' @rdname fitted-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' fitted(x)
+#' }
 setMethod(
     f = "fitted",
     signature = signature(object = 'ExploratoryClass'),

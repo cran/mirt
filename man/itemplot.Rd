@@ -5,7 +5,8 @@
   itemplot(object, item, type = "trace", degrees = 45,
     CE = FALSE, CEalpha = 0.05, CEdraws = 1000,
     drop.zeros = FALSE,
-    rot = list(xaxis = -70, yaxis = 30, zaxis = 10), ...)
+    rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
+    shiny = FALSE, ...)
 }
 \arguments{
   \item{object}{a computed model object of class
@@ -46,12 +47,19 @@
   other confirmatory models that contain several zero
   slopes}
 
-  \item{...}{additional arguments to be passed to lattice}
+  \item{shiny}{logical; run interactive display for item
+  plots using the \code{shiny} interface.  This primarily
+  is an instructive tool for demonstrating how item
+  response curves behave when adjusting their parameters}
+
+  \item{...}{additional arguments to be passed to
+  \code{lattice} and \code{coef()}}
 }
 \description{
   \code{itemplot} displays various item based IRT plots,
   with special options for plotting items that contain
-  several 0 slope parameters.
+  several 0 slope parameters. Supports up to three
+  dimensional models.
 }
 \examples{
 \dontrun{
@@ -78,6 +86,8 @@ pmod <- mirt(Science, 1, SE=TRUE, SE.type = 'MHRM')
 itemplot(pmod, 3)
 itemplot(pmod, 3, CE = TRUE)
 
+#interactive shiny applet
+itemplot(shiny = TRUE)
     }
 }
 \author{

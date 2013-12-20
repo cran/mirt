@@ -16,7 +16,7 @@ test_that('dich', {
     expect_equal(sv$value, sv2$value)
     modm1 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM', verbose=FALSE)
     cfs <- as.numeric(do.call(c, coef(modm1, digits = 4)))
-    expect_equal(cfs, c(0.9879, 0.6428, 1.333, 1.856, 1.6012, 2.1108, 0, NA, NA, 1, NA, NA, 1.0809, 0.754, 1.4078, 0.808, 0.6298, 0.9861, 0, NA, NA, 1, NA, NA, 1.7061, 1.124, 2.2882, 1.8044, 1.4126, 2.1962, 0, NA, NA, 1, NA, NA, 0.7651, 0.5012, 1.0291, 0.486, 0.3397, 0.6323, 0, NA, NA, 1, NA, NA, 0.7358, 0.4391, 1.0324, 1.8545, 1.6306, 2.0784, 0, NA, NA, 1, NA, NA, 0, NA, NA, 1, NA, NA), 
+    expect_equal(cfs, c(0.9879, 0.6442, 1.3315, 1.856, 1.6007, 2.1114, 0, NA, NA, 1, NA, NA, 1.0809, 0.7519, 1.4098, 0.808, 0.6302, 0.9857, 0, NA, NA, 1, NA, NA, 1.7061, 1.1053, 2.3069, 1.8044, 1.4146, 2.1942, 0, NA, NA, 1, NA, NA, 0.7651, 0.5038, 1.0265, 0.486, 0.3407, 0.6314, 0, NA, NA, 1, NA, NA, 0.7358, 0.4428, 1.0288, 1.8545, 1.6316, 2.0774, 0, NA, NA, 1, NA, NA, 0, NA, NA, 1, NA, NA), 
                  tollerance = 1e-2)    
     expect_is(modm1, 'ConfirmatoryClass')          
     modm2 <- mirt(data, 1, SE = TRUE, SE.type = 'BL', verbose=FALSE)
@@ -47,7 +47,7 @@ test_that('dich', {
     expect_equal(modm7@df, 11)
     expect_is(modm7, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modm7)))
-    expect_equal(cfs, c(8.75, 12.18, 0.135, 0.893, 14.777, 3.67, 0.337, 0.872, 11.004, 6.189, 0.369, 0.933, 3.748, 4.004, 0.127, 0.703, 1.667, 3.253, 0.153, 0.91, 0, 1), tollerance = 1e-2)
+    expect_equal(cfs, c(7.816, 10.923, 0.134, 0.893, 14.116, 3.414, 0.337, 0.875, 9.987, 5.625, 0.369, 0.933, 3.841, 4.099, 0.127, 0.703, 1.68, 3.267, 0.155, 0.91, 0, 1), tollerance = 1e-2)
     data[1,1] <- data[2,2] <- NA
     modm6 <- mirt(data, 1, verbose=FALSE)
     expect_equal(modm6@df, 21)
@@ -76,10 +76,7 @@ test_that('dich', {
     expect_is(fm5, 'matrix')
     fm6 <- fscores(modm1, method = 'EAPsum', full.scores = FALSE, verbose = FALSE)
     expect_is(fm6, 'data.frame')
-    expect_true(mirt:::closeEnough(as.numeric(as.matrix(fm6)) -  
-                 c(0.0000000,  1.0000000,  2.0000000,  3.0000000,  4.0000000,  5.0000000,
-                   -1.8665957, -1.4314464, -0.9487476, -0.4131919,  0.1516851, 0.7269940,
-                   0.6872827,  0.6831615,  0.6941894,  0.7210850,  0.7587511,  0.8004654), -1e-2, 1e-2))
+    expect_true(mirt:::closeEnough(as.numeric(as.matrix(fm6)) - c(0, 1, 2, 3, 4, 5, -1.86658192945326, -1.43145812172939, -0.948768946608248, -0.413197495468693, 0.151688441471554, 0.726983431734596, 0.687274771185597, 0.683151658641026, 0.694186119529085, 0.721086634187972, 0.758750386799023, 0.800462035386804, 12, 40, 114, 205, 321, 308, 10.07773181541, 44.6534534093701, 109.776473457804, 207.75299446646, 319.192972299934, 308.546374551022), -1e-2, 1e-2))
     
     res1 <- residuals(modm1, verbose = FALSE)
     expect_equal(as.numeric(res1), c(NA, -0.452, -0.853, 2.576, 2.393, -0.021, NA, 1.06, -0.266, 

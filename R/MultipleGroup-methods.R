@@ -21,7 +21,7 @@ setMethod(
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
                 cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
-                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3), 
+                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3),
                     ", TLI = ", round(x@TLI,3), '\n\n', sep='')
                 for(g in 1:length(x@cmods))
                     cat(as.character(x@groupNames[g]), " group: G2 = ", round(x@cmods[[g]]@G2,2), '\n', sep='')
@@ -69,7 +69,7 @@ setMethod(
                     allPars[[g]][[i]] <- matrix(round(object@cmods[[g]]@pars[[i]]@par, digits), 1L)
                     colnames(allPars[[g]][[i]]) <- names(object@cmods[[1L]]@pars[[i]]@parnum)
                     rownames(allPars[[g]][[i]]) <- 'par'
-                    
+
                 }
             }
             names(allPars[[g]]) <- c(itemnames, 'GroupPars')
@@ -114,7 +114,7 @@ setMethod(
 setMethod(
     f = "anova",
     signature = signature(object = 'MultipleGroupClass'),
-    definition = function(object, object2)
+    definition = function(object, object2, verbose = TRUE)
     {
         nitems <- length(object@K)
         if(length(object@df) == 0 || length(object2@df) == 0)
@@ -126,16 +126,17 @@ setMethod(
             object2 <- tmp
         }
         X2 <- round(2*object2@logLik - 2*object@logLik, 3)
-        cat('\nModel 1: ')
-        print(object@Call)
-        cat('Model 2: ')
-        print(object2@Call)
-        cat('\n')
-        ret <- cbind(Df = c(object@df, object2@df),
-                          AIC = c(object@AIC, object2@AIC),
+        if(verbose){
+            cat('\nModel 1: ')
+            print(object@Call)
+            cat('Model 2: ')
+            print(object2@Call)
+            cat('\n')
+        }
+        ret <- cbind(AIC = c(object@AIC, object2@AIC),
                           AICc = c(object@AICc, object2@AICc),
-                          BIC = c(object@BIC, object2@BIC),
                           SABIC = c(object@SABIC, object2@SABIC),
+                          BIC = c(object@BIC, object2@BIC),
                           logLik = c(object@logLik, object2@logLik),
                           X2 = c(NA, X2),
                           df = c(NA, abs(df)),
@@ -148,10 +149,11 @@ setMethod(
     f = "plot",
     signature = signature(x = 'MultipleGroupClass', y = 'missing'),
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
+                          which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-                          auto.key = TRUE, ...)
+                          facet_items = FALSE, auto.key = TRUE, ...)
     {
-        if (!type %in% c('info','infocontour', 'SE', 'RE', 'score'))
+        if (!type %in% c('info','infocontour', 'SE', 'RE', 'score', 'empiricalhist', 'trace', 'infotrace'))
             stop(type, " is not a valid plot type.")
         if (any(theta_angle > 90 | theta_angle < 0))
             stop('Improper angle specifed. Must be between 0 and 90.')
@@ -239,6 +241,78 @@ setMethod(
             if(type == 'score')
                 return(xyplot(score~Theta, plt, type='l', group=group, main = 'Expected Total Score',
                               xlab = expression(theta), ylab=expression(Total(theta)), auto.key = TRUE, ...))
+            if(type == 'empiricalhist'){
+                if(!length(x@Prior)) stop('Empirical histogram was not estimated for this object')
+                Prior <- Theta <- pltfull <- vector('list', ngroups)
+                for(g in 1L:ngroups){
+                    Theta[[g]] <- as.matrix(seq(-(.8 * sqrt(x@quadpts)), .8 * sqrt(x@quadpts),
+                                           length.out = x@quadpts))
+                    Prior[[g]] <- x@Prior[[g]] * nrow(x@data)
+                    cuts <- cut(Theta[[g]], floor(npts/2))
+                    Prior[[g]] <- do.call(c, lapply(split(Prior[[g]], cuts), mean))
+                    Theta[[g]] <- do.call(c, lapply(split(Theta[[g]], cuts), mean))
+                    keep1 <- min(which(Prior[[g]] > 1e-10))
+                    keep2 <- max(which(Prior[[g]] > 1e-10))
+                    plt <- data.frame(Theta=Theta[[g]], Prior=Prior[[g]], group=x@groupNames[g])
+                    plt <- plt[keep1:keep2, , drop=FALSE]
+                    pltfull[[g]] <- plt
+                }
+                plt <- do.call(rbind, pltfull)
+                return(xyplot(Prior ~ Theta, plt, group=group, auto.key = TRUE,
+                              xlab = expression(theta), ylab = 'Expected Frequency',
+                              type = 'b', main = 'Empirical Histogram', ...))
+            }
+            if(type == 'trace'){
+                plt <- vector('list', ngroups)
+                P <- vector('list', length(which.items))
+                for(g in 1L:ngroups){
+                    names(P) <- colnames(x@data)[which.items]
+                    count <- 1
+                    for(i in which.items){
+                        tmp <- probtrace(extract.item(x, i, group=x@groupNames[g]), ThetaFull)
+                        if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
+                        tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(ThetaFull),
+                                                                     labels=paste0('cat', 1L:ncol(tmp))))
+                        P[[count]] <- tmp2
+                        count <- count + 1
+                    }
+                    nrs <- sapply(P, nrow)
+                    Pstack <- do.call(rbind, P)
+                    names <- c()
+                    for(i in 1L:length(nrs))
+                        if(!is.null(nrs[i]))
+                            names <- c(names, rep(names(P)[i], nrs[i]))
+                    plotobj <- data.frame(Pstack, item=names, Theta=ThetaFull, group=x@groupNames[g])
+                    plt[[g]] <- plotobj
+                }
+                plt <- do.call(rbind, plt)
+                return(xyplot(P ~ Theta|item, plt, group = cat:group, ylim = c(-0.1,1.1),
+                       xlab = expression(theta), ylab = expression(P(theta)),
+                       auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+            }
+            if(type == 'infotrace'){
+                plt <- vector('list', ngroups)
+                for(g in 1L:ngroups){
+                    I <- matrix(NA, nrow(ThetaFull), J)
+                    for(i in which.items)
+                        I[,i] <- iteminfo(extract.item(x, i, group=x@groupNames[g]), ThetaFull)
+                    I <- t(na.omit(t(I)))
+                    items <- gl(n=length(unique(which.items)), k=nrow(ThetaFull),
+                                labels = paste('Item', which.items))
+                    plotobj <- data.frame(I = as.numeric(I), Theta=ThetaFull, item=items, group=x@groupNames[g])
+                    plt[[g]] <- plotobj
+                }
+                plt <- do.call(rbind, plt)
+                if(facet_items){
+                    return(xyplot(I ~ Theta | item, plt, group = group,
+                                  xlab = expression(theta), ylab = expression(I(theta)),
+                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                } else {
+                    return(xyplot(I ~ Theta | group, plt, group = item,
+                                  xlab = expression(theta), ylab = expression(I(theta)),
+                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                }
+            }
         }
     }
 )
