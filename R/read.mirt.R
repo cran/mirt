@@ -62,7 +62,21 @@
 #' plot(plinkpars)
 #' itemplot(mod2, 1)
 #'
-#' #gpcm
+#' ### multiple group
+#' set.seed(1234)
+#' dat <- expand.table(LSAT7)
+#' group <- sample(c('g1', 'g2'), nrow(dat), TRUE)
+#' mod <- multipleGroup(dat, 1, group)
+#' 
+#' # convert, and combine pars
+#' plinkMG <- read.mirt(mod)
+#' combine <- matrix(1:5, 5, 2)
+#' comb <- combine.pars(plinkMG, combine, grp.names=unique(group))
+#' out <- plink(comb, rescale="SL")
+#' equate(out)
+#' equate(out, method = 'OSE')
+#'
+# #gpcm
 # mod3 <- mirt(Science, 2, itemtype = 'gpcm')
 # plinkpars <- read.mirt(mod3)
 # plot(plinkpars)
@@ -80,9 +94,10 @@ read.mirt <- function (x, as.irt.pars = TRUE, ...)
         stop('You must install the plink package.')
     cls <- class(x)
     if(class(x) == 'MultipleGroupClass'){
-        pars <- vector(length(x@cmods))
+        pars <- vector('list', length(x@cmods))
         for(i in 1:length(pars))
-            pars[[i]] <- read.mirt(x@cmods, as.irt.pars=as.irt.pars, ...)
+            pars[[i]] <- read.mirt(x@cmods[[i]], as.irt.pars=as.irt.pars, ...)
+        names(pars) <- x@groupNames
         return(pars)
     }
     if(class(x) == 'MixedClass')

@@ -2,9 +2,10 @@
 \alias{bfactor}
 \title{Full-Information Item Bi-factor and Two-Tier Analysis}
 \usage{
-  bfactor(data, model, model2 = mirt.model(paste0('G = 1-',
-    ncol(data))), SE = FALSE, SE.type = 'SEM', group =
-    NULL, verbose = TRUE, ...)
+  bfactor(data, model,
+    model2 = mirt.model(paste0("G = 1-", ncol(data))),
+    SE = FALSE, SE.type = "crossprod", group = NULL,
+    verbose = TRUE, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -154,6 +155,7 @@ coef(simmod)
 # Two-tier model
 
 #simulate data
+set.seed(1234)
 a <- matrix(c(
 0,1,0.5,NA,NA,
 0,1,0.5,NA,NA,
@@ -177,7 +179,6 @@ items <- rep('dich', 16)
 
 sigma <- diag(5)
 sigma[1,2] <- sigma[2,1] <- .4
-set.seed(1234)
 dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
 
 specific <- c(rep(1,5),rep(2,6),rep(3,5))
@@ -186,7 +187,7 @@ model <- mirt.model('
     G2 = 9-16
     COV = G1*G2')
 
-simmod <- bfactor(dataset, specific, model, quadpts = 9, technical = list(TOL = 1e-3))
+simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3)
 coef(simmod)
 summary(simmod)
 
@@ -219,18 +220,17 @@ summary(simmod)
   \code{\link{anova-method}}, \code{\link{coef-method}},
   \code{\link{summary-method}},
   \code{\link{residuals-method}},
-  \code{\link{plot-method}}, \code{\link{fitted-method}},
-  \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{mirt.model}}, \code{\link{mirt}},
-  \code{\link{bfactor}}, \code{\link{multipleGroup}},
-  \code{\link{mixedmirt}}, \code{\link{wald}},
-  \code{\link{itemplot}}, \code{\link{fscores}},
-  \code{\link{fitIndices}}, \code{\link{extract.item}},
-  \code{\link{iteminfo}}, \code{\link{testinfo}},
-  \code{\link{probtrace}}, \code{\link{boot.mirt}},
-  \code{\link{imputeMissing}}, \code{\link{itemfit}},
-  \code{\link{mod2values}}, \code{\link{simdata}},
-  \code{\link{createItem}}
+  \code{\link{plot-method}}, \code{\link{expand.table}},
+  \code{\link{key2binary}}, \code{\link{mirt.model}},
+  \code{\link{mirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{M2}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}, \code{\link{probtrace}},
+  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
+  \code{\link{itemfit}}, \code{\link{mod2values}},
+  \code{\link{simdata}}, \code{\link{createItem}}
 }
 \keyword{models}
 

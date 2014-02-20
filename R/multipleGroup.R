@@ -58,6 +58,8 @@
 #'   and \code{'score'} for the expected total score plot
 #' @param empiricalhist logical; estimate prior distribution using an empirical histogram approach.
 #'   see \code{mirt} for details
+#' @param GenRandomPars logical; generate random starting values prior to optimization instead of
+#'          using the fixed internal starting values?
 #' @param key see \code{\link{mirt}} for details
 #' @param itemtype see \code{\link{mirt}} for details
 #' @param constrain see \code{\link{mirt}} for details
@@ -65,15 +67,17 @@
 #' @param rsm.block see \code{\link{mirt}} for details
 #' @param parprior see \code{\link{mirt}} for details
 #' @param pars see \code{\link{mirt}} for details
+#' @param TOL see \code{\link{mirt}} for details
 #' @param ... additional arguments to be passed
 #' @param technical list specifying subtle parameters that can be adjusted. See
 #'   \code{\link{mirt}} for details
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso \code{\link{anova-method}}, \code{\link{coef-method}}, \code{\link{summary-method}},
-#'   \code{\link{residuals-method}}, \code{\link{plot-method}}, \code{\link{fitted-method}},
+#'   \code{\link{residuals-method}}, \code{\link{plot-method}},
 #'   \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{mirt.model}}, \code{\link{mirt}},
 #'   \code{\link{bfactor}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
-#'   \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, \code{\link{fitIndices}},
+#'   \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, 
+#'   \code{\link{M2}},
 #'   \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}, \code{\link{probtrace}},
 #'   \code{\link{boot.mirt}}, \code{\link{imputeMissing}}, \code{\link{itemfit}}, \code{\link{mod2values}},
 #'   \code{\link{simdata}}, \code{\link{createItem}}, \code{\link{mirtCluster}}, \code{\link{DIF}}
@@ -94,6 +98,8 @@
 #' models <- mirt.model('F1 = 1-15')
 #'
 #' mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
+#' #limited information fit statistics
+#' M2(mod_configural)
 #'
 #' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #' #equal intercepts, free variance and means
@@ -184,36 +190,26 @@
 #'    F2 = 6-10
 #'    F3 = 11-15')
 #'
+#' #define mirt cluster to use parallel architecture
+#' mirtCluster()
+#'
 #' #EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
 #' mod_configural <- multipleGroup(dat, model, group = group) #completely separate analyses
 #' mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes')) #equal slopes
-#' mod_scalar <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
-#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))
 #' mod_fullconstrain <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
 #'                              invariance=c('slopes', 'intercepts'))
 #'
 #' anova(mod_metric, mod_configural)
-#' anova(mod_scalar, mod_metric)
-#' anova(mod_fullconstrain, mod_scalar)
+#' anova(mod_fullconstrain, mod_metric)
 #'
-#' #same as above, but with MHRM (more accurate with 3 factors, but slower)
-#' #define mirt cluster to compute log-likelihoods faster
-#' mirtCluster()
-#'
-#' #completely separate analyses
-#' mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM')
-#' #equal slopes
-#' mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM')
-#' #equal means, slopes, intercepts
-#' mod_scalar <- multipleGroup(dat, models, group = group, method = 'MHRM',
-#'                              invariance=c('slopes', 'intercepts', 'free_varcov'))
-#' #equal means, slopes, intercepts
-#' mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'MHRM',
+#' #same as above, but with MHRM (generally  more accurate with 3+ factors, but slower)
+#' mod_configural <- multipleGroup(dat, model, group = group, method = 'MHRM')
+#' mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes'), method = 'MHRM')
+#' mod_fullconstrain <- multipleGroup(dat, model, group = group, method = 'MHRM',
 #'                              invariance=c('slopes', 'intercepts'))
 #'
 #' anova(mod_metric, mod_configural)
-#' anova(mod_scalar, mod_metric)
-#' anova(mod_fullconstrain, mod_scalar)
+#' anova(mod_fullconstrain, mod_metric)
 #'
 #' ############
 #' #polytomous item example
@@ -237,7 +233,7 @@
 #' fs <- fscores(mod_configural)
 #' head(fs[["D1"]])
 #' fscores(mod_configural, method = 'EAPsum')
-#' 
+#'
 #' # constrain slopes within each group to be equal (but not accross groups)
 #' model2 <- mirt.model('F1 = 1-15
 #'                       CONSTRAIN = (1-15, a1)')
@@ -270,9 +266,9 @@
 multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1,
                           SE = FALSE, SE.type = 'SEM', invariance = '', pars = NULL,
                           method = 'EM', constrain = NULL, parprior = NULL, calcNull = TRUE,
-                          draws = 5000, quadpts = NULL, grsm.block = NULL, rsm.block = NULL,
+                          draws = 5000, quadpts = NULL, TOL = NULL, grsm.block = NULL, rsm.block = NULL,
                           key = NULL, technical = list(), accelerate = TRUE, empiricalhist = FALSE,
-                          verbose = TRUE, ...)
+                          GenRandomPars = FALSE, verbose = TRUE, ...)
 {
     Call <- match.call()
     if(length(model) > 1L)
@@ -294,7 +290,8 @@ multipleGroup <- function(data, model, group, itemtype = NULL, guess = 0, upper 
                       pars=pars, constrain=constrain, SE=SE, grsm.block=grsm.block,
                       parprior=parprior, quadpts=quadpts, method=method, rsm.block=rsm.block,
                       technical = technical, verbose = verbose, calcNull=calcNull,
-                      SE.type = SE.type, key=key, accelerate=accelerate, draws=draws, ...)
+                      SE.type = SE.type, key=key, accelerate=accelerate, draws=draws,
+                      GenRandomPars=GenRandomPars, TOL=TOL, ...)
     if(is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)

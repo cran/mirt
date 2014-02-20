@@ -201,8 +201,10 @@
 #'   \code{'BL'} for the Bock and Lieberman approach (numerical evaluation of observed Hessian), 
 #'   \code{'Fisher'} for the expected information, \code{'complete'} for information based on the 
 #'   complete-data Hessian used in EM algorithm (EM only), \code{'SEM'} for the supplemented EM 
-#'   (disables the \code{accelerate} option; EM only), and \code{'crossprod'}
-#'   for standard error computations based on the variance of the Fisher scores.
+#'   (disables the \code{accelerate} option; EM only), \code{'crossprod'}
+#'   for standard error computations based on the variance of the Fisher scores, \code{'Louis'} 
+#'   for Louis' (1982) computation of the observed information matrix, 
+#'   and \code{'sandwich'} for the sandwich covariance estimate.
 #'   
 #'   Note that for \code{'SEM'} and \code{'MHRM'} option increasing the number of iterations 
 #'   (\code{NCYCLES} and \code{TOL}, see below)  will help to improve the accuracy, and will be 
@@ -251,6 +253,9 @@
 #' @param quadpts number of quadrature points per dimension (must be an odd number).
 #'   By default the number of quadrature uses the following scheme:
 #'   \code{switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)}
+#' @param TOL convergence threshold for EM or MH-RM; defaults are .0001 and .001. If \code{SE.type = 'SEM'} and this
+#'   value is not specified, the default is set to \code{1e-6}. If \code{empiricalhist = TRUE} and \code{TOL} is 
+#'   not specified then the default \code{3e-5} will be used
 #' @param large a logical, indicating whether the internal collapsed data should be returned,
 #'   or list of internally computed mirt parameters containing the data. If \code{TRUE} a list containing
 #'   the organized data used prior to estimation is returned. This list object can then be passed back into
@@ -275,18 +280,26 @@
 #'   to identify the categories)
 #' @param draws the number of Monte Carlo draws to estimate the log-likelihood for the MH-RM algorithm. Default
 #'   is 5000
+#' @param GenRandomPars logical; generate random starting values prior to optimization instead of
+#'   using the fixed internal starting values?
 #' @param verbose logical; print observed log-likelihood value at each iteration?
 #' @param technical a list containing lower level technical parameters for estimation. May be:
 #'   \describe{
-#'     \item{MAXQUAD}{maximum number of quadratures; default 10000}
-#'     \item{TOL}{EM or MH-RM convergence threshold; defaults are .0001 and .001}
+#'     \item{MAXQUAD}{maximum number of quadratures, which you can increase if you have more than 4GB or RAM on your PC; 
+#'       default 10000}
 #'     \item{SEtol}{tolerance value used to stop the MHRM estimation when \code{SE = TRUE}
 #'     and \code{SE.type = 'MHRM'} and \code{method = 'EM'}. Lower values will take longer but may be more
-#'     stable for computing the information matrix. Default is .0001}
+#'     stable for computing the information matrix. Default is .0001.
+#'     
+#'     If \code{SE.type = 'SEM'}, this is the tollerance used to terminate the S-EM computations for each parameter,
+#'     and if not specified the default is \code{.001}}
 #'     \item{NCYCLES}{maximum number of EM or MH-RM cycles; defaults are 500 and 2000}
 #'     \item{BURNIN}{number of burn in cycles (stage 1) in MH-RM; default 150}
 #'     \item{SEMCYCLES}{number of SEM cycles (stage 2) in MH-RM; default 50}
 #'     \item{set.seed}{seed number used during estimation. Default is 12345}
+#'     \item{symmetric_SEM}{logical; force S-EM information matrix to be symmetric? Default is TRUE
+#'       so that computation of standard errors are more stable. Setting this to FALSE can help
+#'       to detect solutions that have not reached the ML estimate}
 #'     \item{gain}{a vector of two values specifying the numerator and exponent
 #'          values for the RM gain function \eqn{(val1 / cycle)^val2}. Default is \code{c(0.15,0.65)}}
 #'     \item{customK}{a numeric value to be used to explicitly declare the number of response categories
@@ -294,19 +307,25 @@
 #'           than parameter estimation (such as to obtain factor scores), and requires that the input data
 #'           all have 0 as the lowest category. The format is the same as the
 #'           \code{mod@@K} slot in all converged models}
-#'     \item{GenRandomPars}{logical; generate random starting values prior to optimization instead of
-#'          using the fixed internal starting values?}
 #'     \item{customPriorFun}{a custom function used to determine the normalized density for integration
 #'          in the EM algorithm. Must be of the form \code{function(Theta){...}}, and return a numeric vector
 #'          with the same length as number of rows in \code{Theta}}
+#'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration. 
+#'          If not defined, the grid is determined internally based on the number of \code{quadpts}}
+#'     \item{MHcand}{a vector of values used to tune the MH sampler. Larger values will 
+#'          cause the acceptance ratio to decrease. Only one value is required for unconditional 
+#'          item factor analysis (\code{mixedmirt()} requires additional values for random effect). 
+#'          If null, these values are determined internally, attempting to make the draws between
+#'          .1 and .4}
 #'   }
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso \code{\link{anova-method}}, \code{\link{coef-method}}, \code{\link{summary-method}},
-#'   \code{\link{residuals-method}}, \code{\link{plot-method}}, \code{\link{fitted-method}},
+#'   \code{\link{residuals-method}}, \code{\link{plot-method}}, 
 #'   \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{mirt.model}}, \code{\link{mirt}},
 #'   \code{\link{bfactor}}, \code{\link{multipleGroup}}, \code{\link{mixedmirt}}, \code{\link{mod2values}},
-#'   \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, \code{\link{fitIndices}},
+#'   \code{\link{wald}}, \code{\link{itemplot}}, \code{\link{fscores}}, 
+#'   \code{\link{M2}},
 #'   \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}}, \code{\link{probtrace}},
 #'   \code{\link{boot.mirt}}, \code{\link{PLCI.mirt}}, \code{\link{imputeMissing}}, \code{\link{itemfit}},
 #'   \code{\link{simdata}}, \code{\link{createItem}}, \code{\link{mirtCluster}}
@@ -381,8 +400,9 @@
 #'
 #' (mod1 <- mirt(data, 1))
 #' coef(mod1)
-#' coef(mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
-#' coef(mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
+#' (mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
+#' coef(mod2)
+#' (mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
 #' residuals(mod1)
 #' plot(mod1) #test information function
 #' plot(mod1, type = 'trace') #trace lines
@@ -402,6 +422,8 @@
 #'                      PRIOR = (5, g, norm, -1.5, 3)')
 #' mod1.3PL.norm2 <- mirt(data, model, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'))
 #' coef(mod1.3PL.norm2)
+#' #limited information fit statistics
+#' M2(mod1.3PL.norm, calcNull=TRUE)
 #'
 #' #two factors (exploratory)
 #' mod2 <- mirt(data, 2)
@@ -412,9 +434,9 @@
 #'
 #' anova(mod1, mod2) #compare the two models
 #' scores <- fscores(mod2) #save factor score table
-#' scoresfull <- fscores(mod2, full.scores = TRUE, scores.only = TRUE) #factor scores for original data
+#' scoresfull <- fscores(mod2, full.scores = TRUE, scores.only = TRUE) #factor scores
 #'
-#' #confirmatory
+#' #confirmatory (as an example, model is not identified since you need 3 items per factor)
 #' cmodel <- mirt.model('
 #'    F1 = 1,4,5
 #'    F2 = 2,3')
@@ -423,13 +445,15 @@
 #' cmod <- mirt(data, cmodel)
 #' coef(cmod)
 #' anova(cmod, mod2)
+#' #check if identified by looking at second order condition
+#' (cmod <- mirt(data, cmodel, SE = T))
 #'
 #' ###########
 #' #data from the 'ltm' package in numeric format
 #' pmod1 <- mirt(Science, 1)
 #' plot(pmod1)
 #' summary(pmod1)
-#' fitIndices(pmod1) #M2 limited information statistic
+# fitIndices(pmod1) #M2 limited information statistic
 #'
 #' #Constrain all slopes to be equal with the constrain = list() input or mirt.model() syntax
 #' #first obtain parameter index
@@ -477,7 +501,7 @@
 #' mod1 <- mirt(data, 1)
 #' mod2 <- mirt(data, 2)
 #' #difficulty converging with reduced quadpts, reduce TOL
-#' mod3 <- mirt(data, 3, technical = list(TOL = .001))
+#' mod3 <- mirt(data, 3, TOL = .001)
 #' anova(mod1,mod2)
 #' anova(mod2, mod3) #negative AIC, 2 factors probably best
 #'
@@ -643,7 +667,7 @@
 #' d <- matrix(rnorm(50))
 #' ThetaNormal <- matrix(rnorm(2000))
 #' ThetaBimodal <- scale(matrix(c(rnorm(1000, -2), rnorm(1000,2)))) #bimodal
-#' ThetaSkew <- scale(matrix(rchisq(2000, 5))) #positive skew
+#' ThetaSkew <- scale(matrix(rchisq(2000, 3))) #positive skew
 #' datNormal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaNormal)
 #' datBimodal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaBimodal)
 #' datSkew <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaSkew)
@@ -665,19 +689,19 @@
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, SE.type = 'SEM',
                  method = 'EM', pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = TRUE, draws = 5000, rotate = 'oblimin',
-                 Target = NaN, quadpts = NULL, grsm.block = NULL, rsm.block = NULL,
-                 key = NULL, nominal.highlow = NULL, large = FALSE,
+                 Target = NaN, quadpts = NULL, TOL = NULL, grsm.block = NULL, rsm.block = NULL,
+                 key = NULL, nominal.highlow = NULL, large = FALSE, GenRandomPars = FALSE,
                  accelerate = TRUE, empiricalhist = FALSE, verbose = TRUE, technical = list(), ...)
 {
     Call <- match.call()
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)),
                       itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
-                      pars=pars, method=method, constrain=constrain, SE=SE,
+                      pars=pars, method=method, constrain=constrain, SE=SE, TOL=TOL,
                       parprior=parprior, quadpts=quadpts, rotate=rotate, Target=Target,
                       rsm.block=rsm.block, technical=technical, verbose=verbose,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
                       nominal.highlow=nominal.highlow, accellerate=accelerate, draws=draws,
-                      empiricalhist=empiricalhist, ...)
+                      empiricalhist=empiricalhist, GenRandomPars=GenRandomPars, ...)
     if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
         mod@Call <- Call
     return(mod)

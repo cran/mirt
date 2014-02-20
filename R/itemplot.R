@@ -8,10 +8,11 @@
 #' @param object a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
 #'   \code{MultipleGroupClass}. Input may also be a \code{list} for comparing similar item types (e.g., 1PL vs 2PL)
 #' @param item a single numeric value, or the item name, indicating which item to plot
-#' @param type plot type to use, information (\code{'info'}), standard errors (\code{'SE'}), information and
-#'   standard errors (\code{'infoSE'}), item trace lines (\code{'trace'}), relative
-#'   efficiency lines (\code{'RE'}), expected score \code{'score'}, or information contours \code{('infocontour')}
-#'   (not for \code{MultipleGroupClass} objects)
+#' @param type plot type to use, information (\code{'info'}), standard errors (\code{'SE'}), 
+#'   item trace lines (\code{'trace'}), information and standard errors (\code{'infoSE'}) or 
+#'   information and trace lines (\code{'infotrace'}), relative efficiency lines (\code{'RE'}), 
+#'   expected score \code{'score'}, or information and trace line contours (\code{'infocontour'} and 
+#'   \code{'tracecontour'}; not supported for \code{MultipleGroupClass} objects)
 #' @param degrees the degrees argument to be used if there are exactly two factors. See \code{\link{iteminfo}}
 #'   for more detail
 #' @param CE logical; plot confidence envelope?
@@ -45,13 +46,17 @@
 #' mods <- list(twoPL = mod1, onePL = mod2)
 #' itemplot(mods, 1, type = 'RE')
 #'
-#' #multidimensional info
+#' #multidimensional
 #' itemplot(mod3, 3, type = 'info')
+#' itemplot(mod3, 3, type = 'infocontour')
+#' itemplot(mod3, 3, type = 'tracecontour')
 #'
 #' #polytomous items
-#' pmod <- mirt(Science, 1, SE=TRUE, SE.type = 'MHRM')
+#' pmod <- mirt(Science, 1, SE=TRUE)
 #' itemplot(pmod, 3)
 #' itemplot(pmod, 3, CE = TRUE)
+#' itemplot(pmod, 3, type = 'score')
+#' itemplot(pmod, 3, type = 'infotrace')
 #'
 #' #interactive shiny applet
 #' itemplot(shiny = TRUE)

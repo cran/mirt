@@ -6,9 +6,10 @@
     guess = 0, upper = 1, SE = FALSE, SE.type = "SEM",
     invariance = "", pars = NULL, method = "EM",
     constrain = NULL, parprior = NULL, calcNull = TRUE,
-    draws = 5000, quadpts = NULL, grsm.block = NULL,
-    rsm.block = NULL, key = NULL, technical = list(),
-    accelerate = TRUE, empiricalhist = FALSE,
+    draws = 5000, quadpts = NULL, TOL = NULL,
+    grsm.block = NULL, rsm.block = NULL, key = NULL,
+    technical = list(), accelerate = TRUE,
+    empiricalhist = FALSE, GenRandomPars = FALSE,
     verbose = TRUE, ...)
 }
 \arguments{
@@ -91,6 +92,10 @@
   using an empirical histogram approach.  see \code{mirt}
   for details}
 
+  \item{GenRandomPars}{logical; generate random starting
+  values prior to optimization instead of using the fixed
+  internal starting values?}
+
   \item{key}{see \code{\link{mirt}} for details}
 
   \item{itemtype}{see \code{\link{mirt}} for details}
@@ -104,6 +109,8 @@
   \item{parprior}{see \code{\link{mirt}} for details}
 
   \item{pars}{see \code{\link{mirt}} for details}
+
+  \item{TOL}{see \code{\link{mirt}} for details}
 
   \item{...}{additional arguments to be passed}
 
@@ -149,6 +156,8 @@ group <- c(rep('D1', N), rep('D2', N))
 models <- mirt.model('F1 = 1-15')
 
 mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
+#limited information fit statistics
+M2(mod_configural)
 
 mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes')) #equal slopes
 #equal intercepts, free variance and means
@@ -239,36 +248,26 @@ model <- mirt.model('
    F2 = 6-10
    F3 = 11-15')
 
+#define mirt cluster to use parallel architecture
+mirtCluster()
+
 #EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
 mod_configural <- multipleGroup(dat, model, group = group) #completely separate analyses
 mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes')) #equal slopes
-mod_scalar <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
-                             invariance=c('slopes', 'intercepts', 'free_varcov'))
 mod_fullconstrain <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts'))
 
 anova(mod_metric, mod_configural)
-anova(mod_scalar, mod_metric)
-anova(mod_fullconstrain, mod_scalar)
+anova(mod_fullconstrain, mod_metric)
 
-#same as above, but with MHRM (more accurate with 3 factors, but slower)
-#define mirt cluster to compute log-likelihoods faster
-mirtCluster()
-
-#completely separate analyses
-mod_configural <- multipleGroup(dat, models, group = group, method = 'MHRM')
-#equal slopes
-mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM')
-#equal means, slopes, intercepts
-mod_scalar <- multipleGroup(dat, models, group = group, method = 'MHRM',
-                             invariance=c('slopes', 'intercepts', 'free_varcov'))
-#equal means, slopes, intercepts
-mod_fullconstrain <- multipleGroup(dat, models, group = group, method = 'MHRM',
+#same as above, but with MHRM (generally  more accurate with 3+ factors, but slower)
+mod_configural <- multipleGroup(dat, model, group = group, method = 'MHRM')
+mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes'), method = 'MHRM')
+mod_fullconstrain <- multipleGroup(dat, model, group = group, method = 'MHRM',
                              invariance=c('slopes', 'intercepts'))
 
 anova(mod_metric, mod_configural)
-anova(mod_scalar, mod_metric)
-anova(mod_fullconstrain, mod_scalar)
+anova(mod_fullconstrain, mod_metric)
 
 ############
 #polytomous item example
@@ -330,19 +329,18 @@ anova(EH, EH1)
   \code{\link{anova-method}}, \code{\link{coef-method}},
   \code{\link{summary-method}},
   \code{\link{residuals-method}},
-  \code{\link{plot-method}}, \code{\link{fitted-method}},
-  \code{\link{expand.table}}, \code{\link{key2binary}},
-  \code{\link{mirt.model}}, \code{\link{mirt}},
-  \code{\link{bfactor}}, \code{\link{multipleGroup}},
-  \code{\link{mixedmirt}}, \code{\link{wald}},
-  \code{\link{itemplot}}, \code{\link{fscores}},
-  \code{\link{fitIndices}}, \code{\link{extract.item}},
-  \code{\link{iteminfo}}, \code{\link{testinfo}},
-  \code{\link{probtrace}}, \code{\link{boot.mirt}},
-  \code{\link{imputeMissing}}, \code{\link{itemfit}},
-  \code{\link{mod2values}}, \code{\link{simdata}},
-  \code{\link{createItem}}, \code{\link{mirtCluster}},
-  \code{\link{DIF}}
+  \code{\link{plot-method}}, \code{\link{expand.table}},
+  \code{\link{key2binary}}, \code{\link{mirt.model}},
+  \code{\link{mirt}}, \code{\link{bfactor}},
+  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
+  \code{\link{wald}}, \code{\link{itemplot}},
+  \code{\link{fscores}}, \code{\link{M2}},
+  \code{\link{extract.item}}, \code{\link{iteminfo}},
+  \code{\link{testinfo}}, \code{\link{probtrace}},
+  \code{\link{boot.mirt}}, \code{\link{imputeMissing}},
+  \code{\link{itemfit}}, \code{\link{mod2values}},
+  \code{\link{simdata}}, \code{\link{createItem}},
+  \code{\link{mirtCluster}}, \code{\link{DIF}}
 }
 \keyword{models}
 

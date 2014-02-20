@@ -58,8 +58,18 @@
   \code{"list"}, typicall null, except for internal mixed
   model usage} \item{\code{null.mod}:}{Object of class
   \code{"ExploratoryClass"}, null model}
-  \item{\code{Call}:}{Object of class \code{"call"}, call }
-  }
+  \item{\code{condnum}:}{Object of class \code{"numeric"},
+  condition number of information matrix}
+  \item{\code{bfactor}:}{Object of class \code{"list"},
+  contains information from bfactor() estimation}
+  \item{\code{secondordertest}:}{Object of class
+  \code{"logical"}, indicate whether information matrix
+  passes second-order test}
+  \item{\code{CUSTOM.IND}:}{Object of class
+  \code{"integer"}, an internal index}
+  \item{\code{SLOW.IND}:}{Object of class \code{"integer"},
+  an internal index} \item{\code{Call}:}{Object of class
+  \code{"call"}, call } }
 }
 
 \section{Methods}{
@@ -74,8 +84,6 @@
   \item{logLik}{\code{signature(object =
   "ConfirmatoryClass")} }
   \item{anova}{\code{signature(object =
-  "ConfirmatoryClass")} }
-  \item{fitted}{\code{signature(object =
   "ConfirmatoryClass")} } }
 }
 \author{
