@@ -3,7 +3,9 @@
 #' This function defines a object that is placed in a relevant internal environment defined in mirt.
 #' Internal functions such as \code{calcLogLik}, \code{fscores}, etc, will utilize this object
 #' automatically to capitalize on parallel
-#' processing architecture. The object defined is a call from \code{parallel::makeCluster()}.
+#' processing architecture. The object defined is a call from \code{parallel::makeCluster()}. Note that
+#' if you are defining other parallel objects (for simulation desings, for example) it is not recommended
+#' to define a mirtCluster. 
 #' @aliases mirtCluster
 #' @param ncores number of cores to be used in the returned object which is
 #' passed to \code{parallel::makeCluster()}. If no input is given the maximum number of available
@@ -30,7 +32,7 @@ mirtCluster <- function(ncores, remove = FALSE){
     if(!require(parallel)) require(parallel)
     if(remove){
         if(is.null(mirtClusterEnv$MIRTCLUSTER)){
-            message('No MIRTCLUSTER object has been defined')
+            message('There is no visible mirtCluster() definition')
             return(invisible())
         }
         stopCluster(mirtClusterEnv$MIRTCLUSTER)
@@ -39,7 +41,7 @@ mirtCluster <- function(ncores, remove = FALSE){
         return(invisible())
     }
     if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
-        message('MIRTCLUSTER object already defined')
+        message('mirtCluster() has already been defined')
         return(invisible())
     }
     if(missing(ncores))

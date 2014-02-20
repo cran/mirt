@@ -5,7 +5,7 @@
   mixedmirt(data, covdata = NULL, model, fixed = ~1,
     random = NULL, itemtype = "Rasch", itemdesign = NULL,
     constrain = NULL, pars = NULL, return.design = FALSE,
-    SE = FALSE, draws = 5000, ...)
+    SE = TRUE, draws = 5000, TOL = NULL, ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -68,11 +68,14 @@
   number of iterations to be no less than 400 so that the
   information matrix is computed more accurately.  An
   alternative approach would be to drop the \code{TOL}
-  criteria from the techinical list input}
+  criteria}
 
   \item{draws}{the number of Monte Carlo draws to estimate
   the log-likelihood for the MH-RM algorithm. Default is
   5000}
+
+  \item{TOL}{convergence threshold for MH-RM; default is
+  .001}
 
   \item{...}{additional arguments to be passed to the MH-RM
   estimation engine. See \code{\link{mirt}} for more
@@ -161,7 +164,7 @@ mod1b <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items, itemtype =
 anova(mod1, mod1b) #much better with 2PL models using all criteria (as expected, given simdata pars)
 
 #continuous predictor with group
-mod2 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + pseudoIQ)
+mod2 <- mixedmirt(data, covdata, model, fixed = ~ 0 + group + items + pseudoIQ)
 summary(mod2)
 anova(mod1b, mod2)
 
@@ -216,6 +219,9 @@ wald(LLTM, L) #first half not different from second
 #compare to items with estimated slopes (2PL)
 twoPL <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, itemtype = '2PL',
                    itemdesign = itemdesign)
+#twoPL not mixing too well (AR should be between .2 and .5), decrease MHcand
+twoPL <- mixedmirt(data, model = model, fixed = ~ 0 + itemorder, itemtype = '2PL',
+                  itemdesign = itemdesign, technical = list(MHcand = 0.8))
 anova(twoPL, LLTM) #much better fit
 summary(twoPL)
 coef(twoPL)

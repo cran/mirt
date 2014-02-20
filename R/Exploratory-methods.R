@@ -31,6 +31,11 @@ setMethod(
             cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
         else
             cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
+        if(!is.nan(x@condnum))
+            cat("Condition number of information matrix = ", x@condnum,
+                '\nSecond-order test: model ', if(!x@secondordertest)
+                    'is not a maximum, or the information matrix is too inaccurate' else
+                        'is a possible local maximum', '\n', sep = "")
         if(length(x@logLik) > 0){
             cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0,
                                                       paste(', SE = ', round(x@SElogLik,3)),
@@ -52,7 +57,7 @@ setMethod(
 #'
 #' Print model object summaries to the console.
 #'
-#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
 #'
 #' @name show-method
@@ -78,8 +83,8 @@ setMethod(
 #'
 #' \code{summary(object, rotate = '', Target = NULL, suppress = 0, digits = 3, verbose = TRUE, ...)}
 #'
-#' Tranforms coefficients into a standardized factor loading's metric. For \code{MixedClass} objects,
-#' the fixed and random coeffiicents are printed.
+#' Transforms coefficients into a standardized factor loading's metric. For \code{MixedClass} objects,
+#' the fixed and random coefficients are printed.
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
@@ -159,7 +164,7 @@ setMethod(
                 print(Phi)
             }
             if(any(h2 > 1))
-                warning("Solution has heywood cases. Interpret with caution.")
+                warning("Solution has Heywood cases. Interpret with caution.")
             invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))
         }
     }
@@ -167,8 +172,8 @@ setMethod(
 
 #' Extract raw coefs from model object
 #'
-#' \code{coef(object, CI = .95, rotate = '', Target = NULL, digits = 3, IRTpars = FALSE,
-#'    rawug = FALSE, verbose = TRUE, ...)}
+#' \code{coef(object, CI = .95, printSE = FALSE, rotate = '', Target = NULL, digits = 3,
+#'    IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE, verbose = TRUE, ...)}
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
@@ -178,12 +183,11 @@ setMethod(
 #'   Only applicable to unidimensional models
 #' @param rotate see \code{\link{mirt}} for details
 #' @param Target a dummy variable matrix indicting a target rotation pattern
-#' @param suppress a numeric value indicating which (possibly rotated) factor
-#'   loadings should be suppressed. Typical values are around .3 in most
-#'   statistical software. Default is 0 for no suppression
+#' @param printSE logical; print the standard errors instead of the confidence intervals?
 #' @param digits number of significant digits to be rounded
+#' @param as.data.frame logical; convert list output to a data.frame instead?
 #' @param verbose logical; allow information to be printed to the console?
-#' @param rawug logical; return the untranformed internal g and u parameters?
+#' @param rawug logical; return the untransformed internal g and u parameters?
 #'   If \code{FALSE}, g and u's are converted with the original format along with delta standard errors
 #' @param ... additional arguments to be passed
 #'
@@ -200,18 +204,31 @@ setMethod(
 #' x <- mirt(dat, 1)
 #' coef(x)
 #' coef(x, IRTpars = TRUE)
-#' 
+#'
+#' #with computed information matrix
+#' x <- mirt(dat, 1, SE = TRUE)
+#' coef(x)
+#' coef(x, printSE = TRUE)
+#' coef(x, as.data.frame = TRUE)
+#'
+#' #two factors
 #' x2 <- mirt(Science, 2)
 #' coef(x2)
 #' coef(x2, rotate = 'varimax')
+#'
 #' }
 setMethod(
     f = "coef",
     signature = 'ExploratoryClass',
-    definition = function(object, CI = .95, rotate = '', Target = NULL, digits = 3,
-                          rawug = FALSE, verbose = TRUE, ...){
+    definition = function(object, CI = .95, printSE = FALSE, rotate = '', Target = NULL, digits = 3,
+                          IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE, verbose = TRUE, ...){
+        if(printSE) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
             stop('CI must be between 0 and 1')
+        if(rotate == ''){
+            rotate <- try(slot(object, 'rotate'), TRUE)
+            if(is(rotate, 'try-error')) rotate <- 'none'
+        }
         z <- abs(qnorm((1 - CI)/2))
         SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
@@ -220,6 +237,7 @@ setMethod(
         a <- matrix(0, J, nfact)
         for(i in 1:J)
             a[i, ] <- ExtractLambdas(object@pars[[i]])
+
         if (ncol(a) > 1 && rotate != 'none'){
             rotname <- ifelse(rotate == '', object@rotate, rotate)
             if(verbose) cat("\nRotation: ", rotname, "\n\n")
@@ -231,20 +249,37 @@ setMethod(
                 object@pars[[J + 1]]@par[-c(1:nfact)] <- so$fcor[lower.tri(so$fcor, TRUE)]
         }
         allPars <- list()
-        if(length(object@pars[[1]]@SEpar) > 0){
-            for(i in 1:(J+1)){
-                allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
-                                               object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
-                                               object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
-                                             3, byrow = TRUE), digits)
-                rownames(allPars[[i]]) <- c('par', SEnames)
-                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
-            }
+        if(IRTpars){
+            if(object@nfact > 1L)
+                stop('traditional parameterization is only available for unidimensional models')
+            for(i in 1:(J+1))
+                allPars[[i]] <- round(mirt2traditional(object@pars[[i]]), digits)
         } else {
-            for(i in 1:(J+1)){
-                allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
-                colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
-                rownames(allPars[[i]]) <- 'par'
+            if(length(object@pars[[1]]@SEpar) > 0){
+                if(printSE){
+                    for(i in 1:(J+1)){
+                        allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
+                                                       object@pars[[i]]@SEpar),
+                                                     2, byrow = TRUE), digits)
+                        rownames(allPars[[i]]) <- c('par', 'SE')
+                        colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                    }
+                } else {
+                    for(i in 1:(J+1)){
+                        allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
+                                                       object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
+                                                       object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
+                                                     3, byrow = TRUE), digits)
+                        rownames(allPars[[i]]) <- c('par', SEnames)
+                        colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                    }
+                }
+            } else {
+                for(i in 1:(J+1)){
+                    allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
+                    colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                    rownames(allPars[[i]]) <- 'par'
+                }
             }
         }
         if(!rawug){
@@ -254,6 +289,8 @@ setMethod(
             },  digits=digits)
         }
         names(allPars) <- c(colnames(object@data), 'GroupPars')
+        if(as.data.frame)
+            allPars <- t(as.data.frame(allPars))
         return(allPars)
     }
 )
@@ -311,41 +348,63 @@ setMethod(
 
 #' Compute model residuals
 #'
-#' \code{residuals(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
-#'                          printvalue = NULL, verbose = TRUE, ...)}
+#' \code{residuals(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
+#'                          printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL, ...)}
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
-#'   \code{MultipleGroupClass}
-#' @param restype type of residuals to be displayed.
-#'   Can be either \code{'LD'} for a local dependence matrix (Chen & Thissen, 1997) or \code{'exp'} for the
-#'   expected values for the frequencies of every response pattern
+#'   \code{MultipleGroupClass}. Bifactor models are automatically detected and utilized for
+#'   better accuracy
+#' @param type type of residuals to be displayed.
+#'   Can be either \code{'LD'} or \code{'LDG2'} for a local dependence matrix based on the
+#'   X2 or G2 statistics (Chen & Thissen, 1997), \code{'Q3'} for the statistic proposed by
+#'   Yen (1984), or \code{'exp'} for the expected values for the frequencies of every response pattern
+#' @param tables logical; for LD type, return the observed, expected, and standardized residual
+#'   tables for each item combination?
 #' @param digits number of significant digits to be rounded
 #' @param df.p logical; print the degrees of freedom and p-values?
-#' @param full.scores logical; compute relavent statistics
+#' @param full.scores logical; compute relevant statistics
 #'  for each subject in the original data?
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
 #'   option. Only prints patterns that have standardized residuals greater than
 #'   \code{abs(printvalue)}. The default (NULL) prints all response patterns
 #' @param verbose logical; allow information to be printed to the console?
-#' @param ... additional arguments to be passed
+#' @param Theta a matrix of factor scores used for statistics that require empirical estimates (i.e., Q3).
+#'   If supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
+#'   be used instead
+#' @param ... additional arguments to be passed to \code{fscores()}
 #'
 #' @name residuals-method
 #' @aliases residuals,ExploratoryClass-method residuals,ConfirmatoryClass-method
 #'   residuals,MultipleGroupClass-method
 #' @docType methods
 #' @rdname residuals-method
+#' @references
+#'
+#' Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
+#' response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
+#'
+#' Yen, W. (1984). Effects of local item dependence on the fit and equating performance of the three
+#' parameter logistic model. \emph{Applied Psychological Measurement, 8}, 125-145.
 #' @examples
 #'
 #' \dontrun{
+#'
 #' x <- mirt(Science, 1)
 #' residuals(x)
-#' residuals(x, restype = 'exp')
+#' residuals(x, tables = TRUE)
+#' residuals(x, type = 'exp')
+#'
+#' # with and without supplied factor scores
+#' Theta <- fscores(x, full.scores=TRUE, scores.only=TRUE)
+#' residuals(x, type = 'Q3', Theta=Theta)
+#' residuals(x, type = 'Q3', method = 'ML')
+#'
 #' }
 setMethod(
     f = "residuals",
     signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, restype = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
-                          printvalue = NULL, verbose = TRUE, ...)
+    definition = function(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
+                          printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL, ...)
     {
         K <- object@K
         data <- object@data
@@ -356,13 +415,30 @@ setMethod(
         res <- matrix(0,J,J)
         diag(res) <- NA
         colnames(res) <- rownames(res) <- colnames(data)
-        Theta <- object@Theta
-        prior <- mvtnorm::dmvnorm(Theta,rep(0,nfact),diag(nfact))
-        prior <- prior/sum(prior)
-        df <- (object@K - 1) %o% (object@K - 1)
-        diag(df) <- NA
-        colnames(df) <- rownames(df) <- colnames(res)
-        if(restype == 'LD'){
+        quadpts <- object@quadpts
+        if(is.nan(quadpts))
+            quadpts <- switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)
+        bfactorlist <- object@bfactor
+        theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
+        if(type != 'Q3'){
+            if(is.null(bfactorlist$Priorbetween[[1L]])){
+                Theta <- thetaComb(theta, nfact)
+            } else {
+                Theta <- object@Theta
+            }
+        } else if(is.null(Theta)){
+            Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, scores.only=TRUE, ...)
+        }
+        itemnames <- colnames(data)
+        listtabs <- list()
+        calcG2 <- ifelse(type == 'LDG2', TRUE, FALSE)
+        if(type %in% c('LD', 'LDG2')){
+            groupPars <- ExtractGroupPars(object@pars[[length(object@pars)]])
+            prior <- mvtnorm::dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
+            prior <- prior/sum(prior)
+            df <- (object@K - 1) %o% (object@K - 1)
+            diag(df) <- NA
+            colnames(df) <- rownames(df) <- colnames(res)
             for(i in 1:J){
                 for(j in 1:J){
                     if(i < j){
@@ -375,12 +451,23 @@ setMethod(
                                 Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)
                         s <- gamma.cor(tab) - gamma.cor(Etab)
                         if(s == 0) s <- 1
-                        res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
+                        if(calcG2){
+                            tmp <- tab
+                            tmp[tab == 0] <- NA
+                            res[j,i] <- 2 * sum(tmp * log(tmp/Etab), na.rm=TRUE) * sign(s)
+                        } else {
+                            res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
+                        }
                         res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (N*min(c(K[i],K[j]) - 1L)))
                         df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
+                        if(tables){
+                            tmp <- paste0(itemnames[i], '_', itemnames[j])
+                            listtabs[[tmp]] <- list(Obs=tab, Exp=Etab, std_res=(tab-Etab)/sqrt(Etab))
+                        }
                     }
                 }
             }
+            if(tables) return(listtabs)
             if(df.p){
                 cat("Degrees of freedom (lower triangle) and p-values:\n\n")
                 print(round(df, digits))
@@ -389,8 +476,7 @@ setMethod(
             if(verbose) cat("LD matrix (lower triangle) and standardized values:\n\n")
             res <- round(res,digits)
             return(res)
-        }
-        if(restype == 'exp'){
+        } else if(type == 'exp'){
             r <- object@tabdata[ ,ncol(object@tabdata)]
             res <- round((r - object@Pl * nrow(object@data)) /
                              sqrt(object@Pl * nrow(object@data)),digits)
@@ -422,25 +508,53 @@ setMethod(
                 }
                 return(tabdata)
             }
+        } else if(type == 'Q3'){
+            dat <- matrix(NA, N, 2L)
+            diag(res) <- 1
+            for(i in 1L:J){
+                ei <- extract.item(object, item=i)
+                EI <- expected.item(ei, Theta=Theta)
+                dat[ ,1L] <- object@data[ ,i] - EI
+                for(j in 1L:J){
+                    if(i < j){
+                        ej <- extract.item(object, item=i)
+                        EJ <- expected.item(ej, Theta=Theta)
+                        dat[,2L] <- object@data[ ,j] - EJ
+                        tmpdat <- na.omit(dat)
+                        n <- nrow(tmpdat)
+                        Sz <- sqrt(1 / (n-3))
+                        res[i,j] <- res[j,i] <- cor(tmpdat)[1L,2L]
+                    }
+                }
+            }
+            if(verbose) cat("Q3 matrix:\n\n")
+            res <- round(res,digits)
+            return(res)
+        } else {
+            stop('specified type does not exist')
         }
+
     }
 )
 
 #' Plot various test implied functions from models
 #'
 #' \code{plot(x, y, type = 'info', npts = 50, theta_angle = 45,
-#'                          which.items = 1:ncol(x@@data),
-#'                          rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-#'                          facet_items = FALSE, auto.key = TRUE, ...)}
+#'                           which.items = 1:ncol(x@@data),
+#'                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
+#'                           facet_items = TRUE, auto.key = TRUE, main = NULL,
+#'                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)}
 #'
 #' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
 #'   \code{MultipleGroupClass}
+#' @param y an arbitrary missing argument required for \code{R CMD check}
 #' @param type type of plot to view; can be \code{'info'} to show the test
 #'   information function, \code{'infocontour'} for the test information contours,
 #'   \code{'SE'} for the test standard error function, \code{'trace'} and \code{'infotrace'}
 #'   for all item probability information or trace lines (only available when all items are dichotomous),
-#'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} for
-#'   the expected total score. If \code{empiricalhist = TRUE} was used then the type \code{'empiricalhist'}
+#'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} and
+#'   \code{'scorecontour'} for the expected total score surface and contour plots.
+#'   If \code{empiricalhist = TRUE} was used in estimation then the type \code{'empiricalhist'}
 #'   also will be available to generate the empirical histogram plot
 #' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}.
 #'   If a vector is used then a bubble plot is created with the summed information across the angles specified
@@ -450,10 +564,17 @@ setMethod(
 #' @param rot allows rotation of the 3D graphics
 #' @param which.items numeric vector indicating which items to be used when plotting. Default is
 #'   to use all available items
-#' @param facet_items logical; apply grid of plots accross items? If \code{FALSE}, items will be 
-#'   placed in one plot for each group 
+#' @param facet_items logical; apply grid of plots across items? If \code{FALSE}, items will be
+#'   placed in one plot for each group
 #' @param auto.key logical parameter passed to the \code{lattice} package
-#' @param ... additional arguments to be passed
+#' @param ehist.cut a probability value indicating a threshold for excluding cases in empirical
+#'   histogram plots. Values larger than the default will include more points in the tails of the
+#'   plot, potentially squishing the 'meat' of the plot to take up less area than visually desired
+#' @param main argument passed to lattice. Default generated automatically
+#' @param drape logical argument passed to lattice. Default generated automatically
+#' @param colorkey logical argument passed to lattice. Default generated automatically
+#' @param add.ylab2 logical argument passed to lattice. Default generated automatically
+#' @param ... additional arguments to be passed to lattice
 #'
 #' @name plot-method
 #' @aliases plot,ExploratoryClass-method plot,ConfirmatoryClass-method
@@ -467,21 +588,22 @@ setMethod(
 #' plot(x)
 #' plot(x, type = 'trace')
 #' plot(x, type = 'infotrace')
-#' plot(x, type = 'infotrace', facet_items = TRUE)
+#' plot(x, type = 'infotrace', facet_items = FALSE)
 #' plot(x, type = 'infoSE')
-#' 
+#'
 #' set.seed(1234)
 #' group <- sample(c('g1','g2'), nrow(Science), TRUE)
 #' x2 <- multipleGroup(Science, 1, group)
 #' plot(x2)
 #' plot(x2, type = 'trace')
 #' plot(x2, type = 'trace', which.items = 1:2)
+#' plot(x2, type = 'trace', which.items = 1, facet_items = FALSE) #facet by group
 #' plot(x2, type = 'score')
-#' 
+#'
 #' x3 <- mirt(Science, 2)
 #' plot(x3)
 #' plot(x3, type = 'SE')
-#' 
+#'
 #' }
 setMethod(
     f = "plot",
@@ -489,12 +611,11 @@ setMethod(
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
                           which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-                          facet_items = FALSE, auto.key = TRUE, ...)
+                          facet_items = TRUE, auto.key = TRUE, main = NULL,
+                          drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)
     {
-        if (!type %in% c('info','infocontour', 'SE', 'trace', 'infotrace', 'infoSE', 'score', 'empiricalhist'))
-            stop(type, " is not a valid plot type.")
         if (any(theta_angle > 90 | theta_angle < 0))
-            stop('Improper angle specifed. Must be between 0 and 90.')
+            stop('Improper angle specified. Must be between 0 and 90.')
         if(length(theta_angle) > 1) type = 'infoangle'
         rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
         nfact <- x@nfact
@@ -528,7 +649,7 @@ setMethod(
             for(i in 1:J)
                 x@pars[[i]]@par[1:nfact] <- a[i, ]
         }
-        itemtrace <- computeItemtrace(x@pars, ThetaFull, x@itemloc)
+        itemtrace <- computeItemtrace(x@pars, ThetaFull, x@itemloc, CUSTOM.IND=x@CUSTOM.IND)
         score <- c()
         for(i in 1:J)
             score <- c(score, 0:(x@K[i]-1))
@@ -537,45 +658,69 @@ setMethod(
         if(nfact == 2){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2")
             plt$SE <- 1 / sqrt(plt$info)
-            if(type == 'infocontour')
+            if(type == 'infocontour'){
+                if(is.null(main))
+                    main <- paste("Test Information Contour")
                 return(contourplot(info ~ Theta1 * Theta2, data = plt,
-                                   main = paste("Test Information Contour"), xlab = expression(theta[1]),
+                                   main = main, xlab = expression(theta[1]),
                                    ylab = expression(theta[2])))
-            if(type == 'info')
-                return(wireframe(info ~ Theta1 + Theta2, data = plt, main = "Test Information",
+            } else if(type == 'scorecontour'){
+                if(is.null(main))
+                    main <- paste("Expected Score Contour")
+                    return(contourplot(score ~ Theta1 * Theta2, data = plt,
+                                       main = main, xlab = expression(theta[1]),
+                                       ylab = expression(theta[2])))
+            } else if(type == 'info'){
+                if(is.null(main))
+                    main <- "Test Information"
+                return(wireframe(info ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(I(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE))
-            if(type == 'score')
-                return(wireframe(score ~ Theta1 + Theta2, data = plt, main = "Expected Total Score",
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+            } else if(type == 'score'){
+                if(is.null(main))
+                    main <- "Expected Total Score"
+                return(wireframe(score ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE))
-            if(type == 'infoangle')
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+            } else if(type == 'infoangle'){
+                if(is.null(main))
+                    main <- 'Information across different angles'
                 symbols(plt[,2], plt[,3], circles = sqrt(plt[,1]/pi), inches = .35, fg='white', bg='blue',
                         xlab = expression(theta[1]), ylab = expression(theta[2]),
-                        main = 'Information across different angles')
-            if(type == 'SE')
-                return(wireframe(SE ~ Theta1 + Theta2, data = plt, main = "Test Standard Errors",
+                        main = main)
+            } else if(type == 'SE'){
+                if(is.null(main))
+                    main <- "Test Standard Errors"
+                return(wireframe(SE ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(SE(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE))
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+            } else {
+                stop('plot type not supported for two dimensional model')
+            }
         } else {
             colnames(plt) <- c("info", "score", "Theta")
             plt$SE <- 1 / sqrt(plt$info)
-            if(type == 'info')
-                return(xyplot(info~Theta, plt, type='l',main = 'Test Information',
+            if(type == 'info'){
+                if(is.null(main))
+                    main <- 'Test Information'
+                return(xyplot(info~Theta, plt, type='l', main = main,
                               xlab = expression(theta), ylab=expression(I(theta))))
-            if(type == 'infocontour')
-                cat('No \'contour\' plots for 1-dimensional models\n')
-            if(type == 'SE')
-                return(xyplot(SE~Theta, plt, type='l',main = 'Test Standard Errors',
+            } else if(type == 'SE'){
+                if(is.null(main))
+                    main <- 'Test Standard Errors'
+                return(xyplot(SE~Theta, plt, type='l', main = main,
                        xlab = expression(theta), ylab=expression(SE(theta))))
-            if(type == 'infoSE'){
-                obj1 <- xyplot(info~Theta, plt, type='l',main = 'Test Information and Standard Errors',
+            } else if(type == 'infoSE'){
+                if(is.null(main))
+                    main <- 'Test Information and Standard Errors'
+                obj1 <- xyplot(info~Theta, plt, type='l', main = main,
                                xlab = expression(theta), ylab=expression(I(theta)))
                 obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)))
                 if(!require(latticeExtra)) require(latticeExtra)
-                return(doubleYScale(obj1, obj2, add.ylab2 = TRUE))
-            }
-            if(type == 'trace'){
+                return(doubleYScale(obj1, obj2, add.ylab2 = add.ylab2))
+            } else if(type == 'trace'){
+                if(is.null(main))
+                    main <- 'Item trace lines'
                 P <- vector('list', length(which.items))
                 names(P) <- colnames(x@data)[which.items]
                 for(i in which.items){
@@ -591,12 +736,19 @@ setMethod(
                 for(i in 1L:length(nrs))
                     names <- c(names, rep(names(P)[i], nrs[i]))
                 plotobj <- data.frame(Pstack, item=names, Theta=Theta)
-                return(xyplot(P ~ Theta|item, plotobj, ylim = c(-0.1,1.1), group = cat,
-                              xlab = expression(theta), ylab = expression(P(theta)),
-                              auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
-                
-            }
-            if(type == 'infotrace'){
+                if(facet_items){
+                    return(xyplot(P ~ Theta|item, plotobj, ylim = c(-0.1,1.1), group = cat,
+                                  xlab = expression(theta), ylab = expression(P(theta)),
+                                  auto.key = auto.key, type = 'l', main = main, ...))
+                } else {
+                    return(xyplot(P ~ Theta, plotobj, group=item, ylim = c(-0.1,1.1),
+                                  xlab = expression(theta), ylab = expression(P(theta)),
+                                  auto.key = auto.key, type = 'l', main = main, ...))
+                }
+
+            } else if(type == 'infotrace'){
+                if(is.null(main))
+                    main <- 'Item information trace lines'
                 I <- matrix(NA, nrow(Theta), J)
                 for(i in which.items)
                     I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
@@ -605,20 +757,23 @@ setMethod(
                             labels = paste('Item', which.items))
                 plotobj <- data.frame(I = as.numeric(I), Theta=Theta, item=items)
                 if(facet_items){
-                    return(xyplot(I ~ Theta|item, plotobj, 
+                    return(xyplot(I ~ Theta|item, plotobj,
                                   xlab = expression(theta), ylab = expression(I(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                                  auto.key = auto.key, type = 'l', main = main, ...))
                 } else {
                     return(xyplot(I ~ Theta, plotobj, group = item,
                                   xlab = expression(theta), ylab = expression(I(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines', ...))
+                                  auto.key = auto.key, type = 'l', main = main, ...))
                 }
-            }
-            if(type == 'score')
+            } else if(type == 'score'){
+                if(is.null(main))
+                    main <- 'Expected Total Score'
                 return(xyplot(score ~ Theta, plt,
                               xlab = expression(theta), ylab = expression(Total(theta)),
-                              type = 'l', main = 'Expected Total Score', ...))
-            if(type == 'empiricalhist'){
+                              type = 'l', main = main, ...))
+            } else if(type == 'empiricalhist'){
+                if(is.null(main))
+                    main <- 'Empirical Histogram'
                 if(all(is.nan(x@Prior))) stop('Empirical histogram was not estimated for this object')
                 Theta <- as.matrix(seq(-(.8 * sqrt(x@quadpts)), .8 * sqrt(x@quadpts),
                                     length.out = x@quadpts))
@@ -626,46 +781,16 @@ setMethod(
                 cuts <- cut(Theta, floor(npts/2))
                 Prior <- do.call(c, lapply(split(Prior, cuts), mean))
                 Theta <- do.call(c, lapply(split(Theta, cuts), mean))
-                keep1 <- min(which(Prior > 1e-10))
-                keep2 <- max(which(Prior > 1e-10))
+                keep1 <- min(which(Prior > ehist.cut))
+                keep2 <- max(which(Prior > ehist.cut))
                 plt <- data.frame(Theta = Theta, Prior = Prior)
                 plt <- plt[keep1:keep2, , drop=FALSE]
                 return(xyplot(Prior ~ Theta, plt,
                               xlab = expression(theta), ylab = 'Expected Frequency',
-                              type = 'b', main = 'Empirical Histogram', ...))
+                              type = 'b', main = main, ...))
+            } else {
+                stop('plot not supported for unidimensional models')
             }
         }
-    }
-)
-
-#' Compute fitted values
-#'
-#' \code{fitted(object, digits = 3, ...)}
-#'
-#' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
-#'   \code{MultipleGroupClass}
-#' @param digits number of significant digits to be rounded
-#' @param ... additional arguments to be passed
-#'
-#' @name fitted-method
-#' @aliases fitted,ExploratoryClass-method fitted,ConfirmatoryClass-method
-#'   fitted,MultipleGroupClass-method
-#' @docType methods
-#' @rdname fitted-method
-#' @examples
-#'
-#' \dontrun{
-#' x <- mirt(Science, 1)
-#' fitted(x)
-#' }
-setMethod(
-    f = "fitted",
-    signature = signature(object = 'ExploratoryClass'),
-    definition = function(object, digits = 3, ...){
-        Exp <- round(nrow(object@data) * object@Pl,digits)
-        tabdata <- object@tabdata
-        Exp[is.na(rowSums(tabdata))] <- NA
-        tabdata <- cbind(tabdata,Exp)
-        return(tabdata)
     }
 )

@@ -54,23 +54,23 @@ setMethod(
 	definition = function(object, draws = 5000, G2 = TRUE)
 	{
         LLdraws <- function(LLDUMMY=NULL, nfact, N, grp, prodlist, fulldata, object, J, random, ot,
-                            NO.CUSTOM){
+                            CUSTOM.IND){
             theta <- mvtnorm::rmvnorm(N,grp$gmeans, grp$gcov)
             if(length(prodlist) > 0L)
                 theta <- prodterms(theta,prodlist)
             if(length(random) > 0L){
                 for(i in 1L:length(random)){
                     random[[i]]@drawvals <- DrawValues(x=random[[i]], Theta=theta, pars=pars,
-                                                fulldata=fulldata, itemloc=itemloc, offterm0=ot)
+                                                       fulldata=fulldata, itemloc=itemloc, 
+                                                       offterm0=ot, CUSTOM.IND=CUSTOM.IND)
                 }
                 ot <- OffTerm(random, J=J, N=N)
             }
             itemtrace <- computeItemtrace(pars=pars, Theta=theta, itemloc=itemloc, offterm=ot,
-                                          NO.CUSTOM=NO.CUSTOM)
-            return(exp(rowSums(log(itemtrace)*fulldata)))
+                                          CUSTOM.IND=CUSTOM.IND)
+            return(rowSums(log(itemtrace)*fulldata))
         }
         pars <- object@pars
-	    tol <- .Machine$double.eps
         fulldata <- object@fulldata
         prodlist <- object@prodlist
         itemloc <- object@itemloc
@@ -82,14 +82,10 @@ setMethod(
         if(length(object@random) == 0L){
             ot <- matrix(0, 1, J)
         } else ot <- OffTerm(object@random, J=J, N=N)
-        NO.CUSTOM <- !any(sapply(pars, class) %in% 'custom')
-        if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
-            LL <- parallel::parApply(cl=mirtClusterEnv$MIRTCLUSTER, LL, MARGIN=1, FUN=LLdraws, nfact=nfact,
-                                     N=N, grp=grp, prodlist=prodlist, fulldata=fulldata, object=object, J=J,
-                                     random=object@random, ot=ot, NO.CUSTOM=NO.CUSTOM)
-        } else for(draw in 1L:draws)
-            LL[ ,draw] <- LLdraws(nfact=nfact, N=N, grp=grp, prodlist=prodlist, NO.CUSTOM=NO.CUSTOM,
-                                  fulldata=fulldata, object=object, J=J, random=object@random, ot=ot)
+        LL <- t(myApply(X=LL, MARGIN=2L, FUN=LLdraws, nfact=nfact,
+                        N=N, grp=grp, prodlist=prodlist, fulldata=fulldata, object=object, J=J,
+                        random=object@random, ot=ot, CUSTOM.IND=object@CUSTOM.IND))
+        LL <- exp(LL)
         LL[is.nan(LL)] <- 0
         rwmeans <- rowMeans(LL)
         logLik <- sum(log(rwmeans))
@@ -102,23 +98,9 @@ setMethod(
 		data <- object@data
         tabdata <- object@tabdata
         r <- tabdata[,ncol(tabdata)]
-		expected <- rep(0,nrow(tabdata))
-		for (j in 1L:nrow(tabdata)){
-			TFvec <- colSums(ifelse(t(data) == tabdata[j,1L:J],1,0)) == J
-			TFvec[is.na(TFvec)] <- FALSE
-			expected[j] <- mean(rwmeans[TFvec])
-		}
-		expected[is.nan(expected)] <- NA
+        expected <- .Call('sumExpected', t(data), tabdata, rwmeans, J, mirtClusterEnv$ncores)
 		tabdata <- cbind(tabdata,expected*N)
         object@Pl <- expected
-		logN <- 0
-		logr <- rep(0,length(r))
-		for (i in 1L:N) logN <- logN + log(i)
-		for (i in 1L:length(r))
-			for (j in 1L:r[i])
-				logr[i] <- logr[i] + log(j)
-		if(sum(logr) != 0)
-			logLik <- logLik + logN/sum(logr)
         nestpars <- nconstr <- 0L
         for(i in 1:length(pars))
             nestpars <- nestpars + sum(pars[[i]]@est)
@@ -131,8 +113,9 @@ setMethod(
 			if(any(is.na(data))){
 			    object@G2 <- NaN
 			} else {
-                r <- r[!is.na(expected)]
-                expected <- expected[!is.na(expected)]
+                pick <- r != 0
+                r <- r[pick]
+                expected <- expected[pick]
 				G2 <- 2 * sum(r*log(r/(sum(r)*expected)))
                 df <- object@df
 				object@G2 <- G2
@@ -153,7 +136,7 @@ setMethod(
 setMethod(
     f = "calcLogLik",
     signature = signature(object = 'ConfirmatoryClass'),
-    definition = function(object, draws = 2000, G2 = TRUE)
+    definition = function(object, draws = 5000, G2 = TRUE)
     {
         class(object) <- 'ExploratoryClass'
         ret <- calcLogLik(object, draws=draws, G2=G2)

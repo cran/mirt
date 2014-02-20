@@ -4,29 +4,8 @@ setMethod(
     signature = signature(x = 'MultipleGroupClass'),
     definition = function(x)
     {
-        cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"),
-            "\n\n", sep = "")
-        cat("Full-information item factor analysis with ", x@nfact, " factors \n", sep="")
-        EMquad <- ''
-        if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
-        if(x@converge == 1)
-            cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
-        else
-            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
-        if(length(x@logLik) > 0){
-            cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0,
-                                                      paste(', SE = ', round(x@SElogLik,3)),
-                                                      ''), "\n",sep='')
-            cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
-            cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
-            if(!is.nan(x@p)){
-                cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
-                cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3),
-                    ", TLI = ", round(x@TLI,3), '\n\n', sep='')
-                for(g in 1:length(x@cmods))
-                    cat(as.character(x@groupNames[g]), " group: G2 = ", round(x@cmods[[g]]@G2,2), '\n', sep='')
-            }
-        }
+        class(x) <- 'ExploratoryClass'
+        print(x)
     }
 )
 
@@ -41,47 +20,13 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'MultipleGroupClass',
-    definition = function(object, CI = .95, digits = 3, rawug = FALSE, verbose = TRUE, ...)
+    definition = function(object, ...)
     {
-        if(CI >= 1 || CI <= 0)
-            stop('CI must be between 0 and 1')
-        z <- abs(qnorm((1 - CI)/2))
-        SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         ngroups <- length(object@cmods)
         allPars <- vector('list', ngroups)
         names(allPars) <- object@groupNames
-        itemnames <- colnames(object@data)
-        J <- length(itemnames)
-        for(g in 1:ngroups){
-            allPars[[g]] <- list()
-            if(length(object@cmods[[1]]@pars[[1]]@SEpar) > 0){
-                for(i in 1:(J+1)){
-                    allPars[[g]][[i]] <- round(
-                        matrix(c(object@cmods[[g]]@pars[[i]]@par,
-                                 object@cmods[[g]]@pars[[i]]@par - z*object@cmods[[g]]@pars[[i]]@SEpar,
-                                 object@cmods[[g]]@pars[[i]]@par + z*object@cmods[[g]]@pars[[i]]@SEpar),
-                               3, byrow = TRUE), digits)
-                    rownames(allPars[[g]][[i]]) <- c('par', SEnames)
-                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[1L]]@pars[[i]]@parnum)
-                }
-            } else {
-                for(i in 1:(J+1)){
-                    allPars[[g]][[i]] <- matrix(round(object@cmods[[g]]@pars[[i]]@par, digits), 1L)
-                    colnames(allPars[[g]][[i]]) <- names(object@cmods[[1L]]@pars[[i]]@parnum)
-                    rownames(allPars[[g]][[i]]) <- 'par'
-
-                }
-            }
-            names(allPars[[g]]) <- c(itemnames, 'GroupPars')
-        }
-        if(!rawug){
-            for(g in 1:ngroups){
-                allPars[[g]] <- lapply(allPars[[g]], function(x, digits){
-                    x[ , colnames(x) %in% c('g', 'u')] <- round(antilogit(x[ , colnames(x) %in% c('g', 'u')]), digits)
-                    x
-                }, digits=digits)
-            }
-        }
+        for(g in 1:ngroups)
+            allPars[[g]] <- coef(object@cmods[[g]], ...)
         return(allPars)
     }
 )
@@ -114,34 +59,10 @@ setMethod(
 setMethod(
     f = "anova",
     signature = signature(object = 'MultipleGroupClass'),
-    definition = function(object, object2, verbose = TRUE)
+    definition = function(object, object2, ...)
     {
-        nitems <- length(object@K)
-        if(length(object@df) == 0 || length(object2@df) == 0)
-            stop('Use \'logLik\' to obtain likelihood values')
-        df <- object@df - object2@df
-        if(df < 0){
-            tmp <- object
-            object <- object2
-            object2 <- tmp
-        }
-        X2 <- round(2*object2@logLik - 2*object@logLik, 3)
-        if(verbose){
-            cat('\nModel 1: ')
-            print(object@Call)
-            cat('Model 2: ')
-            print(object2@Call)
-            cat('\n')
-        }
-        ret <- cbind(AIC = c(object@AIC, object2@AIC),
-                          AICc = c(object@AICc, object2@AICc),
-                          SABIC = c(object@SABIC, object2@SABIC),
-                          BIC = c(object@BIC, object2@BIC),
-                          logLik = c(object@logLik, object2@logLik),
-                          X2 = c(NA, X2),
-                          df = c(NA, abs(df)),
-                          p = c(NA, round(1 - pchisq(X2,abs(df)),3)))
-        ret
+        class(object) <- 'ExploratoryClass'
+        anova(object, object2, ...)
     }
 )
 
@@ -151,7 +72,7 @@ setMethod(
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
                           which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-                          facet_items = FALSE, auto.key = TRUE, ...)
+                          facet_items = TRUE, auto.key = TRUE, ...)
     {
         if (!type %in% c('info','infocontour', 'SE', 'RE', 'score', 'empiricalhist', 'trace', 'infotrace'))
             stop(type, " is not a valid plot type.")
@@ -189,7 +110,8 @@ setMethod(
             message('Adjusted so that the lowest category score for every item is 0')
         gscore <- c()
         for(g in 1:ngroups){
-            itemtrace <- computeItemtrace(x@cmods[[g]]@pars, ThetaFull, x@itemloc)
+            itemtrace <- computeItemtrace(x@cmods[[g]]@pars, ThetaFull, x@itemloc, 
+                                          CUSTOM.IND=x@CUSTOM.IND)
             score <- c()
             for(i in 1:J)
                 score <- c(score, 0:(x@K[i]-1))
@@ -286,9 +208,15 @@ setMethod(
                     plt[[g]] <- plotobj
                 }
                 plt <- do.call(rbind, plt)
-                return(xyplot(P ~ Theta|item, plt, group = cat:group, ylim = c(-0.1,1.1),
-                       xlab = expression(theta), ylab = expression(P(theta)),
-                       auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+                if(facet_items){
+                    return(xyplot(P ~ Theta|item, plt, group = cat:group, ylim = c(-0.1,1.1),
+                           xlab = expression(theta), ylab = expression(P(theta)),
+                           auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+                } else {
+                    return(xyplot(P ~ Theta|group, plt, group = cat:item, ylim = c(-0.1,1.1),
+                                  xlab = expression(theta), ylab = expression(P(theta)),
+                                  auto.key = auto.key, type = 'l', main = 'Item trace lines', ...))
+                }
             }
             if(type == 'infotrace'){
                 plt <- vector('list', ngroups)
@@ -324,21 +252,12 @@ setMethod(
     {
         ret <- vector('list', length(object@groupNames))
         names(ret) <- object@groupNames
-        for(g in 1:length(ret))
-            ret[[g]] <- residuals(object@cmods[[g]], verbose = FALSE, ...)
-        ret
-    }
-)
-
-setMethod(
-    f = "fitted",
-    signature = signature(object = 'MultipleGroupClass'),
-    definition = function(object, ...)
-    {
-        ret <- vector('list', length(object@groupNames))
-        names(ret) <- object@groupNames
-        for(g in 1:length(ret))
-            ret[[g]] <- fitted(object@cmods[[g]], ...)
+        for(g in 1L:length(ret)){
+            cmod <- object@cmods[[g]]
+            cmod@quadpts <- object@quadpts
+            cmod@bfactor <- object@bfactor
+            ret[[g]] <- residuals(cmod, verbose = FALSE, ...)            
+        }
         ret
     }
 )

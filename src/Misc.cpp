@@ -1,4 +1,4 @@
-#include"Misc.h"
+#include "Misc.h"
 
 NumericMatrix polyOuter(const NumericMatrix &Thetas, const vector<double> &Pk,
 	const vector<double> &Pk_1, const vector<double> &PQ_1, const vector<double> &PQ,
@@ -21,25 +21,6 @@ NumericMatrix polyOuter(const NumericMatrix &Thetas, const vector<double> &Pk,
 				    outer(i,j) - Pk[n] * (1.0 - Pk[n]) * (1.0 - 2.0 * Pk[n]) * outer(i,j)));
 	}
 	return d2Louter;
-}
-
-void itemTrace(vector<double> &P, vector<double> &Pstar, const vector<double> &a, const double *d,
-        const NumericMatrix &Theta, const double *g, const double *u, const vector<double> &ot)
-{
-    const int nquad = Theta.nrow();
-    const int nfact = Theta.ncol();
-    const int USEOT = ot.size() > 1;
-
-	for (int i = 0; i <	nquad; ++i){
-        double z = *d;
-    	for (int j = 0; j <	nfact; ++j)
-			z += a[j] * Theta(i,j);
-        if(USEOT) z += ot[i];
-        if(z > ABS_MAX_Z) z = ABS_MAX_Z;
-        else if(z < -ABS_MAX_Z) z = -ABS_MAX_Z;
-        Pstar[i] = 1.0 / (1.0 + exp(-z));
-    	P[i] = *g + (*u - *g) * Pstar[i];
-	}
 }
 
 RcppExport SEXP reloadPars(SEXP Rlongpars, SEXP Rpars, SEXP Rngroups, SEXP RJ)
@@ -71,7 +52,7 @@ RcppExport SEXP reloadPars(SEXP Rlongpars, SEXP Rpars, SEXP Rngroups, SEXP RJ)
 }
 
 RcppExport SEXP denRowSums(SEXP Rfulldata, SEXP Ritemtrace0, SEXP Ritemtrace1,
-    SEXP Rlog_den0, SEXP Rlog_den1)
+    SEXP Rlog_den0, SEXP Rlog_den1, SEXP Rncores)
 {
     BEGIN_RCPP
 
@@ -80,10 +61,12 @@ RcppExport SEXP denRowSums(SEXP Rfulldata, SEXP Ritemtrace0, SEXP Ritemtrace1,
     const NumericMatrix itemtrace1(Ritemtrace1);
     const vector<double> log_den0 = as< vector<double> >(Rlog_den0);
     const vector<double> log_den1 = as< vector<double> >(Rlog_den1);
+    const int ncores = as<int>(Rncores);
     List ret;
     vector<double> Sum0(fulldata.nrow()), Sum1(fulldata.nrow());
+    omp_set_num_threads(ncores);
 
-
+#pragma omp parallel for
     for(int i = 0; i < fulldata.nrow(); ++i){
         double rs0 = 0.0;
         double rs1 = 0.0;
@@ -101,6 +84,42 @@ RcppExport SEXP denRowSums(SEXP Rfulldata, SEXP Ritemtrace0, SEXP Ritemtrace1,
     ret["total_1"] = wrap(Sum1);
     return(ret);
 	END_RCPP
+}
+
+RcppExport SEXP sumExpected(SEXP Rtdata, SEXP Rtabdata, SEXP Rrwmeans, SEXP Rnitems, SEXP Rncores)
+{
+    BEGIN_RCPP
+
+    const IntegerMatrix tdata(Rtdata);
+    const IntegerMatrix tabdata(Rtabdata);
+    const NumericVector rwmeans(Rrwmeans);
+    const int ncores = as<int>(Rncores);
+    const int nitems = as<int>(Rnitems);
+    const int N = tdata.ncol();
+    const int n = tabdata.nrow();
+    const int J = tdata.nrow();
+    vector<double> expected(n);
+    omp_set_num_threads(ncores);
+
+#pragma omp parallel for
+    for(int i = 0; i < n; ++i){
+        int count = 0;
+        double tempexp = 0.0;
+        for(int NN = 0; NN < N; ++NN){
+            int tmp = 0;
+            for(int j = 0; j < J; ++j)
+                tmp += tabdata(i, j) == tdata(j, NN);
+            if(tmp == nitems){
+                count += 1;
+                tempexp = tempexp + rwmeans(NN);
+            }
+        }
+        if(count) expected[i] = tempexp / count;
+    }
+
+    return(wrap(expected));
+
+    END_RCPP
 }
 
 double antilogit(const double *x){

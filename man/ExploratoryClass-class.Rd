@@ -54,16 +54,23 @@
   or 'MHRM'} \item{\code{null.mod}:}{Object of class
   \code{"ExploratoryClass"}, null model}
   \item{\code{Target}:}{Object of class \code{"numeric"},
-  dummy rotation matrix} \item{\code{Call}:}{Object of
-  class \code{"call"}, call } }
+  dummy rotation matrix} \item{\code{condnum}:}{Object of
+  class \code{"numeric"}, condition number of information
+  matrix} \item{\code{secondordertest}:}{Object of class
+  \code{"logical"}, indicate whether information matrix
+  passes second-order test} \item{\code{bfactor}:}{Object
+  of class \code{"list"}, an empty list}
+  \item{\code{CUSTOM.IND}:}{Object of class
+  \code{"integer"}, an internal index}
+  \item{\code{SLOW.IND}:}{Object of class \code{"integer"},
+  an internal index} \item{\code{Call}:}{Object of class
+  \code{"call"}, call } }
 }
 
 \section{Methods}{
   \describe{ \item{anova}{\code{signature(object =
   "ExploratoryClass")}} \item{coef}{\code{signature(object
-  = "ExploratoryClass")}}
-  \item{fitted}{\code{signature(object =
-  "ExploratoryClass")}} \item{plot}{\code{signature(x =
+  = "ExploratoryClass")}} \item{plot}{\code{signature(x =
   "ExploratoryClass", y = "missing")}}
   \item{print}{\code{signature(x = "ExploratoryClass")} }
   \item{residuals}{\code{signature(object =

@@ -12,7 +12,7 @@ setClass("GroupPars",
                         lbound='numeric',
                         ubound='numeric',
                         any.prior='logical',
-                        prior.type='character',
+                        prior.type='integer',
                         prior_1='numeric',
                         prior_2='numeric')
 )
@@ -32,7 +32,7 @@ setClass("RandomPars",
                         drawvals='matrix',
                         mtch='numeric',
                         any.prior='logical',
-                        prior.type='character',
+                        prior.type='integer',
                         prior_1='numeric',
                         prior_2='numeric')
 )
@@ -55,7 +55,7 @@ setClass("AllItemsClass",
                         lbound='numeric',
                         ubound='numeric',
                         any.prior='logical',
-                        prior.type='character',
+                        prior.type='integer',
                         prior_1='numeric',
                         prior_2='numeric',
                         'VIRTUAL')
@@ -101,6 +101,8 @@ setGeneric('ExtractZetas', function(x) standardGeneric("ExtractZetas"))
 setGeneric('Deriv', function(x, Theta, ...) standardGeneric("Deriv"))
 
 setGeneric('DerivTheta', function(x, Theta) standardGeneric("DerivTheta"))
+
+setGeneric('dP', function(x, Theta, prior, ...) standardGeneric("dP"))
 
 setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))
 

@@ -38,7 +38,11 @@ setClass("AllModelClass",
                         method='character',
                         itemtype='character',
                         time='numeric',
+                        condnum='numeric',
+                        secondordertest='logical',
                         CFI='numeric',
+                        CUSTOM.IND='integer',
+                        SLOW.IND='integer',
                         'VIRTUAL'),
              validity = function(object) return(TRUE)
 )
@@ -80,6 +84,12 @@ setClass("AllModelClass",
 #'     \item{\code{esttype}:}{Object of class \code{"character"}, indicates whether estimation was 'EM' or 'MHRM'}
 #'     \item{\code{null.mod}:}{Object of class \code{"ExploratoryClass"}, null model}
 #'     \item{\code{Target}:}{Object of class \code{"numeric"}, dummy rotation matrix}
+#'     \item{\code{condnum}:}{Object of class \code{"numeric"}, condition number of information matrix}
+#'     \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
+#'       second-order test}
+#'     \item{\code{bfactor}:}{Object of class \code{"list"}, an empty list}
+#'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
+#'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{Call}:}{Object of class \code{"call"}, call }
 #' }
 #' @section Methods:
@@ -87,7 +97,6 @@ setClass("AllModelClass",
 #' \describe{
 #'     \item{anova}{\code{signature(object = "ExploratoryClass")}}
 #'     \item{coef}{\code{signature(object = "ExploratoryClass")}}
-#'     \item{fitted}{\code{signature(object = "ExploratoryClass")}}
 #'     \item{plot}{\code{signature(x = "ExploratoryClass", y = "missing")}}
 #'     \item{print}{\code{signature(x = "ExploratoryClass")} }
 #'     \item{residuals}{\code{signature(object = "ExploratoryClass")}}
@@ -105,7 +114,8 @@ setClass(
     Class = 'ExploratoryClass', contains = 'AllModelClass',
     representation = representation(Pl='numeric',
                                     Target='numeric',
-                                    rotate='character'),
+                                    rotate='character',
+                                    bfactor='list'),
     validity = function(object) return(TRUE)
 )
 
@@ -149,6 +159,12 @@ setClass(
 #'     \item{\code{esttype}:}{Object of class \code{"character"}, indicates whether estimation was 'EM' or 'MHRM'}
 #'     \item{\code{random}:}{Object of class \code{"list"}, typicall null, except for internal mixed model usage}
 #'     \item{\code{null.mod}:}{Object of class \code{"ExploratoryClass"}, null model}
+#'     \item{\code{condnum}:}{Object of class \code{"numeric"}, condition number of information matrix}
+#'     \item{\code{bfactor}:}{Object of class \code{"list"}, contains information from bfactor() estimation}
+#'     \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
+#'       second-order test}
+#'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
+#'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{Call}:}{Object of class \code{"call"}, call }
 #'   }
 #' @section Methods:
@@ -161,7 +177,6 @@ setClass(
 #'    \item{summary}{\code{signature(object = "ConfirmatoryClass")} }
 #'    \item{logLik}{\code{signature(object = "ConfirmatoryClass")} }
 #'    \item{anova}{\code{signature(object = "ConfirmatoryClass")} }
-#'    \item{fitted}{\code{signature(object = "ConfirmatoryClass")} }
 #' }
 #'
 #' @name ConfirmatoryClass-class
@@ -175,7 +190,8 @@ setClass(
     Class = 'ConfirmatoryClass', contains = 'AllModelClass',
     representation = representation(Pl='numeric',
                                     random='list',
-                                    Prior='numeric'),
+                                    Prior='numeric',
+                                    bfactor='list'),
     validity = function(object) return(TRUE)
 )
 
@@ -222,6 +238,12 @@ setClass(
 #'    \item{\code{group}:}{Object of class \code{"factor"}, group membership}
 #'    \item{\code{groupNames}:}{Object of class \code{"character"}, names of groups}
 #'    \item{\code{cmods}:}{Object of class \code{"list"}, a list containing estimated ConfirmatoryClass models }
+#'    \item{\code{condnum}:}{Object of class \code{"numeric"}, condition number of information matrix}
+#'     \item{\code{bfactor}:}{Object of class \code{"list"}, contains information from bfactor() estimation}
+#'    \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
+#'       second-order test}
+#'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
+#'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'    \item{\code{Call}:}{Object of class \code{"call"}, call }
 #'  }
 #' @section Methods:
@@ -247,7 +269,8 @@ setClass(
                                     groupNames='factor',
                                     invariance='character',
                                     cmods='list',
-                                    Prior='list'),
+                                    Prior='list',
+                                    bfactor='list'),
     validity = function(object) return(TRUE)
 )
 
@@ -289,6 +312,11 @@ setClass(
 #'    \item{\code{cand.t.var}:}{Object of class \code{"numeric"}, parameter used to control the MH sampler for Theta}
 #'    \item{\code{random}:}{Object of class \code{"list"}, typicall null, except for internal mixed model usage}
 #'    \item{\code{null.mod}:}{Object of class \code{"ExploratoryClass"}, null model}
+#'    \item{\code{condnum}:}{Object of class \code{"numeric"}, condition number of information matrix}
+#'    \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
+#'       second-order test}
+#'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
+#'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'    \item{\code{Call}:}{Object of class \code{"call"}, call }
 #'  }
 #' @section Methods:
@@ -301,7 +329,6 @@ setClass(
 #'    \item{summary}{\code{signature(object = "MixedClass")} }
 #'    \item{logLik}{\code{signature(object = "MixedClass")} }
 #'    \item{anova}{\code{signature(object = "MixedClass")} }
-#'    \item{fitted}{\code{signature(object = "MixedClass")} }
 #'   }
 #'
 #' @name MixedClass-class

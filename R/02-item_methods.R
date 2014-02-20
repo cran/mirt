@@ -270,7 +270,7 @@ setMethod(
     signature = signature(x = 'gpcm'),
     definition = function(x){
         par <- x@par
-        d <- par[-(1L:x@nfact)]
+        d <- par[(length(par)-x@ncat+1L):length(par)]
         d
     }
 )
@@ -280,7 +280,7 @@ setMethod(
     signature = signature(x = 'rsm'),
     definition = function(x){
         par <- x@par
-        d <- par[-(1L:x@nfact)]
+        d <- par[(length(par) - x@ncat):length(par)]
         d
     }
 )
@@ -444,29 +444,27 @@ setMethod(
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        P <- P.mirt(x@par, Theta=Theta, asMatrix=TRUE, ot=ot)
+        P <- P.mirt(x@par, Theta=Theta, ot=ot)
         return(P)
     }
 )
 
 P.mirt <- function(par, Theta, asMatrix = FALSE, ot = 0)
 {
-    return(.Call("traceLinePts", par, Theta, asMatrix, ot, FALSE))
+    return(.Call("traceLinePts", par, Theta, ot))
 }
 
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'nestlogit', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        if(nrow(x@fixed.design) > 1L && useDesign)
-            Theta <- cbind(x@fixed.design, Theta)
         return(P.nestlogit(x@par, Theta=Theta, correct=x@correctcat, ncat=x@ncat))
     }
 )
 
 P.nestlogit <- function(par, Theta, correct, ncat)
 {
-    return(.Call("nestlogitTraceLinePts", par, Theta, correct, ncat, FALSE))
+    return(.Call("nestlogitTraceLinePts", par, Theta, correct, ncat))
 }
 
 setMethod(
@@ -533,33 +531,27 @@ setMethod(
     f = "ProbTrace",
     signature = signature(x = 'nominal', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        a <- x@par[1L:x@nfact]
-        ak <- x@par[(x@nfact+1L):(x@nfact + x@ncat)]
-        d <- x@par[(length(x@par) - x@ncat + 1L):length(x@par)]
         if(nrow(x@fixed.design) > 1L && useDesign)
             Theta <- cbind(x@fixed.design, Theta)
-        return(P.nominal(a=a, ak=ak, d=d, Theta=Theta, ot=ot))
+        return(P.nominal(par=x@par, ncat=x@ncat, Theta=Theta, ot=ot))
     }
 )
 
-#d[1] == 0, ak[1] == 0, ak[length(ak)] == length(ak) - 1
-P.nominal <- function(a, ak, d, Theta, returnNum = FALSE, ot = 0){
-    return(.Call("nominalTraceLinePts", a, ak, d, Theta, returnNum, ot))
+P.nominal <- function(par, ncat, Theta, returnNum = FALSE, ot = 0){
+    return(.Call("nominalTraceLinePts", par, ncat, Theta, returnNum, ot))
 }
 
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'partcomp', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        if(nrow(x@fixed.design) > 1L && useDesign)
-            Theta <- cbind(x@fixed.design, Theta)
-        return(P.comp(x@par, Theta=Theta, asMatrix=TRUE))
+        return(P.comp(x@par, Theta=Theta))
     }
 )
 
-P.comp <- function(par, Theta, asMatrix = FALSE, ot = 0)
+P.comp <- function(par, Theta, ot = 0)
 {
-    return(.Call('partcompTraceLinePts', par, Theta, asMatrix, ot, FALSE))
+    return(.Call('partcompTraceLinePts', par, Theta))
 }
 
 #----------------------------------------------------------------------------
@@ -601,7 +593,7 @@ setMethod("initialize",
 setMethod(
     f = "DrawValues",
     signature = signature(x = 'RandomPars', Theta = 'matrix'),
-    definition = function(x, Theta, pars, fulldata, itemloc, offterm0){
+    definition = function(x, Theta, pars, fulldata, itemloc, offterm0, CUSTOM.IND){
         J <- length(pars) - 1L
         theta0 <- x@drawvals
         N <- nrow(theta0)
@@ -625,22 +617,20 @@ setMethod(
             offterm1 <- matrix(tmp1, nrow(itemtrace0), J, byrow = TRUE)
         }
         offterm1 <- offterm1 + offterm0
-        for (i in 1L:J){
-            itemtrace0[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-                ProbTrace(x=pars[[i]], Theta=Theta, ot=offterm0[,i])
-            itemtrace1[ ,itemloc[i]:(itemloc[i+1L] - 1L)] <-
-                ProbTrace(x=pars[[i]], Theta=Theta, ot=offterm1[,i])
-        }
+        itemtrace0 <- computeItemtrace(pars, Theta=Theta, offterm=offterm0, 
+                                       itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+        itemtrace1 <- computeItemtrace(pars, Theta=Theta, offterm=offterm1, 
+                                       itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
         if(x@between){
             totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1,
-                            rep(0, nrow(fulldata)), rep(0, nrow(fulldata)))
+                            rep(0, nrow(fulldata)), rep(0, nrow(fulldata)), mirtClusterEnv$ncores)
             total_0 <- totals[[1L]]
             total_1 <- totals[[2L]]
             total_0 <- tapply(total_0, x@mtch, sum) + log_den0
             total_1 <- tapply(total_1, x@mtch, sum) + log_den1
         } else {
             totals <- .Call('denRowSums', t(fulldata), t(itemtrace0), t(itemtrace1),
-                            rep(0, ncol(fulldata)), rep(0, ncol(fulldata)))
+                            rep(0, ncol(fulldata)), rep(0, ncol(fulldata)), mirtClusterEnv$ncores)
             tmp0 <- totals[[1L]]
             tmp1 <- totals[[2L]]
             LL0 <- LL1 <- numeric(J)
