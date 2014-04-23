@@ -20,7 +20,7 @@ setMethod(
 setMethod(
     f = "summary",
     signature = 'ConfirmatoryClass',
-    definition = function(object, suppress = 0, digits = 3, verbose = TRUE, ...)
+    definition = function(object, suppress = 0, digits = 3, verbose = TRUE, printCI = NA, ...)
     {
         nfact <- ncol(object@F)
         itemnames <- colnames(object@data)
@@ -33,14 +33,28 @@ setMethod(
         Phi <- gpars$gcov
         Phi <- round(Phi, digits)
         colnames(Phi) <- rownames(Phi) <- paste('F',1:ncol(Phi), sep='')
+        Flist <- list()
         if(verbose){
             cat("\nFactor loadings metric: \n")
             print(cbind(F, h2),digits)
             cat("\nSS loadings: ",round(SS,digits), "\n")
             cat("\nFactor covariance: \n")
             print(Phi)
+            if(!is.na(printCI)){
+                Flist <- Lambdas(object@pars, Names=itemnames, explor=FALSE, alpha=1-printCI)
+                cat("\n----------------------------------------------------")
+                cat("\n", paste0(printCI*100,"%"), "Confidence Intervals for Standardized Loadings: \n")  
+                lb <- paste0('(', (1-printCI)/2, ')')
+                ub <- paste0('(', printCI + (1-printCI)/2, ')')
+                lo <- paste0(colnames(F), lb)
+                hi <- paste0(colnames(F), ub)
+                tmp <- data.frame(round(Flist$lower, digits),"."='.', 
+                                  round(Flist$upper, digits))
+                colnames(tmp) <- c(lo, '.', hi)
+                print(tmp)
+            }
         }
-        invisible(list(F=F, fcor=Phi))
+        invisible(list(F=F, fcor=Phi, lower=Flist$lower, upper=Flist$upper))
     }
 )
 
@@ -99,9 +113,10 @@ mirt2traditional <- function(x){
         names(par) <- c('a', paste0('b', 1:(length(par)-1)))
     } else if(cls == 'gpcm'){
         ds <- par[-1]/par[1]
-        newd <- numeric(length(ds)/2)
-        for(i in 1:length(newd))
-            newd[i] <- -(ds[i+length(newd)] - ds[i])
+        ds <- ds[-c(1L:ncat)]
+        newd <- numeric(length(ds)-1L)
+        for(i in 2:length(ds))
+            newd[i-1L] <- -(ds[i] - ds[i-1L])
         par <- c(par[1], newd)
         names(par) <- c('a', paste0('b', 1:length(newd)))
     } else if(cls == 'nominal'){
@@ -128,4 +143,42 @@ mirt2traditional <- function(x){
     }
     ret <- matrix(par, 1L, dimnames=list('par', names(par)))
     ret
+}
+
+traditional2mirt <- function(x, cls, ncat, digits = 3){
+    if(cls == 'dich'){
+        par <- x
+        par[2L] <- -par[2L]*par[1L]
+        names(par) <- c('a1', 'd', 'g', 'u')
+    } else if(cls == 'graded'){
+        par <- x
+        for(i in 2L:ncat)
+            par[i] <- -par[i]*par[1L]
+        names(par) <- c('a1', paste0('d', 1:(length(par)-1)))        
+    } else if(cls == 'gpcm'){
+        par <- c(x[1L], 0L:(ncat-1L), 0, x[-1L])
+        ds <- -par[-c(1:(ncat+1))]*par[1]
+        newd <- numeric(length(ds))
+        for(i in length(ds):2L)
+            newd[i] <- (ds[i] + ds[i-1L])
+        for(i in length(newd):3L)
+            newd[i] <- newd[i] + newd[i-2L]
+        par <- c(par[1:(ncat+1)], newd)
+        names(par) <- c('a1', paste0('ak', 0:(ncat-1)), paste0('d', 0:(ncat-1)))
+    } else if(cls == 'nominal'){
+        as <- x[1L:(length(x)/2)]
+        ds <- x[-c(1L:(length(x)/2))]
+        a1 <- (as[ncat] - as[1L]) / (ncat-1L)
+        ak <- 1:ncat - 1
+        for(i in 2:(ncat-1))
+            ak[i] <- -(as[1L] - as[i]) / a1
+        dk <- ak
+        for(i in 2:ncat)
+            dk[i] <- ds[i] - ds[1L]
+        par <- c(a1, ak, dk)
+        names(par) <- c('a1', paste0('ak', 0:(ncat-1)), paste0('d', 0:(ncat-1)))
+    } else {
+        stop('traditional2mirt item class not supported')
+    }
+    par
 }

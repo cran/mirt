@@ -3,16 +3,13 @@
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-  mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-    SE = FALSE, SE.type = "SEM", method = "EM",
-    pars = NULL, constrain = NULL, parprior = NULL,
-    calcNull = TRUE, draws = 5000, rotate = "oblimin",
-    Target = NaN, quadpts = NULL, TOL = NULL,
-    grsm.block = NULL, rsm.block = NULL, key = NULL,
-    nominal.highlow = NULL, large = FALSE,
-    GenRandomPars = FALSE, accelerate = TRUE,
-    empiricalhist = FALSE, verbose = TRUE,
-    technical = list(), ...)
+mirt(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
+  SE.type = "crossprod", method = "EM", pars = NULL, constrain = NULL,
+  parprior = NULL, calcNull = TRUE, draws = 5000, rotate = "oblimin",
+  Target = NaN, quadpts = NULL, TOL = NULL, grsm.block = NULL,
+  rsm.block = NULL, key = NULL, nominal.highlow = NULL, large = FALSE,
+  GenRandomPars = FALSE, accelerate = TRUE, empiricalhist = FALSE,
+  verbose = TRUE, technical = list(), ...)
 }
 \arguments{
   \item{data}{a \code{matrix} or \code{data.frame} that
@@ -176,19 +173,19 @@ Theory)}
   \item{TOL}{convergence threshold for EM or MH-RM;
   defaults are .0001 and .001. If \code{SE.type = 'SEM'}
   and this value is not specified, the default is set to
-  \code{1e-6}. If \code{empiricalhist = TRUE} and
+  \code{1e-5}. If \code{empiricalhist = TRUE} and
   \code{TOL} is not specified then the default \code{3e-5}
   will be used}
 
-  \item{large}{a logical, indicating whether the internal
-  collapsed data should be returned, or list of internally
-  computed mirt parameters containing the data. If
-  \code{TRUE} a list containing the organized data used
-  prior to estimation is returned. This list object can
-  then be passed back into \code{large} to avoid
-  reorganizing the data in every estimation (useful when
-  the dataset are very large and computing the tabularized
-  data is computationally burdensome).
+  \item{large}{either a \code{logical}, indicating whether
+  the internal collapsed data should be returned, or a
+  \code{list} of internally computed data tables. If
+  \code{TRUE} is passed, a list containing the organized
+  tables is returned. This list object can then be passed
+  back into \code{large} to avoid reorganizing the data
+  again (useful when the dataset are very large and
+  computing the tabulated data is computationally
+  burdensome).
 
   The best strategy for large data is to always pass the
   internal data to the estimation function, shown below:
@@ -237,7 +234,7 @@ Theory)}
   values will take longer but may be more stable for
   computing the information matrix. Default is .0001.
 
-  If \code{SE.type = 'SEM'}, this is the tollerance used to
+  If \code{SE.type = 'SEM'}, this is the tolerance used to
   terminate the S-EM computations for each parameter, and
   if not specified the default is \code{.001}}
   \item{NCYCLES}{maximum number of EM or MH-RM cycles;
@@ -275,52 +272,57 @@ Theory)}
   (\code{mixedmirt()} requires additional values for random
   effect).  If null, these values are determined
   internally, attempting to make the draws between .1 and
-  .4} }}
+  .4} \item{Moptim}{Choose which optimizer to use. By
+  default the EM algorithm with use the \code{'BFGS'} when
+  there are no upper and lower bounds, and
+  \code{'L-BFGS-B'} when there are. The
+  \code{'Nelder-Mead'} and \code{'SANN'} estimators may
+  also be used, though their routine use generally is not
+  required. The MH-RM algorithm uses the Newton-Raphson by
+  default, and currently cannot be changed} }}
 
   \item{...}{additional arguments to be passed}
 }
 \description{
-  \code{mirt} fits an unconditional maximum likelihood
-  factor analysis model to dichotomous and polytomous data
-  under the item response theory paradigm. Fits univariate
-  and multivariate Rasch, 2-4PL, graded, (generalized)
-  partial credit, nominal, graded rating scale, Rasch
-  rating scale, nested logistic, and partially compensatory
-  models using the traditional EM algorithm or Cai's (2010)
-  Metropolis-Hastings Robbins-Monro (MH-RM) algorithm. User
-  defined item classes can also be defined using the
-  \code{\link{createItem}} function. Models may also
-  contain 'explanatory' person or item level predictors,
-  though these can only be included by using the
-  \code{\link{mixedmirt}} function. Tests that form a
-  two-tier or bi-factor structure should be estimated with
-  the \code{\link{bfactor}} function, which uses a
-  dimension reduction EM algorithm for modeling item
-  parcels. Multiple group analyses (useful for DIF testing)
-  are also available using the \code{\link{multipleGroup}}
-  function.
+\code{mirt} fits an unconditional maximum likelihood factor
+analysis model to dichotomous and polytomous data under the
+item response theory paradigm. Fits univariate and
+multivariate Rasch, 2-4PL, graded, (generalized) partial
+credit, nominal, graded rating scale, Rasch rating scale,
+nested logistic, and partially compensatory models using
+the traditional EM algorithm or Cai's (2010)
+Metropolis-Hastings Robbins-Monro (MH-RM) algorithm. User
+defined item classes can also be defined using the
+\code{\link{createItem}} function. Models may also contain
+'explanatory' person or item level predictors, though these
+can only be included by using the \code{\link{mixedmirt}}
+function. Tests that form a two-tier or bi-factor structure
+should be estimated with the \code{\link{bfactor}}
+function, which uses a dimension reduction EM algorithm for
+modeling item parcels. Multiple group analyses (useful for
+DIF testing) are also available using the
+\code{\link{multipleGroup}} function.
 }
 \details{
-  \code{mirt} follows the item factor analysis strategy by
-  marginal maximum likelihood estimation (MML) outlined in
-  Bock and Aiken (1981), Bock, Gibbons and Muraki (1988),
-  and Muraki and Carlson (1995). Nested models may be
-  compared via the approximate chi-squared difference test
-  or by a reduction in AIC/BIC values (comparison via
-  \code{\link{anova}}).
+\code{mirt} follows the item factor analysis strategy by
+marginal maximum likelihood estimation (MML) outlined in
+Bock and Aiken (1981), Bock, Gibbons and Muraki (1988), and
+Muraki and Carlson (1995). Nested models may be compared
+via the approximate chi-squared difference test or by a
+reduction in AIC/BIC values (comparison via
+\code{\link{anova}}).
 
-  \code{summary} and \code{coef} allow for all the
-  rotations available from the \code{GPArotation} package
-  (e.g., \code{rotate = 'oblimin'}) as well as a
-  \code{'promax'} rotation. Using \code{plot} will plot the
-  test information function or the test standard errors for
-  1 and 2 dimensional solutions, or all item trace lines if
-  only 1 dimensional the test is only dichotomous items. To
-  examine individual item plots use \code{\link{itemplot}}.
-  Residuals are computed using the LD statistic (Chen &
-  Thissen, 1997) in the lower diagonal of the matrix
-  returned by \code{residuals}, and Cramer's V above the
-  diagonal.
+\code{summary} and \code{coef} allow for all the rotations
+available from the \code{GPArotation} package (e.g.,
+\code{rotate = 'oblimin'}) as well as a \code{'promax'}
+rotation. Using \code{plot} will plot the test information
+function or the test standard errors for 1 and 2
+dimensional solutions, or all item trace lines if only 1
+dimensional the test is only dichotomous items. To examine
+individual item plots use \code{\link{itemplot}}. Residuals
+are computed using the LD statistic (Chen & Thissen, 1997)
+in the lower diagonal of the matrix returned by
+\code{residuals}, and Cramer's V above the diagonal.
 }
 \section{Confirmatory and Exploratory IRT}{
   Specification of the confirmatory item factor analysis
@@ -399,7 +401,7 @@ Theory)}
   genuine maximum-likelihood parameter estimates may be
   difficult to find. Additionally, it is recommended that
   at least 400 cycles are run through to approximate the
-  obsevered information matrix accurately, which can be
+  observed information matrix accurately, which can be
   accomplished either by decreasing the \code{TOL} criteria
   or setting \code{SE = TRUE}.
 }
@@ -444,7 +446,7 @@ Theory)}
   \eqn{a_1 = 1}, and the latent variance of \eqn{\theta_1}
   is freely estimated.
 
-  In the nominal model this parametrizations helps to
+  In the nominal model this parametrization helps to
   identify the empirical ordering of the categories by
   inspecting the \eqn{ak} values. Larger values indicate
   that the item category is more positively related to the
@@ -499,7 +501,8 @@ data <- expand.table(LSAT7)
 
 (mod1 <- mirt(data, 1))
 coef(mod1)
-(mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with SEM method
+(mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with crossprod method
+(mod2 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM')) #standard errors with SEM method
 coef(mod2)
 (mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
 residuals(mod1)
@@ -510,7 +513,7 @@ plot(mod1, type = 'trace') #trace lines
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
 coef(mod1.3PL)
 #internally g and u pars are stored as logits, so usually a good idea to include normal prior
-#  to help stabilize the paramteres. For a value around .182 use a mean
+#  to help stabilize the parameters. For a value around .182 use a mean
 #  of -1.5 (since 1 / (1 + exp(-(-1.5))) == .182)
 (mod1.3PL.norm <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'),
     parprior = list(c(19, 'norm', -1.5, 3))))
@@ -544,7 +547,7 @@ cmodel <- mirt.model('
 cmod <- mirt(data, cmodel)
 coef(cmod)
 anova(cmod, mod2)
-#check if identified by looking at second order condition
+#check if identified by computing information matrix
 (cmod <- mirt(data, cmodel, SE = T))
 
 ###########
@@ -786,101 +789,102 @@ histogram(ThetaSkew, breaks=30)
 }
 }
 \author{
-  Phil Chalmers \email{rphilip.chalmers@gmail.com}
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
-  Andrich, D. (1978). A rating scale formulation for
-  ordered response categories. \emph{Psychometrika, 43},
-  561-573.
+Andrich, D. (1978). A rating scale formulation for ordered
+response categories. \emph{Psychometrika, 43}, 561-573.
 
-  Bock, R. D., & Aitkin, M. (1981). Marginal maximum
-  likelihood estimation of item parameters: Application of
-  an EM algorithm. \emph{Psychometrika, 46}(4), 443-459.
+Bock, R. D., & Aitkin, M. (1981). Marginal maximum
+likelihood estimation of item parameters: Application of an
+EM algorithm. \emph{Psychometrika, 46}(4), 443-459.
 
-  Bock, R. D., Gibbons, R., & Muraki, E. (1988).
-  Full-Information Item Factor Analysis. \emph{Applied
-  Psychological Measurement, 12}(3), 261-280.
+Bock, R. D., Gibbons, R., & Muraki, E. (1988).
+Full-Information Item Factor Analysis. \emph{Applied
+Psychological Measurement, 12}(3), 261-280.
 
-  Bock, R. D. & Lieberman, M. (1970). Fitting a response
-  model for n dichotomously scored items.
-  \emph{Psychometrika, 35}, 179-197.
+Bock, R. D. & Lieberman, M. (1970). Fitting a response
+model for n dichotomously scored items.
+\emph{Psychometrika, 35}, 179-197.
 
-  Cai, L. (2010a). High-Dimensional exploratory item factor
-  analysis by a Metropolis-Hastings Robbins-Monro
-  algorithm. \emph{Psychometrika, 75}, 33-57.
+Cai, L. (2010a). High-Dimensional exploratory item factor
+analysis by a Metropolis-Hastings Robbins-Monro algorithm.
+\emph{Psychometrika, 75}, 33-57.
 
-  Cai, L. (2010b). Metropolis-Hastings Robbins-Monro
-  algorithm for confirmatory item factor analysis.
-  \emph{Journal of Educational and Behavioral Statistics,
-  35}, 307-335.
+Cai, L. (2010b). Metropolis-Hastings Robbins-Monro
+algorithm for confirmatory item factor analysis.
+\emph{Journal of Educational and Behavioral Statistics,
+35}, 307-335.
 
-  Chalmers, R., P. (2012). mirt: A Multidimensional Item
-  Response Theory Package for the R Environment.
-  \emph{Journal of Statistical Software, 48}(6), 1-29.
+Chalmers, R., P. (2012). mirt: A Multidimensional Item
+Response Theory Package for the R Environment.
+\emph{Journal of Statistical Software, 48}(6), 1-29.
 
-  Chen, W. H. & Thissen, D. (1997). Local dependence
-  indices for item pairs using item response theory.
-  \emph{Journal of Educational and Behavioral Statistics,
-  22}, 265-289.
+Chalmers, R., P. & Flora, D. (2014). Maximum-likelihood
+Estimation of Noncompensatory IRT Models with the MH-RM
+Algorithm. \emph{Applied Psychological Measurement}.
 
-  Lord, F. M. & Novick, M. R. (1968). Statistical theory of
-  mental test scores. Addison-Wesley.
+Chen, W. H. & Thissen, D. (1997). Local dependence indices
+for item pairs using item response theory. \emph{Journal of
+Educational and Behavioral Statistics, 22}, 265-289.
 
-  Ramsay, J. O. (1975). Solving implicit equations in
-  psychometric data analysis. \emph{Psychometrika, 40},
-  337-360.
+Lord, F. M. & Novick, M. R. (1968). Statistical theory of
+mental test scores. Addison-Wesley.
 
-  Rasch, G. (1960). Probabilistic models for some
-  intelligence and attainment tests. \emph{Danish Institute
-  for Educational Research}.
+Ramsay, J. O. (1975). Solving implicit equations in
+psychometric data analysis. \emph{Psychometrika, 40},
+337-360.
 
-  Muraki, E. (1992). A generalized partial credit model:
-  Application of an EM algorithm. \emph{Applied
-  Psychological Measurement, 16}, 159-176.
+Rasch, G. (1960). Probabilistic models for some
+intelligence and attainment tests. \emph{Danish Institute
+for Educational Research}.
 
-  Muraki, E. & Carlson, E. B. (1995). Full-information
-  factor analysis for polytomous item responses.
-  \emph{Applied Psychological Measurement, 19}, 73-90.
+Muraki, E. (1992). A generalized partial credit model:
+Application of an EM algorithm. \emph{Applied Psychological
+Measurement, 16}, 159-176.
 
-  Samejima, F. (1969). Estimation of latent ability using a
-  response pattern of graded scores. \emph{Psychometrika
-  Monographs}, 34.
+Muraki, E. & Carlson, E. B. (1995). Full-information factor
+analysis for polytomous item responses. \emph{Applied
+Psychological Measurement, 19}, 73-90.
 
-  Suh, Y. & Bolt, D. (2010). Nested logit models for
-  multiple-choice item response data. \emph{Psychometrika,
-  75}, 454-473.
+Samejima, F. (1969). Estimation of latent ability using a
+response pattern of graded scores. \emph{Psychometrika
+Monographs}, 34.
 
-  Sympson, J. B. (1977). A model for testing with
-  multidimensional items. Proceedings of the 1977
-  Computerized Adaptive Testing Conference.
+Suh, Y. & Bolt, D. (2010). Nested logit models for
+multiple-choice item response data. \emph{Psychometrika,
+75}, 454-473.
 
-  Thissen, D. (1982). Marginal maximum likelihood
-  estimation for the one-parameter logistic model.
-  \emph{Psychometrika, 47}, 175-186.
+Sympson, J. B. (1977). A model for testing with
+multidimensional items. Proceedings of the 1977
+Computerized Adaptive Testing Conference.
 
-  Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S.
-  G., Muraki, E., & Bock, R. D. (2003). \emph{TESTFACT 4
-  for Windows: Test Scoring, Item Statistics, and
-  Full-information Item Factor Analysis} [Computer
-  software]. Lincolnwood, IL: Scientific Software
-  International.
+Thissen, D. (1982). Marginal maximum likelihood estimation
+for the one-parameter logistic model. \emph{Psychometrika,
+47}, 175-186.
+
+Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S. G.,
+Muraki, E., & Bock, R. D. (2003). \emph{TESTFACT 4 for
+Windows: Test Scoring, Item Statistics, and
+Full-information Item Factor Analysis} [Computer software].
+Lincolnwood, IL: Scientific Software International.
 }
 \seealso{
-  \code{\link{anova-method}}, \code{\link{coef-method}},
-  \code{\link{summary-method}},
-  \code{\link{residuals-method}},
-  \code{\link{plot-method}}, \code{\link{expand.table}},
-  \code{\link{key2binary}}, \code{\link{mirt.model}},
-  \code{\link{mirt}}, \code{\link{bfactor}},
-  \code{\link{multipleGroup}}, \code{\link{mixedmirt}},
-  \code{\link{mod2values}}, \code{\link{wald}},
-  \code{\link{itemplot}}, \code{\link{fscores}},
-  \code{\link{M2}}, \code{\link{extract.item}},
-  \code{\link{iteminfo}}, \code{\link{testinfo}},
-  \code{\link{probtrace}}, \code{\link{boot.mirt}},
-  \code{\link{PLCI.mirt}}, \code{\link{imputeMissing}},
-  \code{\link{itemfit}}, \code{\link{simdata}},
-  \code{\link{createItem}}, \code{\link{mirtCluster}}
+\code{\link{anova-method}}, \code{\link{coef-method}},
+\code{\link{summary-method}},
+\code{\link{residuals-method}}, \code{\link{plot-method}},
+\code{\link{expand.table}}, \code{\link{key2binary}},
+\code{\link{mirt.model}}, \code{\link{mirt}},
+\code{\link{bfactor}}, \code{\link{multipleGroup}},
+\code{\link{mixedmirt}}, \code{\link{mod2values}},
+\code{\link{wald}}, \code{\link{itemplot}},
+\code{\link{fscores}}, \code{\link{M2}},
+\code{\link{extract.item}}, \code{\link{iteminfo}},
+\code{\link{testinfo}}, \code{\link{probtrace}},
+\code{\link{boot.mirt}}, \code{\link{PLCI.mirt}},
+\code{\link{imputeMissing}}, \code{\link{itemfit}},
+\code{\link{simdata}}, \code{\link{createItem}},
+\code{\link{mirtCluster}}
 }
 \keyword{models}
 

@@ -33,9 +33,9 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     J <- length(pars) - 1L
     unif <- runif(N)
     sigma <- if(ncol(theta0) == 1L) matrix(cand.t.var) else diag(rep(cand.t.var,ncol(theta0)))
-    theta1 <- theta0 + mvtnorm::rmvnorm(N,prior.mu, sigma)
-    log_den0 <- mvtnorm::dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
-    log_den1 <- mvtnorm::dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
+    theta1 <- theta0 + mirt_rmvnorm(N,prior.mu, sigma)
+    log_den0 <- mirt_dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
+    log_den1 <- mirt_dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
     if(length(prodlist) > 0L){
         theta0 <- prodterms(theta0,prodlist)
         theta1 <- prodterms(theta1,prodlist)
@@ -60,6 +60,35 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     attr(theta1, "Proportion Accepted") <- sum(accept)/N
     attr(theta1, "log.lik") <- log.lik
     return(theta1)
+}
+
+imputePars <- function(pars, covB, imputenums, constrain){
+    shift <- mirt_rmvnorm(1L, sigma=covB)
+    for(i in 1L:length(pars)){
+        pn <- pars[[i]]@parnum 
+        pick2 <- imputenums %in% pn
+        pick1 <- pn %in% imputenums
+        pars[[i]]@par[pick1] <- pars[[i]]@par[pick1] + shift[pick2]
+        if(is(pars[[i]], 'graded')){
+            where <- (length(pars[[i]]@par) - pars[[i]]@ncat + 2L):length(pars[[i]]@par)
+            pars[[i]]@par[where] <- sort(pars[[i]]@par[where], decreasing=TRUE)
+        } else if(is(pars[[i]], 'grsm')){
+            where <- (length(pars[[i]]@par) - pars[[i]]@ncat + 1L):(length(pars[[i]]@par)-1L)
+            pars[[i]]@par[where] <- sort(pars[[i]]@par[where], decreasing=TRUE)
+        }
+    }
+    if(length(constrain)){
+        for(con in 1L:length(constrain)){
+            tmp <- shift[imputenums %in% constrain[[con]][1L]]
+            if(length(tmp)){
+                for(i in 1L:length(pars)){
+                    pick <- pars[[i]]@parnum %in% constrain[[con]][-1L]
+                    pars[[i]]@par[pick] <- tmp + pars[[i]]@par[pick]
+                }
+            }
+        }
+    }
+    return(pars)
 }
 
 # Rotation function
@@ -203,13 +232,31 @@ test_info <- function(pars, Theta, Alist, K){
     info
 }
 
-Lambdas <- function(pars){
-    lambdas <- list()
-    J <- ifelse(is(pars[[length(pars)]], 'GroupPars'), length(pars)-1L, length(pars))
-    for(i in 1L:J)
-        lambdas[[i]] <- ExtractLambdas(pars[[i]])
-    lambdas <- do.call(rbind,lambdas)
-    lambdas
+Lambdas <- function(pars, Names, explor = FALSE, alpha = .05){
+    J <- length(pars) - 1L
+    lambdas <- lowerlambdas <- upperlambdas <- 
+        matrix(NA, J, length(ExtractLambdas(pars[[1L]])))
+    z <- qnorm(1 - alpha/2)
+    rownames(lambdas) <- rownames(upperlambdas) <- rownames(lowerlambdas) <- Names
+    for(i in 1L:J){
+        tmp <- pars[[i]]
+        lambdas[i,] <- ExtractLambdas(tmp)/1.702
+        tmp@par <- pars[[i]]@par - z * pars[[i]]@SEpar
+        lowerlambdas[i,] <- ExtractLambdas(tmp)/1.702
+        tmp@par <- pars[[i]]@par + z * pars[[i]]@SEpar
+        upperlambdas[i,] <- ExtractLambdas(tmp)/1.702
+    }
+    norm <- sqrt(1 + rowSums(lambdas^2))
+    F <- as.matrix(lambdas/norm)
+    if(!explor){
+        norml <- sqrt(1 + rowSums(lowerlambdas^2, na.rm=TRUE))
+        normh <- sqrt(1 + rowSums(upperlambdas^2, na.rm=TRUE))
+        ret <- list(F=F, lower=as.matrix(lowerlambdas/norml), 
+                    upper=as.matrix(upperlambdas/normh))
+    } else {
+        ret <- list(F=F, lower=list(), upper=list())
+    }
+    ret
 }
 
 #change long pars for groups into mean in sigma
@@ -261,23 +308,23 @@ bfactor2mod <- function(model, J){
 
 updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J, 
                         BFACTOR, sitems, cycles, rlist, prior){
-    gstructgrouppars <- Prior <- Priorbetween <- vector('list', ngroups)
+    Prior <- Priorbetween <- vector('list', ngroups)
     if(list$EH){
         Prior[[1L]] <- list$EHPrior[[1L]]
     } else {
         for(g in 1L:ngroups){
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
+            gp <- ExtractGroupPars(pars[[g]][[J+1L]])
             if(BFACTOR){
-                sel <- 1L:(nfact-ncol(sitems))
-                Priorbetween[[g]] <- mvtnorm::dmvnorm(Thetabetween,
-                                                      gstructgrouppars[[g]]$gmeans[sel],
-                                                      gstructgrouppars[[g]]$gcov[sel,sel,drop=FALSE])
+                sel <- 1L:(nfact-ncol(sitems) + 1L)
+                sel2 <- sel[-length(sel)]
+                Priorbetween[[g]] <- mirt_dmvnorm(Thetabetween,
+                                                      gp$gmeans[sel2], gp$gcov[sel2,sel2,drop=FALSE])
                 Priorbetween[[g]] <- Priorbetween[[g]]/sum(Priorbetween[[g]])
-                Prior[[g]] <- apply(expand.grid(Priorbetween[[g]], prior[[g]]), 1, prod)
+                Prior[[g]] <- mirt_dmvnorm(Theta[ ,sel], gp$gmeans[sel], gp$gcov[sel,sel,drop=FALSE])
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
                 next
             }
-            Prior[[g]] <- mvtnorm::dmvnorm(Theta[ ,1L:nfact,drop=FALSE],gstructgrouppars[[g]]$gmeans,
-                                           gstructgrouppars[[g]]$gcov)
+            Prior[[g]] <- mirt_dmvnorm(Theta[ ,1L:nfact,drop=FALSE], gp$gmeans, gp$gcov)
             Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
     }
@@ -287,7 +334,7 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
                 Prior[[g]] <- rowSums(rlist[[g]][[1L]]) / sum(rlist[[g]][[1L]])
         } else {
             for(g in 1L:ngroups){
-                Prior[[g]] <- mvtnorm::dmvnorm(Theta, 0, matrix(1))
+                Prior[[g]] <- mirt_dmvnorm(Theta, 0, matrix(1))
                 Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
             }
         }
@@ -549,9 +596,6 @@ UpdatePrior <- function(PrepList, model, groupNames){
                     val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
                     for(j in 1L:length(sel)){
                         which <- names(pars[[g]][[j]]@est) == name
-                        if(names(pars[[g]][[sel[j]]]@par)[which] %in% c('g', 'u') && 
-                               type == 3L)
-                            warning('\'beta\' prior for g and u parameters is not recommended')
                         if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j)
                         pars[[g]][[sel[j]]]@any.prior <- TRUE
                         pars[[g]][[sel[j]]]@prior.type[which] <- type
@@ -877,7 +921,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
                      ...)
 {
     opts <- list()
-    if(method == 'MHRM' && SE.type == 'SEM') SE.type <- 'MHRM'
+    if(method == 'MHRM' || method == 'MIXED') SE.type <- 'MHRM'
     D <- 1
     opts$method = method
     opts$draws = draws
@@ -899,7 +943,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$TOL <- ifelse(is.null(TOL), if(method == 'EM') 1e-4 else 1e-3, TOL)
     if(SE.type == 'SEM' && SE){
         opts$accelerate <- FALSE
-        if(is.null(TOL)) opts$TOL <- 1e-6
+        if(is.null(TOL)) opts$TOL <- 1e-5
         if(is.null(technical$NCYCLES)) technical$NCYCLES <- 1000L
         opts$SEtol <- ifelse(is.null(technical$SEtol), .001, technical$SEtol)
     }
@@ -935,6 +979,11 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$USEEM <- ifelse(method == 'EM', TRUE, FALSE)
     opts$returnPrepList <- FALSE
     opts$PrepList <- NULL
+    if(is.null(technical$Moptim)){
+        opts$Moptim <- if(method == 'EM') 'BFGS' else 'NR'
+    } else {
+        opts$Moptim <- technical$Moptim
+    }
     if(!is.null(large)){
         if(is.logical(large))
             if(large) opts$returnPrepList <- TRUE
@@ -944,8 +993,21 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     return(opts)
 }
 
-reloadPars <- function(longpars, pars, ngroups, J){
-    return(.Call('reloadPars', longpars, pars, ngroups, J))
+reloadPars <- function(longpars, pars, ngroups, J){    
+    if(FALSE){
+        pars <- .Call('reloadPars', longpars, pars, ngroups, J)
+    } else {
+        #slower version for now till R 3.1.0 evaluation bug gets fixed. FIXME
+        ind <- 1L
+        for(g in 1L:ngroups){
+            for(i in 1L:(J+1L)){
+                tmp <- pars[[g]][[i]]@par
+                pars[[g]][[i]]@par <- longpars[ind:(ind+length(tmp)-1L)]
+                ind <- ind + length(tmp)
+            }
+        }
+    }
+    return(pars)
 }
 
 computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L),
@@ -973,6 +1035,14 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     info <- nameInfoMatrix(info=info, correction=ESTIMATE$correction, L=ESTIMATE$L,
                            npars=length(longpars))
     ESTIMATE$info <- info
+    isna <- is.na(diag(info))
+    info <- info[!isna, !isna]
+    acov <- try(solve(info), TRUE)
+    if(is(acov, 'try-error')){
+        warning('Could not invert information matrix; model likely is not identified.')
+        ESTIMATE$fail_invert_info <- TRUE
+        return(ESTIMATE)
+    } else ESTIMATE$fail_invert_info <- FALSE
     SEtmp <- diag(solve(info))
     if(any(SEtmp < 0)){
         warning("Negative SEs set to NaN.\n")
@@ -980,7 +1050,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     }
     SEtmp <- sqrt(SEtmp)
     SE <- rep(NA, length(longpars))
-    SE[ESTIMATE$estindex_unique] <- SEtmp
+    SE[ESTIMATE$estindex_unique[!isna]] <- SEtmp
     index <- 1L:length(longpars)
     if(length(constrain) > 0L)
         for(i in 1L:length(constrain))
@@ -1040,6 +1110,7 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
         ret[[i]] <- new('RandomPars',
                         par=par,
                         est=est,
+                        SEpar=rep(NaN,length(par)),
                         ndim=ndim,
                         lbound=lbound,
                         ubound=rep(Inf, length(par)),
@@ -1096,262 +1167,64 @@ smooth.cor <- function(x){
     x
 }
 
+assignInformationMG <- function(object){
+    J <- ncol(object@data)
+    names <- colnames(object@information)
+    spl_names <- strsplit(names, split="\\.")
+    spl_names_par <- sapply(spl_names, function(x) x[1L])
+    spl_names <- lapply(spl_names, 
+                        function(x) as.numeric(x[-1L]))
+    spl_names <- do.call(rbind, spl_names)
+    for(g in 1L:length(object@cmods)){
+        from <- object@cmods[[g]]@pars[[1L]]@parnum[1L]
+        to <- object@cmods[[g]]@pars[[J+1L]]@parnum[length(
+            object@cmods[[g]]@pars[[J+1L]]@parnum)]
+        pick <- spl_names[,g] >= from & spl_names[,g] <= to
+        tmp <- object@information[pick,pick]
+        colnames(tmp) <- rownames(tmp) <- 
+            paste(spl_names_par[pick], spl_names[pick,g], sep='.')
+        object@cmods[[g]]@information <- tmp
+    }
+    object
+}
+
+mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean)),
+                         check = FALSE)
+{    
+    # Version modified from mvtnorm::rmvnorm, version 0.9-9996, 19-April, 2014. 
+    if(check){
+        if (!isSymmetric(sigma, tol = sqrt(.Machine$double.eps), check.attributes = FALSE)) 
+            stop("sigma must be a symmetric matrix")
+        if (length(mean) != nrow(sigma)) 
+            stop("mean and sigma have non-conforming size")
+    }
+    ev <- eigen(sigma, symmetric = TRUE)
+    if(check)
+        if (!all(ev$values >= -sqrt(.Machine$double.eps) * abs(ev$values[1])))
+            warning("sigma is numerically not positive definite")
+    retval <- ev$vectors %*%  diag(sqrt(ev$values), length(ev$values)) %*% t(ev$vectors)
+    retval <- matrix(rnorm(n * ncol(sigma)), nrow = n) %*%  retval
+    retval <- sweep(retval, 2, mean, "+")
+    colnames(retval) <- names(mean)
+    retval
+}
+
+mirt_dmvnorm <- function(x, mean, sigma, log = FALSE)
+{
+    # Version modified from mvtnorm::dmvnorm, version 0.9-9996, 19-April, 2014. 
+    if(is.vector(x)) x <- matrix(x, nrow=1L)
+    if (missing(mean)) mean <- rep(0, length = ncol(x))
+    if (missing(sigma)) sigma <- diag(ncol(x))
+    distval <- mahalanobis(x, center = mean, cov = sigma)
+    logdet <- sum(log(eigen(sigma, symmetric=TRUE,
+                            only.values=TRUE)$values))
+    logretval <- -(ncol(x)*log(2*pi) + logdet + distval)/2
+    if(log) return(logretval)
+    exp(logretval)
+}
+
 mirtClusterEnv <- new.env()
 mirtClusterEnv$ncores <- 1L
-
-shinyItemplot <- function(){
-    require(latticeExtra)
-
-    ret <- list(
-
-        ui = pageWithSidebar(
-
-                    # Application title
-                    headerPanel("Item plots in mirt"),
-
-                    sidebarPanel(
-
-                        h5('Select an internal mirt item class, the type of plot to display, the number of factors,
-                           and use the checkbox to include sliders for adjusting multiple item parameters.
-                           Note that if the slider label you choose does not appear in the output box then the
-                           associated slider will have no effect on the graphic.
-                           See ?mirt::mirt and ?mirt::simdata for more details.'),
-
-                        selectInput(inputId = "itemclass",
-                                    label = "Class of mirt item:",
-                                    choices = c('dich', 'graded', 'nominal', 'gpcm', 'partcomp'), #'nestlogit'
-                                    selected = 'dich'),
-
-                        h6('Note: for nestlogit the first category is assumed to be the correct response option.'),
-
-                        selectInput(inputId = "plottype",
-                                    label = "Type of plot to display:",
-                                    choices = c('trace', 'info', 'score', 'infocontour', 'SE', 'infoSE', 'tracecontour'),
-                                    selected = 'trace'),
-
-                        checkboxInput(inputId = "nfact",
-                                      label = "Multidimensional?",
-                                      value = FALSE),
-
-                        #         conditionalPanel(condition = "input.nfact == true",
-                        #                          h5('Rotate axis:'),
-                        #
-                        #                          sliderInput(inputId = "zaxis",
-                        #                                      label = "z-axis:",
-                        #                                      min = -180, max = 180, value = 10, step = 5)
-                        #         ),
-
-                        h5('Check the boxes below to make sliders appear for editing parameters.'),
-
-                        checkboxInput(inputId = "a1",
-                                      label = "a1",
-                                      value = TRUE),
-                        conditionalPanel(condition = "input.a1 == true",
-                                         sliderInput(inputId = "a1par",
-                                                     label = "a1 value:",
-                                                     min = -3, max = 3, value = 1, step = 0.2)
-                        ),
-
-                        checkboxInput(inputId = "a2",
-                                      label = "a2",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.a2 == true",
-                                         sliderInput(inputId = "a2par",
-                                                     label = "a2 value:",
-                                                     min = -3, max = 3, value = 1, step = 0.2)
-                        ),
-
-                        checkboxInput(inputId = "d",
-                                      label = "d",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.d == true",
-                                         sliderInput(inputId = "dpar",
-                                                     label = "d value:",
-                                                     min = -5, max = 5, value = 0, step = 0.25)
-                        ),
-
-                        checkboxInput(inputId = "g",
-                                      label = "g",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.g == true",
-                                         sliderInput(inputId = "gpar",
-                                                     label = "g value:",
-                                                     min = 0, max = 1, value = 0, step = 0.05)
-                        ),
-
-                        checkboxInput(inputId = "u",
-                                      label = "u",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.u == true",
-                                         sliderInput(inputId = "upar",
-                                                     label = "u value:",
-                                                     min = 0, max = 1, value = 1, step = 0.05)
-                        ),
-
-                        checkboxInput(inputId = "d0",
-                                      label = "d0",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.d0 == true",
-                                         sliderInput(inputId = "d0par",
-                                                     label = "d0 value:",
-                                                     min = -5, max = 5, value = 0, step = 0.25)
-                        ),
-
-                        checkboxInput(inputId = "d1",
-                                      label = "d1",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.d1 == true",
-                                         sliderInput(inputId = "d1par",
-                                                     label = "d1 value:",
-                                                     min = -5, max = 5, value = 1, step = 0.25)
-                        ),
-
-                        checkboxInput(inputId = "d2",
-                                      label = "d2",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.d2 == true",
-                                         sliderInput(inputId = "d2par",
-                                                     label = "d2 value:",
-                                                     min = -5, max = 5, value = 0, step = 0.25)
-                        ),
-
-                        checkboxInput(inputId = "d3",
-                                      label = "d3",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.d3 == true",
-                                         sliderInput(inputId = "d3par",
-                                                     label = "d3 value:",
-                                                     min = -5, max = 5, value = -1, step = 0.25)
-                        ),
-
-                        checkboxInput(inputId = "ak0",
-                                      label = "ak0",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.ak0 == true",
-                                         sliderInput(inputId = "ak0par",
-                                                     label = "ak0 value:",
-                                                     min = -3, max = 3, value = 0, step = 0.2)
-                        ),
-
-                        checkboxInput(inputId = "ak1",
-                                      label = "ak1",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.ak1 == true",
-                                         sliderInput(inputId = "ak1par",
-                                                     label = "ak0 value:",
-                                                     min = -3, max = 3, value = 1, step = 0.2)
-                        ),
-
-                        checkboxInput(inputId = "ak2",
-                                      label = "ak2",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.ak2 == true",
-                                         sliderInput(inputId = "ak2par",
-                                                     label = "ak2 value:",
-                                                     min = -3, max = 3, value = 2, step = 0.2)
-                        ),
-
-                        checkboxInput(inputId = "ak3",
-                                      label = "ak3",
-                                      value = FALSE),
-                        conditionalPanel(condition = "input.ak3 == true",
-                                         sliderInput(inputId = "ak3par",
-                                                     label = "ak3 value:",
-                                                     min = -3, max = 3, value = 3, step = 0.2)
-                        )
-
-                        ),
-
-                    mainPanel(
-                        verbatimTextOutput("coefs"),
-                        plotOutput(outputId = "main_plot", height = "700px", width = "700px")
-                    )
-
-                ),
-
-        server = function(input, output) {
-
-                    genmod <- function(input){
-                        set.seed(1234)
-                        itemclass <- c(input$itemclass, input$itemclass)
-                        itemtype <- switch(input$itemclass,
-                                           dich='2PL',
-                                           graded='graded',
-                                           nominal='nominal',
-                                           nestlogit='2PLNRM',
-                                           partcomp='PC2PL',
-                                           nestlogit='2PLNRM')
-                        nominal <- NULL
-                        model <- 1
-                        if(input$nfact) model <- 2
-                        if(model == 2 && input$plottype == 'infoSE')
-                            stop('infoSE only available for single dimensional models')
-                        a <- matrix(1,2)
-                        d <- matrix(0,2)
-                        if(input$itemclass == 'graded'){
-                            d <- matrix(c(1,0,-1), 2, 3, byrow=TRUE)
-                        } else if(input$itemclass == 'gpcm'){
-                            d <- matrix(c(0,1,0,-1), 2, 4, byrow=TRUE)
-                        } else if(input$itemclass == 'nominal'){
-                            nominal <- matrix(c(0,1,2,3), 2, 4, byrow=TRUE)
-                            d <- matrix(c(0,1,0,-1), 2, 4, byrow=TRUE)
-                        } else if(input$itemclass == 'nestlogit'){
-                            nominal <- matrix(c(0,1,2), 2, 3, byrow=TRUE)
-                            d <- matrix(c(0,0,1,-1), 2, 4, byrow=TRUE)
-                        } else if(input$itemclass == 'partcomp'){
-                            if(model != 2) stop('partcomp models require more than 1 dimension')
-                            if(input$plottype == 'info' || input$plottype == 'infocontour')
-                                stop('information based plots not currently supported for partcomp items')
-                            a <- matrix(c(1,1), 2, 2, byrow=TRUE)
-                            d <- matrix(c(1,1,1,NA), 2, 2, byrow=TRUE)
-                            itemtype[2] <- '2PL'
-                            itemclass[2] <- 'dich'
-                            model <- mirt.model('F1 = 1,2
-                                                F2 = 1', quiet=TRUE)
-                        }
-                        dat <- simdata(a=a, d=d, N=100,
-                                       itemtype=itemclass, nominal=nominal)
-                        sv <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars = 'values', key=c(1, NA)))
-                        sv$est <- FALSE
-                        mod <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars=sv, key=c(1, NA)))
-                        par <- mod@pars[[1]]@par
-                        if(input$a1) par[names(par) == 'a1'] <- input$a1par
-                        if(input$a2) par[names(par) == 'a2'] <- input$a2par
-                        if(input$d) par[names(par) == 'd'] <- input$dpar
-                        if(input$g) par[names(par) == 'g'] <- logit(input$gpar)
-                        if(input$u) par[names(par) == 'u'] <- logit(input$upar)
-                        if(input$d0) par[names(par) == 'd0'] <- input$d0par
-                        if(input$d1) par[names(par) == 'd1'] <- input$d1par
-                        if(input$d2) par[names(par) == 'd2'] <- input$d2par
-                        if(input$d3) par[names(par) == 'd3'] <- input$d3par
-                        if(input$ak0) par[names(par) == 'ak0'] <- input$ak0par
-                        if(input$ak1) par[names(par) == 'ak1'] <- input$ak1par
-                        if(input$ak2) par[names(par) == 'ak2'] <- input$ak2par
-                        if(input$ak3) par[names(par) == 'ak3'] <- input$ak3par
-                        mod@pars[[1]]@par <- par
-                        mod
-                        }
-
-                    output$main_plot <- renderPlot({
-                        mod <- genmod(input)
-                        print(itemplot(mod, 1, type=input$plottype, rotate = 'none'))
-                    })
-
-                    output$coefs <- renderPrint({
-                        mod <- genmod(input)
-                        cat('Item parameters: \n\n')
-                        print(coef(mod, rotate = 'none')[[1L]])
-                        if(mod@nfact == 1L && !is(mod@pars[[1L]], 'nestlogit')){
-                            cat('\n\nItem parameters (traditional IRT metric): \n\n')
-                            print(coef(mod, IRTpars = TRUE)[[1L]])
-                        }
-                    })
-
-                }
-    )
-
-    return(ret)
-}
 
 myApply <- function(X, MARGIN, FUN, ...){
     if(!is.null(mirtClusterEnv$MIRTCLUSTER)){

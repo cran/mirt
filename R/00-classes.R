@@ -1,5 +1,6 @@
 setClass("AllModelClass",
          representation(pars='list',
+                        shortpars='numeric',
                         model='list',
                         K='numeric',
                         G2='numeric',
@@ -33,7 +34,7 @@ setClass("AllModelClass",
                         parprior='list',
                         fulldata='matrix',
                         information='matrix',
-                        longpars='numeric',
+                        infomethod='character',
                         factorNames='character',
                         method='character',
                         itemtype='character',
@@ -43,6 +44,7 @@ setClass("AllModelClass",
                         CFI='numeric',
                         CUSTOM.IND='integer',
                         SLOW.IND='integer',
+                        TOL='numeric',
                         'VIRTUAL'),
              validity = function(object) return(TRUE)
 )
@@ -57,6 +59,7 @@ setClass("AllModelClass",
 #' \describe{
 #'     \item{\code{iter}:}{Object of class \code{"numeric"}, number of iterations  }
 #'     \item{\code{pars}:}{Object of class \code{"list"}, estimated parameter objects list }
+#'     \item{\code{shortpars}:}{Object of class \code{"numeric"}, unique estimated parameters}
 #'     \item{\code{model}:}{Object of class \code{"list"}, list containing original model }
 #'     \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }
 #'     \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }
@@ -88,6 +91,8 @@ setClass("AllModelClass",
 #'     \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
 #'       second-order test}
 #'     \item{\code{bfactor}:}{Object of class \code{"list"}, an empty list}
+#'     \item{\code{infomethod}:}{Object of class \code{"character"}, indiciates which information estimation method was used}
+#'     \item{\code{TOL}:}{Object of class \code{"numeric"}, tollerence stopping criteria}
 #'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{Call}:}{Object of class \code{"call"}, call }
@@ -130,6 +135,7 @@ setClass(
 #' \describe{
 #'     \item{\code{iter}:}{Object of class \code{"numeric"}, number of iterations  }
 #'     \item{\code{pars}:}{Object of class \code{"list"}, estimated parameter objects list }
+#'     \item{\code{shortpars}:}{Object of class \code{"numeric"}, unique estimated parameters}
 #'     \item{\code{model}:}{Object of class \code{"list"}, list containing original model }
 #'     \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }
 #'     \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }
@@ -163,6 +169,8 @@ setClass(
 #'     \item{\code{bfactor}:}{Object of class \code{"list"}, contains information from bfactor() estimation}
 #'     \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
 #'       second-order test}
+#'     \item{\code{infomethod}:}{Object of class \code{"character"}, indiciates which information estimation method was used}
+#'     \item{\code{TOL}:}{Object of class \code{"numeric"}, tollerence stopping criteria}
 #'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{Call}:}{Object of class \code{"call"}, call }
@@ -205,6 +213,7 @@ setClass(
 #'  \describe{
 #'    \item{\code{iter}:}{Object of class \code{"numeric"}, number of iterations  }
 #'    \item{\code{pars}:}{Object of class \code{"list"}, estimated parameter objects list }
+#'    \item{\code{shortpars}:}{Object of class \code{"numeric"}, unique estimated parameters}
 #'    \item{\code{model}:}{Object of class \code{"list"}, list containing original model }
 #'    \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }
 #'    \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }
@@ -242,6 +251,8 @@ setClass(
 #'     \item{\code{bfactor}:}{Object of class \code{"list"}, contains information from bfactor() estimation}
 #'    \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
 #'       second-order test}
+#'     \item{\code{infomethod}:}{Object of class \code{"character"}, indiciates which information estimation method was used}
+#'     \item{\code{TOL}:}{Object of class \code{"numeric"}, tollerence stopping criteria}
 #'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'    \item{\code{Call}:}{Object of class \code{"call"}, call }
@@ -284,6 +295,7 @@ setClass(
 #'  \describe{
 #'    \item{\code{iter}:}{Object of class \code{"numeric"}, number of iterations  }
 #'    \item{\code{pars}:}{Object of class \code{"list"}, estimated parameter objects list }
+#'    \item{\code{shortpars}:}{Object of class \code{"numeric"}, unique estimated parameters}
 #'    \item{\code{model}:}{Object of class \code{"list"}, list containing original model }
 #'    \item{\code{K}:}{Object of class \code{"numeric", number of item categories}  }
 #'    \item{\code{itemloc}:}{Object of class \code{"numeric", index for tabdata}  }
@@ -315,6 +327,8 @@ setClass(
 #'    \item{\code{condnum}:}{Object of class \code{"numeric"}, condition number of information matrix}
 #'    \item{\code{secondordertest}:}{Object of class \code{"logical"}, indicate whether information matrix passes 
 #'       second-order test}
+#'     \item{\code{infomethod}:}{Object of class \code{"character"}, indiciates which information estimation method was used}
+#'     \item{\code{TOL}:}{Object of class \code{"numeric"}, tollerence stopping criteria}
 #'     \item{\code{CUSTOM.IND}:}{Object of class \code{"integer"}, an internal index}
 #'     \item{\code{SLOW.IND}:}{Object of class \code{"integer"}, an internal index}
 #'    \item{\code{Call}:}{Object of class \code{"call"}, call }

@@ -16,7 +16,7 @@ SE.BL <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
                     Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
                     next
                 }
-                Prior[[g]] <- mvtnorm::dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
+                Prior[[g]] <- mirt_dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
                                                gstructgrouppars[[g]]$gcov)
                 Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
             }
@@ -77,6 +77,7 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
     J <- length(itemloc) - 1L
     L <- Ls$L
     MSTEPTOL <- list$MSTEPTOL
+    Moptim <- list$Moptim
     sitems <- list$sitems
     specific <- list$specific
     ngroups <- ESTIMATE$ngroups
@@ -150,9 +151,10 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         }
         longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
                           gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
-                          PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND,
+                          PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, nfact=nfact, 
                           rlist=rlist, constrain=constrain, cycle=cycles, DERIV=DERIV, groupest=groupest,
-                          CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND)
+                          CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND, BFACTOR=list$BFACTOR,
+                          Moptim=Moptim, SEM=TRUE)
         rijlast <- rij
         denom <- (EMhistory[cycles, estindex] - MLestimates[estindex])
         rij <- (longpars[estpars & !redun_constr] - MLestimates[estpars & !redun_constr]) / denom
@@ -237,7 +239,7 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     Prior <- ESTIMATE$Prior
     prior <- ESTIMATE$prior
     Priorbetween <- ESTIMATE$Priorbetween
-    isbifactor <- length(prior) > 0L
+    isbifactor <- length(Priorbetween[[1L]]) > 0L
     if(!isbifactor){
         prior <- Priorbetween <- list(matrix(0))
     }
@@ -247,7 +249,7 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     tabdata <- tabdata[,-ncol(tabdata)]
     gitemtrace <- rs <- vector('list', ngroups)
     for(g in 1L:ngroups){
-        rs[[g]] <- PrepList[[1L]]$tabdata[,ncol(tabdata)+1L]
+        rs[[g]] <- PrepList[[g]]$tabdata[,ncol(tabdata)+1L]
         gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=Theta, 
                                             itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
     }
@@ -278,6 +280,11 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     Igrad <- Igrad[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     IgradP <- IgradP[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     Ihess <- Ihess[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
+    lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
+    lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
+    is.latent <- lengthsplit > 2L
+    Ihess <- Ihess[!is.latent, !is.latent]; Igrad <- Igrad[!is.latent, !is.latent]
+    IgradP <- IgradP[!is.latent, !is.latent]
     if(type == 'Louis'){
         info <- -Ihess - IgradP + Igrad
     } else if(type == 'crossprod'){
@@ -286,11 +293,10 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
         tmp <- solve(-Ihess - IgradP + Igrad)
         info <- solve(tmp %*% Igrad %*% tmp)
     }
-    colnames(info) <- rownames(info) <- names(ESTIMATE$correction)
-    lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
-    lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
-    info[lengthsplit > 2L, lengthsplit > 2L] <- 1
-    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain)
+    colnames(info) <- rownames(info) <- names(ESTIMATE$correction)[!is.latent]
+    tmp <- matrix(NA, length(is.latent), length(is.latent))
+    tmp[!is.latent, !is.latent] <- info
+    ESTIMATE <- loadESTIMATEinfo(info=tmp, ESTIMATE=ESTIMATE, constrain=constrain)
     if(any(lengthsplit > 2L)){
         for(g in 1L:ngroups){
             tmp <- ESTIMATE$pars[[g]][[nitems+1L]]@SEpar
@@ -342,7 +348,7 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
                 tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
                 pars[[g]][[i]]@dat <- rlist$r1[, tmp]
                 pars[[g]][[i]]@itemtrace <- rlist$itemtrace[, tmp]
-                tmp <- Deriv(pars[[g]][[i]], Theta=Theta, EM = TRUE, estHess=FALSE)
+                tmp <- Deriv(pars[[g]][[i]], Theta=Theta, estHess=FALSE)
                 dx <- tmp$grad
                 DX[pars[[g]][[i]]@parnum] <- dx
             }
@@ -356,7 +362,7 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
     colnames(info) <- rownames(info) <- names(ESTIMATE$correction)
     lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
     lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
-    info[lengthsplit > 2L, lengthsplit > 2L] <- 1
+    info[lengthsplit > 2L, lengthsplit > 2L] <- NA
     ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain)
     if(any(lengthsplit > 2L)){
         for(g in 1L:ngroups){

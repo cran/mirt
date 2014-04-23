@@ -1,15 +1,18 @@
+\docType{class}
 \name{MultipleGroupClass-class}
 \alias{MultipleGroupClass-class}
 \title{Class "MultipleGroupClass"}
 \description{
-  Defines the object returned from
-  \code{\link{multipleGroup}}.
+Defines the object returned from
+\code{\link{multipleGroup}}.
 }
 \section{Slots}{
   \describe{ \item{\code{iter}:}{Object of class
   \code{"numeric"}, number of iterations }
   \item{\code{pars}:}{Object of class \code{"list"},
   estimated parameter objects list }
+  \item{\code{shortpars}:}{Object of class
+  \code{"numeric"}, unique estimated parameters}
   \item{\code{model}:}{Object of class \code{"list"}, list
   containing original model } \item{\code{K}:}{Object of
   class \code{"numeric", number of item categories} }
@@ -71,6 +74,10 @@
   \item{\code{secondordertest}:}{Object of class
   \code{"logical"}, indicate whether information matrix
   passes second-order test}
+  \item{\code{infomethod}:}{Object of class
+  \code{"character"}, indiciates which information
+  estimation method was used} \item{\code{TOL}:}{Object of
+  class \code{"numeric"}, tollerence stopping criteria}
   \item{\code{CUSTOM.IND}:}{Object of class
   \code{"integer"}, an internal index}
   \item{\code{SLOW.IND}:}{Object of class \code{"integer"},
@@ -88,7 +95,7 @@
   "MultipleGroupClass")} } }
 }
 \author{
-  Phil Chalmers \email{rphilip.chalmers@gmail.com}
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \keyword{classes}
 

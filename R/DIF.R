@@ -51,6 +51,8 @@
 #' @param ... additional arguments to be passed to \code{\link{multipleGroup}} and \code{plot}
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords DIF
+#' @seealso \code{\link{multipleGroup}} 
+#  \code{\link{DTF}}
 #' @export DIF
 #' @examples
 #' \dontrun{
@@ -135,10 +137,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
                  Consider removing it from the item2test input or adding relevant parameters to which.par')
         if(Wald){
             wv <- wald(model)
-            L <- matrix(0, length(parnum), length(wv))
+            infoname <- wv[1L, ]
+            L <- matrix(0, length(parnum), length(infoname))
             for(i in 1L:length(parnum)){
-                L[i, paste0(which.par[i], '.', parnum[[i]][1L]) == wv] <- 1
-                L[i, paste0(which.par[i], '.', parnum[[i]][2L]) == wv] <- -1
+                L[i, paste0(which.par[i], '.', parnum[[i]][1L]) == infoname] <- 1
+                L[i, paste0(which.par[i], '.', parnum[[i]][2L]) == infoname] <- -1
             }
             res <- wald(model, L)
             return(res)

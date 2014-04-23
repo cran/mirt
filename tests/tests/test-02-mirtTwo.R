@@ -10,15 +10,15 @@ test_that('poly', {
     modLouis <- mirt(Science, 1, SE=T, SE.type='Louis', verbose=FALSE)
     expect_is(modp1, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modLouis, digits = 5, printSE=TRUE)))
-    expect_equal(cfs, c(1.0416, 0.1883, 4.86371, 0.49058, 2.63978, 0.22257, -1.46592, 0.15863, 1.22583, 0.1818, 2.92402, 0.23925, 0.90114, 0.14289, -2.26652, 0.20304, 2.29511, 0.48523, 5.23747, 0.73208, 2.21511, 0.35808, -1.96461, 0.32343, 1.09488, 0.1833, 3.34766, 0.27648, 0.99163, 0.14048, -1.6881, 0.16859, 0, NA, 1, NA),
+    expect_equal(cfs, c(1.04242, 0.18838, 4.86516, 0.49082, 2.64042, 0.22267, -1.46627, 0.15868, 1.2257, 0.18191, 2.9241, 0.2393, 0.90113, 0.14289, -2.26671, 0.2031, 2.28964, 0.48218, 5.2285, 0.72744, 2.21148, 0.3561, -1.96184, 0.32184, 1.0956, 0.18336, 3.34852, 0.27659, 0.99191, 0.14053, -1.68858, 0.16865, 0, NA, 1, NA),
                  tolerance = 1e-4)
-    expect_equal(modLouis@condnum, 98.36997, tolerance = 1e-2)
+    expect_equal(modLouis@condnum, 97.04485, tolerance = 1e-2)
     modsandwich <- mirt(Science, 1, SE=T, SE.type='sandwich', verbose=FALSE)
     expect_is(modp1, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modsandwich, digits = 5, printSE=TRUE)))
-    expect_equal(cfs, c(1.0416, 0.23843, 4.86371, 0.46757, 2.63978, 0.24649, -1.46592, 0.17158, 1.22583, 0.19197, 2.92402, 0.24647, 0.90114, 0.14591, -2.26652, 0.19888, 2.29511, 0.52407, 5.23747, 0.81335, 2.21511, 0.37544, -1.96461, 0.33878, 1.09488, 0.22703, 3.34766, 0.29195, 0.99163, 0.14486, -1.6881, 0.18012, 0, NA, 1, NA),
+    expect_equal(cfs, c(1.04242, 0.23839, 4.86516, 0.4678, 2.64042, 0.24657, -1.46627, 0.17162, 1.2257, 0.19225, 2.9241, 0.24659, 0.90113, 0.14593, -2.26671, 0.19902, 2.28964, 0.51948, 5.2285, 0.80622, 2.21148, 0.37255, -1.96184, 0.33646, 1.0956, 0.22698, 3.34852, 0.29202, 0.99191, 0.14491, -1.68858, 0.18015, 0, NA, 1, NA),
                  tolerance = 1e-4)
-    expect_equal(modsandwich@condnum, 142.5913, tolerance = 1e-2)
+    expect_equal(modsandwich@condnum, 140.0871, tolerance = 1e-2)
     modp1 <- mirt(Science, 1, verbose=FALSE)
     expect_is(modp1, 'ConfirmatoryClass')
     expect_equal(modp1@df, 239)
@@ -34,7 +34,7 @@ test_that('poly', {
     modp1 <- mirt(Science, 1, SE=TRUE, SE.type = 'SEM', verbose=FALSE)
     expect_is(modp1, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modp1)))
-    expect_equal(cfs, c(1.041, 0.669, 1.412, 4.863, 3.904, 5.822, 2.639, 2.203, 3.075, -1.465, -1.775, -1.156, 1.226, 0.866, 1.586, 2.924, 2.442, 3.406, 0.901, 0.617, 1.185, -2.266, -2.663, -1.869, 2.301, 1.334, 3.267, 5.245, 3.782, 6.708, 2.219, 1.506, 2.932, -1.967, -2.613, -1.322, 1.094, 0.731, 1.456, 3.347, 2.804, 3.89, 0.991, 0.716, 1.267, -1.688, -2.016, -1.359, 0, NA, NA, 1, NA, NA),
+    expect_equal(cfs, c(1.041, 0.657, 1.424, 4.863, 3.343, 6.382, 2.639, 2.18, 3.099, -1.466, -1.77, -1.161, 1.226, 0.884, 1.567, 2.924, 2.454, 3.394, 0.901, 0.614, 1.189, -2.266, -2.646, -1.887, 2.3, 1.34, 3.259, 5.244, 3.837, 6.651, 2.218, 1.518, 2.919, -1.967, -2.602, -1.333, 1.094, 0.732, 1.456, 3.347, 2.808, 3.886, 0.991, 0.723, 1.26, -1.688, -2.017, -1.358, 0, NA, NA, 1, NA, NA),
                  tolerance = 1e-2)
     suppressMessages(modp2 <- mirt(Science, 2, verbose=FALSE))
     expect_is(modp2, 'ExploratoryClass')
@@ -63,42 +63,47 @@ test_that('poly', {
     cfs <- as.numeric(do.call(c, coef(modp4, verbose = FALSE, digits=4)))
     expect_equal(cfs, c(1.0408, 4.862, 2.6387, -1.4664, 1.2063, 2.9083, 0.8958, -2.254, 2.3376, 5.2972, 2.2404, -1.9886, 0.7986, 0, 1.0782, 1.7756, 3, 0, 2.1964, 2.9637, 1.6742, 0, 1),
                  tolerance = 1e-2)
-    modp5 <- mirt(Science, 1, itemtype = c(rep('graded',3), 'gpcm'), SE = TRUE, verbose=FALSE)
+    modp5 <- mirt(Science, 1, itemtype = c(rep('graded',3), 'gpcm'), SE = TRUE, SE.type = 'SEM', verbose=FALSE)
     expect_is(modp5, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modp5, verbose = FALSE)))
-    expect_equal(cfs, c(1.057, 0.671, 1.442, 4.876, 3.909, 5.843, 2.649, 2.209, 3.09, -1.472, -1.789, -1.155, 1.219, 0.858, 1.58, 2.918, 2.448, 3.387, 0.9, 0.621, 1.179, -2.263, -2.663, -1.863, 2.255, 1.297, 3.213, 5.178, 3.707, 6.648, 2.19, 1.466, 2.914, -1.943, -2.574, -1.311, 0.77, 0.458, 1.083, 0, NA, NA, 1, NA, NA, 2, NA, NA, 3, NA, NA, 0, NA, NA, 2.159, 1.544, 2.775, 2.973, 2.284, 3.663, 1.767, 1.131, 2.403, 0, NA, NA, 1, NA, NA),
+    expect_equal(cfs, c(1.057, 0.676, 1.438, 4.876, 3.912, 5.84, 2.65, 2.21, 3.09, -1.472, -1.786, -1.159, 1.219, 0.839, 1.599, 2.918, 2.425, 3.41, 0.9, 0.615, 1.185, -2.263, -2.679, -1.848, 2.254, 1.322, 3.187, 5.177, 3.765, 6.588, 2.19, 1.49, 2.89, -1.942, -2.567, -1.318, 0.771, 0.464, 1.077, 0, NA, NA, 1, NA, NA, 2, NA, NA, 3, NA, NA, 0, NA, NA, 2.16, 1.552, 2.767, 2.973, 2.29, 3.657, 1.767, 1.137, 2.397, 0, NA, NA, 1, NA, NA),
                  tolerance = 1e-2)
     modp6 <- mirt(Science, 1, empiricalhist=TRUE, verbose = FALSE)
     expect_is(modp6, 'ConfirmatoryClass')
     cfs <- as.numeric(do.call(c, coef(modp6, verbose = FALSE)))
-    expect_equal(cfs, c(0.764, 5.211, 2.662, -1.281, 1.031, 2.999, 1.025, -2.095, 3.172, 6.42, 3.44, -1.639, 0.924, 3.479, 1.109, -1.518, 0, 1),
+    expect_equal(cfs, c(0.789, 5.158, 2.624, -1.344, 1.047, 2.943, 0.962, -2.184, 2.681, 5.726, 2.782, -1.808, 0.931, 3.423, 1.047, -1.592, 0, 1),
                  tolerance = 1e-2)
-
+    
+    fm0 <- fscores(modp1, method='EAP', response.pattern = c(1,2,3,4))
+    expect_equal(as.numeric(fm0[,c('F1','SE_F1')]), c(-0.3494903, 0.6004922), tolerance=1e-4)
     fm1 <- fscores(modp1, verbose = FALSE)
     expect_is(fm1, 'matrix')
     expect_true(mirt:::closeEnough(fm1[1:6,'F1'] - c(-2.7173474, -1.4189304, -0.7155405,
-                                                     -0.4452374, -2.5339610, -1.2481305), -1e-4, 1e-4))
+                                                     -0.4452374, -2.5339610, -1.2481305), -1e-2, 1e-2))
+    fm1b <- fscores(modp1, verbose = FALSE, full.scores=TRUE)
+    expect_equal(cor(fm1b, rowSums(Science))[1], .969, tolerance = .02)
     fm2 <- fscores(modp2, rotate = 'oblimin', verbose = FALSE)
     expect_is(fm2, 'matrix')
     expect_true(mirt:::closeEnough(abs(as.numeric(fm2[1:6,c('F1','F2')])) -
-                                       abs(c(-2.5689536, -1.8493210, -0.6202252, -1.1195381, -2.4169928, -0.7386485,  2.3431580,  0.7169414, -0.2393583, -0.4576444,  2.2886770,  1.5675075)),
+                                       abs(c(2.5707445, 1.8477329, 0.6198135, 1.1152277, 2.4184494,
+                                             0.7455961, 2.3420774, 0.7085009, 0.2521220, 0.4697231, 2.2881277, 1.5731773)),
                                    -1e-2, 1e-2))
     fm3 <- fscores(modp3, rotate = 'oblimin', full.scores = TRUE, verbose = FALSE)
     expect_is(fm3, 'matrix')
     fm4 <- fscores(modp4, verbose = FALSE)
     expect_is(fm4, 'matrix')
-    expect_true(mirt:::closeEnough(fm4[1:6,'F1'] - c(-2.7014033, -1.4432191, -0.7929087, -0.5390761, -2.5216331, -1.1445815), -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fm4[1:6,'F1'] - c(-2.7025522, -1.4458413, -0.7908526, -0.5438003, -2.5218037, -1.1433440), -1e-4, 1e-4))
     fm5 <- fscores(modp5, verbose = FALSE)
     expect_is(fm5, 'matrix')
     expect_true(mirt:::closeEnough(fm5[1:6,'F1'] - c(-2.6953386, -1.4445425, -0.7365539,
-                                                     -0.5624948, -2.5085663, -1.1733173), -1e-4, 1e-4))
+                                                     -0.5624948, -2.5085663, -1.1733173), -1e-2, 1e-2))
 
     resmat <- residuals(modp3, type = 'Q3', Theta = fm3[,'F1'], verbose = FALSE)
-    expect_equal(as.numeric(resmat), c(1, -0.167, -0.144, 0.085, -0.167, 1, -0.055, -0.217, -0.144, -0.055, 1, -0.448, 0.085, -0.217, -0.448, 1))
+    expect_equal(as.numeric(resmat), c(1, -0.167, -0.144, 0.084, -0.167, 1, -0.055, -0.218, -0.144, -0.055, 1, -0.447, 0.084, -0.218, -0.447, 1))
     resmatLD <- residuals(modp3, type = 'LD', verbose = FALSE)
-    expect_equal(as.numeric(resmatLD), c(NA, -20.127, -13.328, 19.607, -0.131, NA, 10.872, -21.561, -0.106, 0.096, NA, -17.541, 0.129, -0.135, -0.122, NA))
+    expect_equal(as.numeric(resmatLD), c(NA, -20.136, -13.303, 19.573, -0.131, NA, 10.895, -21.592, -0.106, 0.096, NA, -17.521, 0.129, -0.136, -0.122, NA))
     resmatG2 <- residuals(modp3, type = 'LDG2', verbose = FALSE)
-    expect_equal(as.numeric(resmatG2), c(NA, -22.903, -12.621, 23.24, -0.14, NA, 10.728, -17.242, -0.104, 0.096, NA, -18.519, 0.141, -0.121, -0.125, NA))
+    expect_equal(as.numeric(resmatG2), c(NA, -22.906, -12.609, 23.21, -0.14, NA, 10.753, -17.254, -0.104, 0.096, NA, -18.509, 0.14, -0.121, -0.125, NA))
     cof1 <- coef(modp1)
     expect_is(cof1, 'list')
     cof2 <- coef(modp2, verbose = FALSE)

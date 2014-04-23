@@ -2,8 +2,8 @@
 \alias{createItem}
 \title{Create a user defined item with correct generic functions}
 \usage{
-  createItem(name, par, est, P, gr = NULL, hss = NULL,
-    lbound = NULL, ubound = NULL, userdata = NULL)
+createItem(name, par, est, P, gr = NULL, hss = NULL, lbound = NULL,
+  ubound = NULL, userdata = NULL)
 }
 \arguments{
   \item{name}{a character indicating the item class name to
@@ -17,18 +17,18 @@
 
   \item{P}{the probability trace function for all
   categories (first column is category 1, second category
-  two, etc). First input contains a vector of all the item
+  two, etc).  First input contains a vector of all the item
   parameters, the second input must be a matrix called
   \code{Theta}, and the third input must be the number of
-  categories called \code{ncat}. Function also must return
+  categories called \code{ncat}.  Function also must return
   a \code{matrix} object of category probabilities}
 
   \item{gr}{gradient function (vector of first derivatives)
-  used in estimation. If not specified a numeric
+  used in estimation.  If not specified a numeric
   approximation will be used}
 
   \item{hss}{Hessian function (matrix of second
-  derivatives) used in estimation. If not specified a
+  derivatives) used in estimation.  If not specified a
   numeric approximation will be used (required for the
   MH-RM algorithm only)}
 
@@ -50,18 +50,17 @@
   be set to Inf}
 }
 \description{
-  Initializes the proper S4 class and methods necessary for
-  mirt functions to use in estimation. To use the defined
-  objects pass to the \code{mirt(..., customItems =
-  list())} command, and ensure that the classes are
-  properly labeled and unique in the list.
+Initializes the proper S4 class and methods necessary for
+mirt functions to use in estimation. To use the defined
+objects pass to the \code{mirt(..., customItems = list())}
+command, and ensure that the classes are properly labeled
+and unique in the list.
 }
 \details{
-  Additionally, the \code{summary()} function will not
-  return proper standardized loadings since the function is
-  not sure how to handle them (no slopes could be defined
-  at all!). Instead loadings of .001 are filled in as
-  place-holders.
+Additionally, the \code{summary()} function will not return
+proper standardized loadings since the function is not sure
+how to handle them (no slopes could be defined at all!).
+Instead loadings of .001 are filled in as place-holders.
 }
 \examples{
 \dontrun{
@@ -155,7 +154,7 @@ Tnom.dev(4) \%*\% coef(nommod)[[1]][4:6] #d
 }
 }
 \author{
-  Phil Chalmers \email{rphilip.chalmers@gmail.com}
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \keyword{createItem}
 

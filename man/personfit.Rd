@@ -2,7 +2,7 @@
 \alias{personfit}
 \title{Person fit statistics}
 \usage{
-  personfit(x, method = "EAP", Theta = NULL, ...)
+personfit(x, method = "EAP", Theta = NULL, stats.only = TRUE, ...)
 }
 \arguments{
   \item{x}{a computed model object of class
@@ -17,17 +17,20 @@
   arguments typically passed to \code{fscores()} will be
   ignored and these values will be used instead}
 
+  \item{stats.only}{logical; return only the person fit
+  statistics without their associated response pattern?}
+
   \item{...}{additional arguments to be passed to
   \code{fscores()}}
 }
 \description{
-  \code{personfit} calculates the Zh values from Drasgow,
-  Levine and Williams (1985) for unidimensional and
-  multidimensional models. For Rasch models infit and
-  outfit statistics are also produced. The returned object
-  is a \code{data.frame} consisting either of the tabulated
-  data or full data with the statistics appended to the
-  rightmost columns.
+\code{personfit} calculates the Zh values from Drasgow,
+Levine and Williams (1985) for unidimensional and
+multidimensional models. For Rasch models infit and outfit
+statistics are also produced. The returned object is a
+\code{data.frame} consisting either of the tabulated data
+or full data with the statistics appended to the rightmost
+columns.
 }
 \examples{
 \dontrun{
@@ -47,23 +50,43 @@ head(fit)
 Theta <- fscores(x, method = 'MAP', full.scores = TRUE, scores.only = TRUE)
 personfit(x, Theta=Theta)
 
+#muliple group Rasch model example
+set.seed(12345)
+a <- matrix(rep(1, 15), ncol=1)
+d <- matrix(rnorm(15,0,.7),ncol=1)
+itemtype <- rep('dich', nrow(a))
+N <- 1000
+dataset1 <- simdata(a, d, N, itemtype)
+dataset2 <- simdata(a, d, N, itemtype, sigma = matrix(1.5))
+dat <- rbind(dataset1, dataset2)
+group <- c(rep('D1', N), rep('D2', N))
+MGmodel1 <- 'F1 = 1-15'
+models <- mirt.model(MGmodel1, quiet = TRUE)
+mod_Rasch <- multipleGroup(dat, models, itemtype = 'Rasch', group = group)
+coef(mod_Rasch)
+pf <- personfit(mod_Rasch, method='MAP')
+head(pf)
+
   }
 }
 \author{
-  Phil Chalmers \email{rphilip.chalmers@gmail.com}
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
-  Drasgow, F., Levine, M. V., & Williams, E. A. (1985).
-  Appropriateness measurement with polychotomous item
-  response models and standardized indices. \emph{Journal
-  of Mathematical and Statistical Psychology, 38}, 67-86.
+Drasgow, F., Levine, M. V., & Williams, E. A. (1985).
+Appropriateness measurement with polychotomous item
+response models and standardized indices. \emph{Journal of
+Mathematical and Statistical Psychology, 38}, 67-86.
 
-  Reise, S. P. (1990). A comparison of item- and person-fit
-  methods of assessing model-data fit in IRT. \emph{Applied
-  Psychological Measurement, 14}, 127-137.
+Reise, S. P. (1990). A comparison of item- and person-fit
+methods of assessing model-data fit in IRT. \emph{Applied
+Psychological Measurement, 14}, 127-137.
+
+Wright B. D. & Masters, G. N. (1982). \emph{Rating scale
+analysis}. MESA Press.
 }
 \seealso{
-  \code{\link{itemfit}}
+\code{\link{itemfit}}
 }
 \keyword{fit}
 \keyword{person}

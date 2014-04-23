@@ -3,18 +3,17 @@
 #' Compute a Wald test given an \code{L} vector or matrix of numeric contrasts. Requires that the
 #' model information matrix be computed (including \code{SE = TRUE} when using the EM method). Use
 #' \code{wald(model)} to observe how the information matrix columns are named, especially if
-#' the estimated model contains constrained parameters (e.g., 1PL). The information matrix names
-#' are labelled according to which parameter number(s) they correspond to (to check the
-#' numbering use \code{\link{mod2values}} on the estimated object).
+#' the estimated model contains constrained parameters (e.g., 1PL). 
 #'
 #'
 #' @aliases wald
-#' @param L a coefficient matrix with dimensions nconstrasts x npars, or a vector if only one
-#'   set of contrasts is being tested. Omitting this value will return the column names of the
+#' @param L a coefficient matrix with dimensions nconstrasts x npars. 
+#'   Omitting this value will return the column names of the
 #'   information matrix used to identify the (potentially constrained) parameters
 #' @param object estimated object from \code{mirt}, \code{bfactor},
-#' \code{multipleGroup}, or \code{mixedmirt}
-#' @param C a constant vector/matrix to be compared along side L
+#'   \code{multipleGroup}, or \code{mixedmirt}
+#' @param C a constant vector of population parameters to be compared along side L, where 
+#'   \code{length(C) == ncol(L)}. By default a vector of 0's is constructed
 #' @keywords wald
 #' @export wald
 #' @examples
@@ -31,14 +30,12 @@
 #' index[index$est, ]
 #'
 #' #second item slope equal to 0?
-#' L <- rep(0, 10)
-#' names(L) <- infonames #labelling is optional
-#' L[3] <- 1
+#' L <- matrix(0, 1, 10)
+#' L[1,3] <- 1
 #' wald(mod, L)
 #'
 #' #simultaneously test equal factor slopes for item 1 and 2, and 4 and 5
 #' L <- matrix(0, 2, 10)
-#' colnames(L) <- infonames #again, labelling not required
 #' L[1,1] <- L[2, 7] <- 1
 #' L[1,3] <- L[2, 9] <- -1
 #' L
@@ -59,44 +56,29 @@ wald <- function(object, L, C = 0){
             stop('No information matrix has been calculated for the model')
     Names <- colnames(object@information)
     if(missing(L)){
-        names(Names) <- 1:length(Names)
-        return(Names)
+        index <- 1L:length(Names)
+        ret <- as.data.frame(t(data.frame(infoname=Names, par = round(object@shortpars,3))))
+        colnames(ret) <- index
+        return(ret)
     }
-    if(!is.matrix(L))
-        L <- matrix(L, 1)
+    if(!is.matrix(L)){
+        stop('L must be a matrix')
+    } else if(ncol(L) != length(Names)){
+        stop('L does not have an appropriate number of columns')
+    }
+    if(!is.vector(C))
+        stop('C must be a vector of constant population parameters')
+    if(length(C) == 1L){
+        C <- numeric(ncol(L))
+    } else if(length(C) != ncol(L)){
+        stop('length(C) must be the same as ncol(L)')
+    }
     pars <- object@pars
     if(is(object, 'MultipleGroupClass'))
         pars <- object@cmods
     covB <- solve(object@information)
-    B <- parnum <- c()
-    if(is(object, 'MultipleGroupClass')){
-        for(g in 1L:length(pars)){
-            for(i in 1L:length(pars[[g]]@pars)){
-                B <- c(B, pars[[g]]@pars[[i]]@par)
-                parnum <- c(parnum, pars[[g]]@pars[[i]]@parnum)
-            }
-        }
-    } else {
-        for(i in 1L:length(pars)){
-            B <- c(B, pars[[i]]@par)
-            parnum <- c(parnum, pars[[i]]@parnum)
-        }
-    }
-    if(is(object, 'MixedClass')){
-        if(length(object@random)){
-            for(i in 1L:length(object@random)){
-                B <- c(B, object@random[[i]]@par)
-                tmp <- object@random[[i]]@parnum
-                names(tmp) <- names(object@random[[i]]@est)
-                parnum <- c(parnum, tmp)
-            }
-        }
-    }
-    keep <- c()
-    for(i in 1L:length(Names))
-        keep <- c(keep, as.numeric(strsplit(Names[i], '.', fixed = TRUE)[[1]][2]))
-    B <- B[keep]
-    W <- t(L %*% B - C) %*% solve(L %*% covB %*% t(L)) %*% (L %*% B - C)
+    B <- object@shortpars
+    W <- t(L %*% (B - C)) %*% solve(L %*% covB %*% t(L)) %*% (L %*% (B - C))
     W <- ifelse(W < 0, 0, W)
     ret <- list(W=W, df = nrow(L))
     p <- 1 - pchisq(ret$W, ret$df)
@@ -112,6 +94,6 @@ wald <- function(object, L, C = 0){
 #' @param ... additional arguments to be passed
 print.wald <- function(x, ...){
     cat('\nWald test: \nW = ', round(x$W, 3), ', df = ', x$df, ', p = ',
-        round(x$p, 3), '\n', sep='')
+        round(x$p, 4), '\n', sep='')
 }
 

@@ -2,7 +2,7 @@
 \alias{iteminfo}
 \title{Function to calculate item information}
 \usage{
-  iteminfo(x, Theta, degrees = NULL, total.info = TRUE)
+iteminfo(x, Theta, degrees = NULL, total.info = TRUE)
 }
 \arguments{
   \item{x}{an extracted internal mirt object containing
@@ -12,7 +12,7 @@
   (multidimensional) of latent trait values}
 
   \item{degrees}{a vector of angles in degrees that are
-  between 0 and 90 that jointly sum to 90. Only applicable
+  between 0 and 90 that jointly sum to 90.  Only applicable
   when the input object is multidimensional}
 
   \item{total.info}{logical; return the total information
@@ -20,8 +20,8 @@
   for each category are returned as a matrix}
 }
 \description{
-  Given an internal mirt item object extracted by using
-  \code{\link{extract.item}}, compute the item information.
+Given an internal mirt item object extracted by using
+\code{\link{extract.item}}, compute the item information.
 }
 \examples{
 \dontrun{
@@ -55,7 +55,7 @@ lines(Theta, T1/T1, col = 'red')
 }
 }
 \seealso{
-  \code{\link{extract.item}}
+\code{\link{extract.item}}
 }
 \keyword{information}
 

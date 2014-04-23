@@ -1,7 +1,5 @@
 #' Print the model objects
 #'
-#' \code{print(x)}
-#'
 #' Print model object summaries to the console.
 #'
 #' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
@@ -24,22 +22,30 @@ setMethod(
     definition = function(x){
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"),
             "\n\n", sep = "")
-        cat("Full-information item factor analysis with ", x@nfact, " factors \n", sep="")
+        cat("Full-information item factor analysis with ", x@nfact, " factor(s).\n", sep="")
         EMquad <- ''
-        if(x@method == 'EM') EMquad <- c(' with ', x@quadpts, ' quadrature')
+        if(x@method == 'EM') EMquad <- c('\n     using ', x@quadpts, ' quadrature')
+        method <- x@method
+        if(method == 'MIXED') method <- 'MHRM'
         if(x@converge == 1)
-            cat("Converged in ", x@iter, " iterations", EMquad, ". \n", sep = "")
+            cat("Converged within ", x@TOL, ' tolerance after ', x@iter, ' ', 
+                method, " iterations.\n", sep = "")
         else
-            cat("Estimation stopped after ", x@iter, " iterations", EMquad, ". \n", sep="")
-        if(!is.nan(x@condnum))
-            cat("Condition number of information matrix = ", x@condnum,
+            cat("FAILED TO CONVERGE within ", x@TOL, ' tolerance after ', 
+                x@iter, ' ', method, " iterations.\n", sep="")
+        if(method == 'EM')
+            cat('Number of rectangular quadrature used:', x@quadpts)
+        cat('\n')
+        if(!is.nan(x@condnum)){
+            cat("\nInformation matrix estimated with method:", x@infomethod)
+            cat("\nCondition number of information matrix = ", x@condnum,
                 '\nSecond-order test: model ', if(!x@secondordertest)
                     'is not a maximum, or the information matrix is too inaccurate' else
                         'is a possible local maximum', '\n', sep = "")
+        }
         if(length(x@logLik) > 0){
-            cat("Log-likelihood = ", x@logLik, ifelse(length(x@SElogLik) > 0,
-                                                      paste(', SE = ', round(x@SElogLik,3)),
-                                                      ''), "\n",sep='')
+            cat("\nLog-likelihood = ", x@logLik, if(method == 'MHRM')
+                paste(', SE =', round(x@SElogLik,3)), "\n",sep='')
             cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
             cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
             if(!is.nan(x@p)){
@@ -52,8 +58,6 @@ setMethod(
 )
 
 #' Show model object
-#'
-#' \code{show(object)}
 #'
 #' Print model object summaries to the console.
 #'
@@ -81,8 +85,6 @@ setMethod(
 
 #' Summary of model object
 #'
-#' \code{summary(object, rotate = '', Target = NULL, suppress = 0, digits = 3, verbose = TRUE, ...)}
-#'
 #' Transforms coefficients into a standardized factor loading's metric. For \code{MixedClass} objects,
 #' the fixed and random coefficients are printed.
 #'
@@ -93,6 +95,8 @@ setMethod(
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #'   loadings should be suppressed. Typical values are around .3 in most
 #'   statistical software. Default is 0 for no suppression
+#' @param printCI print a confidence interval for standardized loadings
+#'   (e.g., \code{printCI = .95} gives a 95\% confidence interval)
 #' @param digits number of significant digits to be rounded
 #' @param verbose logical; allow information to be printed to the console?
 #' @param ... additional arguments to be passed
@@ -109,12 +113,16 @@ setMethod(
 #' x <- mirt(Science, 2)
 #' summary(x)
 #' summary(x, rotate = 'varimax')
+#' 
+#' #print confidence interval (requires computed information matrix)
+#' x2 <- mirt(Science, 1, SE=TRUE)
+#' summary(x2, printCI=.95)
 #' }
 setMethod(
     f = "summary",
     signature = 'ExploratoryClass',
     definition = function(object, rotate = '', Target = NULL, suppress = 0, digits = 3,
-                          verbose = TRUE, ...){
+                          printCI = FALSE, verbose = TRUE, ...){
         nfact <- ncol(object@F)
         if (rotate == 'none' || nfact == 1) {
             F <- object@F
@@ -172,8 +180,7 @@ setMethod(
 
 #' Extract raw coefs from model object
 #'
-#' \code{coef(object, CI = .95, printSE = FALSE, rotate = '', Target = NULL, digits = 3,
-#'    IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE, verbose = TRUE, ...)}
+#' Return a list (or data.frame) of raw item and group level coefficients.
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
@@ -297,7 +304,7 @@ setMethod(
 
 #' Compare nested models
 #'
-#' \code{anova(object, object2, verbose = TRUE)}
+#' Compare nested models using likelihood ratio, AIC, BIC, etc.
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
@@ -339,17 +346,16 @@ setMethod(
                           SABIC = c(object@SABIC, object2@SABIC),
                           BIC = c(object@BIC, object2@BIC),
                           logLik = c(object@logLik, object2@logLik),
-                          X2 = c('', X2),
-                          df = c('', abs(df)),
-                          p = c('', round(1 - pchisq(X2,abs(df)),3)))
+                          X2 = c(NaN, X2),
+                          df = c(NaN, abs(df)),
+                          p = c(NaN, round(1 - pchisq(X2,abs(df)),4)))
         return(ret)
     }
 )
 
 #' Compute model residuals
 #'
-#' \code{residuals(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
-#'                          printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL, ...)}
+#' Return model implied residuals for linear dependencies between items or at the person level.
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
 #'   \code{MultipleGroupClass}. Bifactor models are automatically detected and utilized for
@@ -434,7 +440,7 @@ setMethod(
         calcG2 <- ifelse(type == 'LDG2', TRUE, FALSE)
         if(type %in% c('LD', 'LDG2')){
             groupPars <- ExtractGroupPars(object@pars[[length(object@pars)]])
-            prior <- mvtnorm::dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
+            prior <- mirt_dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
             prior <- prior/sum(prior)
             df <- (object@K - 1) %o% (object@K - 1)
             diag(df) <- NA
@@ -539,11 +545,7 @@ setMethod(
 
 #' Plot various test implied functions from models
 #'
-#' \code{plot(x, y, type = 'info', npts = 50, theta_angle = 45,
-#'                           which.items = 1:ncol(x@@data),
-#'                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
-#'                           facet_items = TRUE, auto.key = TRUE, main = NULL,
-#'                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)}
+#' Plot various test implied response functions from models estimated in the mirt package.
 #'
 #' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
 #'   \code{MultipleGroupClass}
@@ -559,6 +561,8 @@ setMethod(
 #' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}.
 #'   If a vector is used then a bubble plot is created with the summed information across the angles specified
 #'   (e.g., \code{theta_angle = seq(0, 90, by=10)})
+#' @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is 
+#'   used in conjunction with \code{npts}
 #' @param npts number of quadrature points to be used for plotting features.
 #'   Larger values make plots look smoother
 #' @param rot allows rotation of the 3D graphics
@@ -578,7 +582,7 @@ setMethod(
 #'
 #' @name plot-method
 #' @aliases plot,ExploratoryClass-method plot,ConfirmatoryClass-method
-#'   plot,MultipleGroupClass-method
+#'   plot,MultipleGroupClass-method plot,ExploratoryClass,missing-method
 #' @docType methods
 #' @rdname plot-method
 #' @examples
@@ -609,7 +613,7 @@ setMethod(
     f = "plot",
     signature = signature(x = 'ExploratoryClass', y = 'missing'),
     definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
-                          which.items = 1:ncol(x@data),
+                          theta_lim = c(-4,4), which.items = 1:ncol(x@data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE, auto.key = TRUE, main = NULL,
                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)
@@ -622,7 +626,7 @@ setMethod(
         if(nfact > 2) stop("Can't plot high dimensional solutions.")
         if(nfact == 1) theta_angle <- 0
         J <- length(x@pars) - 1
-        theta <- seq(-4,4,length.out=npts)
+        theta <- seq(theta_lim[1L],theta_lim[2L],length.out=npts)
         ThetaFull <- Theta <- thetaComb(theta, nfact)
         prodlist <- attr(x@pars, 'prodlist')
         if(length(prodlist) > 0)
@@ -638,9 +642,7 @@ setMethod(
                     info <- info + iteminfo(x=x@pars[[i]], Theta=ThetaFull, degrees=ta)
             }
         }
-        adj <- apply(x@data, 2, min)
-        if(any(adj > 0) && type == 'score')
-            message('Adjusted so that the lowest category score for every item is 0')
+        adj <- apply(x@data, 2, min, na.rm=TRUE)
         tmp <- try(x@rotate, silent = TRUE)
         if (x@nfact > 1 && !is(tmp,'try-error')){
             rotname <- x@rotate
@@ -652,7 +654,7 @@ setMethod(
         itemtrace <- computeItemtrace(x@pars, ThetaFull, x@itemloc, CUSTOM.IND=x@CUSTOM.IND)
         score <- c()
         for(i in 1:J)
-            score <- c(score, 0:(x@K[i]-1))
+            score <- c(score, 0:(x@K[i]-1) + adj[i])
         score <- matrix(score, nrow(itemtrace), ncol(itemtrace), byrow = TRUE)
         plt <- data.frame(cbind(info,score=rowSums(score*itemtrace),Theta=Theta))
         if(nfact == 2){

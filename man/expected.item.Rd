@@ -2,7 +2,7 @@
 \alias{expected.item}
 \title{Function to calculate expected value of item}
 \usage{
-  expected.item(x, Theta, min = 0)
+expected.item(x, Theta, min = 0)
 }
 \arguments{
   \item{x}{an extracted internal mirt object containing
@@ -15,23 +15,22 @@
   indicating the lowest theoretical category. Default is 0}
 }
 \description{
-  Given an internal mirt object extracted from an estimated
-  model compute the expected value for an item given the
-  ability parameter(s).
+Given an internal mirt object extracted from an estimated
+model compute the expected value for an item given the
+ability parameter(s).
 }
 \examples{
 \dontrun{
 mod <- mirt(Science, 1)
 extr.2 <- extract.item(mod, 2)
-Theta <- fscores(mod, full.scores=TRUE, scores.only=TRUE)
+Theta <- matrix(seq(-6,6, length.out=200))
 expected <- expected.item(extr.2, Theta, min(Science[,1])) #min() of first item
-
 head(data.frame(expected, Theta=Theta))
 
 }
 }
 \seealso{
-  \code{\link{extract.item}}
+\code{\link{extract.item}}, , \code{\link{expected.test}}
 }
 \keyword{expected}
 \keyword{value}
