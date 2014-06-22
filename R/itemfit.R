@@ -8,23 +8,30 @@
 #' @aliases itemfit
 #' @param x a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass}, or
 #'   \code{MultipleGroupClass}
-#' @param Zh logical; calculate Zh and associated statistics (infit/outfit)? Disable this is you are only
-#'   interested in computing the S-X2 quickly
+#' @param Zh logical; calculate Zh and associated statistics (infit/outfit)? Disable this is you are 
+#'   only interested in computing the S-X2 quickly
 #' @param X2 logical; calculate the X2 statistic for unidimensional models?
 #' @param mincell the minimum expected cell size to be used in the S-X2 computations. Tables will be
 #'   collapsed across items first if polytomous, and then across scores if necessary
 #' @param S_X2.tables logical; return the tables in a list format used to compute the S-X2 stats?
-#' @param group.size approximate size of each group to be used in calculating the \eqn{\chi^2} statistic
-#' @param empirical.plot a single numeric value or character of the item name  indicating which item to plot
-#'   (via \code{itemplot}) and overlay with the empirical \eqn{\theta} groupings. Only applicable
-#'   when \code{type = 'X2'}. The default is \code{NULL}, therefore no plots are drawn
-#' @param empirical.CI a numeric value indicating the width of the empirical confidence interval ranging 
-#'   between 0 and 1 (default of 0 plots not interval). For example, a 95% confidence interval would be 
-#'   plotted if \code{empirical.CI = .95}. Only applicable to dichotomous items
+#' @param group.size approximate size of each group to be used in calculating the \eqn{\chi^2} 
+#'   statistic
+#' @param empirical.plot a single numeric value or character of the item name  indicating which 
+#'   item to plot (via \code{itemplot}) and overlay with the empirical \eqn{\theta} groupings. 
+#'   Only applicable when \code{type = 'X2'}. The default is \code{NULL}, therefore no plots 
+#'   are drawn
+#' @param empirical.CI a numeric value indicating the width of the empirical confidence interval 
+#'   ranging between 0 and 1 (default of 0 plots not interval). For example, a 95% confidence 
+#'   interval would be plotted if \code{empirical.CI = .95}. Only applicable to dichotomous items
 #' @param method type of factor score estimation method. See \code{\link{fscores}} for more detail
-#' @param Theta a matrix of factor scores used for statistics that require emperical estimates. If 
-#'   supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
-#'   be used instead
+#' @param Theta a matrix of factor scores for each person used for statistics that require 
+#'   empirical estimates. If supplied, arguments typically passed to \code{fscores()} will be 
+#'   ignored and these values will be used instead. Also required when estimating statistics 
+#'   with missing data via imputation
+#' @param impute a number indicating how many imputations to perform (passed to 
+#'   \code{\link{imputeMissing}}) when there are missing data present. This requires a 
+#'   precomputed \code{Theta} input. Will return a data.frame object with the mean estimates 
+#'   of the stats and their imputed standard deviations
 #' @param ... additional arguments to be passed to \code{fscores()}
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords item fit
@@ -42,8 +49,8 @@
 #' Kang, T. & Chen, Troy, T. (2007). An investigation of the performance of the generalized
 #' S-X2 item-fit index for polytomous IRT models. ACT
 #'
-#' Orlando, M. & Thissen, D. (2000). Likelihood-based item fit indices for dichotomous item response theory
-#' models. \emph{Applied Psychological Measurement, 24}, 50-64.
+#' Orlando, M. & Thissen, D. (2000). Likelihood-based item fit indices for dichotomous item 
+#' response theory models. \emph{Applied Psychological Measurement, 24}, 50-64.
 #'
 #' Reise, S. P. (1990). A comparison of item- and person-fit methods of assessing model-data fit
 #' in IRT. \emph{Applied Psychological Measurement, 14}, 127-137.
@@ -93,26 +100,76 @@
 #' tables$O[[1]]
 #' tables$E[[1]]
 #'
-#'
+#' # fit stats with missing data (run in parallel using all cores)
+#' data[sample(1:prod(dim(data)), 500)] <- NA
+#' raschfit <- mirt(data, 1, itemtype='Rasch')
+#' 
+#' mirtCluster()
+#' Theta <- fscores(raschfit, method = 'ML', full.scores=TRUE)
+#' itemfit(raschfit, impute = 10, Theta=Theta)
+#' 
 #'   }
 #'
 itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X2.tables = FALSE,
-                    empirical.plot = NULL, empirical.CI = 0, method = 'EAP', Theta = NULL, ...){
-    if(any(is.na(x@data)))
-        stop('Fit statistics cannot be computed when there are missing data.')
+                    empirical.plot = NULL, empirical.CI = 0, method = 'EAP', Theta = NULL, 
+                    impute = 0, ...){
+    
+    fn <- function(collect, obj, Theta, ...){
+        tmpdat <- imputeMissing(obj, Theta)
+        tmpmod <- mirt(tmpdat, obj@nfact, pars = vals)
+        tmpmod@pars <- obj@pars
+        return(itemfit(tmpmod, Theta=Theta, ...))
+    } 
+    
+    if(is(x, 'MixedClass'))
+        stop('mixedmirt objects not supported')
+    
+    if(any(is.na(x@Data$data)) && !is(x, 'MultipleGroupClass')){
+        if(impute == 0 || is.null(Theta))
+            stop('Fit statistics cannot be computed when there are missing data. Pass suitable
+                 Theta and impute arguments to compute statistics following multiple data 
+                 inputations')
+        collect <- vector('list', impute)
+        vals <- mod2values(x)
+        vals$est <- FALSE
+        collect <- myLapply(collect, fn, obj=x, Theta=Theta, vals=vals, 
+                            Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
+                            S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
+                            empirical.CI=empirical.CI, method=method, impute=0, ...)
+        ave <- SD <- collect[[1L]]
+        pick1 <- 1:nrow(ave)
+        pick2 <- sapply(ave, is.numeric)
+        ave[pick1, pick2] <- SD[pick1, pick2] <- 0
+        for(i in 1L:impute)
+            ave[pick1, pick2] <- ave[pick1, pick2] + collect[[i]][pick1, pick2]
+        ave[pick1, pick2] <- ave[pick1, pick2]/impute
+        for(i in 1L:impute)
+            SD[pick1, pick2] <- (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
+        SD[pick1, pick2] <- sqrt(SD[pick1, pick2]/impute)
+        SD$item <- paste0('SD_', SD$item)
+        SD <- rbind(NA, SD)
+        return(rbind(ave, SD))
+    }
     if(is(x, 'MultipleGroupClass')){
-        ret <- list()
-        for(g in 1L:length(x@cmods)){
-            x@cmods[[g]]@itemtype <- x@itemtype
-            ret[[g]] <- itemfit(x@cmods[[g]], group.size=group.size, mincell = 1,
-                                S_X2.tables = FALSE, method=method, Theta=Theta, ...)
+        ret <- vector('list', length(x@pars))
+        if(is.null(Theta))
+            Theta <- fscores(x, method=method, scores.only=TRUE, full.scores=TRUE, ...)
+        for(g in 1L:length(x@pars)){
+            tmpTheta <- Theta[x@Data$groupNames[g] == x@Data$group, , drop=FALSE]
+            tmp <- x@pars[[g]]
+            tmp@Data <- x@Data
+            tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[g]]
+            ret[[g]] <- itemfit(tmp, Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
+                                S_X2.tables=S_X2.tables, empirical.plot=empirical.plot, 
+                                Theta=tmpTheta, empirical.CI=empirical.CI, method=method, 
+                                impute=impute, ...)
         }
-        names(ret) <- x@groupNames
+        names(ret) <- x@Data$groupNames
         return(ret)
     }
     if(S_X2.tables) Zh <- X2 <- FALSE
-    ret <- data.frame(item=colnames(x@data))
-    J <- ncol(x@data)
+    ret <- data.frame(item=colnames(x@Data$data))
+    J <- ncol(x@Data$data)
     itemloc <- x@itemloc
     pars <- x@pars
     if(Zh || X2){
@@ -121,7 +178,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
                              scores.only=TRUE, method=method, ...)
         prodlist <- attr(pars, 'prodlist')
         nfact <- x@nfact + length(prodlist)
-        fulldata <- x@fulldata
+        fulldata <- x@Data$fulldata[[1L]]
         if(method %in% c('ML', 'WLE')){
             for(i in 1L:ncol(Theta)){
                 tmp <- Theta[,i]
@@ -146,7 +203,8 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
             for(i in 1L:ncol(P))
                 for(j in 1L:ncol(P))
                     if(i != j)
-                        sigma2[item] <- sigma2[item] + sum(P[,i] * P[,j] * log_P[,i] * log(P[,i]/P[,j]))
+                        sigma2[item] <- sigma2[item] + sum(P[,i] * P[,j] * 
+                                                               log_P[,i] * log(P[,i]/P[,j]))
         }
         ret$Zh <- (colSums(Lmatrix) - mu) / sqrt(sigma2)
         #if all Rasch models, infit and outfit
@@ -192,7 +250,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
             theta <- seq(-4,4, length.out=40)
             ThetaFull <- thetaComb(theta, nfact)
             if(!is.numeric(empirical.plot)){
-                inames <- colnames(x@data)
+                inames <- colnames(x@Data$data)
                 ind <- 1L:length(inames)
                 empirical.plot <- ind[inames == empirical.plot]
             }
@@ -225,7 +283,8 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
             EPCI.lower <- EPCI.upper <- NULL
             if(K == 2 && empirical.CI != 0){
                 p.L <- function(x, alpha) if (x[1] == 0) 0 else qbeta(alpha, x[1], x[2] - x[1] + 1)
-                p.U <- function(x, alpha) if (x[1] == x[2]) 1 else qbeta(1 - alpha, x[1] + 1, x[2] - x[1])
+                p.U <- function(x, alpha) if (x[1] == x[2]) 1 else 
+                    qbeta(1 - alpha, x[1] + 1, x[2] - x[1])
                 N <- empirical.plot_points[,2]
                 O <- empirical.plot_points[,ncol(empirical.plot_points)] * N
                 EPCI.lower <- apply(cbind(O, N), 1, p.L, (1-empirical.CI)/2)
@@ -243,17 +302,19 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
             plt <- cbind(plt.1, plt.2)
             if(K == 2) plt <- plt[plt$cat != 1, ]
             return(xyplot(P ~ Theta, plt, group = cat, 
-                          main = paste('Empirical plot for item', empirical.plot), ylim = c(-0.1,1.1),
-                          xlab = expression(theta), ylab=expression(P(theta)), 
+                          main = paste('Empirical plot for item', empirical.plot), 
+                            ylim = c(-0.1,1.1), xlab = expression(theta), ylab=expression(P(theta)), 
                           auto.key=ifelse(K==2, FALSE, TRUE), EPCI.lower=EPCI.lower,
                           EPCI.upper=EPCI.upper,
                           panel = function(x, y, groups, subscripts, EPCI.lower, EPCI.upper, ...){
-                              panel.xyplot(x=x, y=y, groups=groups, type='l', subscripts=subscripts, ...)
+                              panel.xyplot(x=x, y=y, groups=groups, type='l', 
+                                           subscripts=subscripts, ...)
                               panel.points(cbind(plt$theta, plt$p), col=groups, pch=groups, ...)     
                               if(!is.null(EPCI.lower)){
                                   theta <- na.omit(plt$theta)
                                   for(i in 1:length(theta))
-                                      panel.lines(c(theta[i], theta[i]), c(EPCI.lower[i], EPCI.upper[i]),
+                                      panel.lines(c(theta[i], theta[i]), c(EPCI.lower[i], 
+                                                                           EPCI.upper[i]),
                                                   lty = 2, col = 'red')
                               }
                           }))
@@ -359,15 +420,21 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, group.size = 150, mincell = 1, S_X
         return(list(O=O, E=E))
     }
     if(x@nfact == 1L){
-        dat <- x@data
-        adj <- apply(dat, 2, min)
+        dat <- x@Data$data
+        adj <- x@Data$mins
         if(any(adj > 0))
             message('Data adjusted so that the lowest category score for every item is 0')
         dat <- t(t(dat) - adj)
         S_X2 <- df.S_X2 <- numeric(J)
         O <- makeObstables(dat, x@K)
         Nk <- rowSums(O[[1L]])
-        E <- EAPsum(x, S_X2 = TRUE, gp = list(gmeans=0, gcov=matrix(1)), CUSTOM.IND=x@CUSTOM.IND)
+        dots <- list(...)
+        quadpts <- dots$quadpts
+        theta_lim <- dots$theta_lim
+        if(is.null(quadpts)) quadpts <- 61
+        if(is.null(theta_lim)) theta_lim <- c(-6,6)
+        E <- EAPsum(x, S_X2 = TRUE, gp = list(gmeans=0, gcov=matrix(1)), CUSTOM.IND=x@CUSTOM.IND,
+                    quadpts=quadpts, theta_lim=theta_lim)
         for(i in 1L:J)
             E[[i]] <- E[[i]] * Nk
         coll <- collapseCells(O, E, mincell=mincell)

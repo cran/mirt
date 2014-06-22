@@ -1,5 +1,7 @@
 # mirt
 
+[![Build Status](https://travis-ci.org/philchalmers/mirt.png)](https://travis-ci.org/philchalmers/mirt)
+
 Multidimensional item response theory in R.
 
 ## Description
@@ -63,9 +65,7 @@ Below are some presentation/workshop files for `mirt` that I have written and pr
 may be helpful in understanding the package.
 
 - [2013 workshop](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/mirt.pdf) in
-  Klagenfurt, Austria, along with the
-  [Examples presented](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/Examples.zip) and
-  [Exercises provided](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2013/Exercises.zip)
+  Klagenfurt, Austria
 - [2012 presentation](https://dl.dropboxusercontent.com/u/10780530/mirt-pres-2012/mirt-presentation-2012.pdf) at
   York University, Toronto
 

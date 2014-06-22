@@ -1,5 +1,5 @@
 Package: mirt
-Version: 1.3
+Version: 1.4
 Date: 2014-04-23
 Type: Package
 Title: Multidimensional Item Response Theory
@@ -15,9 +15,10 @@ Description: Analysis of dichotomous and polytomous response data using
     Multiple group analysis and mixed effects designs also are available for
     detecting differential item functioning and modelling item and person
     covariates.
+VignetteBuilder: knitr
 Depends: R (>= 2.15), stats4, lattice, methods
 Imports: GPArotation, Rcpp, numDeriv
-Suggests: testthat, plink, boot, latticeExtra, shiny, parallel
+Suggests: testthat, plink, boot, latticeExtra, shiny, knitr, parallel
 ByteCompile: yes
 LazyLoad: yes
 LazyData: yes
@@ -27,9 +28,9 @@ Repository: CRAN
 Maintainer: Phil Chalmers <rphilip.chalmers@gmail.com>
 URL: https://github.com/philchalmers/mirt
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
-Packaged: 2014-04-23 15:19:13 UTC; phil
+Packaged: 2014-06-22 17:58:42 UTC; phil
 Author: Phil Chalmers [aut, cre, cph],
   Joshua Pritikin [ctb],
   Mateusz Zoltak [ctb]
 NeedsCompilation: yes
-Date/Publication: 2014-04-23 19:54:27
+Date/Publication: 2014-06-22 23:45:56

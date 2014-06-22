@@ -28,10 +28,10 @@ shinyItemplot <- function(){
                             choices = c('trace', 'info', 'score', 'infocontour', 'SE', 'infoSE', 'tracecontour'),
                             selected = 'trace'),
                 
-                numericInput("theta_lim_low", "Theta lower range:", -4,
+                numericInput("theta_lim_low", "Theta lower range:", -6,
                              min = -35, max = 35),
                 
-                numericInput("theta_lim_high", "Theta upper range:", 4,
+                numericInput("theta_lim_high", "Theta upper range:", 6,
                              min = -35, max = 35),
                 
                 checkboxInput(inputId = "classical",
@@ -230,9 +230,11 @@ shinyItemplot <- function(){
                 }
                 dat <- simdata(a=a, d=d, N=100,
                                itemtype=itemclass, nominal=nominal)
-                sv <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars = 'values', key=c(1, NA)))
+                sv <- mirt(dat, model, itemtype=itemtype, pars = 'values', key=c(1, NA), 
+                           technical=list(message=FALSE))
                 sv$est <- FALSE
-                mod <- suppressMessages(mirt(dat, model, itemtype=itemtype, pars=sv, key=c(1, NA)))
+                mod <- mirt(dat, model, itemtype=itemtype, pars=sv, key=c(1, NA),
+                            technical=list(message=FALSE))
                 par <- mod@pars[[1]]@par
                 if(input$classical){
                     if(itemclass[1L] == 'dich'){

@@ -78,6 +78,8 @@ setClass("partcomp", contains = 'AllItemsClass')
 setClass("nestlogit", contains = 'AllItemsClass',
          representation = representation(correctcat='integer'))
 
+setClass("ideal", contains = 'AllItemsClass')
+
 setClass('custom', contains = 'AllItemsClass',
          representation = representation(name='character',
                                          P='function',
@@ -102,7 +104,7 @@ setGeneric('Deriv', function(x, Theta, ...) standardGeneric("Deriv"))
 
 setGeneric('DerivTheta', function(x, Theta) standardGeneric("DerivTheta"))
 
-setGeneric('dP', function(x, Theta, prior, ...) standardGeneric("dP"))
+setGeneric('dP', function(x, Theta) standardGeneric("dP"))
 
 setGeneric('calcLogLik', function(object, ...) standardGeneric("calcLogLik"))
 

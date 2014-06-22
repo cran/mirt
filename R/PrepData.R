@@ -25,8 +25,6 @@ PrepData <- function(data, model, itemtype, guess, upper,
         model <- mirt.model(file=tmp, quiet = TRUE)
         unlink(tmp)
     }
-    if(exploratory && any(itemtype == c('PC2PL', 'PC3PL')))
-        stop('Partially compensatory models can only be estimated within a confirmatory model')
     if(is(model, 'numeric') && length(model) > 1L)
         model <- bfactor2mod(model, J)
     if(length(guess) == 1L) guess <- rep(guess,J)

@@ -5,19 +5,27 @@
 # then the input object should contain a set of 'anchor' items to ensure that only differential
 # test features are being detected rather than group differences. Returns signed (average area
 # above and below) and unsigned (total area) statistics, with descriptives such as the percent
-# average bias between group total scores.
+# average bias between group total scores for each statistic.
 # 
 #
 # @aliases DTF
 # @param mod a multipleGroup object which estimated only 2 groups
 # @param MI a number indicating how many draws to take to form a suitable multiple imputation
 #   for the expected test scores (100 or more). Requires an estimated parameter
-#   information matrix
-# @param CI range of condfidince interval when using MI
+#   information matrix. Returns a list containing the bootstrap distribution and null hypothesis
+#   test for the sDTF statistic
+# @param CI range of condfidince interval when using MI input
 # @param npts number of points to use in the integration
 # @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is 
 #   used in conjunction with \code{npts}
-# @param digits number of digits to round result to
+# @param Theta_nodes an optional matrix of Theta values to be evaluated in the MI draws for the 
+#   sDTF statistic. However, these values are not averaged accross, and instead give the bootstrap
+#   condifence intervals at the repespective Theta nodes. Useful when following up a large 
+#   uDTF/sDTF statistic to determine where the difference between the test curves are large 
+#   (while still accounting for sampling variability). Returns a matrix with observed
+#   variability)
+# @param plot logical; plot the test score functions with imputed confidence envelopes?
+# @param ... additional arguments to be passed to lattice
 # @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 # @seealso \code{\link{multipleGroup}}, \code{\link{DIF}}
 # @keywords DTF
@@ -46,7 +54,8 @@
 # plot(mod, type = 'score')
 #
 # DTF(mod)
-# DTF(mod, MI = 100) #95% C.I. for DTI containins 0
+# mirtCluster()
+# DTF(mod, MI = 1000) #95% C.I. for sDTI containins 0. uDTF is very small
 # 
 # ## -------------
 # ## random slopes and intercepts for 15 items, and latent mean difference 
@@ -62,11 +71,10 @@
 #                       invariance=c('free_means', 'free_var'))
 # plot(mod2, type = 'score')
 # 
-# mirtCluster()
 # #significant DIF in multiple items....
 # DIF(mod2, which.par=c('a1', 'd'), items2test=16:30) 
-# DTF(mod2) #...but not substantial DTF due to randomness of DIF
-# DTF(mod2, MI=100)
+# DTF(mod2)
+# DTF(mod2, MI=1000)
 # 
 # ## -------------
 # ## systematic differing slopes and intercepts (clear DTF)
@@ -80,27 +88,80 @@
 # 
 # DIF(mod3, c('a1', 'd'), items2test=16:30) 
 # DTF(mod3) #huge unsigned bias. Signed bias indicates group 2 scores generally lower
-# DTF(mod3, MI=100) 
+# DTF(mod3, MI=1000) 
+# DTF(mod3, MI=1000, plot=TRUE, auto.key=TRUE) 
 # 
 # }
-DTF <- function(mod, MI = NULL, CI = .95, npts = 200, digits = 4, theta_lim=c(-6,6)){
+DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_nodes = NULL,
+                plot = FALSE, ...){
 
+    fn <- function(x, omod, impute, covBs, imputenums, Theta, max_score, Theta_nodes = NULL,
+                   plot){
+        mod <- omod
+        if(impute){
+            for(g in 1L:2L)
+                mod@pars[[g]]@pars <- imputePars(pars=omod@pars[[g]]@pars, covB=covBs[[g]],
+                                            imputenums=imputenums[[g]], constrain=omod@constrain)
+        }
+        if(!is.null(Theta_nodes)){
+            T1 <- expected.test(mod, Theta_nodes, group=1L, mins=FALSE)
+            T2 <- expected.test(mod, Theta_nodes, group=2L, mins=FALSE)
+            D <- T1 - T2
+            ret <- c("sDTF." = D)
+            return(ret)
+        }
+        T1 <- expected.test(mod, Theta, group=1L)
+        T2 <- expected.test(mod, Theta, group=2L)
+        if(plot) return(c(T1, T2) + sum(mod@Data$mins))
+        D <- T1 - T2
+        uDTF <- mean(abs(D))
+        uDTF_percent <- uDTF/max_score * 100
+        sDTF <- mean(D)
+        sDTF_percent <- sDTF/max_score * 100
+        ret <- c("signed.DTF" = sDTF, "signed.DTF(%)" = sDTF_percent,
+                    "unsigned.DTF" = uDTF, "unsigned.DTF(%)" = uDTF_percent)
+        ret
+    }
+    
     if(class(mod) != 'MultipleGroupClass')
         stop('mod input was not estimated by multipleGroup()')
-    if(length(mod@cmods) != 2L)
+    if(length(mod@pars) != 2L)
         stop('DTF only supports two group models at a time')
+    if(!is.null(Theta_nodes)){
+        if(!is.matrix(Theta_nodes))
+            stop('Theta_nodes must be a matrix')
+        if(ncol(Theta_nodes) != mod@nfact)
+            stop('Theta_nodes input does not have the correct number of factors')
+        colnames(Theta_nodes) <- if(ncol(Theta_nodes) > 1) 
+            paste0('Theta.', 1:ncol(Theta_nodes)) else 'Theta'
+    }
+    if(plot){
+        if(is.null(MI))
+            stop('Must specificy number of imputations to generate plot')
+        Theta_nodes <- NULL
+    }
+    
     J <- length(mod@K)
     if(is.null(MI)){
         MI <- 1L
         impute <- FALSE
     } else {
-        if(is(try(chol(mod@information), silent=TRUE), 'try-error')){
+        if(length(mod@information) == 1L)
+            stop('Stop an information matrix must be computed')
+        info <- mod@information
+        is_na <- is.na(diag(info))
+        info <- info[!is_na, !is_na]
+        if(is(try(chol(info), silent=TRUE), 'try-error')){
             stop('Proper information matrix must be precomputed in model')
         } else {
             impute <- TRUE
             list_scores <- vector('list', MI)
             mod <- assignInformationMG(mod)
-            covBs <- lapply(mod@cmods, function(x) solve(x@information))
+            covBs <- lapply(mod@pars, function(x){
+                info <- x@information
+                is_na <- is.na(diag(info))
+                return(solve(info[!is_na, !is_na]))
+                })
             imputenums <- vector('list', 2L)
             for(g in 1L:2L){
                 names <- colnames(covBs[[g]])
@@ -114,47 +175,62 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 200, digits = 4, theta_lim=c(-6
 
     theta <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=npts))
     Theta <- thetaComb(theta, mod@nfact)
-    max_score <- sum(apply(mod@data, 2, min) + (mod@K - 1L))
-    omod <- mod
-    for(mi in 1L:MI){
-        if(impute){
-            for(g in 1L:2L)
-                mod@cmods[[g]]@pars <- imputePars(pars=omod@cmods[[g]]@pars, covB=covBs[[g]],
-                                                  imputenums=imputenums[[g]], constrain=omod@constrain)
-        }
-        T1 <- expected.test(mod, Theta, group=1)
-        T2 <- expected.test(mod, Theta, group=2)
-        D <- T1 - T2
-        uDTF <- mean(D^2)
-        uDTF_percent <- sqrt(uDTF)/max_score * 100
-        sDTF <- mean(D)
-        sDTF_percent <- sDTF/max_score * 100
-        max_DTF_percent <- max(abs(D))/max_score * 100
-        ret <- list(signed = c(DTF=sDTF, `DTF(%)`=sDTF_percent),
-                    unsigned = c(DTF=uDTF, `DTF(%)`=uDTF_percent,
-                                 `max.DTF(%)`=max_DTF_percent))
-        if(impute) list_scores[[mi]] <- c(ret$signed, ret$unsigned)
-    }
+    max_score <- sum(apply(mod@Data$data, 2L, min) + (mod@Data$K - 1L))
+    list_scores <- myLapply(1L, fn, omod=mod, impute=FALSE, covBs=NULL, Theta_nodes=Theta_nodes,
+                            imputenums=NULL, max_score=max_score, Theta=Theta, plot=plot)
     if(impute){
+        
+        bs_range <- function(x, CI){
+            ss <- sort(x)
+            N <- length(ss)
+            ret <- c(upper = ss[ceiling(N * (1 - (1-CI)/2))],                
+                     middle = median(x),
+                     lower = ss[floor(N * (1-CI)/2)])
+            ret
+        }
+        
+        oCM <- list_scores[[1L]]
+        list_scores <- myLapply(1L:MI, fn, omod=mod, impute=TRUE, covBs=covBs, max_score=max_score,
+                                imputenums=imputenums, Theta=Theta, Theta_nodes=Theta_nodes, 
+                                plot=plot)
         scores <- do.call(rbind, list_scores)
-        CM <- apply(scores, 2, mean)
-        SD <- apply(scores, 2, sd)
-        t_sDTF <- CM[1L] / SD[1L]
-        p_sDTF <- pt(abs(t_sDTF), df=MI-1, lower.tail=FALSE)
-        t_DTF <- CM[3L] / SD[3L]
-        p_DTF <- pt(t_DTF, df=MI-1, lower.tail=FALSE) * 2 #one-tailed
-        tt <- qt(CI + (1-CI)/2, df=MI-1)
-        upper <- CM + tt * SD
-        lower <- CM - tt * SD
-        signed <- rbind(upper[1:2], CM[1:2], lower[1:2])
-        unsigned <- rbind(upper[3:5], CM[3:5], lower[3:5])
-        tests <- c(p_sDTF, p_DTF)
-        names(tests) <- c("P(sDTF = 0)", "P(uDTF = 0)")
-        rownames(signed) <- rownames(unsigned) <-
-            c(paste0('CI_', round(CI + (1-CI)/2,3)), 'value',
-              paste0('CI_', round((1-CI)/2, 3)))
-        ret <- list(signed=signed, unsigned=unsigned, tests=tests)
-    }
-    ret <- lapply(ret, round, digits=digits)
+        if(plot){            
+            panel.bands <- function(x, y, upper, lower, fill, col,
+                                       subscripts, ..., font, fontface){
+                upper <- upper[subscripts]
+                lower <- lower[subscripts]
+                panel.polygon(c(x, rev(x)), c(upper, rev(lower)), col = fill, border = FALSE,
+                              ...)
+            }            
+            group <- factor(rep(mod@Data$groupNames, each=nrow(Theta)))
+            CIs <- apply(scores, 2L, bs_range, CI=CI)
+            CIs <- CIs[-2L, ]
+            df <- data.frame(Theta=rbind(Theta, Theta), group, TS=oCM, t(CIs))
+            return(xyplot(TS ~ Theta, data=df, groups=group,
+                   upper=df$upper, lower=df$lower, 
+                   panel = function(x, y, ...){
+                       panel.superpose(x, y, panel.groups = panel.bands, type='l', ...)
+                       panel.xyplot(x, y, type='l', lty=1,...)
+                   },
+                   xlab = expression(theta), ylab = expression(T(theta)), 
+                   main = 'Expected Total Score', ...))
+        }
+        if(!is.null(Theta_nodes)){
+            CIs <- apply(scores, 2L, bs_range, CI=CI)
+            rownames(CIs) <- rownames(CIs) <-
+                c(paste0('CI_', round(CI + (1-CI)/2, 3L)*100), paste0('CI_', 50),
+                  paste0('CI_', round((1-CI)/2, 3L)*100))
+            return(cbind(Theta_nodes, "sDTF(Theta)"=oCM, t(CIs)))
+        }
+        t_sDTF <- oCM['signed.DTF'] / sd(scores[,'signed.DTF'])
+        p_sDTF <- pt(abs(t_sDTF), df=MI-1L, lower.tail=FALSE) * 2
+        CIs <- apply(scores, 2L, bs_range, CI=CI)
+        if(!is.matrix(CIs)) stop('Too few MI draws were specified')
+        tests <- c("P(sDTF = 0)" = as.numeric(p_sDTF))
+        rownames(CIs) <- rownames(CIs) <-
+            c(paste0('CI_', round(CI + (1-CI)/2, 3L)*100), paste0('CI_', 50),
+              paste0('CI_', round((1-CI)/2, 3L)*100))
+        ret <- list(observed=oCM, CIs=CIs, tests=tests)
+    } else ret <- list_scores[[1L]]
     ret
 }

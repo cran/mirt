@@ -853,7 +853,7 @@ nameInfoMatrix <- function(info, correction, L, npars){
 }
 
 maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem, K, itemloc,
-                        Names, itemnames){
+                        Names, itemnames, survey.weights){
     tabdata2 <- lapply(strsplit(stringtabdata, split='/'), as.integer)
     tabdata2 <- do.call(rbind, tabdata2)
     tabdata2[tabdata2 == 99999L] <- NA
@@ -867,15 +867,23 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     tabdata[is.na(tabdata)] <- 0L
     colnames(tabdata) <- Names
     colnames(tabdata2) <- itemnames
-    ret1 <- ret2 <- vector('list', length(groupNames))
+    groupFreq <- vector('list', length(groupNames))
+    names(groupFreq) <- groupNames
     for(g in 1L:length(groupNames)){
         Freq <- integer(length(stringtabdata))
         tmpstringdata <- stringfulldata[group == groupNames[g]]
-        Freq[stringtabdata %in% tmpstringdata] <- as.integer(table(match(tmpstringdata, stringtabdata)))
-        ret1[[g]] <- cbind(tabdata, Freq)
-        ret2[[g]] <- cbind(tabdata2, Freq)
+        if(!is.null(survey.weights)){
+            mtc <- match(tmpstringdata, stringtabdata)
+            Freq <- mySapply(1L:nrow(tabdata), function(x, std, tstd, w)
+                sum(w[stringtabdata[x] == tstd]), std=stringtabdata, tstd=tmpstringdata, 
+                w=survey.weights)
+        } else {
+            Freq[stringtabdata %in% tmpstringdata] <- as.integer(table(
+                match(tmpstringdata, stringtabdata)))
+        }
+        groupFreq[[g]] <- Freq
     }
-    ret <- list(tabdata=ret1, tabdata2=ret2)
+    ret <- list(tabdata=tabdata, tabdata2=tabdata2, Freq=groupFreq)
     ret
 }
 
@@ -890,35 +898,28 @@ makeLmats <- function(pars, constrain, random = NULL){
     if(length(random))
         for(i in 1L:length(random))
             L <- c(L, random[[i]]@est)
-    L <- L2 <- L3 <- diag(as.numeric(L))
+    L <- diag(as.numeric(L))
     redun_constr <- rep(FALSE, ncol(L))
     if(length(constrain) > 0L){
         for(i in 1L:length(constrain)){
-            LC <- length(constrain[[i]])
-            L[constrain[[i]], constrain[[i]]] <- 1/LC
-            L2[constrain[[i]], constrain[[i]]] <- sqrt(1/LC)
-            L3[constrain[[i]], constrain[[i]]] <- f(LC)
+            L[constrain[[i]], constrain[[i]]] <- 1L
             for(j in 2L:length(constrain[[i]]))
                 redun_constr[constrain[[i]][j]] <- TRUE
         }
     }
-    return(list(L=L, L2=L2, L3=L3, redun_constr=redun_constr))
+    return(list(L=L, redun_constr=redun_constr))
 }
 
-updateHess <- function(h, L2, L3){
-    hess <- L3 %*% h %*% L3
-    tmp <- L2 %*% h %*% L2
-    diag(hess) <- diag(tmp)
-    hess
-}
+updateGrad <- function(g, L) L %*% g
+updateHess <- function(h, L) L %*% h %*% L
 
-makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NaN,
+makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NULL,
                      rotate = 'varimax', Target = NaN, SE = FALSE, verbose = TRUE,
                      SEtol = .0001, grsm.block = NULL, D = 1, TOL = NULL,
                      rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
                      technical = list(), use = 'pairwise.complete.obs',
-                     SE.type = 'MHRM', large = NULL, accelerate = TRUE, empiricalhist = FALSE,
-                     ...)
+                     SE.type = 'crossprod', large = NULL, accelerate = TRUE, empiricalhist = FALSE,
+                     optimizer = NULL, ...)
 {
     opts <- list()
     if(method == 'MHRM' || method == 'MIXED') SE.type <- 'MHRM'
@@ -940,17 +941,20 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$customPriorFun = technical$customPriorFun
     opts$BFACTOR = BFACTOR
     opts$accelerate = accelerate
-    opts$TOL <- ifelse(is.null(TOL), if(method == 'EM') 1e-4 else 1e-3, TOL)
+    opts$TOL <- ifelse(is.null(TOL), if(method == 'EM') 1e-4 else 
+        if(method == 'BL') 1e-8 else 1e-3, TOL)
     if(SE.type == 'SEM' && SE){
         opts$accelerate <- FALSE
         if(is.null(TOL)) opts$TOL <- 1e-5
         if(is.null(technical$NCYCLES)) technical$NCYCLES <- 1000L
         opts$SEtol <- ifelse(is.null(technical$SEtol), .001, technical$SEtol)
     }
-    if(BFACTOR && is.nan(quadpts)) opts$quadpts <- 21L
     if(is.null(technical$symmetric_SEM)) technical$symmetric_SEM <- TRUE
+    opts$warn <- if(is.null(technical$warn)) TRUE else technical$warn
+    opts$message <- if(is.null(technical$message)) TRUE else technical$message
     opts$technical <- technical
     opts$use <- use
+    opts$technical$parallel <- ifelse(is.null(technical$parallel), TRUE, technical$parallel)
     opts$MAXQUAD <- ifelse(is.null(technical$MAXQUAD), 10000L, technical$MAXQUAD)
     opts$NCYCLES <- ifelse(is.null(technical$NCYCLES), 2000L, technical$NCYCLES)
     if(opts$method == 'EM')
@@ -979,10 +983,10 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = Na
     opts$USEEM <- ifelse(method == 'EM', TRUE, FALSE)
     opts$returnPrepList <- FALSE
     opts$PrepList <- NULL
-    if(is.null(technical$Moptim)){
-        opts$Moptim <- if(method == 'EM') 'BFGS' else 'NR'
+    if(is.null(optimizer)){
+        opts$Moptim <- if(method == 'EM' || method == 'BL') 'BFGS' else 'NR'
     } else {
-        opts$Moptim <- technical$Moptim
+        opts$Moptim <- optimizer
     }
     if(!is.null(large)){
         if(is.logical(large))
@@ -1027,7 +1031,7 @@ assignItemtrace <- function(pars, itemtrace, itemloc){
     pars
 }
 
-loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
+loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     longpars <- ESTIMATE$longpars
     pars <- ESTIMATE$pars
     ngroups <- length(pars)
@@ -1039,13 +1043,15 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain){
     info <- info[!isna, !isna]
     acov <- try(solve(info), TRUE)
     if(is(acov, 'try-error')){
-        warning('Could not invert information matrix; model likely is not identified.')
+        if(warn)
+            warning('Could not invert information matrix; model likely is not identified.')
         ESTIMATE$fail_invert_info <- TRUE
         return(ESTIMATE)
     } else ESTIMATE$fail_invert_info <- FALSE
     SEtmp <- diag(solve(info))
     if(any(SEtmp < 0)){
-        warning("Negative SEs set to NaN.\n")
+        if(warn)
+            warning("Negative SEs set to NaN.\n")
         SEtmp[SEtmp < 0 ] <- NaN
     }
     SEtmp <- sqrt(SEtmp)
@@ -1167,25 +1173,86 @@ smooth.cor <- function(x){
     x
 }
 
+RMSEA.CI <- function(X2, df, N, ci.lower=.05, ci.upper=.95) {
+    
+    lower.lambda <- function(lambda) pchisq(X2, df=df, ncp=lambda) - ci.upper
+    upper.lambda <- function(lambda) pchisq(X2, df=df, ncp=lambda) - ci.lower
+    
+    lambda.l <- try(uniroot(f=lower.lambda, lower=0, upper=X2)$root, silent=TRUE)
+    lambda.u <- try(uniroot(f=upper.lambda, lower=0, upper=max(N, X2*5))$root, silent=TRUE)
+    if(!is(lambda.l, 'try-error')){
+        RMSEA.lower <- sqrt(lambda.l/(N*df))
+    } else {
+        RMSEA.lower <- 0
+    }
+    if(!is(lambda.u, 'try-error')){
+        RMSEA.upper <- sqrt(lambda.u/(N*df))
+    } else {
+        RMSEA.upper <- 0
+    }
+    
+    return(c(RMSEA.lower, RMSEA.upper))
+}
+
 assignInformationMG <- function(object){
-    J <- ncol(object@data)
+    J <- ncol(object@Data$data)
     names <- colnames(object@information)
     spl_names <- strsplit(names, split="\\.")
     spl_names_par <- sapply(spl_names, function(x) x[1L])
     spl_names <- lapply(spl_names, 
                         function(x) as.numeric(x[-1L]))
     spl_names <- do.call(rbind, spl_names)
-    for(g in 1L:length(object@cmods)){
-        from <- object@cmods[[g]]@pars[[1L]]@parnum[1L]
-        to <- object@cmods[[g]]@pars[[J+1L]]@parnum[length(
-            object@cmods[[g]]@pars[[J+1L]]@parnum)]
+    for(g in 1L:length(object@pars)){
+        from <- object@pars[[g]]@pars[[1L]]@parnum[1L]
+        to <- object@pars[[g]]@pars[[J+1L]]@parnum[length(
+            object@pars[[g]]@pars[[J+1L]]@parnum)]
         pick <- spl_names[,g] >= from & spl_names[,g] <= to
         tmp <- object@information[pick,pick]
         colnames(tmp) <- rownames(tmp) <- 
             paste(spl_names_par[pick], spl_names[pick,g], sep='.')
-        object@cmods[[g]]@information <- tmp
+        object@pars[[g]]@information <- tmp
     }
     object
+}
+
+BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
+               CUSTOM.IND, EH, EHPrior, Data, BFACTOR, itemloc, theta){
+    longpars[est] <- p
+    pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+    gstructgrouppars <- prior <- Prior <- vector('list', ngroups)
+    if(EH){
+        Prior[[1L]] <- EHPrior[[1L]]
+    } else {
+        for(g in 1L:ngroups){
+            gstructgrouppars[[g]] <- ExtractGroupPars(pars2[[g]][[J+1L]])
+            if(BFACTOR){
+                prior[[g]] <- dnorm(theta, 0, 1)
+                prior[[g]] <- prior[[g]]/sum(prior[[g]])
+                Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
+                next
+            }
+            Prior[[g]] <- mirt_dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
+                                       gstructgrouppars[[g]]$gcov)
+            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+        }
+    }
+    LL <- 0
+    for(g in 1L:ngroups){
+        if(BFACTOR){
+            expected <- Estep.bfactor(pars=pars2[[g]], 
+                                      tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
+                                      Theta=Theta, prior=prior[[g]],
+                                      specific=specific, sitems=sitems,
+                                      itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)$expected
+        } else {
+            expected <- Estep.mirt(pars=pars2[[g]], 
+                                   tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
+                                   Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
+                                   CUSTOM.IND=CUSTOM.IND)$expected
+        }
+        LL <- LL + sum(Data$Freq[[g]] * log(expected), na.rm = TRUE)
+    }
+    LL
 }
 
 mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean)),
@@ -1227,7 +1294,7 @@ mirtClusterEnv <- new.env()
 mirtClusterEnv$ncores <- 1L
 
 myApply <- function(X, MARGIN, FUN, ...){
-    if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
+    if(mirtClusterEnv$ncores > 1L){
         return(t(parallel::parApply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, MARGIN=MARGIN, FUN=FUN, ...)))
     } else {
         return(t(apply(X=X, MARGIN=MARGIN, FUN=FUN, ...)))
@@ -1235,7 +1302,7 @@ myApply <- function(X, MARGIN, FUN, ...){
 }
 
 myLapply <- function(X, FUN, ...){
-    if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
+    if(mirtClusterEnv$ncores > 1L){
         return(parallel::parLapply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, fun=FUN, ...))
     } else {
         return(lapply(X=X, FUN=FUN, ...))
@@ -1243,7 +1310,7 @@ myLapply <- function(X, FUN, ...){
 }
 
 mySapply <- function(X, FUN, ...){
-    if(!is.null(mirtClusterEnv$MIRTCLUSTER)){
+    if(mirtClusterEnv$ncores > 1L){
         return(t(parallel::parSapply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, FUN=FUN, ...)))
     } else {
         return(t(sapply(X=X, FUN=FUN, ...)))

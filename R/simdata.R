@@ -4,7 +4,8 @@
 #' from multivariate normally distributed factor (\eqn{\theta}) scores, or from
 #' a user input matrix of \eqn{\theta}'s.
 #'
-#' Returns a data matrix simulated from the parameters.
+#' Returns a data matrix simulated from the parameters, or a list containing the data,
+#' item objects, and Theta matrix.
 #'
 #' @param a a matrix of slope parameters. If slopes are to be constrained to
 #'   zero then use \code{NA}. \code{a} may also be a similar matrix specifying
@@ -12,20 +13,22 @@
 #' @param d a matrix of intercepts. The matrix should have as many columns as
 #'   the item with the largest number of categories, and filled empty locations
 #'   with \code{NA}
-#' @param itemtype a character vector of length \code{nrow(a)} (or 1, if all the item types are the same)
-#'   specifying the type of items to simulate.
+#' @param itemtype a character vector of length \code{nrow(a)} (or 1, if all the item types are 
+#'   the same) specifying the type of items to simulate.
+#'   
 #'   Can be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
-#'   dichotomous, graded, generalized partial credit, nominal, nested logit, and partially compensatory models. Note that
-#'   for the gpcm, nominal, and nested logit models there should be as many parameters as desired categories,
-#'   however to parametrized them for meaningful interpretation the first category intercept should
+#'   dichotomous, graded, generalized partial credit, nominal, nested logit, and partially 
+#'   compensatory models. Note that for the gpcm, nominal, and nested logit models there should 
+#'   be as many parameters as desired categories, however to parametrized them for meaningful 
+#'   interpretation the first category intercept should
 #'   equal 0 for these models (second column for \code{'nestlogit'}, since first column is for the
-#'   correct item traceline). For nested logit models the 'correct' category is always the lowest category
-#'   (i.e., == 1). It may be helpful to use \code{\link{mod2values}} on data-sets that have already been
-#'   estimated to understand the itemtypes more intimately
+#'   correct item traceline). For nested logit models the 'correct' category is always the lowest 
+#'   category (i.e., == 1). It may be helpful to use \code{\link{mod2values}} on data-sets that 
+#'   have already been estimated to understand the itemtypes more intimately
 #' @param nominal a matrix of specific item category slopes for nominal models.
 #'   Should be the dimensions as the intercept specification with one less column, with \code{NA}
-#'   in locations where not applicable. Note that during estimation the first slope will be constrained
-#'   to 0 and the last will be constrained to the number of categories minus 1,
+#'   in locations where not applicable. Note that during estimation the first slope will be 
+#'   constrained to 0 and the last will be constrained to the number of categories minus 1,
 #'   so it is best to set these as the values for the first and last categories as well
 #' @param N sample size
 #' @param guess a vector of guessing parameters for each item; only applicable
@@ -38,6 +41,9 @@
 #'   of zeros
 #' @param Theta a user specified matrix of the underlying ability parameters,
 #'   where \code{nrow(Theta) == N} and \code{ncol(Theta) == ncol(a)}
+#' @param returnList logical; return a list containing the data, item objects defined 
+#'   by \code{mirt} containing the population parameters and item structure, and the 
+#'   latent trait matrix \code{Theta}? Default is FALSE
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references 
 #' Reckase, M. D. (2009). \emph{Multidimensional Item Response Theory}. New York: Springer.
@@ -124,7 +130,7 @@
 #'
 #' dataset <- simdata(a,d,2000,items,sigma=sigma,nominal=nominal)
 #'
-#' #mod <- bfactor(dataset, c(1,1,1,2,2,2), itemtype = c(rep('2PL', 3), 'nominal', 'gpcm','graded'))
+#' #mod <- bfactor(dataset, c(1,1,1,2,2,2), itemtype=c(rep('2PL', 3), 'nominal', 'gpcm','graded'))
 #' #coef(mod)
 #'
 #' ####Unidimensional nonlinear factor pattern
@@ -172,17 +178,21 @@
 #' #mod <- mirt(dataset, 1, itemtype = c('2PL', '2PL', '2PL', '2PLNRM'), key=c(NA,NA,NA,1))
 #' #coef(mod)
 #' #itemplot(mod,4)
+#' 
+#' #return list of simulation parameters
+#' listobj <- simdata(a,d,2000,items,nominal=nominal, returnList=TRUE)
+#' str(listobj)
 #'
 #'
 #'    }
 #'
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
-	upper = 1, nominal = NULL, Theta = NULL)
+	upper = 1, nominal = NULL, Theta = NULL, returnList = FALSE)
 {
-    fn <- function(p, ns) sample(1L:ns, 1, prob = p)
+    fn <- function(p, ns) sample(1L:ns, 1L, prob = p)
 	nfact <- ncol(a)
 	nitems <- nrow(a)
-	K <- rep(0,nitems)
+	K <- rep(0L,nitems)
 	if(length(guess) == 1L) guess <- rep(guess,nitems)
 	if(length(guess) != nitems) stop("Guessing parameter is incorrect")
 	if(length(upper) == 1L) upper <- rep(upper,nitems)
@@ -212,6 +222,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
     if(is.null(nominal)) nominal <- matrix(NA, nitems, max(K))
 	data <- matrix(0, N, nitems)
     a[is.na(a)] <- 0
+    itemobjects <- vector('list', nitems)
 	for(i in 1L:nitems){
 	    if(itemtype[i] == 'nestlogit'){
 	        par <- na.omit(c(a[i, ],d[i,1], guess[i], upper[i], nominal[i,-1L],d[i,-1L]))
@@ -219,6 +230,10 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	    } else {
             if(itemtype[i] == 'gpcm'){
                 par <- na.omit(c(a[i, ],0:(K[i]-1), d[i,],guess[i],upper[i]))
+            } else if(itemtype[i] == 'ideal'){
+                if(K[i] > 2) stop('ideal point models for dichotomous items only')
+                if(d[i,1] > 0) stop('ideal point intercepts must be negative')
+                par <- na.omit(c(a[i, ],d[i,]))
             } else {
                 par <- na.omit(c(a[i, ],nominal[i,],d[i,],guess[i],upper[i]))
             }
@@ -227,10 +242,16 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit')))
             obj@ncat <- K[i]
         P <- ProbTrace(obj, Theta)
-        data[,i] <- apply(P, 1, fn, ns = ncol(P))
-        if(any(itemtype[i] == c('dich', 'gpcm', 'partcomp'))) data[ ,i] <- data[ ,i] - 1L
+        data[,i] <- apply(P, 1L, fn, ns = ncol(P))
+        if(any(itemtype[i] == c('dich', 'gpcm', 'partcomp', 'ideal'))) 
+            data[ ,i] <- data[ ,i] - 1L
+        itemobjects[[i]] <- obj
 	}
 	colnames(data) <- paste("Item_", 1L:nitems, sep="")
-	return(data)
+    if(returnList){
+        return(list(itemobjects=itemobjects, data=data, Theta=Theta))        
+    } else {
+	    return(data)
+    }
 }
 

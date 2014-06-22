@@ -2,7 +2,7 @@
 #include "Estep.h"
 
 void _Estep(vector<double> &expected, vector<double> &r1vec, const vector<double> &prior,
-    const vector<int> &r, const IntegerMatrix &data, const NumericMatrix &itemtrace,
+    const vector<double> &r, const IntegerMatrix &data, const NumericMatrix &itemtrace,
     const int &ncores)
 {
     const int nquad = prior.size();
@@ -16,8 +16,9 @@ void _Estep(vector<double> &expected, vector<double> &r1vec, const vector<double
     }
     #endif
 
-    #pragma omp parallel for
+//    #pragma omp parallel for
     for (int pat = 0; pat < npat; ++pat){
+        if(r[pat] < 1e-10) continue;
         vector<double> posterior(nquad,1.0);
         for(int q = 0; q < nquad; ++q)
             posterior[q] = posterior[q] * prior[q];
@@ -31,7 +32,7 @@ void _Estep(vector<double> &expected, vector<double> &r1vec, const vector<double
         expected[pat] = expd;
         for(int q = 0; q < nquad; ++q)
             posterior[q] = r[pat] * posterior[q] / expd;
-       #pragma omp critical
+//       #pragma omp critical
         for (int item = 0; item < nitems; ++item)
             if (data(pat,item))
                 for(int q = 0; q < nquad; ++q)
@@ -46,7 +47,7 @@ RcppExport SEXP Estep(SEXP Ritemtrace, SEXP Rprior, SEXP RX, SEXP Rr, SEXP Rncor
     BEGIN_RCPP
 
     const vector<double> prior = as< vector<double> >(Rprior);
-    const vector<int> r = as< vector<int> >(Rr);
+    const vector<double> r = as< vector<double> >(Rr);
     const IntegerMatrix data(RX);
     const NumericMatrix itemtrace(Ritemtrace);
     const int ncores = as<int>(Rncores);
@@ -68,7 +69,7 @@ RcppExport SEXP Estep(SEXP Ritemtrace, SEXP Rprior, SEXP RX, SEXP Rr, SEXP Rncor
 
 void _Estepbfactor(vector<double> &expected, vector<double> &r1, vector<double> &ri,
     const NumericMatrix &itemtrace, const vector<double> &prior, const vector<double> &Priorbetween, 
-    const vector<int> &r, const int &ncores, const IntegerMatrix &data, const IntegerMatrix &sitems,
+    const vector<double> &r, const int &ncores, const IntegerMatrix &data, const IntegerMatrix &sitems,
     const vector<double> &Prior)
 {
      #ifdef SUPPORT_OPENMP
@@ -82,8 +83,9 @@ void _Estepbfactor(vector<double> &expected, vector<double> &r1, vector<double> 
     const int npat = r.size();
     vector<double> r1vec(nquad*nitems*sfact, 0.0);
 
-#pragma omp parallel for
+//#pragma omp parallel for
     for (int pat = 0; pat < npat; ++pat){
+        if(r[pat] < 1e-10) continue;
         vector<double> L(nquad), Elk(nbquad*sfact), posterior(nquad*sfact);
         vector<double> likelihoods(nquad*sfact, 1.0);
         for (int fact = 0; fact < sfact; ++fact){
@@ -122,7 +124,7 @@ void _Estepbfactor(vector<double> &expected, vector<double> &r1, vector<double> 
             for (int i = 0; i < nquad; ++i)
                 posterior[i + nquad*fact] = likelihoods[i + nquad*fact] * r[pat] * Elk[i % nbquad + fact*nbquad] /
                                             expected[pat];
-        #pragma omp critical
+//        #pragma omp critical
         for (int i = 0; i < nbquad; ++i)
             ri[i] += Pls[i] * r[pat] * Priorbetween[i] / expected[pat];
         for (int item = 0; item < nitems; ++item)
@@ -149,7 +151,7 @@ RcppExport SEXP Estepbfactor(SEXP Ritemtrace, SEXP Rprior, SEXP RPriorbetween, S
     const vector<double> prior = as< vector<double> >(Rprior);
     const vector<double> Priorbetween = as< vector<double> >(RPriorbetween);
     const vector<double> Prior = as< vector<double> >(RPrior);
-    const vector<int> r = as< vector<int> >(Rr);
+    const vector<double> r = as< vector<double> >(Rr);
     const int ncores = as<int>(Rncores);
     const IntegerMatrix data(RX);
     const IntegerMatrix sitems(Rsitems);

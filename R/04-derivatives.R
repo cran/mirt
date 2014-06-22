@@ -305,10 +305,10 @@ setMethod(
         for(j in 1L:nd){
             grad[nfact+3L+j] <- sum((
                 (idat[,j] * Qd * rowSums(Theta) * (Pn[,j] - Pn[,j]^2) * den) / (Qd * num[,j]) -
-                    rowSums(idat[,-j]) * rowSums(Theta) * Pn[,j]))
+                    rowSums(idat[,-j, drop=FALSE]) * rowSums(Theta) * Pn[,j]))
             grad[nfact+3L+nd+j] <- sum((
                 (idat[,j] * Qd * (Pn[,j] - Pn[,j]^2) * den) / (Qd * num[,j]) -
-                    rowSums(idat[,-j]) * Pn[,j]))
+                    rowSums(idat[,-j, drop=FALSE]) * Pn[,j]))
         }
         ret <- list(grad=grad, hess=hess)
         if(x@any.prior) ret <- DerivativePriors(x=x, grad=ret$grad, hess=ret$hess)
@@ -423,6 +423,30 @@ nominalParDeriv <- function(a, ak, d, Theta, P, num, dat, estHess, gpcm = FALSE)
                  numak2D2, numakDTheta_numsum, estHess)
     ret
 }
+
+setMethod(
+    f = "Deriv",
+    signature = signature(x = 'ideal', Theta = 'matrix'),
+    definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
+        grad <- rep(0, length(x@par))
+        hess <- matrix(0, length(x@par), length(x@par))
+        d <- x@par[length(x@par)]
+        a <- x@par[-length(x@par)]
+        P <- ProbTrace(x, Theta=Theta)[,2L]
+        Q <- (1 - P)
+        Q <- ifelse(Q < 1e-7, 1e-7, Q)
+        int <- as.numeric(Theta %*% a + d)
+        for(i in 1L:ncol(Theta))
+            grad[i] <- -sum( x@dat[,1] * int * Theta[,i] * -P / Q + 
+                               x@dat[,2] * int * Theta[,i])
+        grad[i+1L] <- -sum(2 * x@dat[,1] * int * -P / Q + 
+                           2 * x@dat[,2] * int)/2
+        if(estHess)
+            hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
+                                                         Theta=Theta)
+        return(list(grad = grad, hess=hess))
+    }
+)
 
 setMethod(
     f = "Deriv",
@@ -588,7 +612,9 @@ EML2 <- function(x, Theta, pars, tabdata, itemloc, CUSTOM.IND){
     sigma <- gpars$gcov
     prior <- mirt_dmvnorm(Theta, mean=mu, sigma=sigma)
     prior <- prior/sum(prior)
-    rlist <- Estep.mirt(pars=pars, tabdata=tabdata, Theta=Theta, prior=prior, itemloc=itemloc,
+    freq <- tabdata[,ncol(tabdata)]
+    rlist <- Estep.mirt(pars=pars, tabdata=tabdata[,-ncol(tabdata)], freq=freq,
+                        Theta=Theta, prior=prior, itemloc=itemloc,
                         CUSTOM.IND=CUSTOM.IND)
     LL <- sum(r*log(rlist$expected))
     LL <- LL.Priors(x=obj, LL=LL)
@@ -839,17 +865,102 @@ setMethod(
     }
 )
 
+setMethod(
+    f = "DerivTheta",
+    signature = signature(x = 'ideal', Theta = 'matrix'),
+    definition = function(x, Theta){
+        N <- nrow(Theta)
+        nfact <- ncol(Theta)
+        P <- ProbTrace(x, Theta=Theta)[,2L]
+        d <- x@par[length(x@par)]
+        a <- x@par[-length(x@par)]
+        int <- as.numeric(t(a %*% t(Theta)) + d)
+        grad <- hess <- vector('list', 2L)
+        grad[[1L]] <- grad[[2L]] <- hess[[1L]] <- hess[[2L]] <- matrix(0, N, nfact)
+        for(i in 1L:nfact){
+            grad[[2L]][ ,i] <- 2 * a[i] * int * P
+            grad[[1L]][ ,i] <- -1 * grad[[2L]][ ,i]
+            hess[[2L]][ ,i] <- 2 * a[i]^2 * int * P + 4 * int^2 * a[i]^2 * P
+            hess[[1L]][ ,i] <- -1 * hess[[2L]][ ,i]
+        }
+        return(list(grad=grad, hess=hess))
+    }
+)
+
 ###
 
 setMethod(
     f = "dP",
-    signature = signature(x = 'dich', Theta = 'matrix', prior = 'numeric'),
-    definition = function(x, Theta, prior, extra_term = 1){
+    signature = signature(x = 'dich', Theta = 'matrix'),
+    definition = function(x, Theta){
         P <- ProbTrace(x, Theta)
-        PQ <- apply(P, 1, prod) 
-        ret <- c(colSums(Theta * PQ * extra_term * prior), 
-                 sum(PQ * extra_term * prior), 
-                 colSums(P * extra_term * prior))
+        PQ <- apply(P, 1L, prod) 
+        ret <- cbind(Theta * PQ, PQ, P)
         ret
+    }
+)
+
+setMethod(
+    f = "dP",
+    signature = signature(x = 'graded', Theta = 'matrix'),
+    definition = function(x, Theta){
+        P <- ProbTrace(x, Theta, itemexp=FALSE)
+        P <- P[,-c(1, ncol(P)), drop=FALSE]
+        PQ <- P * (1 - P)
+        ret <- cbind(Theta * rowSums(PQ), PQ) 
+        ret
+    }
+)
+
+setMethod(
+    f = "dP",
+    signature = signature(x = 'gpcm', Theta = 'matrix'),
+    definition = function(x, Theta){
+        class(x) <- 'nominal'
+        return(dP(x, Theta=Theta))
+    }
+)
+
+setMethod(
+    f = "dP",
+    signature = signature(x = 'nominal', Theta = 'matrix'),
+    definition = function(x, Theta){
+        num <- P.nominal(x@par, ncat=x@ncat, Theta=Theta, returnNum=TRUE)
+        den <- rowSums(num)
+        P <- num/den
+        a <- x@par[1L:ncol(Theta)]
+        ak <- x@par[(ncol(Theta)+1L):(ncol(Theta)+x@ncat)]        
+        dp <- matrix(0, nrow(Theta), length(x@par))
+        aknum <- t(ak * t(num))
+        aTheta <- as.numeric(a %*% t(Theta))
+        nfact <- ncol(Theta)
+        ncat <- x@ncat
+        e <- 0:(x@ncat-1)
+        eak <- e*ak
+        for(i in 1L:nfact){
+            for(j in 2L:ncat)
+                dp[,i] <- dp[,i] + eak[j]*Theta[,i]*P[,j] - e[j]*P[,j]*rowSums(Theta[,i] * aknum)
+        }
+        for(j in 2L:x@ncat){
+            dp[,nfact + ncat + j] <- e[j] * P[,j] - e[j] * P[,j]^2 - as.numeric(e[-j] %*% t(P[,-j]*P[,j]))
+            dp[,nfact + j] <- dp[,nfact + ncat + j] * aTheta
+        }
+        return(dp)
+    }
+)
+
+setMethod(
+    f = "dP",
+    signature = signature(x = 'ideal', Theta = 'matrix'),
+    definition = function(x, Theta){
+        P <- ProbTrace(x, Theta=Theta)[,2L]
+        dp <- matrix(0, nrow(Theta), length(x@par))
+        d <- x@par[length(x@par)]
+        a <- x@par[-length(x@par)]
+        int <- as.numeric(t(a %*% t(Theta)) + d)
+        for(i in 1L:ncol(Theta))
+            dp[,i] <- -2 * Theta[,i] * int * P
+        dp[,i+1L] <- -2 * int * P
+        dp
     }
 )

@@ -18,16 +18,22 @@ test_that('extras', {
     dat <- rbind(dataset1, dataset2)
     group <- c(rep('D1', N), rep('D2', N))
     model1a <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, SE.type = 'Louis')
-    model1b <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, SE.type = 'BL')
+    model1b <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, SE.type = 'BL',
+                             pars = mod2values(model1a), technical = list(warn=FALSE))
     expect_equal(as.numeric(model1a@information - model1b@information), numeric(ncol(model1a@information)^2),
                  tolerance = 1e-3)
     model2 <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, 
                             invariance = c('slopes', 'intercepts', 'free_means', 'free_var'))
+    modideal <- mirt(dataset1, model = mirt.model('F1 = 1-6
+                                                  F2 = 5-10'), 'ideal', verbose = FALSE)
+    cfs <- as.numeric(coef(modideal, digits=5, verbose=FALSE)[[5]])
+    expect_equal(modideal@logLik, -6435.657, tolerance = 1e-3)
+    expect_equal(cfs, c(0.73246, 1.26111, -1.41768), tolerance = 1e-3)
     
     acov <- fscores(mod1, return.acov=TRUE)
-    expect_equal(acov[[1]][1], .47235, tolerance=1e-3)
+    expect_equal(acov[[1]][1], 0.4799239, tolerance=1e-3)
     acov <- fscores(mod1, return.acov=TRUE, full.scores=TRUE)
-    expect_equal(acov[[500]][1], 0.4986606, tolerance=1e-3)
+    expect_equal(acov[[500]][1], 0.4994252, tolerance=1e-3)
     acov <- fscores(model1a, return.acov=TRUE, full.scores=TRUE)
     expect_equal(acov[[500]][1], .3452783, tolerance=1e-3)
     boot <- boot.mirt(model1a, R=5)
@@ -47,27 +53,25 @@ test_that('extras', {
     
     WALD <- DIF(model1a, which.par='d', items2test = 1:3, Wald=TRUE)
     expect_is(WALD, 'list')
-    expect_equal(WALD[[1]]$W[1], 1.779436, tolerance = 1e-4)
-    expect_equal(WALD[[1]]$p[1], .1822186, tolerance = 1e-4)
+    expect_equal(WALD[[1]]$W[1], 1.779187, tolerance = 1e-3)
+    expect_equal(WALD[[1]]$p[1], .1822492, tolerance = 1e-3)
     WALD2 <- DIF(model1a, which.par=c('a1', 'd'), Wald=TRUE, p.adjust = 'fdr') 
     expect_equal(as.numeric(WALD2$adj_pvals), c(0.0777, 0.0010, 0.0777, 0.1611, 0.1652, 0.1611, 
                                                 0.2662, 0.0777, 0.2344, 0.1652), tolerance = 1e-3)     
     extr.2 <- extract.item(mod1, 2)
     Theta <- matrix(seq(-6,6, length.out=200))
     expected <- expected.item(extr.2, Theta)
-    expect_equal(expected[1:3], c(0.003411474, 0.003640396, 0.003884619), tolerance=1e-4)
+    expect_equal(expected[1:3], c(0.003424612, 0.003654262, 0.003899251), tolerance=1e-4)
     expected <- expected.test(mod1, Theta=Theta)
-    expect_equal(expected[1:3], c(0.1083644, 0.1133925, 0.1186483), tolerance=1e-4)
+    expect_equal(expected[1:3], c(0.1080442, 0.1130618, 0.1183069), tolerance=1e-4)
     data[1,1] <- NA
     data <- imputeMissing(mod1, Theta=fscores(mod1, full.scores=TRUE))
     expect_is(data, 'matrix')
     expect_true(!all(is.na(data)))
     pb <- probtrace(extr.2, Theta)
-    expect_equal(pb[1:6, 1], c(0.9965885, 0.9963596, 0.9961154, 0.9958548, 0.9955769, 0.9952804),
-                 tolerance = 1e-5)
+    expect_equal(pb[1:3, 1], c(0.9965754, 0.9963457, 0.9961007), tolerance = 1e-5)
     ti <- testinfo(mod1, Theta=Theta)
-    expect_equal(ti[1:6, 1], c(0.06609361, 0.06919815, 0.07244372, 0.07583628, 0.07938197, 0.08308716),
-                 tolerance = 1e-5)
+    expect_equal(ti[1:3, 1], c(0.06600353, 0.06910696, 0.07235155), tolerance = 1e-5)
     set.seed(1234)
     fs <- fscores(mod1, MI=20, verbose=FALSE)
     expect_is(fs, 'matrix')

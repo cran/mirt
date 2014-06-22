@@ -7,9 +7,9 @@
 #' @param item a number or character signifying which item to extract
 #' @param group a number signifying which group the item should be extracted from (applies to
 #'   'MultipleGroupClass' only)
-#' @param drop.zeros logical; drop slope values that are numerically close to zero to reduce dimensionality?
-#'   Useful in objects returned from \code{\link{bfactor}} or other confirmatory models that contain several
-#'   zero slopes
+#' @param drop.zeros logical; drop slope values that are numerically close to zero to reduce 
+#'   dimensionality? Useful in objects returned from \code{\link{bfactor}} or other confirmatory 
+#'   models that contain several zero slopes
 #' @keywords extract
 #' @export extract.item
 #' @examples
@@ -19,12 +19,12 @@
 #' extr.1 <- extract.item(mod, 1)
 #' }
 extract.item <- function(x, item, group = NULL, drop.zeros = FALSE){
-    inames <- colnames(x@data)
+    inames <- colnames(x@Data$data)
     ind <- 1L:length(inames)
     if(!is.numeric(item)) item <- ind[inames == item]
     if(is(x, 'MultipleGroupClass')){
         if(is.null(group)) stop('Which group are you trying to extract from?')
-        ret <- x@cmods[[group]]@pars[[item]]
+        ret <- x@pars[[group]]@pars[[item]]
     } else {
         ret <- x@pars[[item]]
     }

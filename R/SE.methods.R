@@ -1,43 +1,5 @@
 SE.BL <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMATE, constrain, Ls,
-                  CUSTOM.IND, specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL){
-    LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
-                   CUSTOM.IND, EH, EHPrior){
-        longpars[est] <- p
-        pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-        gstructgrouppars <- prior <- Prior <- vector('list', ngroups)
-        if(EH){
-            Prior[[1L]] <- EHPrior[[1L]]
-        } else {
-            for(g in 1L:ngroups){
-                gstructgrouppars[[g]] <- ExtractGroupPars(pars2[[g]][[J+1L]])
-                if(BFACTOR){
-                    prior[[g]] <- dnorm(theta, 0, 1)
-                    prior[[g]] <- prior[[g]]/sum(prior[[g]])
-                    Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
-                    next
-                }
-                Prior[[g]] <- mirt_dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
-                                               gstructgrouppars[[g]]$gcov)
-                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
-            }
-        }
-        LL <- 0
-        for(g in 1L:ngroups){
-            if(BFACTOR){
-                expected <- Estep.bfactor(pars=pars2[[g]], tabdata=PrepList[[g]]$tabdata,
-                                          Theta=Theta, prior=prior[[g]],
-                                          specific=specific, sitems=sitems,
-                                          itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)$expected
-            } else {
-                expected <- Estep.mirt(pars=pars2[[g]], tabdata=PrepList[[g]]$tabdata,
-                                       Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
-                                       CUSTOM.IND=CUSTOM.IND)$expected
-            }
-            LL <- LL + sum(PrepList[[g]]$tabdata[,ncol(PrepList[[g]]$tabdata)] * log(expected))
-        }
-        LL
-    }
-
+                  CUSTOM.IND, specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL, warn, Data){
     longpars <- ESTIMATE$longpars
     rlist <- ESTIMATE$rlist
     infological=ESTIMATE$infological
@@ -57,21 +19,21 @@ SE.BL <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
             pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
         }
     }
-    hess <- numDeriv::hessian(LL, x=shortpars, est=est, longpars=longpars,
-                              pars=pars, ngroups=ngroups, J=J,
-                              Theta=Theta, PrepList=PrepList,
+    hess <- numDeriv::hessian(BL.LL, x=shortpars, est=est, longpars=longpars,
+                              pars=pars, ngroups=ngroups, J=J, itemloc=itemloc,
+                              Theta=Theta, PrepList=PrepList, BFACTOR=BFACTOR,
                               specific=specific, sitems=sitems, CUSTOM.IND=CUSTOM.IND,
-                              EH=EH, EHPrior=EHPrior)
+                              EH=EH, EHPrior=EHPrior, Data=Data, theta=theta)
     Hess <- matrix(0, length(longpars), length(longpars))
     Hess[est, est] <- -hess
-    Hess <- updateHess(h=Hess, L2=Ls$L2, L3=Ls$L3)
+    Hess <- updateHess(h=Hess, L=Ls$L)
     info <- Hess[infological, infological]
-    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain)
+    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain, warn=warn)
     return(ESTIMATE)
 }
 
 SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV,
-                   collectLL, from, to, is.latent){
+                   collectLL, from, to, is.latent, Data){
     TOL <- list$TOL
     itemloc <- list$itemloc
     J <- length(itemloc) - 1L
@@ -133,12 +95,12 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         #Estep
         for(g in 1L:ngroups){
             if(BFACTOR){
-                rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata,
+                rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
                                             Theta=Theta, prior=prior[[g]], Prior=Prior[[g]],
                                             Priorbetween=Priorbetween[[g]], specific=specific, sitems=sitems,
                                             itemloc=itemloc, CUSTOM.IND=list$CUSTOM.IND)
             } else {
-                rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=PrepList[[g]]$tabdata, 
+                rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=Data$tabdatalong, freq=Data$Freq[[g]], 
                                          CUSTOM.IND=list$CUSTOM.IND, Theta=Theta, 
                                          prior=Prior[[g]], itemloc=itemloc)
             }
@@ -152,9 +114,9 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
                           gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
                           PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, nfact=nfact, 
-                          rlist=rlist, constrain=constrain, cycle=cycles, DERIV=DERIV, groupest=groupest,
+                          rlist=rlist, constrain=constrain, DERIV=DERIV, groupest=groupest,
                           CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND, BFACTOR=list$BFACTOR,
-                          Moptim=Moptim, SEM=TRUE)
+                          Moptim=Moptim, Mrate=1, TOL=list$MSTEPTOL)
         rijlast <- rij
         denom <- (EMhistory[cycles, estindex] - MLestimates[estindex])
         rij <- (longpars[estpars & !redun_constr] - MLestimates[estpars & !redun_constr]) / denom
@@ -170,17 +132,17 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
 }
 
 SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type, 
-                      CUSTOM.IND, SLOW.IND){
+                      CUSTOM.IND, SLOW.IND, warn, message, Data){
     
     fn <- function(which, PrepList, ngroups, pars, Theta, Prior, itemloc, Igrad, Igrad2, Ihess,
-                   CUSTOM.IND, SLOW.IND, whichitems, iscross, npars){
+                   CUSTOM.IND, SLOW.IND, whichitems, iscross, npars, Data){
         Igrad <- matrix(0, npars, npars)
+        gtabdatafull <- cbind(Data$tabdatalong[pat, , drop=FALSE], 1L)
         if(iscross){
             for(pat in which){
                 for(g in 1L:ngroups){
-                    gtabdata <- PrepList[[g]]$tabdata[pat, , drop=FALSE]
-                    r <- gtabdata[,ncol(gtabdata)]
-                    gtabdata[,ncol(gtabdata)] <- 1L
+                    gtabdata <- gtabdatafull[pat, , drop=FALSE]
+                    r <- Data$Freq[[g]][pat]
                     rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, CUSTOM.IND=CUSTOM.IND,
                                         Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
                     for(i in whichitems){
@@ -198,9 +160,8 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
             IgradP <- Ihess <- matrix(0, npars, npars)
             for(pat in 1L:nrow(PrepList[[1L]]$tabdata)){
                 for(g in 1L:ngroups){
-                    gtabdata <- PrepList[[g]]$tabdata[pat, , drop=FALSE]
-                    r <- gtabdata[,ncol(gtabdata)]
-                    gtabdata[,ncol(gtabdata)] <- 1L
+                    gtabdata <- gtabdatafull[pat, , drop=FALSE]
+                    r <- Data$Freq[[g]][pat]
                     pick <- min(which(gtabdata == 1L))
                     rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, CUSTOM.IND=CUSTOM.IND,
                                         Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
@@ -240,33 +201,29 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     prior <- ESTIMATE$prior
     Priorbetween <- ESTIMATE$Priorbetween
     isbifactor <- length(Priorbetween[[1L]]) > 0L
-    if(!isbifactor){
+    if(!isbifactor)
         prior <- Priorbetween <- list(matrix(0))
-    }
     sitems <- ESTIMATE$sitems
     iscross <- ifelse(type == 'crossprod', TRUE, FALSE)
-    tabdata <- PrepList[[1L]]$tabdata
-    tabdata <- tabdata[,-ncol(tabdata)]
     gitemtrace <- rs <- vector('list', ngroups)
-    for(g in 1L:ngroups){
-        rs[[g]] <- PrepList[[g]]$tabdata[,ncol(tabdata)+1L]
+    for(g in 1L:ngroups)
         gitemtrace[[g]] <- computeItemtrace(pars=pars[[g]], Theta=Theta, 
                                             itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-    }
     npars <- ncol(L)
     gPrior <- t(do.call(rbind, Prior))
-    rs <- do.call(rbind, rs)
+    rs <- do.call(rbind, Data$Freq)
     infolist <- .Call("computeInfo", pars, Theta, gPrior, prior[[1L]], Priorbetween[[1L]], 
-                      tabdata, rs, sitems, itemloc, gitemtrace, npars, isbifactor, iscross)
+                      Data$tabdatalong, rs, sitems, itemloc, gitemtrace, npars, isbifactor, iscross)
     whichitems <- unique(c(CUSTOM.IND, SLOW.IND))
     Igrad <- infolist[["Igrad"]]; IgradP <- infolist[["IgradP"]]; Ihess <- infolist[["Ihess"]]
     if(length(whichitems)){
         message('Model contains items that have not been optimized. Information matrix 
                 calculation may take longer than expected')
-        for(i in 1L:nrow(tabdata)){
+        for(i in 1L:nrow(Data$tabdata)){
             tmp <- fn(i, PrepList=PrepList, ngroups=ngroups, pars=pars, npars=ncol(L),
                       Theta=Theta, Prior=Prior, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, 
-                      SLOW.IND=SLOW.IND, whichitems=whichitems, iscross=iscross)
+                      SLOW.IND=SLOW.IND, whichitems=whichitems, iscross=iscross, 
+                      Data=Data)
             Igrad <- Igrad + tmp$Igrad
             if(!iscross){
                 IgradP <- IgradP + tmp$IgradP
@@ -274,9 +231,9 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
             }
         }
     }
-    Igrad <- updateHess(Igrad, L2=Ls$L2, L3=Ls$L3)
-    IgradP <- updateHess(IgradP, L2=Ls$L2, L3=Ls$L3)
-    Ihess <- updateHess(Ihess, L2=Ls$L2, L3=Ls$L3)
+    Igrad <- updateHess(Igrad, L=Ls$L)
+    IgradP <- updateHess(IgradP, L=Ls$L)
+    Ihess <- updateHess(Ihess, L=Ls$L)
     Igrad <- Igrad[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     IgradP <- IgradP[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     Ihess <- Ihess[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
@@ -296,7 +253,7 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     colnames(info) <- rownames(info) <- names(ESTIMATE$correction)[!is.latent]
     tmp <- matrix(NA, length(is.latent), length(is.latent))
     tmp[!is.latent, !is.latent] <- info
-    ESTIMATE <- loadESTIMATEinfo(info=tmp, ESTIMATE=ESTIMATE, constrain=constrain)
+    ESTIMATE <- loadESTIMATEinfo(info=tmp, ESTIMATE=ESTIMATE, constrain=constrain, warn=warn)
     if(any(lengthsplit > 2L)){
         for(g in 1L:ngroups){
             tmp <- ESTIMATE$pars[[g]][[nitems+1L]]@SEpar
@@ -307,7 +264,8 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     return(ESTIMATE)
 }
 
-SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, SLOW.IND){
+SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, SLOW.IND, 
+                      warn, Data){
     pars <- ESTIMATE$pars
     itemloc <- PrepList[[1L]]$itemloc
     ngroups <- length(pars)
@@ -316,8 +274,8 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
     DX <- numeric(ncol(L))
     Prior <- ESTIMATE$Prior
     Igrad <- Ihess <- matrix(0, length(DX), length(DX))
-    tabdata <- PrepList[[1L]]$tabdata
-    K <- PrepList[[1L]]$K
+    tabdata <- Data$tabdatalong
+    K <- Data$K
     resp <- vector('list', nitems)
     for(i in 1L:nitems)
         resp[[i]] <- 0L:(K[i]-1L)
@@ -334,7 +292,6 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
         for(j in 1L:length(uniq))
             tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
     }
-    tabdata <- cbind(tabdata, 1L)
     collectL <- numeric(nrow(tabdata))
     collectgrad <- matrix(0, nrow(tabdata), length(DX))
     for(g in 1L:ngroups)
@@ -342,7 +299,7 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
     for(pat in 1L:nrow(tabdata)){
         for(g in 1L:ngroups){
             gtabdata <- PrepList[[g]]$tabdata[pat, , drop=FALSE]
-            rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, CUSTOM.IND=CUSTOM.IND,
+            rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, freq=1L, CUSTOM.IND=CUSTOM.IND,
                                 Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
             for(i in 1L:nitems){
                 tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
@@ -358,12 +315,12 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
         collectgrad[pat, ] <- DX
     }
     info <- N * t(collectgrad) %*% diag(1/collectL) %*% collectgrad
-    info <- updateHess(info, L2=Ls$L2, L3=Ls$L3)[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
+    info <- updateHess(info, L=Ls$L)[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     colnames(info) <- rownames(info) <- names(ESTIMATE$correction)
     lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
     lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
     info[lengthsplit > 2L, lengthsplit > 2L] <- NA
-    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain)
+    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain, warn=warn)
     if(any(lengthsplit > 2L)){
         for(g in 1L:ngroups){
             tmp <- ESTIMATE$pars[[g]][[nitems+1L]]@SEpar

@@ -1,13 +1,14 @@
 #' Imputing plausible data for missing values
 #'
-#' Given an estimated model from any of mirt's model fitting functions and an estimate of the latent trait,
-#' impute plausible missing data values. Returns the original data in a \code{data.frame}
-#' without any NA values.
+#' Given an estimated model from any of mirt's model fitting functions and an estimate of the 
+#' latent trait, impute plausible missing data values. Returns the original data in a 
+#' \code{data.frame} without any NA values.
 #'
 #'
 #' @aliases imputeMissing
 #' @param x an estimated model x from the mirt package
-#' @param Theta a matrix containing the estimates of the latent trait scores (e.g., via \code{\link{fscores}})
+#' @param Theta a matrix containing the estimates of the latent trait scores 
+#'   (e.g., via \code{\link{fscores}})
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords impute data
 #' @export imputeMissing
@@ -32,20 +33,20 @@ imputeMissing <- function(x, Theta){
     if(is(x, 'MixedClass'))
         stop('mixedmirt xs not yet supported')
     if(is(x, 'MultipleGroupClass')){
-        cmods <- x@cmods
+        pars <- x@pars
         group <- x@group
-        data <- x@data
-        for(i in 1L:length(cmods)){
+        data <- x@Data$data
+        for(i in 1L:length(pars)){
             sel <- group == x@groupNames[i]
             Thetatmp <- Theta[sel, , drop = FALSE]
-            data[sel, ] <- imputeMissing(cmods[[i]], Thetatmp)
+            data[sel, ] <- imputeMissing(pars[[i]], Thetatmp)
         }
         return(data)
     }
     pars <- x@pars
     K <- x@K
     J <- length(K)
-    data <- x@data
+    data <- x@Data$data
     N <- nrow(data)
     Nind <- 1L:N
     for (i in 1L:J){

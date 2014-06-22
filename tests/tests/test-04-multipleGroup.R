@@ -24,7 +24,7 @@ test_that('one factor', {
     pffit <- c(as.numeric(as.matrix(head(pf))), as.numeric(as.matrix(tail(pf))))
     expect_equal(pffit, c(0.6388, 0.8582, 0.83267, 0.99725, 1.05999, 1.03414, -1.51153, -0.24137, -0.19464, 0.09861, 0.3459, 0.24062, 0.699, 0.89307, 0.84912, 1.08481, 0.98964, 1.05882, -1.48336, -0.26539, -0.31212, 0.40918, -0.00498, 0.40736, 1.39643, 0.34987, 0.38458, -0.21882, -0.05278, -0.30241, 1.15408, 1.54886, 0.69589, 1.64176, 1.054, 0.47791, 0.5427, 1.01894, -1.43216, 1.13883, 0.30973, -0.96363, 0.91257, 0.98546, 0.73961, 1.10462, 0.96747, 0.66029, -0.29309, 0.09788, -1.5242, 0.38551, -0.12126, -0.82876, 0.12927, -0.21665, 1.41519, -0.5449, 0.05218, 0.89503),
                  tolerance = 1e-3)
-    mod_configural <- multipleGroup(dat, models, SE=TRUE, SE.type = 'crossprod', 
+    mod_configural <- multipleGroup(dat, models, SE=TRUE, SE.type = 'crossprod', optimizer='NR',
                                     group = group, verbose = FALSE, method = 'EM')
     expect_is(mod_configural, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_configural, digits=4)[[1L]]))
@@ -36,7 +36,7 @@ test_that('one factor', {
 #     cfs <- as.numeric(c(dtf$signed, dtf$unsigned))
 #     expect_equal(cfs, c(-0.0562109, -0.3747396, 0.1187070, 2.2969256, 4.4389564), tolerance=1e-3)
     mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), verbose = FALSE,
-                                method = 'EM')
+                                method = 'EM', optimizer = 'NR')
     expect_is(mod_metric, 'MultipleGroupClass')
     expect_equal(mod_metric@df, 32722)
     mod_scalar2 <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
@@ -51,10 +51,11 @@ test_that('one factor', {
                             CONSTRAINB = (1-15, a1), (1,2,3-15,d)')
     mod_scalar1 <- multipleGroup(dat, newmodel, group = group, verbose = FALSE, invariance='free_var')
     expect_is(mod_scalar1, 'MultipleGroupClass')
-    mod_EH <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM', empiricalhist=TRUE)
+    mod_EH <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM', 
+                            empiricalhist=TRUE, optimizer = 'NR')
     expect_is(mod_EH, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_EH, digits=4)[[1L]]))
-    expect_equal(cfs, c(0.9157, 0.5762, 0, 1, 1.1492, -0.6687, 0, 1, 0.7621, -0.1143, 0, 1, 0.962, 0.8544, 0, 1, 1.084, 0.3526, 0, 1, 0.409, 0.4941, 0, 1, 1.0155, 1.1149, 0, 1, 0.757, -0.3631, 0, 1, 0.7929, -1.027, 0, 1, 0.7202, -1.0713, 0, 1, 0.7833, 1.1886, 0, 1, 1.3881, -0.1058, 0, 1, 1.2098, 0.6779, 0, 1, 0.9116, 0.4329, 0, 1, 0.7701, -0.0585, 0, 1, 0, 1),
+    expect_equal(cfs, c(0.9339, 0.5807, 0, 1, 1.1652, -0.6633, 0, 1, 0.7763, -0.1112, 0, 1, 0.9771, 0.8583, 0, 1, 1.1012, 0.3572, 0, 1, 0.4185, 0.4954, 0, 1, 1.0291, 1.118, 0, 1, 0.7706, -0.3602, 0, 1, 0.8036, -1.0231, 0, 1, 0.7288, -1.0674, 0, 1, 0.7949, 1.1914, 0, 1, 1.4117, -0.0999, 0, 1, 1.2329, 0.6838, 0, 1, 0.9236, 0.4362, 0, 1, 0.7843, -0.0553, 0, 1, 0, 1),
                  tolerance = 1e-2)
 
     dat[1,1] <- dat[2,2] <- NA
@@ -69,7 +70,7 @@ test_that('one factor', {
     fs2 <- fscores(mod_metric, full.scores = TRUE, full.scores.SE=TRUE, method = 'ML')
     expect_equal(as.numeric(head(fs2)), c(0.5531893,  1.1960187,  1.8287234,  1.1133180, -0.5164821, -0.2322618,  0.4968711,  0.6002451,  0.7688432,
                                           0.5831489,  0.4716423,  0.4613523),
-                tolerance = 1e-4)
+                tolerance = 1e-2)
     fs3 <- fscores(mod_missing, verbose = FALSE)
     fs4 <- fscores(mod_missing, full.scores = TRUE)
     fs5 <- fscores(mod_metric, full.scores = TRUE, scores.only=TRUE)
@@ -81,7 +82,7 @@ test_that('one factor', {
     fit1 <- M2(mod_metric)
     expect_is(fit1, 'data.frame')
     expect_true(mirt:::closeEnough(fit1[1:2] - c(85.28706, 67.16565), -1e-2, 1e-2))
-    expect_true(mirt:::closeEnough(fit1$df.M2 - 195, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fit1$df - 195, -1e-4, 1e-4))
     fit2 <- itemfit(mod_metric)
     expect_is(fit2, 'list')
 
@@ -137,13 +138,14 @@ test_that('three factor', {
     model2 <- mirt.model(MGmodelg1, quiet = TRUE)
     models <- model1
 
-    suppressWarnings(mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM',
-                                                 verbose = FALSE, draws = 10))
+    mod_metric <- multipleGroup(dat, models, group = group, invariance=c('slopes'), method = 'MHRM',
+                                                 verbose = FALSE, draws = 10)
     expect_is(mod_metric, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_metric, digits=4)[[1]]))[1:20]
-    expect_equal(cfs, c(1.1577, 0.9415, 1.374, 0, NA, NA, 0, NA, NA, 0.7025, 0.5314, 0.8736, 0, NA, NA, 1, NA, NA, 1.3494, 1.09),
+    expect_equal(cfs, c(1.16, 0.945, 1.375, 0, NA, NA, 0, NA, NA, 0.7031, 0.5508, 0.8554, 0, NA, NA, 1, NA, NA, 1.37, 1.0003),
                  tolerance = 1e-2)
-    mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM', SE=TRUE)
+    mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM', SE=TRUE,
+                                    optimizer = 'NR')
     expect_is(mod_configural, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_configural, digits=4)[[1]]))
     cfs <- cfs[cfs != 0 & cfs != 1]
@@ -152,5 +154,5 @@ test_that('three factor', {
 
     fs1 <- fscores(mod_metric, verbose = FALSE)
     expect_is(fs1, 'list')
-    expect_true(mirt:::closeEnough(fs1[[1L]][1:6, 'F3'] - c(-0.95083283,  0.06506389, -0.53194554, -0.35161021,  0.53556601, -0.95083283), -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fs1[[1L]][1:6, 'F3'] - c(-0.97607767,  0.06003614, -0.51816354, -0.32065709,  0.49872843, -0.97607767), -1e-4, 1e-4))
 })

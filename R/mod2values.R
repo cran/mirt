@@ -1,8 +1,8 @@
 #' Convert an estimated mirt model to special data.frame
 #'
 #' Given an estimated model from any of mirt's model fitting functions this function will convert
-#' the model parameters into the design data frame of starting values and other parameter characteristics
-#' (similar to using the \code{pars = 'values'} for obtaining starting values).
+#' the model parameters into the design data frame of starting values and other parameter 
+#' characteristics (similar to using the \code{pars = 'values'} for obtaining starting values).
 #'
 #'
 #' @aliases mod2values
@@ -23,15 +23,15 @@
 #' }
 mod2values <- function(x){
     if(is(x, 'MultipleGroupClass')){
-        PrepList <- x@cmods
-        names(PrepList) <- x@groupNames
+        PrepList <- x@pars
+        names(PrepList) <- x@Data$groupNames
         MG <- TRUE
     } else {
         PrepList <- list(pars=x@pars)
         names(PrepList) <- 'all'
         MG <- FALSE
     }
-    itemnames <- colnames(x@data)
+    itemnames <- colnames(x@Data$data)
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     for(g in 1L:length(PrepList)){
