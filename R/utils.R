@@ -71,10 +71,12 @@ imputePars <- function(pars, covB, imputenums, constrain){
         pars[[i]]@par[pick1] <- pars[[i]]@par[pick1] + shift[pick2]
         if(is(pars[[i]], 'graded')){
             where <- (length(pars[[i]]@par) - pars[[i]]@ncat + 2L):length(pars[[i]]@par)
-            pars[[i]]@par[where] <- sort(pars[[i]]@par[where], decreasing=TRUE)
+            if(!(all(sort(pars[[i]]@par[where], decreasing=TRUE) == pars[[i]]@par[where])))
+                stop('Drawn values out of order')
         } else if(is(pars[[i]], 'grsm')){
             where <- (length(pars[[i]]@par) - pars[[i]]@ncat + 1L):(length(pars[[i]]@par)-1L)
-            pars[[i]]@par[where] <- sort(pars[[i]]@par[where], decreasing=TRUE)
+            if(!(all(sort(pars[[i]]@par[where], decreasing=TRUE) == pars[[i]]@par[where])))
+                stop('Drawn values out of order')
         }
     }
     if(length(constrain)){
@@ -340,7 +342,7 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
         }
     } else if(!is.null(list$customPriorFun)){
         for(g in 1L:ngroups)
-            Prior[[g]] <- list$customPriorFun(Theta)
+            Prior[[g]] <- list$customPriorFun(Theta, Etable=rlist[[g]][[1L]])
     }
     return(list(Prior=Prior, Priorbetween=Priorbetween))
 }
@@ -691,6 +693,8 @@ UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
     len <- length(PrepList[[length(PrepList)]]$pars)
     maxparnum <- max(PrepList[[length(PrepList)]]$pars[[len]]@parnum)
     pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
+    if(PrepList[[1L]]$nfact > 1L)
+        PrepList[[1L]]$exploratory <- all(pars$est[pars$name %in% paste0('a', 1L:PrepList[[1L]]$nfact)])
     ind <- 1L
     for(g in 1L:length(PrepList)){
         for(i in 1L:length(PrepList[[g]]$pars)){
@@ -915,7 +919,7 @@ updateHess <- function(h, L) L %*% h %*% L
 
 makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NULL,
                      rotate = 'varimax', Target = NaN, SE = FALSE, verbose = TRUE,
-                     SEtol = .0001, grsm.block = NULL, D = 1, TOL = NULL,
+                     SEtol = .001, grsm.block = NULL, D = 1, TOL = NULL,
                      rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
                      technical = list(), use = 'pairwise.complete.obs',
                      SE.type = 'crossprod', large = NULL, accelerate = TRUE, empiricalhist = FALSE,
@@ -933,7 +937,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$SE = SE
     opts$SE.type = SE.type
     opts$verbose = verbose
-    opts$SEtol = ifelse(is.null(technical$SEtol), .0001, technical$SEtol)
+    opts$SEtol = ifelse(is.null(technical$SEtol), .001, technical$SEtol)
     opts$grsm.block = grsm.block
     opts$D = D
     opts$rsm.block = rsm.block
@@ -947,7 +951,6 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         opts$accelerate <- FALSE
         if(is.null(TOL)) opts$TOL <- 1e-5
         if(is.null(technical$NCYCLES)) technical$NCYCLES <- 1000L
-        opts$SEtol <- ifelse(is.null(technical$SEtol), .001, technical$SEtol)
     }
     if(is.null(technical$symmetric_SEM)) technical$symmetric_SEM <- TRUE
     opts$warn <- if(is.null(technical$warn)) TRUE else technical$warn

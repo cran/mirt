@@ -18,9 +18,12 @@ test_that('dich data', {
     expect_is(cof, 'list')
     sum <- summary(mod1, verbose = FALSE)
     expect_is(sum, 'list')
-#     fit <- fitIndices(mod1)
-#     expect_equal(fit$M2, 6772.915, tolerance = 1e-2)
-#     expect_equal(fit$df.M2, 432, tolerance = 1e-2)
+    fs <- fscores(mod1, method = 'EAPsum', verbose = FALSE)
+    expect_equal(fs[1:3,'Theta.1'], c(-3.082745, -3.024984, -2.952605), tolerance = 1e-4)
+    expect_equal(fs[1:3,'Theta.2'], c(-1.3812452, -1.1018778, -0.8074491), tolerance = 1e-4)
+    fit <- M2(mod1)
+    expect_equal(fit$M2, 712.5701, tolerance = 1e-2)
+    expect_equal(fit$df, 432, tolerance = 1e-2)
     pfit1 <- personfit(mod1)
     expect_is(pfit1, 'data.frame')
     ifit <- itemfit(mod1)
@@ -79,27 +82,28 @@ test_that('dich data', {
 
     specific <- c(rep(1,7),rep(2,7))
     items[items == 'dich'] <- '2PL'
-    simmod <- bfactor(dataset, specific, itemtype = items, verbose=FALSE)
+    simmod <- bfactor(dataset, specific, itemtype = items, verbose=FALSE, TOL=3e-3)
     expect_is(simmod, 'ConfirmatoryClass')
     expect_equal(simmod@df, 442315)
     cfs <- as.numeric(do.call(c, coef(simmod, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
-    expect_equal(cfs, c(1.219, 0.5688, -1.0322, 1.0239, 0.0551, -1.4492, 1.1112, -0.3067, 1.5076, 1.2321, -0.4864, 0.0489, 1.1882, 0.0943, 1.4165, 2, -0.8873, 1.6079, 1.1425, 0.2036, 2, 2.0687, -0.4324, 1.1425, 0.3774, 3.0415, 2.0473, -0.5699, 0.8676, 0.8965, 3.0701, 2.039, -0.5565, 0.8515, 0.5159, 2.4812, 0.9452, -0.9526, 0.879, 0.8219, 2.2059, 0.0356, 0.794, 0.7967, -0.9985, 0.9118, 0.623, -1.3999, 0.9462, 0.6467, 1.5453, 0.9201, 0.6908, -0.0307),
+    expect_equal(cfs, c(1.0046,0.744,-1.0019,0.883,0.5626,-1.4582,0.9951,0.3027,1.4577,1.0194,0.3282,0.0445,1.0757,0.5798,1.4221,2,-0.8557,1.6356,1.0145,0.5632,2,2.0685,-0.4327,1.0057,0.535,2.9888,2.0091,-0.5589,0.9866,0.772,3.0742,2.042,-0.5571,0.962,0.3164,2.4922,0.9501,-0.9573,0.9949,0.6755,2.2051,0.0358,0.8958,0.7046,-1.003,1.0247,0.4303,-1.4028,1.0745,0.4278,1.5501,1.0361,0.517,-0.0305),
                  tolerance = 1e-2)
     specific[1] <- NA
-    simmod2 <- bfactor(dataset, specific, itemtype = items, verbose=FALSE)
+    simmod2 <- bfactor(dataset, specific, itemtype = items, verbose=FALSE, TOL=3e-3)
     expect_is(simmod2, 'ConfirmatoryClass')
     expect_equal(simmod2@df, 442316)
     cfs <- as.numeric(do.call(c, coef(simmod2, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
-    expect_equal(cfs, c(1.1762, -0.9797, 1.0192, 0.1543, -1.4515, 1.0503, 0.3344, 1.485, 1.2114, 0.8021, 0.051, 1.1933, 0.0394, 1.4147, 2, -0.8852, 1.6098, 1.1494, 0.0068, 2, 2.0612, -0.4309, 1.2013, -0.2778, 3.0668, 2.0662, -0.575, 0.8699, 0.8924, 3.0688, 2.038, -0.5562, 0.8518, 0.5154, 2.4813, 0.9449, -0.9527, 0.8775, 0.824, 2.2063, 0.0357, 0.7912, 0.802, -0.9991, 0.9161, 0.6193, -1.4005, 0.9449, 0.6468, 1.5448, 0.9152, 0.6966, -0.0308),
+    expect_equal(cfs, c(1.1816,-0.9814,1.0163,0.1887,-1.4527,1.0503,0.4358,1.5006,1.1467,0.6797,0.0491,1.1882,0.0973,1.4125,2,-0.8872,1.608,1.1489,0.038,2,2.0613,-0.4309,1.2006,-0.2361,3.059,2.0603,-0.5737,0.8731,0.8887,3.0685,2.0377,-0.5562,0.8547,0.5109,2.4815,0.9449,-0.9528,0.8799,0.8214,2.2063,0.0356,0.7931,0.8013,-0.9994,0.9197,0.6143,-1.4006,0.9478,0.6421,1.5446,0.9168,0.6944,-0.0308),
                  tolerance = 1e-2)
     fs <- fscores(simmod, verbose = FALSE)
-    expect_true(mirt:::closeEnough(fs[1:6,'F1'] - c(-2.630559, -2.334839, -2.415723, -2.127306, -1.976905, -2.139828), -1e-2, 1e-2))
+    expect_true(mirt:::closeEnough(fs[1:6,'F1'] - c( -2.649625, -2.242532, -2.361397, -1.957731, -1.739921, -1.973155), -1e-2, 1e-2))
     expect_is(fs, 'matrix')
 
     res <- residuals(simmod, verbose = FALSE)
     expect_is(res, 'matrix')
+    expect_equal(res[2,1], 1.636, tolerance = 1e-2)
     sum <- summary(simmod, verbose = FALSE)
     expect_is(sum, 'list')
 
@@ -136,13 +140,11 @@ test_that('dich data', {
         G2 = 9-16
         COV = G1*G2')
     
-    simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3, verbose=FALSE)
+    simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 5e-3, verbose=FALSE)
     expect_is(simmod, 'ConfirmatoryClass')
     expect_equal(simmod@df, 65486)
     cfs <- as.numeric(do.call(c, coef(simmod, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
-    expect_equal(cfs, c(1.1676, 0.0707, -1.1358, 0.9599, 0.8734, 0.2572, 1.4081, -0.094, 1.1603, 0.995, 0.3638, -2.2318, 1.1071, 0.2902, 0.474, 1.0824, 0.4672, 0.5874, 1.0401, 0.5948, -0.6579, 1.1344, 0.6779, -0.5169, 0.8959, 0.5099, -0.4837, 1.0979, 0.6283, -0.9717, 0.9903, 0.5833, -0.4863, 1.0698, 0.4347, -1.0032, 1.0424, 0.0972, -0.7258, 1.2091, 0.3615, 0.033, 0.9242, 0.4008, 0.8843, 0.9596, 0.6284, -0.0587, 0.6674),
+    expect_equal(cfs, c(1.1435,0.2137,-1.1342,0.8516,0.5232,0.2348,1.3427,0.1383,1.1393,0.9688,0.6237,-2.2923,1.0951,0.4546,0.4806,1.1037,0.4254,0.5886,1.0589,0.5667,-0.6587,1.1585,0.6428,-0.5176,0.907,0.4958,-0.4842,1.1138,0.6011,-0.9722,1.0039,0.5618,-0.4866,1.057,0.4562,-1.0027,1.0099,0.206,-0.7226,1.1979,0.441,0.0331,0.9131,0.4524,0.8878,0.9367,0.5476,-0.0577,0.6691),
                  tolerance = 1e-2)
-    fs <- fscores(simmod, scores.only=T, returnER=TRUE)
-    expect_equal(as.numeric(fs), c(0.6671379, 0.6482172, 0.1135845, 0.2121324, 0.1107422), tolerance = 1e-2)
 })

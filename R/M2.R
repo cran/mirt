@@ -6,8 +6,8 @@
 #' fitting the null model.
 #' 
 #' @return Returns a data.frame object with the M2 statistic, along with the degrees of freedom,
-#'   p-value, RMSEA (with 90\% confidence interval), and optionally the TLI and CFI model 
-#'   fit statistics
+#'   p-value, RMSEA (with 90\% confidence interval), SRMSR if all items were ordinal, 
+#'   and optionally the TLI and CFI model fit statistics
 #'
 #' @aliases M2
 #' @param obj an estimated model object from the mirt package
@@ -23,6 +23,7 @@
 #'   of the stats and their imputed standard deviations
 #' @param CI numeric value from 0 to 1 indicating the range of the confidence interval for 
 #'   RMSEA. Default returns the 90\% interval
+#' @param residmat logical; return the residual matrix used to compute the SRMSR statistic?
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
 #' Cai, L. & Hansen, M. (2013). Limited-information goodness-of-fit testing of 
@@ -47,14 +48,15 @@
 #' M2(mod2, Theta=Theta, impute = 10)
 #'
 #' }
-M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, CI = .9){
+M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, CI = .9,
+               residmat = FALSE){
     
     fn <- function(collect, obj, Theta, ...){
         dat <- imputeMissing(obj, Theta)
         tmpobj <- obj
         tmpobj@Data$data <- dat
         if(is(obj, 'MultipleGroupClass')){
-            for(g in 1L:length(obj@groupNames))
+            for(g in 1L:length(obj@Data$groupNames))
                 tmpobj@pars[[g]]@Data$data <- dat[obj@Data$groupNames[g] == obj@Data$group, 
                                                   , drop=FALSE]
         }
@@ -94,7 +96,11 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
             pars[[g]]@bfactor <- obj@bfactor
             pars[[g]]@Data <- list(data=obj@Data$data[obj@Data$group == obj@Data$groupName[g], ],
                                    mins=obj@Data$mins)
-            ret[[g]] <- M2(pars[[g]], calcNull=FALSE, quadpts=quadpts)
+            ret[[g]] <- M2(pars[[g]], calcNull=FALSE, quadpts=quadpts, residmat=residmat)
+        }
+        if(residmat){
+            names(ret) <- obj@Data$groupNames
+            return(ret)
         }
         newret <- list()
         newret$M2 <- numeric(ngroups)
@@ -113,6 +119,13 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
                                 ci.lower=alpha, ci.upper=1-alpha)
         newret[[paste0("RMSEA_", alpha*100)]]  <- RMSEA.90_CI[1L]
         newret[[paste0("RMSEA_", (1-alpha)*100)]] <- RMSEA.90_CI[2L]
+        if(!is.null(ret[[1L]]$SRMSR)){
+            SRMSR <- numeric(ngroups)
+            for(g in 1L:ngroups)
+                SRMSR[g] <- ret[[g]]$SRMSR  
+            names(SRMSR) <- paste0(obj@Data$groupNames, '.SRMSR')
+            SRMSR <- as.list(SRMSR)
+        } else SRMSR <- numeric(0)
         if(calcNull){
             null.mod <- try(multipleGroup(obj@Data$data, 1, group=obj@Data$group, 
                                           TOL=1e-3, technical=list(NULL.MODEL=TRUE),
@@ -128,7 +141,10 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         M2s <- as.numeric(newret$M2)
         names(M2s) <- paste0(obj@Data$groupNames, '.M2')
         newret$M2 <- NULL
-        newret <- data.frame(as.list(M2s), newret)
+        if(length(SRMSR)){
+            names(SRMSR) <- paste0(obj@Data$groupNames, '.SRMSR')
+            newret <- data.frame(as.list(M2s), newret, SRMSR)
+        } else newret <- data.frame(as.list(M2s), newret)
         rownames(newret) <- 'stats'
         return(newret)
     }
@@ -171,9 +187,9 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         sitems <- bfactorlist$sitems; specific <- bfactorlist$specific; 
         Prior <- bfactorlist$Prior[[group]]
     }
-    E1 <- numeric(nitems)
+    E1 <- E11 <- numeric(nitems)
     E2 <- matrix(NA, nitems, nitems)
-    EIs <- EIs2 <- matrix(0, nrow(Theta), nitems)
+    EIs <- EIs2 <- E11s <- matrix(0, nrow(Theta), nitems)
     DP <- matrix(0, nrow(Theta), length(estpars))
     wherepar <- c(1L, numeric(nitems))
     ind <- 1L
@@ -181,6 +197,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         x <- extract.item(obj, i)
         EIs[,i] <- expected.item(x, Theta, min=0L)
         tmp <- ProbTrace(x, Theta)
+        E11s[,i] <- colSums((1L:ncol(tmp)-1L)^2 * t(tmp))
         for(j in ncol(tmp):2L)
             tmp[,j-1L] <- tmp[,j] + tmp[,j-1L]
         cfs <- c(0,1)
@@ -194,14 +211,29 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     ind <- 1L
     for(i in 1L:nitems){
         E1[i] <- sum(EIs[,i] * Prior)
+        E11[i] <- sum(E11s[,i] * Prior)
         for(j in 1L:nitems){
-            if(i > j){
+            if(i >= j){
                 E2[i,j] <- sum(EIs[,i] * EIs[,j] * Prior)
                 ind <- ind + 1L
             }
         }
     }
     e <- c(E1, E2[lower.tri(E2)])
+    if(all(sapply(obj@pars, class) %in% c('dich', 'graded', 'gpcm', 'GroupPars'))){
+        E2[is.na(E2)] <- 0
+        E2 <- E2 + t(E2) 
+        diag(E2) <- E11
+        R <- cov2cor(cross/N - outer(colMeans(dat), colMeans(dat)))
+        Kr <- cov2cor(E2 - outer(E1, E1))
+        SRMSR <- sqrt( sum((R[lower.tri(R)] - Kr[lower.tri(Kr)])^2) / sum(lower.tri(R)))
+        if(residmat){
+            ret <- matrix(NA, nrow(R), nrow(R))
+            ret[lower.tri(ret)] <- R[lower.tri(R)] - Kr[lower.tri(Kr)]
+            colnames(ret) <- rownames(ret) <- colnames(obj@Data$dat)
+            return(ret)
+        }
+    } else SRMSR <- NULL
     delta1 <- matrix(0, nitems, length(estpars))
     delta2 <- matrix(0, length(p) - nitems, length(estpars))
     ind <- 1L
@@ -252,6 +284,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     } else {
         ret$nrowT <- length(p)
     }
+    if(!is.null(SRMSR)) ret$SRMSR <- SRMSR
     ret <- as.data.frame(ret)
     rownames(ret) <- 'stats'
     return(ret)

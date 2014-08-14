@@ -5,119 +5,137 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        survey.weights = NULL, ...)
 {
     start.time=proc.time()[3L]
-    if(missing(data) || is.null(nrow(data))) 
-        stop('data argument is required')
-    if(missing(model) || !is(model, 'numeric') && !is(model, 'mirt.model')) 
-        stop('model argument (numeric or from mirt.model() function) is required')
-    if(!(is.factor(group) || is.character(group)) || length(group) != nrow(data))
-        stop('group input provided is not valid')
-    if(!is.null(itemtype))
-        stopifnot(is(itemtype, 'character'))
-    if(!is.null(constrain))
-        stopifnot(is(constrain, 'list'))
-    if(!is.null(parprior))
-        stopifnot(is(parprior, 'list'))
-    if(!is.null(customItems))
-        stopifnot(is(customItems, 'list'))
-    if(!is.null(nominal.highlow))
-        stopifnot(is(nominal.highlow, 'matrix'))
-    stopifnot(is(invariance, 'character'))
-    stopifnot(is(GenRandomPars, 'logical'))
-    stopifnot(is(large, 'logical') || is(large, 'list'))
-    opts <- makeopts(...)
-    if(!is.null(survey.weights)){
-        stopifnot(opts$method == 'EM')
-        stopifnot(length(survey.weights) == nrow(data))
-        
-    }
-    if(any(is.na(group))){
-        if(opts$message)
-            message('NA values in group removed, along with associated rows in data')
-        data <- data[!is.na(group), ]
-        group <- group[!is.na(group)]
-    }    
-    if(!is.null(customItems)) opts$calcNull <- FALSE
-    opts$times <- list(start.time=start.time)
-    # on exit, reset the seed to override internal
-    if(opts$method == 'MHRM' || opts$method == 'MIXED')
-        on.exit(set.seed((as.numeric(Sys.time()) - floor(as.numeric(Sys.time()))) * 1e8))
-    #change itemtypes if NULL.MODEL
-    if(opts$NULL.MODEL){
-        constrain <- NULL
-        if(!is.null(itemtype)){
-            itemtype[itemtype == 'grsm'] <- 'graded'
-            itemtype[itemtype == 'rsm'] <- 'gpcm'
-            itemtype[itemtype == '3PL' | itemtype == '3PLu' | itemtype == '4PL'] <- '2PL'
-            itemtype[itemtype == '3PLNRM' | itemtype == '3PLuNRM' | itemtype == '4PLNRM'] <- '2PLNRM'
+    if(is.logical(large) && large){
+        Data <- opts <- list()
+        data <- as.matrix(data)
+        if(is.numeric(data))
+            data <- matrix(as.integer(data), nrow(data), dimnames=list(rownames(data), colnames(data)))
+        rownames(data) <- 1L:nrow(data)
+        if(is.null(colnames(data)))
+            colnames(data) <- paste0('Item.', 1L:ncol(data))
+        Data$data <- data
+        Data$group <- factor(group)
+        Data$groupNames <- unique(Data$group)
+        Data$nitems <- ncol(data)
+        K <- apply(Data$data, 2L, function(x) length(unique(na.omit(x))))
+        tmp <- list(...)
+        if(!is.null(tmp$technical$customK)) K <- tmp$technical$customK
+        itemloc <- c(1L, cumsum(K) + 1L)
+        PrepListFull <- list(K=K, itemloc=itemloc, Names=NULL, itemnames=colnames(Data$data))
+    } else {
+        if(missing(data) || is.null(nrow(data))) 
+            stop('data argument is required')
+        if(missing(model) || !is(model, 'numeric') && !is(model, 'mirt.model')) 
+            stop('model argument (numeric or from mirt.model() function) is required')
+        if(!(is.factor(group) || is.character(group)) || length(group) != nrow(data))
+            stop('group input provided is not valid')
+        if(!is.null(itemtype))
+            stopifnot(is(itemtype, 'character'))
+        if(!is.null(constrain))
+            stopifnot(is(constrain, 'list'))
+        if(!is.null(parprior))
+            stopifnot(is(parprior, 'list'))
+        if(!is.null(customItems))
+            stopifnot(is(customItems, 'list'))
+        if(!is.null(nominal.highlow))
+            stopifnot(is(nominal.highlow, 'matrix'))
+        stopifnot(is(invariance, 'character'))
+        stopifnot(is(GenRandomPars, 'logical'))
+        stopifnot(is(large, 'logical') || is(large, 'list'))
+        opts <- makeopts(...)
+        if(!is.null(survey.weights)){
+            stopifnot(opts$method == 'EM')
+            stopifnot(length(survey.weights) == nrow(data))
         }
-    }
-    if(length(group) != nrow(data))
-        stop('length of group not equal to number of rows in data.')
-    if(any(is.na(group)))
-        stop('Unknown group memberships cannot be estimated. Please remove the NA values in group
-                and the associated rows in the data input.')
-
-    ##
-    opts$times$start.time.Data <- proc.time()[3L]
-    Data <- list()
-    data <- as.matrix(data)
-    if(!all(apply(data, 2L, class) %in% c('integer', 'numeric')))
-        stop('Input data must be integer or numeric values only')
-    if(is.numeric(data))
-        data <- matrix(as.integer(data), nrow(data), dimnames=list(rownames(data), colnames(data)))
-    rownames(data) <- 1L:nrow(data)
-    if(is.null(colnames(data)))
-        colnames(data) <- paste0('Item.', 1L:ncol(data))
-    Data$data <- data
-    if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
-    if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
-    Data$group <- factor(group)
-    Data$groupNames <- unique(Data$group)
-    if(any(grepl('-', Data$groupNames)))
-        stop('Group names cannot contain a dash (-) character')
-    Data$ngroups <- length(Data$groupNames)
-    Data$nitems <- ncol(Data$data)
-    Data$N <- nrow(Data$data)
-    Data$mins <- apply(data, 2L, min, na.rm=TRUE)
-    oldmodel <- model
-    if(length(model) == 1L){
-        newmodel <- list()
-        for(g in 1L:Data$ngroups)
-            newmodel[[g]] <- model
-        names(newmodel) <- Data$groupNames
-        model <- newmodel
-    }
-    Data$model <- model
-    PrepList <- vector('list', Data$ngroups)
-    names(PrepList) <- Data$groupNames
-    tmp <- 1L:Data$ngroups
-    selectmod <- Data$model[[tmp[names(Data$model) == Data$groupNames[1L]]]]
-    PrepListFull <- PrepList[[1L]] <-
-        PrepData(data=Data$data, model=selectmod, itemtype=itemtype, guess=guess,
-                 upper=upper, parprior=parprior, verbose=opts$verbose,
-                 technical=opts$technical, parnumber=1L, BFACTOR=opts$BFACTOR,
-                 grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
-                 D=opts$D, mixed.design=mixed.design, customItems=customItems,
-                 fulldata=opts$PrepList[[1L]]$fulldata, key=key, nominal.highlow=nominal.highlow)
-    if(any(PrepListFull$itemtype == 'nominal') && is.null(nominal.highlow) && !opts$NULL.MODEL
-       && opts$verbose)
-        if(opts$message)
-            message('\'nominal.highlow\' matrix not specified, highest and lowest categories are used by default')
-    parnumber <- max(PrepList[[1L]]$pars[[Data$nitems+1L]]@parnum) + 1L
-    for(g in 1L:Data$ngroups){
-        if(g != 1L){
-            PrepList[[g]] <- PrepList[[1L]]
-            for(i in 1L:length(PrepList[[g]]$pars)){
-                PrepList[[g]]$pars[[i]]@parnum <- parnumber:(parnumber + length(PrepList[[g]]$pars[[i]]@parnum) - 1L)
-                parnumber <- max(PrepList[[g]]$pars[[i]]@parnum) + 1L
+        if(any(is.na(group))){
+            if(opts$message)
+                message('NA values in group removed, along with associated rows in data')
+            data <- data[!is.na(group), ]
+            group <- group[!is.na(group)]
+        }    
+        if(!is.null(customItems)) opts$calcNull <- FALSE
+        opts$times <- list(start.time=start.time)
+        # on exit, reset the seed to override internal
+        if(opts$method == 'MHRM' || opts$method == 'MIXED')
+            on.exit(set.seed((as.numeric(Sys.time()) - floor(as.numeric(Sys.time()))) * 1e8))
+        #change itemtypes if NULL.MODEL
+        if(opts$NULL.MODEL){
+            constrain <- NULL
+            if(!is.null(itemtype)){
+                itemtype[itemtype == 'grsm'] <- 'graded'
+                itemtype[itemtype == 'rsm'] <- 'gpcm'
+                itemtype[itemtype == '3PL' | itemtype == '3PLu' | itemtype == '4PL'] <- '2PL'
+                itemtype[itemtype == '3PLNRM' | itemtype == '3PLuNRM' | itemtype == '4PLNRM'] <- '2PLNRM'
             }
         }
-    }
-    if(length(mixed.design$random) > 0L){
-        for(i in 1L:length(mixed.design$random)){
-            mixed.design$random[[i]]@parnum <- parnumber:(parnumber - 1L +
-                                                              length(mixed.design$random[[i]]@par))
-            parnumber <- max(mixed.design$random[[i]]@parnum) + 1L
+        if(length(group) != nrow(data))
+            stop('length of group not equal to number of rows in data.')
+        if(any(is.na(group)))
+            stop('Unknown group memberships cannot be estimated. Please remove the NA values in group
+                    and the associated rows in the data input.')
+    
+        ##
+        opts$times$start.time.Data <- proc.time()[3L]
+        Data <- list()
+        data <- as.matrix(data)
+        if(!all(apply(data, 2L, class) %in% c('integer', 'numeric')))
+            stop('Input data must be integer or numeric values only')
+        if(is.numeric(data))
+            data <- matrix(as.integer(data), nrow(data), dimnames=list(rownames(data), colnames(data)))
+        rownames(data) <- 1L:nrow(data)
+        if(is.null(colnames(data)))
+            colnames(data) <- paste0('Item.', 1L:ncol(data))
+        Data$data <- data
+        if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
+        if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
+        Data$group <- factor(group)
+        Data$groupNames <- unique(Data$group)
+        if(any(grepl('-', Data$groupNames)))
+            stop('Group names cannot contain a dash (-) character')
+        Data$ngroups <- length(Data$groupNames)
+        Data$nitems <- ncol(Data$data)
+        Data$N <- nrow(Data$data)
+        Data$mins <- apply(data, 2L, min, na.rm=TRUE)
+        oldmodel <- model
+        if(length(model) == 1L){
+            newmodel <- list()
+            for(g in 1L:Data$ngroups)
+                newmodel[[g]] <- model
+            names(newmodel) <- Data$groupNames
+            model <- newmodel
+        }
+        Data$model <- model
+        PrepList <- vector('list', Data$ngroups)
+        names(PrepList) <- Data$groupNames
+        tmp <- 1L:Data$ngroups
+        selectmod <- Data$model[[tmp[names(Data$model) == Data$groupNames[1L]]]]
+        PrepListFull <- PrepList[[1L]] <-
+            PrepData(data=Data$data, model=selectmod, itemtype=itemtype, guess=guess,
+                     upper=upper, parprior=parprior, verbose=opts$verbose,
+                     technical=opts$technical, parnumber=1L, BFACTOR=opts$BFACTOR,
+                     grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
+                     D=opts$D, mixed.design=mixed.design, customItems=customItems,
+                     fulldata=opts$PrepList[[1L]]$fulldata, key=key, nominal.highlow=nominal.highlow)
+        if(any(PrepListFull$itemtype == 'nominal') && is.null(nominal.highlow) && !opts$NULL.MODEL
+           && opts$verbose)
+            if(opts$message)
+                message('\'nominal.highlow\' matrix not specified, highest and lowest categories are used by default')
+        parnumber <- max(PrepList[[1L]]$pars[[Data$nitems+1L]]@parnum) + 1L
+        for(g in 1L:Data$ngroups){
+            if(g != 1L){
+                PrepList[[g]] <- PrepList[[1L]]
+                for(i in 1L:length(PrepList[[g]]$pars)){
+                    PrepList[[g]]$pars[[i]]@parnum <- parnumber:(parnumber + length(PrepList[[g]]$pars[[i]]@parnum) - 1L)
+                    parnumber <- max(PrepList[[g]]$pars[[i]]@parnum) + 1L
+                }
+            }
+        }
+        if(length(mixed.design$random) > 0L){
+            for(i in 1L:length(mixed.design$random)){
+                mixed.design$random[[i]]@parnum <- parnumber:(parnumber - 1L +
+                                                                  length(mixed.design$random[[i]]@par))
+                parnumber <- max(mixed.design$random[[i]]@parnum) + 1L
+            }
         }
     }
     if(!is.null(opts$PrepList)){
@@ -391,10 +409,30 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                            itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
                                            nfact=nfact, constrain=constrain, verbose=opts$verbose,
                                            CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                                           startlongpars=startlongpars, SE=opts$SE,
+                                           startlongpars=startlongpars, SE=FALSE,
                                            cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                            message=opts$message, expl=PrepList[[1L]]$exploratory),
                                DERIV=DERIV)
+        if(opts$SE){
+            if(opts$verbose)
+                cat('\nCalculating information matrix...\n')
+            tmp <- MHRM.group(pars=ESTIMATE$pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
+                                   list = list(NCYCLES=1000L, BURNIN=1L,
+                                               SEMCYCLES=2L, gain=opts$gain,
+                                               KDRAWS=opts$KDRAWS, TOL=opts$SEtol, USEEM=TRUE,
+                                               nfactNames=PrepList[[1L]]$nfactNames,
+                                               itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
+                                               nfact=nfact, constrain=constrain, verbose=FALSE,
+                                               CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
+                                               startlongpars=ESTIMATE$longpars, SE=TRUE,
+                                               cand.t.var=opts$technical$MHcand, warn=opts$warn,
+                                               message=opts$message, expl=PrepList[[1L]]$exploratory),
+                                   DERIV=DERIV)
+            ESTIMATE$pars <- tmp$pars
+            ESTIMATE$info <- tmp$info
+            ESTIMATE$fail_invert_info <- tmp$fail_invert_info
+            ESTIMATE$time <- c(ESTIMATE$time, SE=sum(tmp$time))
+        }
         rlist <- vector('list', Data$ngroups)
         for(g in 1L:Data$ngroups)
             rlist[[g]]$expected = numeric(1L)
@@ -408,10 +446,32 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                            itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
                                            nfact=nfact, constrain=constrain, verbose=opts$verbose,
                                            CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                                           startlongpars=startlongpars, SE=opts$SE,
+                                           startlongpars=startlongpars, SE=FALSE,
                                            cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                            message=opts$message, expl=FALSE),
                                DERIV=DERIV)
+        if(opts$SE){
+            if(opts$verbose)
+                cat('\nCalculating information matrix...\n')
+            tmp <- MHRM.group(pars=ESTIMATE$pars, constrain=constrain, Ls=Ls,
+                              PrepList=PrepList, random=mixed.design$random, Data=Data,
+                              list = list(NCYCLES=1000L, BURNIN=1L,
+                                          SEMCYCLES=2L, gain=opts$gain,
+                                          KDRAWS=opts$KDRAWS, TOL=opts$SEtol, USEEM=TRUE,
+                                          nfactNames=PrepList[[1L]]$nfactNames,
+                                          itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
+                                          nfact=nfact, constrain=constrain, verbose=FALSE,
+                                          CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
+                                          startlongpars=ESTIMATE$longpars, SE=TRUE,
+                                          cand.t.var=opts$technical$MHcand, warn=opts$warn,
+                                          message=opts$message, expl=FALSE),
+                              DERIV=DERIV)
+            ESTIMATE$pars <- tmp$pars
+            ESTIMATE$random <- tmp$random
+            ESTIMATE$info <- tmp$info
+            ESTIMATE$fail_invert_info <- tmp$fail_invert_info
+            ESTIMATE$time <- c(ESTIMATE$time, SE=sum(tmp$time))
+        }
         rlist <- vector('list', Data$ngroups)
         for(g in 1L:Data$ngroups)
             rlist[[g]]$expected = numeric(1L)
@@ -487,11 +547,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             if(opts$empiricalhist)
                 stop('MHRM standard error not available when using empirical histograms')
             ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
-                                   list = list(NCYCLES=opts$NCYCLES, BURNIN=1L, SEMCYCLES=5L,
+                                   list = list(NCYCLES=1000L, BURNIN=1L, SEMCYCLES=2L,
                                                KDRAWS=opts$KDRAWS, TOL=opts$SEtol, USEEM=opts$USEEM,
                                                gain=opts$gain, nfactNames=PrepList[[1L]]$nfactNames,
                                                itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
-                                               nfact=nfact, constrain=constrain, verbose=FALSE,
+                                               nfact=nfact, constrain=constrain, verbose=FALSE, expl=FALSE,
                                                CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, message=opts$message,
                                                startlongpars=startlongpars, SE=opts$SE, warn=opts$warn),
                                    DERIV=DERIV)
@@ -513,11 +573,21 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     opts$times$start.time.post <- proc.time()[3L]
     cmods <- vector('list', Data$ngroups)
     for(g in 1L:Data$ngroups){
-        Flist <- Lambdas(ESTIMATE$pars[[g]], Names=colnames(data), explor=TRUE)
-        if(opts$method != 'MIXED')
+        if(opts$method == 'MIXED'){
+            F <- matrix(NA)
+            h2 <- numeric(1)
+        } else {
+            Flist <- Lambdas(ESTIMATE$pars[[g]], Names=colnames(data), explor=TRUE)
             colnames(Flist$F) <- PrepList[[g]]$factorNames
-        h2 <- rowSums(Flist$F^2)
-        F <- Flist$F
+            tmpcov <- ExtractGroupPars(pars[[g]][[Data$nitems+1L]])$gcov
+            if(ncol(tmpcov) < ncol(Flist$F)){
+                tmpcov2 <- diag(ncol(Flist$F))
+                tmpcov2[1L:ncol(tmpcov), 1L:ncol(tmpcov)] <- tmpcov
+                tmpcov <- tmpcov2
+            }
+            h2 <- rowSums((Flist$F %*% t(chol(tmpcov)))^2)
+            F <- Flist$F
+        }
         cmods[[g]] <- new('ConfirmatoryClass', pars=ESTIMATE$pars[[g]], itemloc=PrepList[[g]]$itemloc,
                           converge=ESTIMATE$converge, esttype='MHRM', F=F, h2=h2, prodlist=PrepList[[g]]$prodlist,
                           nfact=nfact, constrain=constrain, G2=G2group[g], Pl = rlist[[g]]$expected,
@@ -655,6 +725,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        h2=h2,
                        Theta=Theta,
                        Pl=Pl[[1L]],
+                       empiricalhist=opts$empiricalhist,
+                       Prior=ESTIMATE$Prior,
                        CUSTOM.IND=CUSTOM.IND,
                        SLOW.IND=SLOW.IND,
                        bfactor=list(),
@@ -699,7 +771,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        Theta=Theta,
                        method=opts$method,
                        Pl=Pl[[1L]],
-                       Prior=if(opts$empiricalhist) ESTIMATE$Prior[[1L]] else NaN,
+                       empiricalhist=opts$empiricalhist,
+                       Prior=ESTIMATE$Prior,
                        converge=ESTIMATE$converge,
                        nfact=nfact,
                        quadpts=opts$quadpts,
@@ -729,7 +802,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                    esttype=opts$method,
                    constrain=constrain,
                    parprior=parprior,
-                   Prior=if(opts$empiricalhist) ESTIMATE$Prior else list(),
+                   empiricalhist=opts$empiricalhist,
+                   Prior=ESTIMATE$Prior,
                    quadpts=opts$quadpts,
                    invariance=invariance,
                    df=df,

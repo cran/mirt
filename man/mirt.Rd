@@ -48,9 +48,7 @@ estimators are also available, but their routine use generally is not required o
 The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed}
 
 \item{SE}{logical; estimate the standard errors by computing the parameter information matrix?
- See \code{SE.type} for the type of estimates available. Using
-\code{SE = TRUE} when \code{method = 'MHRM'} will force the estimation to terminate no earlier
-than 400 iterations to ensure that the information matrix is well approximated}
+See \code{SE.type} for the type of estimates available}
 
 \item{SE.type}{type of estimation method to use for calculating the parameter information matrix
   for computing standard errors and \code{\link{wald}} tests. Can be \code{'MHRM'} for stochastic
@@ -62,8 +60,8 @@ than 400 iterations to ensure that the information matrix is well approximated}
   for Louis' (1982) computation of the observed information matrix,
   and \code{'sandwich'} for the sandwich covariance estimate.
 
-  Note that for \code{'SEM'} and \code{'MHRM'} option increasing the number of iterations
-  (\code{NCYCLES} and \code{TOL}, see below)  will help to improve the accuracy, and will be
+  Note that for \code{'SEM'} option increasing the number of iterations
+  (\code{NCYCLES} and \code{TOL}, see below) will help to improve the accuracy, and will be
   run in parallel if a \code{\link{mirtCluster}} object has been defined.
   Bootstrapped and profiled-likelihood standard errors are also possible, but must be run
   with the \code{\link{boot.mirt}} and \code{\link{PLCI.mirt}} functions, respectively}
@@ -109,7 +107,7 @@ By default the number of quadrature uses the following scheme:
 \item{TOL}{convergence threshold for EM or MH-RM; defaults are .0001 and .001. If
 \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}.
 If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5}
-will be used}
+will be used. To evaluate the model using only the starting values pass \code{TOL = NaN}}
 
 \item{empiricalhist}{logical; estimate prior distribution using an empirical histogram approach.
 Only applicable for unidimensional models estimated with the EM algorithm.
@@ -194,9 +192,12 @@ after each iteration cycle? Default is TRUE}
     that the input data all have 0 as the lowest category. The format is the same as the
     \code{mod@K} slot in all converged models}
   \item{customPriorFun}{a custom function used to determine the normalized density for
-    integration in the EM algorithm. Must be of the form \code{function(Theta){...}}, and
-    return a numeric vector with the same length as number of rows in \code{Theta}.
-    For proper integration, the returned vector should sum to 1 (i.e., normalized)}
+    integration in the EM algorithm. Must be of the form \code{function(Theta, Etable){...}},
+    and return a numeric vector with the same length as number of rows in \code{Theta}. The
+    \code{Etable} input contains the aggregated table generated from the current E-step
+    computations. For proper integration, the returned vector should sum to
+    1 (i.e., normalized)}. Note that if using the \code{Etable} it will be NULL
+    on the first call, therefore the prior will have to deal with this issue accordingly
   \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
     If not defined, the grid is determined internally based on the number of \code{quadpts}}
   \item{MHcand}{a vector of values used to tune the MH sampler. Larger values will
@@ -245,7 +246,8 @@ an exploratory IRT model will be estimated. Rotation and target matrix options w
 used in this subroutine and will be
 passed to the returned object for use in generic functions such as \code{summary()} and
 \code{fscores()}. Again, factor means and variances are fixed to ensure proper identification.
-If the model is exploratory then the returned class will be 'ExploratoryClass'.
+If the model is exploratory then the returned class will be \code{'ExploratoryClass'},
+otherwise it will be of class \code{'ConfirmatoryClass'}.
 
 If the model is an exploratory item factor analysis estimation will begin
 by computing a matrix of quasi-polychoric correlations. A
@@ -281,7 +283,8 @@ to allow for an acceptable solution. As a general rule dichotomous items with
 means greater than .95, or items that are only .05 greater than the
 guessing parameter, should be considered for removal from the analysis or
 treated with prior parameter distributions. The same type of reasoning is
-applicable when including upper bound parameters as well. Also, increasing the
+applicable when including upper bound parameters as well. For polytomous items, if categories
+are rarely endoresed then this will cause similar issues. Also, increasing the
 number of quadrature points per dimension may help to stabilize the estimation process
 in higher dimensions. Finally, solutions that are not well defined also will have difficulty
 converging, and can indicate that the model has been misspecified (e.g., extracting too many
@@ -296,9 +299,9 @@ or when \code{Max Change = .2500} values are repeatedly printed
 to the console too often (indicating that the parameters were being constrained since they are
 naturally moving in steps greater than 0.25) then the model may either be ill defined or have a
 very flat likelihood surface, and genuine maximum-likelihood parameter estimates may be difficult
-to find. Additionally, it is recommended that at least 400 cycles are run through to approximate
-the observed information matrix accurately, which can be accomplished either by decreasing the
-\code{TOL} criteria or setting \code{SE = TRUE}.
+to find. Standard errors are computed following the model convergence by passing
+\code{SE = TRUE}, to perform an addition MH-RM stage but treating the maximum-likelihood
+estimates as fixed points.
 }
 
 \section{Additional helper functions}{
@@ -434,6 +437,13 @@ of categories.
   }
 }
 }
+
+\section{HTML help files, exercises, and examples}{
+
+
+To access examples, vignettes, and exercise files that have been generated with knitr please
+visit \url{http://philchalmers.github.io/mirt/mirt-vignettes.html}.
+}
 \examples{
 \dontrun{
 #load LSAT section 7 data and compute 1 and 2 factor models
@@ -448,6 +458,8 @@ coef(mod2)
 residuals(mod1)
 plot(mod1) #test information function
 plot(mod1, type = 'trace') #trace lines
+plot(mod2, type = 'score') #expected total score
+plot(mod2, type = 'score', MI=200) #expected total score with 95\% confidence intervals
 
 #estimated 3PL model for item 5 only
 (mod1.3PL <- mirt(data, 1, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL')))
@@ -487,7 +499,6 @@ scoresfull <- fscores(mod2, full.scores = TRUE, scores.only = TRUE) #factor scor
 cmodel <- mirt.model('
    F1 = 1,4,5
    F2 = 2,3')
-
 
 cmod <- mirt(data, cmodel)
 coef(cmod)
@@ -543,7 +554,6 @@ survey.weights <- c(rep(2, nrow(Science)/2), rep(1, nrow(Science)/2))
 survey.weights <- survey.weights/sum(survey.weights) * nrow(Science)
 unweighted <- mirt(Science, 1)
 weighted <- mirt(Science, 1, survey.weights=survey.weights)
-
 
 ###########
 #empirical dimensionality testing that includes 'guessing'
@@ -666,7 +676,6 @@ model.1 <- mirt.model('
   F2 = 4-8
   COV = F1*F2')
 
-
 #compute model, and use parallel computation of the log-likelihood
 mirtCluster()
 mod1 <- mirt(dataset, model.1, method = 'MHRM')
@@ -680,7 +689,6 @@ model.3 <- mirt.model('
   G = 1-8
   F1 = 1-4
   F2 = 5-8')
-
 
 mod3 <- mirt(dataset,model.3, method = 'MHRM')
 coef(mod3)
@@ -703,7 +711,6 @@ model.combo <- mirt.model('
        F1 = 1-16
        F2 = 17-32
   (F1*F2) = 1-8')
-
 
 (mod.quad <- mirt(data, model.quad))
 (mod.combo <- mirt(data, model.combo))
@@ -739,7 +746,6 @@ histogram(ThetaBimodal, breaks=30)
 skew <- mirt(datSkew, 1, empiricalhist = TRUE)
 plot(skew, type = 'empiricalhist')
 histogram(ThetaSkew, breaks=30)
-
 
 }
 }

@@ -82,9 +82,14 @@ test_that('one factor', {
     fit1 <- M2(mod_metric)
     expect_is(fit1, 'data.frame')
     expect_true(mirt:::closeEnough(fit1[1:2] - c(85.28706, 67.16565), -1e-2, 1e-2))
+    expect_equal(fit1$D1.SRMSR, 0.03606703, tolerance = 1e-4)
+    expect_equal(fit1$TLI, 1.014168, tolerance = 1e-4)
     expect_true(mirt:::closeEnough(fit1$df - 195, -1e-4, 1e-4))
     fit2 <- itemfit(mod_metric)
     expect_is(fit2, 'list')
+
+    g1 <- extract.group(mod_metric, 1)
+    expect_equal(as.numeric(coef(g1)[[1]]), c(1.252, 0.575, 0.000, 1.000), tolerance = 1e-2)
 
     #missing data
     set.seed(1234)
@@ -142,7 +147,7 @@ test_that('three factor', {
                                                  verbose = FALSE, draws = 10)
     expect_is(mod_metric, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_metric, digits=4)[[1]]))[1:20]
-    expect_equal(cfs, c(1.16, 0.945, 1.375, 0, NA, NA, 0, NA, NA, 0.7031, 0.5508, 0.8554, 0, NA, NA, 1, NA, NA, 1.37, 1.0003),
+    expect_equal(cfs, c(1.16,0,0,0.7031,0,1,1.37,0,0,-0.5766,0,1,0.8523,0,0,-0.2518,0,1,0.785,0),
                  tolerance = 1e-2)
     mod_configural <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM', SE=TRUE,
                                     optimizer = 'NR')

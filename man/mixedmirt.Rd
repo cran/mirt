@@ -48,10 +48,8 @@ more detail}
 \item{return.design}{logical; return the design matrices before they have (potentially)
 been reassigned?}
 
-\item{SE}{logical; while standard errors are always computed for the MHRM algorithm this option
-forces the number of iterations to be no less than 400 so that the information matrix is
-computed more accurately. Default is TRUE. An alternative approach would be to drop the
-\code{TOL} criteria}
+\item{SE}{logical; compute the standard errors by approximating the information matrix
+using the MHRM algorithm? Default is TRUE}
 
 \item{...}{additional arguments to be passed to the MH-RM estimation engine. See
   \code{\link{mirt}} for more details and examples}
@@ -72,10 +70,10 @@ using parallel estimation via \code{\link{mirtCluster}}.
 For dichotomous response models, \code{mixedmirt} follows the general form
 
 \deqn{P(x = 1|\theta, \psi) = g + \frac{(u - g)}{1 + exp(-1 * [\mathbf{\theta a} +
- \mathbf{X \beta} + \mathbf{Z \gamma}])}}
+ \mathbf{X \beta} + \mathbf{Z \delta}])}}
 
 where X is a design matrix with associated \eqn{\beta} fixed effect coefficients, and Z is a
- design matrix with associated \eqn{\gamma} random effects. For simplicity and easier
+ design matrix with associated \eqn{\delta} random effects. For simplicity and easier
  interpretation, the unique item intercept values typically found in \eqn{\mathbf{X \beta}}
  are extracted and reassigned within mirt's 'intercept' parameters (e.g., \code{'d'}).
  To observe how the design matrices are structured prior to reassignment and estimation pass

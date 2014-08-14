@@ -7,7 +7,7 @@ fscores(object, rotate = "", full.scores = FALSE, method = "EAP",
   quadpts = NULL, response.pattern = NULL, returnER = FALSE,
   return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
   scores.only = TRUE, full.scores.SE = FALSE, theta_lim = c(-6, 6),
-  MI = 0)
+  MI = 0, ...)
 }
 \arguments{
 \item{object}{a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
@@ -60,6 +60,8 @@ standard errors associated with each respondent? Default is \code{FALSE}}
 
 \item{scores.only}{logical; return only the factor scores (only applicable when
 \code{full.scores = TRUE})}
+
+\item{...}{additional arguments}
 }
 \description{
 Computes MAP, EAP, ML (Embretson & Reise, 2000), EAP for sum-scores (Thissen et al., 1995),
@@ -67,7 +69,7 @@ or WLE (Warm, 1989) factor scores with a multivariate normal
 prior distribution using equally spaced quadrature. EAP scores for models with more than
 three factors are generally not recommended since the integration grid becomes very large,
 resulting in slower estimation and less precision if the \code{quadpts} are too low.
-Therefore, MAP scores schould be used instead of EAP scores for higher dimensional models.
+Therefore, MAP scores should be used instead of EAP scores for higher dimensional models.
 Multiple imputation variants are possible for each estimator if a parameter
 information matrix was computed, which are useful if the sample size/number of items were small.
 }
@@ -120,7 +122,7 @@ Embretson, S. E. & Reise, S. P. (2000). Item Response Theory for Psychologists. 
 
 Thissen, D., Pommerich, M., Billeaud, K., & Williams, V. S. L. (1995).
 Item Response Theory for Scores on Tests Including Polytomous Items with Ordered Responses.
-\emph{Applied Psychological Measurement, 19}, 39-49
+\emph{Applied Psychological Measurement, 19}, 39-49.
 
 Warm, T. A. (1989). Weighted likelihood estimation of ability in item response theory.
 \emph{Psychometrika, 54}, 427-450.

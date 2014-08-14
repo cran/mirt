@@ -1,107 +1,115 @@
-# Differential test functioning
-#
-# Function performs various omnibus differential test functioning proceduces on an object
-# estimated with \code{multipleGroup()}. If the latent means/covariances are suspected to differ
-# then the input object should contain a set of 'anchor' items to ensure that only differential
-# test features are being detected rather than group differences. Returns signed (average area
-# above and below) and unsigned (total area) statistics, with descriptives such as the percent
-# average bias between group total scores for each statistic.
-# 
-#
-# @aliases DTF
-# @param mod a multipleGroup object which estimated only 2 groups
-# @param MI a number indicating how many draws to take to form a suitable multiple imputation
-#   for the expected test scores (100 or more). Requires an estimated parameter
-#   information matrix. Returns a list containing the bootstrap distribution and null hypothesis
-#   test for the sDTF statistic
-# @param CI range of condfidince interval when using MI input
-# @param npts number of points to use in the integration
-# @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is 
-#   used in conjunction with \code{npts}
-# @param Theta_nodes an optional matrix of Theta values to be evaluated in the MI draws for the 
-#   sDTF statistic. However, these values are not averaged accross, and instead give the bootstrap
-#   condifence intervals at the repespective Theta nodes. Useful when following up a large 
-#   uDTF/sDTF statistic to determine where the difference between the test curves are large 
-#   (while still accounting for sampling variability). Returns a matrix with observed
-#   variability)
-# @param plot logical; plot the test score functions with imputed confidence envelopes?
-# @param ... additional arguments to be passed to lattice
-# @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
-# @seealso \code{\link{multipleGroup}}, \code{\link{DIF}}
-# @keywords DTF
-# @export DTF
-# @examples
-# \dontrun{
-# set.seed(1234)
-# n <- 30
-# N <- 500
-#
-# # only first 5 items as anchors
-# model <- mirt.model('F = 1-30
-#                     CONSTRAINB = (1-5, a1), (1-5, d)')
-#
-# a <- matrix(1, n)
-# d <- matrix(rnorm(n), n)
-# group <- c(rep('G1', N), rep('G2', N))
-#
-# ## -------------
-# # groups completely equal
-# dat1 <- simdata(a, d, N, itemtype = 'dich')
-# dat2 <- simdata(a, d, N, itemtype = 'dich')
-# dat <- rbind(dat1, dat2)
-# mod <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
-#                      invariance=c('free_means', 'free_var'))
-# plot(mod, type = 'score')
-#
-# DTF(mod)
-# mirtCluster()
-# DTF(mod, MI = 1000) #95% C.I. for sDTI containins 0. uDTF is very small
-# 
-# ## -------------
-# ## random slopes and intercepts for 15 items, and latent mean difference 
-# ##    (no systematic DTF should exist, but DIF will be present)
-# dat1 <- simdata(a, d, N, itemtype = 'dich', mu=.50, sigma=matrix(1.5))
-# dat2 <- simdata(a + c(numeric(15), sign(rnorm(n-15))*runif(n-15, .25, .5)),     
-#                 d + c(numeric(15), sign(rnorm(n-15))*runif(n-15, .5, 1)), N, itemtype = 'dich')
-# dat <- rbind(dat1, dat2)
-# mod1 <- multipleGroup(dat, 1, group=group)
-# plot(mod1, type = 'score') #does not account for group differences! Need anchors
-# 
-# mod2 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type = 'crossprod',
-#                       invariance=c('free_means', 'free_var'))
-# plot(mod2, type = 'score')
-# 
-# #significant DIF in multiple items....
-# DIF(mod2, which.par=c('a1', 'd'), items2test=16:30) 
-# DTF(mod2)
-# DTF(mod2, MI=1000)
-# 
-# ## -------------
-# ## systematic differing slopes and intercepts (clear DTF)
-# dat1 <- simdata(a, d, N, itemtype = 'dich', mu=.50, sigma=matrix(1.5))
-# dat2 <- simdata(a + c(numeric(15), rnorm(n-15, 1, .25)), d + c(numeric(15), rnorm(n-15, 1, .5)),
-#                 N, itemtype = 'dich')
-# dat <- rbind(dat1, dat2)
-# mod3 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
-#                       invariance=c('free_means', 'free_var'))
-# plot(mod3, type = 'score') #visable DTF happening
-# 
-# DIF(mod3, c('a1', 'd'), items2test=16:30) 
-# DTF(mod3) #huge unsigned bias. Signed bias indicates group 2 scores generally lower
-# DTF(mod3, MI=1000) 
-# DTF(mod3, MI=1000, plot=TRUE, auto.key=TRUE) 
-# 
-# }
+#' Differential test functioning
+#'
+#' THIS FUNCTION IS CURRENTLY EXPERIMENTAL. 
+#'
+#' Function performs various omnibus differential test functioning procedures on an object
+#' estimated with \code{multipleGroup()}. If the latent means/covariances are suspected to differ
+#' then the input object should contain a set of 'anchor' items to ensure that only differential
+#' test features are being detected rather than group differences. Returns signed (average area
+#' above and below) and unsigned (total area) statistics, with descriptives such as the percent
+#' average bias between group total scores for each statistic.
+#' 
+#' @aliases DTF
+#' @param mod a multipleGroup object which estimated only 2 groups
+#' @param MI a number indicating how many draws to take to form a suitable multiple imputation
+#'   for the expected test scores (100 or more). Requires an estimated parameter
+#'   information matrix. Returns a list containing the bootstrap distribution and null hypothesis
+#'   test for the sDTF statistic
+#' @param CI range of confidence interval when using MI input
+#' @param npts number of points to use in the integration. Default is 1000
+#' @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is 
+#'   used in conjunction with \code{npts}
+#' @param Theta_nodes an optional matrix of Theta values to be evaluated in the MI draws for the 
+#'   sDTF statistic. However, these values are not averaged across, and instead give the bootstrap
+#'   confidence intervals at the respective Theta nodes. Useful when following up a large 
+#'   uDTF/sDTF statistic to determine where the difference between the test curves are large 
+#'   (while still accounting for sampling variability). Returns a matrix with observed
+#'   variability
+#' @param plot logical; plot the test score functions with imputed confidence envelopes?
+#' @param auto.key logical; automatically generate key in lattice plot?
+#' @param ... additional arguments to be passed to lattice
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @seealso \code{\link{multipleGroup}}, \code{\link{DIF}}
+#' @keywords DTF
+#' @export DTF
+#' @examples
+#' \dontrun{
+#' set.seed(1234)
+#' n <- 30
+#' N <- 500
+#'
+#' # only first 5 items as anchors
+#' model <- mirt.model('F = 1-30
+#'                     CONSTRAINB = (1-5, a1), (1-5, d)')
+#'
+#' a <- matrix(1, n)
+#' d <- matrix(rnorm(n), n)
+#' group <- c(rep('G1', N), rep('G2', N))
+#'
+#' ## -------------
+#' # groups completely equal
+#' dat1 <- simdata(a, d, N, itemtype = 'dich')
+#' dat2 <- simdata(a, d, N, itemtype = 'dich')
+#' dat <- rbind(dat1, dat2)
+#' mod <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
+#'                      invariance=c('free_means', 'free_var'))
+#' plot(mod, type = 'score')
+#'
+#' DTF(mod)
+#' mirtCluster()
+#' DTF(mod, MI = 1000) #95% C.I. for sDTI containing 0. uDTF is very small
+#' 
+#' ## -------------
+#' ## random slopes and intercepts for 15 items, and latent mean difference 
+#' ##    (no systematic DTF should exist, but DIF will be present)
+#' dat1 <- simdata(a, d, N, itemtype = 'dich', mu=.50, sigma=matrix(1.5))
+#' dat2 <- simdata(a + c(numeric(15), sign(rnorm(n-15))*runif(n-15, .25, .5)),     
+#'                 d + c(numeric(15), sign(rnorm(n-15))*runif(n-15, .5, 1)), N, itemtype = 'dich')
+#' dat <- rbind(dat1, dat2)
+#' mod1 <- multipleGroup(dat, 1, group=group)
+#' plot(mod1, type = 'score') #does not account for group differences! Need anchors
+#' 
+#' mod2 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type = 'crossprod',
+#'                       invariance=c('free_means', 'free_var'))
+#' plot(mod2, type = 'score')
+#' 
+#' #significant DIF in multiple items....
+#' DIF(mod2, which.par=c('a1', 'd'), items2test=16:30) 
+#' DTF(mod2)
+#' DTF(mod2, MI=1000)
+#' 
+#' ## -------------
+#' ## systematic differing slopes and intercepts (clear DTF)
+#' dat1 <- simdata(a, d, N, itemtype = 'dich', mu=.50, sigma=matrix(1.5))
+#' dat2 <- simdata(a + c(numeric(15), rnorm(n-15, 1, .25)), d + c(numeric(15), rnorm(n-15, 1, .5)),
+#'                 N, itemtype = 'dich')
+#' dat <- rbind(dat1, dat2)
+#' mod3 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
+#'                       invariance=c('free_means', 'free_var'))
+#' plot(mod3, type = 'score') #visable DTF happening
+#' 
+#' DIF(mod3, c('a1', 'd'), items2test=16:30) 
+#' DTF(mod3) #unsigned bias. Signed bias indicates group 2 scores generally lower
+#' DTF(mod3, MI=1000) 
+#' DTF(mod3, MI=1000, plot=TRUE) 
+#' 
+#' }
 DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_nodes = NULL,
-                plot = FALSE, ...){
+                plot = FALSE, auto.key = TRUE, ...){
 
     fn <- function(x, omod, impute, covBs, imputenums, Theta, max_score, Theta_nodes = NULL,
                    plot){
         mod <- omod
         if(impute){
-            for(g in 1L:2L)
-                mod@pars[[g]]@pars <- imputePars(pars=omod@pars[[g]]@pars, covB=covBs[[g]],
-                                            imputenums=imputenums[[g]], constrain=omod@constrain)
+            for(g in 1L:2L){
+                while(TRUE){
+                    tmp <- try(imputePars(pars=omod@pars[[g]]@pars, covB=covBs[[g]],
+                                          imputenums=imputenums[[g]], constrain=omod@constrain), 
+                               silent=TRUE)
+                    if(!is(tmp, 'try-error')) break
+                }
+                mod@pars[[g]]@pars <- tmp
+            }
         }
         if(!is.null(Theta_nodes)){
             T1 <- expected.test(mod, Theta_nodes, group=1L, mins=FALSE)
@@ -157,11 +165,13 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_
             impute <- TRUE
             list_scores <- vector('list', MI)
             mod <- assignInformationMG(mod)
-            covBs <- lapply(mod@pars, function(x){
+            covBs <- try(lapply(mod@pars, function(x){
                 info <- x@information
                 is_na <- is.na(diag(info))
                 return(solve(info[!is_na, !is_na]))
-                })
+                }), silent=TRUE)
+            if(is(covBs, 'try-error')) 
+                stop('Could not compute inverse of information matrix')
             imputenums <- vector('list', 2L)
             for(g in 1L:2L){
                 names <- colnames(covBs[[g]])
@@ -175,7 +185,7 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_
 
     theta <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=npts))
     Theta <- thetaComb(theta, mod@nfact)
-    max_score <- sum(apply(mod@Data$data, 2L, min) + (mod@Data$K - 1L))
+    max_score <- sum(mod@Data$mins + mod@Data$K - 1L)
     list_scores <- myLapply(1L, fn, omod=mod, impute=FALSE, covBs=NULL, Theta_nodes=Theta_nodes,
                             imputenums=NULL, max_score=max_score, Theta=Theta, plot=plot)
     if(impute){
@@ -201,15 +211,17 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_
                 lower <- lower[subscripts]
                 panel.polygon(c(x, rev(x)), c(upper, rev(lower)), col = fill, border = FALSE,
                               ...)
-            }            
-            group <- factor(rep(mod@Data$groupNames, each=nrow(Theta)))
+            }
+            #for some reason the plot is drawn backwords....use rev() for now 
+            group <- rev(factor(rep(mod@Data$groupNames, each=nrow(Theta))))
             CIs <- apply(scores, 2L, bs_range, CI=CI)
             CIs <- CIs[-2L, ]
             df <- data.frame(Theta=rbind(Theta, Theta), group, TS=oCM, t(CIs))
-            return(xyplot(TS ~ Theta, data=df, groups=group,
-                   upper=df$upper, lower=df$lower, 
-                   panel = function(x, y, ...){
-                       panel.superpose(x, y, panel.groups = panel.bands, type='l', ...)
+            return(xyplot(TS ~ Theta, data=df, groups=group, auto.key=auto.key,
+                   upper=df$upper, lower=df$lower, col=c('red', 'blue'), 
+                   fill=c('red', 'blue'), alpha=0.2,
+                   panel = function(x, y, alpha, ...){
+                       panel.superpose(x, y, panel.groups = panel.bands, type='l', alpha=alpha, ...)
                        panel.xyplot(x, y, type='l', lty=1,...)
                    },
                    xlab = expression(theta), ylab = expression(T(theta)), 

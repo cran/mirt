@@ -189,6 +189,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
             preMstep.longpars2 <- preMstep.longpars
             preMstep.longpars <- longpars
             if(all(!est) && all(!groupest)) break
+            if(is.nan(TOL)) break
             longpars <- Mstep(pars=pars, est=est, longpars=longpars, ngroups=ngroups, J=J,
                               gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
                               CUSTOM.IND=CUSTOM.IND, SLOW.IND=list$SLOW.IND, groupest=groupest, 
@@ -218,10 +219,10 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
         } #END EM
         if(cycles == NCYCLES){
             if(list$message)
-                message('EM iterations terminated after ', cycles, ' iterations.')
+                message('EM cycles terminated after ', cycles, ' iterations.')
             converge <- 0L
         } else if(cycles == 1L && !(all(!est) && all(!groupest))){
-            if(list$warn)
+            if(list$warn && !is.nan(TOL))
                 warning('M-step optimimizer converged immediately. Solution is either at the ML or
                      starting values are causing issues and should be adjusted. ')
         } 
@@ -257,14 +258,15 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
                     estpars=estpars & !redun_constr, redun_constr=redun_constr, ngroups=ngroups,
                     LBOUND=LBOUND, UBOUND=UBOUND, EMhistory=na.omit(EMhistory), random=list(),
                     time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)), 
-                    collectLL=na.omit(collectLL), shortpars=longpars[estpars & !redun_constr])
+                    collectLL=na.omit(collectLL), shortpars=longpars[estpars & !redun_constr],
+                    groupest=groupest)
     } else {
         ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological,
                     estindex_unique=estindex_unique, correction=correction, hess=hess, random=list(),
                     Prior=Prior, time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     prior=prior, Priorbetween=Priorbetween, sitems=sitems,
-                    shortpars=longpars[estpars & !redun_constr])
+                    shortpars=longpars[estpars & !redun_constr], groupest=groupest)
     }
     for(g in 1L:ngroups)
         for(i in 1L:J)

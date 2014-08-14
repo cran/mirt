@@ -3,13 +3,15 @@
 \alias{imputeMissing}
 \title{Imputing plausible data for missing values}
 \usage{
-imputeMissing(x, Theta)
+imputeMissing(x, Theta, ...)
 }
 \arguments{
 \item{x}{an estimated model x from the mirt package}
 
 \item{Theta}{a matrix containing the estimates of the latent trait scores
 (e.g., via \code{\link{fscores}})}
+
+\item{...}{additional arguments to pass}
 }
 \description{
 Given an estimated model from any of mirt's model fitting functions and an estimate of the
@@ -25,13 +27,17 @@ NAitem <- sample(1:ncol(dat), 20, replace = TRUE)
 for(i in 1:20)
     dat[NAperson[i], NAitem[i]] <- NA
 (mod <- mirt(dat, 1))
-scores <- fscores(mod, method = 'MAP', full.scores = TRUE, scores.only = TRUE)
+scores <- fscores(mod, method = 'MAP', scores.only = TRUE)
 
 #re-estimate imputed dataset (good to do this multiple times and average over)
 fulldata <- imputeMissing(mod, scores)
 (fullmod <- mirt(fulldata, 1))
 
-
+#with multipleGroup
+group <- rep(c('group1', 'group2'), each=500)
+mod2 <- multipleGroup(dat, 1, group)
+fs <- fscores(mod2, full.scores=TRUE)
+fulldata2 <- imputeMissing(mod2, fs)
 }
 }
 \author{

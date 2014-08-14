@@ -76,9 +76,6 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         ANY.PRIOR[g] <- any(sapply(pars[[g]], function(x) x@any.prior))
         gTheta[[g]] <- Theta
     }
-    groupest <- FALSE
-    for(g in 1L:ngroups)
-        groupest <- any(groupest, pars[[g]][[J+1]]@est)
 
     for (cycles in from:to){
 
@@ -111,10 +108,10 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
                 pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
             }
         }
-        longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
+        longpars <- Mstep(pars=pars, est=estpars & !ESTIMATE$groupest, longpars=longpars, ngroups=ngroups, J=J,
                           gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
                           PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, nfact=nfact, 
-                          rlist=rlist, constrain=constrain, DERIV=DERIV, groupest=groupest,
+                          rlist=rlist, constrain=constrain, DERIV=DERIV, groupest=ESTIMATE$groupest,
                           CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND, BFACTOR=list$BFACTOR,
                           Moptim=Moptim, Mrate=1, TOL=list$MSTEPTOL)
         rijlast <- rij
@@ -137,14 +134,14 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     fn <- function(which, PrepList, ngroups, pars, Theta, Prior, itemloc, Igrad, Igrad2, Ihess,
                    CUSTOM.IND, SLOW.IND, whichitems, iscross, npars, Data){
         Igrad <- matrix(0, npars, npars)
-        gtabdatafull <- cbind(Data$tabdatalong[pat, , drop=FALSE], 1L)
+        gtabdatafull <- Data$tabdatalong
         if(iscross){
             for(pat in which){
                 for(g in 1L:ngroups){
                     gtabdata <- gtabdatafull[pat, , drop=FALSE]
                     r <- Data$Freq[[g]][pat]
                     rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, CUSTOM.IND=CUSTOM.IND,
-                                        Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
+                                        freq=r, Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
                     for(i in whichitems){
                         tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))
                         pars[[g]][[i]]@itemtrace <- rlist$itemtrace[, tmp]
@@ -158,13 +155,13 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
             return(list(Igrad=Igrad))
         } else {
             IgradP <- Ihess <- matrix(0, npars, npars)
-            for(pat in 1L:nrow(PrepList[[1L]]$tabdata)){
+            for(pat in 1L:nrow(gtabdatafull)){
                 for(g in 1L:ngroups){
                     gtabdata <- gtabdatafull[pat, , drop=FALSE]
                     r <- Data$Freq[[g]][pat]
                     pick <- min(which(gtabdata == 1L))
                     rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, CUSTOM.IND=CUSTOM.IND,
-                                        Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
+                                        freq=r, Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
                     w <- rlist$r1[,pick]
                     tmpderiv <- matrix(0, nrow(Theta), length(DX))
                     tmphess <- matrix(0, nrow(Ihess), ncol(Ihess))
