@@ -31,8 +31,13 @@ setMethod(
         SS <- apply(F^2,2,sum)
         gpars <- ExtractGroupPars(object@pars[[length(object@pars)]])
         Phi <- gpars$gcov
+        if(ncol(Phi) < ncol(F)){
+            tmpcov <- diag(ncol(F))
+            tmpcov[1L:ncol(Phi), 1L:ncol(Phi)] <- Phi
+            Phi <- tmpcov
+        }
         Phi <- round(Phi, digits)
-        colnames(Phi) <- rownames(Phi) <- paste('F',1:ncol(Phi), sep='')
+        colnames(Phi) <- rownames(Phi) <- colnames(F)
         Flist <- list()
         if(verbose){
             cat("\nFactor loadings metric: \n")

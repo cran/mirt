@@ -4,7 +4,8 @@
 #' \code{mirt} fits an unconditional maximum likelihood factor analysis model
 #' to any mixture of dichotomous and polytomous data under the item response theory paradigm 
 #' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm or with 
-#' an EM algorithm approach outlined by Bock and Aiken (1981). 
+#' an EM algorithm approach outlined by Bock and Aiken (1981) using rectangular or 
+#' quasi-Monte Carlo integration grids. 
 #' Models containing 'explanatory' person or item level predictors 
 #' can only be included by using the \code{\link{mixedmirt}} function. Tests that form a 
 #' two-tier or bi-factor structure should be estimated with the \code{\link{bfactor}} function, 
@@ -62,8 +63,9 @@
 #' guessing parameter, should be considered for removal from the analysis or
 #' treated with prior parameter distributions. The same type of reasoning is
 #' applicable when including upper bound parameters as well. For polytomous items, if categories
-#' are rarely endoresed then this will cause similar issues. Also, increasing the
-#' number of quadrature points per dimension may help to stabilize the estimation process
+#' are rarely endorsed then this will cause similar issues. Also, increasing the
+#' number of quadrature points per dimension, or using the 
+#' quasi-Monte Carlo integration method, may help to stabilize the estimation process
 #' in higher dimensions. Finally, solutions that are not well defined also will have difficulty
 #' converging, and can indicate that the model has been misspecified (e.g., extracting too many
 #' dimensions).
@@ -130,8 +132,8 @@
 #'   \item{\code{\link{boot.mirt}} and \code{\link{PLCI.mirt}}}{
 #'     Compute estimated parameter confidence intervals via the bootstrap and profiled-likelihood 
 #'     methods}
-#'   \item{\code{\link{read.mirt}}}{
-#'     Translates mirt objects into objects suitable for use with the \code{plink} package}
+#   \item{\code{\link{read.mirt}}}{
+#     Translates mirt objects into objects suitable for use with the \code{plink} package}
 #'   \item{\code{\link{mirtCluster}}}{
 #'     Define a cluster for the package functions to use for capitalizing on multi-core architecture
 #'     to utilize available CPUs when possible. Will help to decrease estimation times for tasks 
@@ -245,9 +247,13 @@
 #'   logistic models, respectively. User defined item classes can also be defined using the 
 #'   \code{\link{createItem}} function
 #' @param method a character object specifying the estimation algorithm to be used. The default is 
-#'   \code{'EM'}, for the standard EM algorithm with fixed quadrature. The option \code{'MHRM'} may 
+#'   \code{'EM'}, for the standard EM algorithm with fixed quadrature, or \code{'QMCEM'} for 
+#'   quasi-Monte Carlo EM estimation. The option \code{'MHRM'} may 
 #'   also be passed to use the MH-RM algorithm, as well as \code{'BL'} for the Bock and Lieberman 
-#'   approach (generally not recommended for serious use)
+#'   approach (generally not recommended for serious use).
+#'   
+#'   The \code{'EM'} is generally effective with 1-3 factors, but methods such as the \code{'QMCEM'}
+#'   or \code{'MHRM'} should be used when the dimensions are 3 or more 
 #' @param optimizer a character indicating which numerical optimizer to use. By default, the EM 
 #'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds, and 
 #'   \code{'L-BFGS-B'} when there are. Other options include the Newton-Raphson (\code{'NR'}), 
@@ -255,7 +261,21 @@
 #'   models (such as the nominal or nested logit models) and does not support 
 #'   upper and lower bound constraints. As well, the \code{'Nelder-Mead'} and \code{'SANN'} 
 #'   estimators are also available, but their routine use generally is not required or recommended. 
-#'   The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed
+#'   The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed.
+#'   
+#'   Additionally, estimation subroutines from the \code{Rsolnp} and \code{alabama} 
+#'   packages are available by passing the arguments \code{'solnp'} and \code{'alabama'}. 
+#'   This should be used in
+#'   conjunction with the \code{solnp_args} and \code{alabama_args} specified below. 
+#'   If equality constraints were 
+#'   specified in the model definition only the parameter with the lowest \code{parnum} 
+#'   in the \code{pars = 'values'} data.frame is used in the estimation vector passed 
+#'   to the objective function, and group hyper-parameters are omitted. 
+#'   Equality an inequality functions should be of the form. Note that the \code{alabama}
+#'   estimation may perform faster than the \code{Rsolnp} package since information about the 
+#'   function gradient vector is utilized 
+#'   \code{function(p, optim_args)}, where \code{optim_args} is a list of internally parameters
+#'   that largely can be ignored when defining constraints
 #' @param SE logical; estimate the standard errors by computing the parameter information matrix?
 #'    See \code{SE.type} for the type of estimates available 
 #' @param SE.type type of estimation method to use for calculating the parameter information matrix 
@@ -279,8 +299,10 @@
 #' @param upper fixed upper bound parameters for 4-PL model. Can be entered as a single
 #'   value to assign a global guessing parameter or may be entered as a numeric
 #'   vector corresponding to each item
-#' @param accelerate logical; use a general acceleration algorithm described by Ramsey (1975)? 
-#'   Default is \code{TRUE}
+#' @param accelerate a character vector indicating the type of acceleration to use. Default
+#'   is \code{'Ramsay'}, but may also be \code{'squarem'} for the SQUAREM procedure (specifically,
+#'   the gSqS3 approach) described in Varadhan and Roldand (2008). 
+#'   To disable the acceleration, pass \code{'none'}
 #' @param constrain a list of user declared equality constraints. To see how to define the
 #'   parameters correctly use \code{pars = 'values'} initially to see how the parameters are 
 #'   labeled. To constrain parameters to be equal create a list with separate concatenated 
@@ -303,7 +325,9 @@
 #'   into the estimation with \code{pars = mymodifiedpars}
 #' @param quadpts number of quadrature points per dimension (must be larger than 2).
 #'   By default the number of quadrature uses the following scheme:
-#'   \code{switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)}
+#'   \code{switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)}. 
+#'   However, if the method input is set to \code{'QMCEM'} and this argument is left blank then
+#'   the default number of quasi-Monte Carlo integration nodes will be set to 2000
 #' @param TOL convergence threshold for EM or MH-RM; defaults are .0001 and .001. If 
 #'   \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}. 
 #'   If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5} 
@@ -340,7 +364,7 @@
 #'   is used instead. See \code{\link{summary-method}} for a list of supported rotation options.
 #' @param Target a dummy variable matrix indicting a target rotation pattern
 #' @param calcNull logical; calculate the Null model for additional fit statistics (e.g., TLI)? 
-#'   Only applicable if the data contains no NA's and the data is not overaly sparse
+#'   Only applicable if the data contains no NA's and the data is not overly sparse
 #' @param large either a \code{logical}, indicating whether the internal collapsed data should
 #'   be returned, or a \code{list} of internally computed data tables. If \code{TRUE} is passed,
 #'   a list containing  the organized tables is returned. This list object can then be passed back 
@@ -384,8 +408,8 @@
 #'       and return a numeric vector with the same length as number of rows in \code{Theta}. The 
 #'       \code{Etable} input contains the aggregated table generated from the current E-step 
 #'       computations. For proper integration, the returned vector should sum to 
-#'       1 (i.e., normalized)}. Note that if using the \code{Etable} it will be NULL 
-#'       on the first call, therefore the prior will have to deal with this issue accordingly
+#'       1 (i.e., normalized). Note that if using the \code{Etable} it will be NULL 
+#'       on the first call, therefore the prior will have to deal with this issue accordingly}
 #'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
 #'     \item{MHcand}{a vector of values used to tune the MH sampler. Larger values will
@@ -396,6 +420,10 @@
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
 #'   }
+#' @param solnp_args a list of arguments to be passed to the \code{solnp::solnp()} function for 
+#'   equality constraints, inequality constriants, etc
+#' @param alabama_args a list of arguments to be passed to the \code{alabama::constrOptim.nl()} 
+#'   function for equality constraints, inequality constriants, etc
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso  \code{\link{bfactor}},  \code{\link{multipleGroup}},  \code{\link{mixedmirt}},
@@ -464,6 +492,9 @@
 #'
 #' Thissen, D. (1982). Marginal maximum likelihood estimation for the one-parameter logistic model.
 #' \emph{Psychometrika, 47}, 175-186.
+#' 
+#' Varadhan, R. & Roland, C. (2008). Simple and Globally Convergent Methods for Accelerating 
+#' the Convergence of Any EM Algorithm. \emph{Scandinavian Journal of Statistics, 35}, 335-353.
 #'
 #' Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S. G., Muraki, E., &
 #' Bock, R. D. (2003). \emph{TESTFACT 4 for Windows: Test Scoring, Item Statistics,
@@ -603,6 +634,10 @@
 #' mod3 <- mirt(data, 3, TOL = .001, optimizer = 'NR')
 #' anova(mod1,mod2)
 #' anova(mod2, mod3) #negative AIC, 2 factors probably best
+#' 
+#' #same as above, but using the QMCEM method for generally better accuracy in mod3
+#' mod3 <- mirt(data, 3, method = 'QMCEM', TOL = .001, optimizer = 'NR')
+#' anova(mod2, mod3)
 #'
 #' #with fixed guessing parameters
 #' mod1g <- mirt(data, 1, guess = .1)
@@ -629,7 +664,7 @@
 #' ###########
 #' # 2PL nominal response model example (Suh and Bolt, 2010)
 #' data(SAT12)
-#' SAT12[SAT12 == 8] <- NA
+#' SAT12[SAT12 == 8] <- NA #set 8 as a missing value
 #' head(SAT12)
 #'
 #' #correct answer key
@@ -742,6 +777,7 @@
 #'   (F1*F2) = 1-8')
 #'
 #' (mod.quad <- mirt(data, model.quad))
+#' summary(mod.quad)
 #' (mod.combo <- mirt(data, model.combo))
 #' anova(mod.quad, mod.combo)
 #'
@@ -775,6 +811,33 @@
 #' skew <- mirt(datSkew, 1, empiricalhist = TRUE)
 #' plot(skew, type = 'empiricalhist')
 #' histogram(ThetaSkew, breaks=30)
+#' 
+#' #####
+#' # non-linear parameter constraints with Rsolnp package (alabama supported as well): 
+#' # Find Rasch model subject to the constraint that the intercepts sum to 0
+#' 
+#' dat <- expand.table(LSAT6)
+#' 
+#' #free latent mean and variance terms
+#' model <- mirt.model('Theta = 1-5
+#'                     MEAN = Theta
+#'                     COV = Theta*Theta')
+#' 
+#' #view how vector of parameters is organized internally
+#' sv <- mirt(dat, model, itemtype = 'Rasch', pars = 'values')
+#' sv[sv$est, ]
+#' 
+#' #constraint: create function for solnp to compute constraint, and declare value in eqB
+#' eqfun <- function(p, optim_args) sum(p[1:5]) #could use browser() here, if it helps
+#' solnp_args <- list(eqfun=eqfun, eqB=0)
+#' 
+#' mod <- mirt(dat, model, itemtype = 'Rasch', optimizer = 'solnp', solnp_args=solnp_args)
+#' print(mod)
+#' coef(mod)
+#' (ds <- sapply(coef(mod)[1:5], function(x) x[,'d']))
+#' sum(ds)
+#' 
+#' # same likelihood location as: mirt(dat, 1, itemtype = 'Rasch')
 #'
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE, 
@@ -782,8 +845,8 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  constrain = NULL, parprior = NULL, calcNull = TRUE, draws = 5000, 
                  survey.weights = NULL, rotate = 'oblimin', Target = NaN, quadpts = NULL, 
                  TOL = NULL, grsm.block = NULL, key = NULL, nominal.highlow = NULL, large = FALSE, 
-                 GenRandomPars = FALSE, accelerate = TRUE, empiricalhist = FALSE, verbose = TRUE, 
-                 technical = list(), ...)
+                 GenRandomPars = FALSE, accelerate = 'Ramsay', empiricalhist = FALSE, verbose = TRUE, 
+                 solnp_args = list(), alabama_args = list(), technical = list(), ...)
 {
     Call <- match.call()
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)),
@@ -792,9 +855,9 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       parprior=parprior, quadpts=quadpts, rotate=rotate, Target=Target,
                       technical=technical, verbose=verbose, survey.weights=survey.weights,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
-                      nominal.highlow=nominal.highlow, accellerate=accelerate, draws=draws,
+                      nominal.highlow=nominal.highlow, accelerate=accelerate, draws=draws,
                       empiricalhist=empiricalhist, GenRandomPars=GenRandomPars, 
-                      optimizer=optimizer, ...)
+                      optimizer=optimizer, solnp_args=solnp_args, alabama_args=alabama_args, ...)
     if(is(mod, 'ExploratoryClass') || is(mod, 'ConfirmatoryClass'))
         mod@Call <- Call
     return(mod)

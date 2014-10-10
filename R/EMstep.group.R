@@ -1,4 +1,4 @@
-EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
+EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, solnp_args)
 {
     verbose <- list$verbose
     nfact <- list$nfact
@@ -154,21 +154,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
                                list=list, ngroups=ngroups, nfact=nfact, prior=prior,
                                J=J, BFACTOR=BFACTOR, sitems=sitems, cycles=cycles, rlist=rlist)
             Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
-            #Estep
-            LL <- 0
-            for(g in 1L:ngroups){
-                if(BFACTOR){
-                    rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
-                                                Theta=Theta, prior=prior[[g]], Prior=Prior[[g]],
-                                                Priorbetween=Priorbetween[[g]], specific=specific, 
-                                                sitems=sitems, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-                } else {
-                    rlist[[g]] <- Estep.mirt(pars=pars[[g]], tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
-                                             CUSTOM.IND=CUSTOM.IND, Theta=Theta, 
-                                             prior=Prior[[g]], itemloc=itemloc)
-                }
-                LL <- LL + sum(Data$Freq[[g]]*log(rlist[[g]]$expected), na.rm = TRUE)
-            }
+            Elist <- Estep(pars=pars, Data=Data, Theta=Theta, prior=prior, Prior=Prior, 
+                           Priorbetween=Priorbetween, specific=specific, sitems=sitems, 
+                           ngroups=ngroups, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, 
+                           BFACTOR=BFACTOR, rlist=rlist)
+            rlist <- Elist$rlist; LL <- Elist$LL
             collectLL[cycles] <- LL
             if(is.nan(LL))
                 stop('Optimization error: Could not compute observed log-likelihood. Try
@@ -183,7 +173,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
             }
             for(g in 1L:ngroups)
                 for(i in 1L:J)
-                    pars[[g]][[i]]@dat <- rlist[[g]]$r1[, c(itemloc[i]:(itemloc[i+1L] - 1L))]
+                    pars[[g]][[i]]@dat <- rlist[[g]]$r1[, c(itemloc[i]:(itemloc[i+1L] - 1L)), 
+                                                        drop=FALSE]
             Estep.time <- Estep.time + proc.time()[3L] - start
             start <- proc.time()[3L]
             preMstep.longpars2 <- preMstep.longpars
@@ -196,25 +187,59 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
                               PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, Moptim=Moptim,
                               BFACTOR=BFACTOR, nfact=nfact, Thetabetween=Thetabetween, 
                               rlist=rlist, constrain=constrain, DERIV=DERIV, Mrate=Mrate, 
-                              TOL=list$MSTEPTOL)
-            if(list$accelerate && Mrate > .01 && cycles %% 3 == 0L){
-                dX2 <- preMstep.longpars - preMstep.longpars2
-                dX <- longpars - preMstep.longpars
-                d2X2 <- dX - dX2
-                accel <- 1 - sqrt((dX %*% dX) / (d2X2 %*% d2X2))
-                if(accel < -5) accel <- -5
-                tmp <- (1 - accel) * longpars + accel * preMstep.longpars
-                longpars[!latent_longpars] <- tmp[!latent_longpars]
-            }
-            pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+                              TOL=list$MSTEPTOL, solnp_args=solnp_args)
             EMhistory[cycles+1L,] <- longpars
             if(verbose)
                 cat(sprintf('\rIteration: %d, Log-Lik: %.3f, Max-Change: %.5f',
                             cycles, LL, max(abs(preMstep.longpars - longpars))))
             if(all(abs(preMstep.longpars - longpars) < TOL)){
-                if(!list$accelerate) break
-                else if(cycles %% 3 != 1L) break
+                pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+                break
             }
+            if(list$accelerate != 'none' && cycles %% 3 == 0L){
+                if(list$accelerate == 'Ramsay'){
+                    if(Mrate > .01){
+                        dX2 <- preMstep.longpars - preMstep.longpars2
+                        dX <- longpars - preMstep.longpars
+                        d2X2 <- dX - dX2
+                        ratio <- sqrt((dX %*% dX) / (d2X2 %*% d2X2))
+                        accel <- 1 - ratio
+                        if(accel < -5) accel <- -5
+                        tmp <- (1 - accel) * longpars + accel * preMstep.longpars
+                        longpars[!latent_longpars] <- tmp[!latent_longpars]
+                    }
+                } else if(list$accelerate == 'squarem'){
+                    r <- preMstep.longpars - preMstep.longpars2
+                    v <- (longpars - preMstep.longpars) - r
+                    ratio <- sqrt((r %*% r) / (v %*% v))
+                    accel <- -ratio
+                    if(accel > -1){
+                        accel <- -1
+                    } else {
+                        count <- 1L
+                        while(TRUE){
+                            tmp <- preMstep.longpars2 - 2 * accel * r  + accel^2 * v
+                            longpars[!latent_longpars] <- tmp[!latent_longpars]
+                            pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+                            Elist <- Estep(pars=pars, Data=Data, Theta=Theta, prior=prior, Prior=Prior, 
+                                           Priorbetween=Priorbetween, specific=specific, sitems=sitems, 
+                                           ngroups=ngroups, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, 
+                                           BFACTOR=BFACTOR, rlist=rlist)
+                            if(Elist$LL <= collectLL[cycles]){
+                                accel <- (accel - 1) / 2
+                                count <- count + 1L
+                            } else break
+                            if(count == 5L){
+                                accel <- -1
+                                break
+                            }
+                        }
+                    }
+                    tmp <- preMstep.longpars2 - 2 * accel * r  + accel^2 * v
+                    longpars[!latent_longpars] <- tmp[!latent_longpars]
+                } else stop('acceleration option not defined')
+            }
+            pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
             Mstep.time <- Mstep.time + proc.time()[3L] - start
         } #END EM
         if(cycles == NCYCLES){
@@ -265,7 +290,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological,
                     estindex_unique=estindex_unique, correction=correction, hess=hess, random=list(),
                     Prior=Prior, time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
-                    prior=prior, Priorbetween=Priorbetween, sitems=sitems,
+                    prior=prior, Priorbetween=Priorbetween, sitems=sitems, collectLL=na.omit(collectLL),
                     shortpars=longpars[estpars & !redun_constr], groupest=groupest)
     }
     for(g in 1L:ngroups)
@@ -273,242 +298,3 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV)
             ret$pars[[g]][[i]]@dat <- matrix(0)
     ret
 }
-
-# Estep for mirt
-Estep.mirt <- function(pars, tabdata, freq, Theta, prior, itemloc, CUSTOM.IND,
-                       itemtrace=NULL, deriv = FALSE)
-{
-    nquad <- nrow(Theta)
-    J <- length(itemloc) - 1L
-    if(is.null(itemtrace))
-        itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-    retlist <- .Call("Estep", itemtrace, prior, tabdata, freq, mirtClusterEnv$ncores)
-    if(deriv) retlist$itemtrace <- itemtrace
-    return(retlist)
-}
-
-# Estep for bfactor
-Estep.bfactor <- function(pars, tabdata, freq, Theta, prior, Prior, Priorbetween, specific,
-                          CUSTOM.IND, sitems, itemloc, itemtrace=NULL)
-{
-    J <- length(itemloc) - 1L
-    if(is.null(itemtrace))
-        itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-    retlist <- .Call("Estepbfactor", itemtrace, prior, Priorbetween, tabdata, freq, sitems, Prior,
-                     mirtClusterEnv$ncores)
-    return(retlist)
-}
-
-Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L, ANY.PRIOR,
-                  UBOUND, LBOUND, constrain, DERIV, Prior, rlist, CUSTOM.IND, 
-                  SLOW.IND, groupest, BFACTOR, nfact, Thetabetween, Moptim, Mrate, TOL){
-    p <- longpars[est]
-    #Moptim <- 'NR'
-    if(length(p)){
-        if(Moptim == 'BFGS'){
-            maxit <- max(ceiling(Mrate * 50), 15)
-            opt <- try(optim(p, fn=Mstep.LL, gr=Mstep.grad, method='BFGS',
-                             control=list(maxit=maxit, fnscale = -1L),
-                             DERIV=DERIV, rlist=rlist, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                             est=est, longpars=longpars, pars=pars, ngroups=ngroups, J=J, gTheta=gTheta,
-                             PrepList=PrepList, L=L, constrain=constrain, ANY.PRIOR=ANY.PRIOR,
-                             UBOUND=UBOUND, LBOUND=LBOUND, itemloc=itemloc),
-                    silent=TRUE)
-        } else if(Moptim == 'L-BFGS-B'){
-            maxit <- max(ceiling(Mrate * 50), 15)
-            opt <- try(optim(p, fn=Mstep.LL, gr=Mstep.grad, method='L-BFGS-B',
-                             control=list(maxit=maxit, fnscale = -1L),
-                             DERIV=DERIV, rlist=rlist, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                             est=est, longpars=longpars, pars=pars, ngroups=ngroups, J=J, gTheta=gTheta,
-                             PrepList=PrepList, L=L, constrain=constrain, ANY.PRIOR=ANY.PRIOR,
-                             UBOUND=UBOUND, LBOUND=LBOUND, itemloc=itemloc, lower=LBOUND[est],
-                             upper=UBOUND[est]),
-                       silent=TRUE)
-        } else if(Moptim == 'Nelder-Mead'){
-            opt <- try(optim(p, fn=Mstep.LL, method='Nelder-Mead', control=list(fnscale = -1L),
-                             DERIV=DERIV, rlist=rlist, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                             est=est, longpars=longpars, pars=pars, ngroups=ngroups, J=J, gTheta=gTheta,
-                             PrepList=PrepList, L=L, constrain=constrain, ANY.PRIOR=ANY.PRIOR,
-                             UBOUND=UBOUND, LBOUND=LBOUND, itemloc=itemloc),
-                       silent=TRUE)
-        } else if(Moptim == 'SANN'){
-            opt <- try(optim(p, fn=Mstep.LL, method='SANN', control=list(fnscale = -1L),
-                             DERIV=DERIV, rlist=rlist, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                             est=est, longpars=longpars, pars=pars, ngroups=ngroups, J=J, gTheta=gTheta,
-                             PrepList=PrepList, L=L, constrain=constrain, ANY.PRIOR=ANY.PRIOR,
-                             UBOUND=UBOUND, LBOUND=LBOUND, itemloc=itemloc),
-                       silent=TRUE)
-        } else if(Moptim == 'NR'){
-            opt <- try(Mstep.NR(p=p, est=est, longpars=longpars, pars=pars, ngroups=ngroups, 
-                                J=J, gTheta=gTheta, PrepList=PrepList, L=L,  ANY.PRIOR=ANY.PRIOR,
-                                constrain=constrain, LBOUND=LBOUND, UBOUND=UBOUND, SLOW.IND=SLOW.IND,
-                                itemloc=itemloc, DERIV=DERIV, rlist=rlist, TOL=TOL))
-        } else {
-            stop('M-step optimzer not supported')
-        }
-        if(is(opt, 'try-error'))
-            stop(opt)
-        longpars[est] <- opt$par
-    }
-    if(any(groupest)){
-        p <- longpars[groupest]
-        maxit <- max(ceiling(Mrate * 100), 35)
-        res <- try(nlm(Mstep.LL2, p, pars=pars, Theta=gTheta[[1L]], nfact=nfact, BFACTOR=BFACTOR,
-                   constrain=constrain, groupest=groupest, longpars=longpars, rlist=rlist, 
-                       Thetabetween=Thetabetween, iterlim=maxit), 
-                   silent=TRUE)
-        if(is(res, 'try-error')) stop(res)
-        longpars[groupest] <- res$estimate
-    }
-    if(length(constrain))
-        for(i in 1L:length(constrain))
-            longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
-    return(longpars)
-}
-
-Mstep.LL <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L, CUSTOM.IND, 
-                     SLOW.IND, constrain, LBOUND, UBOUND, itemloc, DERIV, rlist, ANY.PRIOR){
-    longpars[est] <- p
-    if(length(constrain))
-       for(i in 1L:length(constrain))
-           longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
-    pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-    LLs <- numeric(ngroups)
-    for(g in 1L:ngroups)
-        LLs[g] <- LogLikMstep(pars[[g]], Theta=gTheta[[g]], rs=rlist[[g]],
-                              itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, any.prior=ANY.PRIOR[g])
-    return(sum(LLs))
-}
-
-Mstep.LL2 <- function(p, longpars, pars, Theta, BFACTOR, nfact, constrain, groupest, rlist,
-                      Thetabetween){
-    ngroups <- length(pars); J <- length(pars[[1L]]) - 1L
-    longpars[groupest] <- p
-    if(length(constrain))
-        for(i in 1L:length(constrain))
-            longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
-    pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-    LL <- 0
-    ind <- 1L
-    for(g in 1L:ngroups){
-        if(BFACTOR){
-            theta <- Thetabetween
-            rr <- rlist[[g]]$r2
-        } else {
-            theta <- Theta[ ,1L:nfact,drop=FALSE]
-            rr <- rlist[[g]]$r1
-        }
-        est <- pars[[g]][[J+1L]]@est
-        nest <- sum(est)
-        if(nest){
-            pars[[g]][[J+1L]]@par[est] <- p[ind:(nest + ind - 1L)]
-            ind <- ind + nest
-        } else next
-        gp <- ExtractGroupPars(pars[[g]][[J+1L]])
-        chl <- try(chol(gp$gcov), silent=TRUE)
-        if(is(chl, 'try-error')) return(1e100)
-        tmp <- outer(diag(gp$gcov), diag(gp$gcov))
-        if(any(gp$gcov[lower.tri(tmp)] >= tmp[lower.tri(tmp)])) return(1e100)
-        tmp <- rr * mirt_dmvnorm(theta, gp$gmeans[1L:ncol(theta)], 
-                                     gp$gcov[1L:ncol(theta),1L:ncol(theta), drop=FALSE], log=TRUE)
-        LL <- LL + sum(tmp)
-        if(pars[[g]][[J+1L]]@any.prior)
-            LL <- LL.Priors(x=pars[[g]][[J+1L]], LL=LL)
-    }
-    return(ifelse(is.nan(LL), 1e100, -LL))
-}
-
-LogLikMstep <- function(x, Theta, itemloc, rs, any.prior, CUSTOM.IND){
-    log_itemtrace <- log(computeItemtrace(pars=x, Theta=Theta, 
-                                          itemloc=itemloc, CUSTOM.IND=CUSTOM.IND))
-    LL <- sum(rs$r1 * log_itemtrace)
-    if(any.prior){
-        for(i in 1L:(length(x)-1L))
-            if(x[[i]]@any.prior)
-                LL <- LL.Priors(x=x[[i]], LL=LL)
-    }
-    return(ifelse(is.finite(LL), LL, -1e100))
-}
-
-Mstep.grad <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L, ANY.PRIOR,
-                       constrain, LBOUND, UBOUND, itemloc, DERIV, rlist, CUSTOM.IND, 
-                       SLOW.IND){
-    longpars[est] <- p
-    if(length(constrain) > 0L)
-        for(i in 1L:length(constrain))
-            longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
-    pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-    g <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 0L, 0L)$grad
-    if(length(SLOW.IND)){        
-        for(group in 1L:ngroups){
-            for (i in SLOW.IND){
-                deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]])
-                g[pars[[group]][[i]]@parnum] <- deriv$grad
-            }
-        }
-    }
-    if(length(constrain)){
-        grad <- g %*% L
-    } else {
-        grad <- g
-    }
-    return(grad[est])
-}
-
-Mstep.NR <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L,  ANY.PRIOR,
-                     constrain, LBOUND, UBOUND, itemloc, DERIV, rlist, NO.CUSTOM, SLOW.IND,
-                     TOL)
-{
-    plast2 <- plast <- p
-    for(iter in 1L:50L){
-        longpars[est] <- p
-        if(length(constrain) > 0L)
-            for(i in 1L:length(constrain))
-                longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
-        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-        dd <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 1L, 0L)
-        if(length(SLOW.IND)){        
-            for(group in 1L:ngroups){
-                for (i in SLOW.IND){
-                    deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]], 
-                                                 estHess=TRUE)
-                    tmp <- pars[[group]][[i]]@parnum
-                    dd$grad[tmp] <- deriv$grad
-                    dd$hess[tmp, tmp] <- deriv$hess
-                }
-            }
-        }
-        if(length(constrain)){
-            grad <- updateGrad(dd$grad, L)
-            hess <- updateHess(-dd$hess, L)
-        } else {
-            grad <- dd$grad
-            hess <- -dd$hess
-        }
-        g <- grad[est]
-        h <- hess[est, est]
-        trychol <- try(chol(h), silent=TRUE)
-        if(is(trychol, 'try-error')){
-            ev <- eigen(h)
-            ev$values[ev$values <= 0] <- .Machine$double.eps*100
-            h <- t(ev$vector) %*% diag(ev$values) %*% ev$vector
-            trychol <- chol(h)
-        }
-        change <- as.numeric(g %*% chol2inv(trychol))
-        change <- ifelse(change > .25, .25, change) 
-        change <- ifelse(change < -.25, -.25, change) 
-        plast2 <- plast
-        plast <- p
-        p <- p + change       
-        if(iter > 1L){
-            flip <- (sign(lastchange) * sign(change)) == -1L
-            p[flip] <- (plast[flip] + p[flip]) / 2            
-        }
-        dif <- plast - p
-        if(all(abs(dif) < TOL)) break
-        lastchange <- change
-    }
-    return(list(par=p))
-}
-
-BL.grad <- function(x, ...) numDeriv::grad(BL.LL, x=x, ...)

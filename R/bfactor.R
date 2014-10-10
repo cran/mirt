@@ -23,7 +23,7 @@
 #' dimension reduction technique.
 #' 
 #' @return function returns an object of class \code{ConfirmatoryClass} 
-#'   (\link{ConfirmatoryClass-class}).
+#'   (\link{ConfirmatoryClass-class}) or \code{MultipleGroupClass}(\link{MultipleGroupClass-class}).
 #'
 #' @aliases bfactor
 #' @param data a \code{matrix} or \code{data.frame} that consists of
@@ -180,6 +180,8 @@
 #' simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3)
 #' coef(simmod)
 #' summary(simmod)
+#' itemfit(simmod, QMC=TRUE)
+#' M2(simmod)
 #'
 #'     }
 #'

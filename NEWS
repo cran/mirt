@@ -1,3 +1,69 @@
+Changes in mirt 1.6.1
+
+MAJOR CHANGES
+
+  - `sirt` package added to suggests list. Special thanks to Alexander
+  Robitzsch (author of `sirt`) for developing useful wrapper functions for
+  mirt such as `mirt.wrapper.coef()`, `tam2mirt()`, and `lavaan2mirt()`. As
+  well, many examples in `sirt` demonstrate the possibility of estimating
+  specialized IRT models with `mirt`, such as the: Ramsay quotient,
+  latent class, mixed Rasch, located latent class, probabilistic Guttman,
+  nonparametric, discrete graded membership, and multidimensional IRT discrete
+  traits, DINA, and Rasch copula models.
+
+  - exploratory IRT models are no longer rotated by default in `coef()`,
+  and now requires an explicit `rotate` argument
+
+  - computation of `S_X2` statistic in `itemfit` now much more stable for
+  polytomous item types
+
+  - support for the `plink` package now unofficially dropped because it was
+  removed from CRAN
+
+  - data inputs are now required to have category spacing codings exactly
+  equal to 1 (e.g., [0, 1, 2, ...]; patterns such as [0, 2, 3] which are
+  implicitly missing spaces are now invalid)
+
+NEW FEATURES
+
+  - `mdirt` function added to model discrete latent variables such as latent
+  class analysis for dichotomous and polytomous items. Can be used to model
+  several other discrete IRT models as well, such as the located latent
+  class model, multidimensional IRT with discrete traits, DINA models,
+  etc. See the examples and documentation for details
+
+  - axillary support for `DiscreteClass` objects added to `itemfit()`,
+  `M2()`, `fscores()`, `wald()`, and `boot.mirt()`
+
+  - the S-X2 statistic available in `itemfit()` has been generalized to
+  include multidimensional models
+
+  - the method `'QMCEM'` has been added for quasi-Monte Carlo integration in
+  `mirt()` and `multipleGroup()` for estimating higher dimensional models
+  with greater accuracy (suggested by Alexander Robitzsch). Several axillary
+  function such as `fscores()`, `itemfit()`, and `M2()` also now contain an
+  `QMC` argument (or will accept one through the ...  argument) to use the
+  same integration scheme for better accuracy in higher dimensional models
+
+  - nonlinear parameter constraints for EM estimation can be specified by
+  using the `Rsolnp` and `alabama` packages by passing `optimizer = 'solnp'`
+  and `optimizer = 'alabama'`, as well as the relevant package arguments
+  through the `solnp_ags` and `alabama_ags` list inputs
+
+  - `itemnames` argument added to `mirt.model()` to allow model specifications
+  using raw item names rather than location indicators
+
+  - `accelerate` argument changed from logical to character vector, now
+  allowing three potential options: 'Ramsay' (default), 'squarem', and 'none'
+  for modifying the EM acceleration approach
+
+BUG FIXES
+
+  - fixed bug in `bfactor()` starting values when NAs were specified in the
+  `model` argument
+
+  - adjust overly optimistic termination criteria in EM algorithm
+
 Changes in mirt 1.5
 
 MAJOR CHANGES
@@ -5,10 +71,10 @@ MAJOR CHANGES
   - for efficiency, the Hessian is no longer computed in `fscores()` unless
   it is required in the returned object
 
-  - estimation with `method = 'MHRM'` now requires and explicity `SE=TRUE`
+  - estimation with `method = 'MHRM'` now requires and explicitly `SE=TRUE`
   call to compute the information matrix. The matrix is now computed using
   the ML estimates rather than approximated sequentially after each iteration
-  (very unstable), and therefore a seperate stage is performed. This provides
+  (very unstable), and therefore a separate stage is performed. This provides
   much better accuracy in the computations
 
 NEW FEATURES
@@ -24,7 +90,7 @@ NEW FEATURES
 
   - vignette files for the package examples are now hosted on Github and
   can be accessed by following the link mentioned in the vignette location
-  in the index or `?mirt` helpfile
+  in the index or `?mirt` help file
 
   - E-step is now computed in parallel (if available) following a
   `mirtCluster()` definition

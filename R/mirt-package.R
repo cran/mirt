@@ -23,7 +23,7 @@
 #' @useDynLib mirt
 #' @importFrom stats anova residuals
 # @importFrom MASS ginv
-#' @import lattice GPArotation Rcpp stats4 methods
+#' @import lattice GPArotation Rcpp stats4 methods sfsmisc
 #' @exportMethod anova
 #' @exportMethod residuals
 #' @exportMethod summary
@@ -74,14 +74,16 @@ NULL
 #' head(SAT12)
 #' data <- key2binary(SAT12,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#' head(data)
 #'
-#' #score the data, missing treated as NA
+#' #score the data, missing (value of 8) treated as NA
 #' SAT12missing <- SAT12
-#' SAT12missing[SAT12missing == '8'] <- NA
+#' SAT12missing[SAT12missing == 8] <- NA
 #' data <- key2binary(SAT12missing,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#' head(data)
 #'
-#' #potentially better scoring for item 32
+#' #potentially better scoring for item 32 (based on nominal model finding)
 #' data <- key2binary(SAT12,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,3))
 #' }
@@ -134,7 +136,12 @@ NULL
 #'                      CONSTRAIN = (1-5, a1)')
 #' (mod <- mirt(dat, model))
 #' coef(mod)
-#'
+#' 
+#' #equivalentely, but with a different parameterization
+#' mod2 <- mirt(dat, 1, itemtype = 'Rasch')
+#' anova(mod, mod2) #equal
+#' coef(mod2)
+#' sqrt(coef(mod2)$GroupPars[2]) #latent SD equal to the slope in mod
 #'
 #' }
 NULL
@@ -185,7 +192,7 @@ NULL
 #' table
 #'
 #' #using nominal.highlow matrix to specify lowest and highest categories
-#' (nominal.highlow <- matrix(c(4,4,4,4,1,1,1,1), 2, byrow = TRUE))
+#' (nominal.highlow <- matrix(c(4,4,4,1,1,1), 2, byrow = TRUE))
 #' mod <- mirt(dat, 1, 'nominal', nominal.highlow=nominal.highlow)
 #' coef(mod)
 #'

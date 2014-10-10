@@ -14,11 +14,17 @@
 #' default the latent means and covariances are determined from the estimated object,
 #' though these can be overwritten. Iterative estimation methods can be estimated
 #' in parallel to decrease estimation times if a \code{\link{mirtCluster}} object is available.
+#' 
+#' If the input object is a discrete latent class object estimated from \code{\link{mdirt}}
+#' then the returned results will be with respect to the posterior classification for each 
+#' individual. The method inputs for \code{'DiscreteClass'} objects may only be \code{'EAP'},
+#' for posterior classification of each response pattern, or \code{'EAPsum'} for posterior
+#' classification based on the raw sum-score.
 #'
 #'
 #' @aliases fscores
 #' @param object a computed model object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
-#'   or \code{MultipleGroupClass}
+#'   \code{MultipleGroupClass}, or \code{DiscreteClass}
 #' @param full.scores if \code{FALSE} (default) then a summary table with
 #'   factor scores for each unique pattern is displayed. Otherwise the original
 #'   data matrix is returned with the computed factor scores appended to the
@@ -53,6 +59,8 @@
 #' @param verbose logical; print verbose output messages?
 #' @param scores.only logical; return only the factor scores (only applicable when 
 #'   \code{full.scores = TRUE})
+#' @param QMC logical; use quasi-Monte Carlo integration? If \code{quadpts} is omitted the 
+#'   default number of nodes is 2000
 #' @param ... additional arguments
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords factor.scores
@@ -105,12 +113,17 @@
 fscores <- function(object, rotate = '', full.scores = FALSE, method = "EAP",
                     quadpts = NULL, response.pattern = NULL,
                     returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
-                    scores.only = TRUE, full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0, ...)
+                    scores.only = TRUE, full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0, 
+                    QMC = FALSE, ...)
 {
-    if(is.null(quadpts))
-        quadpts <- switch(as.character(object@nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
+    if(!is(object, 'DiscreteClass')){
+        if(QMC && is.null(quadpts)) quadpts <- 2000
+        if(is.null(quadpts))
+            quadpts <- switch(as.character(object@nfact), 
+                              '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
+    } else quadpts <- 1
     ret <- fscores.internal(object=object, rotate=rotate, full.scores=full.scores, method=method,
-                            quadpts=quadpts, response.pattern=response.pattern,
+                            quadpts=quadpts, response.pattern=response.pattern, QMC=QMC,
                             verbose=verbose, returnER=returnER, gmean=mean, gcov=cov,
                             scores.only=scores.only, theta_lim=theta_lim, MI=MI,
                             full.scores.SE=full.scores.SE, return.acov=return.acov, ...)

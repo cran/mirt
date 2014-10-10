@@ -450,6 +450,20 @@ setMethod(
 
 setMethod(
     f = "Deriv",
+    signature = signature(x = 'lca', Theta = 'matrix'),
+    definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
+        ret <- .Call('dparslca', x@par, Theta, x@score, estHess, x@dat, offterm)
+        if(estHess){
+            ret$hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
+                                                         Theta=Theta)
+        }
+        if(x@any.prior) ret <- DerivativePriors(x=x, grad=ret$grad, hess=ret$hess)
+        return(ret)
+    }
+)
+
+setMethod(
+    f = "Deriv",
     signature = signature(x = 'GroupPars', Theta = 'matrix'),
     definition = function(x, Theta, CUSTOM.IND, EM = FALSE, pars = NULL, itemloc = NULL,
                           tabdata = NULL, estHess=FALSE, prior = NULL){
@@ -962,6 +976,25 @@ setMethod(
         for(i in 1L:ncol(Theta))
             dp[,i] <- -2 * Theta[,i] * int * P
         dp[,i+1L] <- -2 * int * P
+        dp
+    }
+)
+
+setMethod(
+    f = "dP",
+    signature = signature(x = 'lca', Theta = 'matrix'),
+    definition = function(x, Theta){
+        P <- ProbTrace(x, Theta)
+        dp <- matrix(0, nrow(Theta), length(x@par))
+        ind <- 1L
+        s2 <- x@score^2
+        for(j in 2L:x@ncat){
+            for(i in 1:ncol(Theta)){
+                dp[,ind] <- Theta[,i] * s2[j] * (P[,j] - 
+                        rowSums(P[,j,drop=FALSE] * P[,j,drop=FALSE]))
+                ind <- ind + 1L
+            }
+        }
         dp
     }
 )

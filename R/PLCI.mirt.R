@@ -9,6 +9,7 @@
 #' @param parnum a numeric vector indicating which parameters to estimate. 
 #'   Use \code{\link{mod2values}} to determine parameter numbers. If \code{NULL}, all possible
 #'   parameters are used
+#' @param ... additional arguments to pass to the estimation functions
 #' @keywords profiled likelihood
 #' @export PLCI.mirt
 #' @seealso
@@ -35,17 +36,20 @@
 #' result3
 #'
 #' }
-PLCI.mirt <- function(mod, alpha = .05, parnum = NULL){
+PLCI.mirt <- function(mod, alpha = .05, parnum = NULL, ...){
+    
+    #silently accepts print_debug = TRUE for printing the minimization criteria
 
-    compute.LL <- function(dat, model, sv, large, parprior){
+    compute.LL <- function(dat, model, sv, large, parprior, ...){
         tmpmod <- mirt::mirt(dat, model, pars = sv, verbose = FALSE, parprior=parprior,
                                         large=large, calcNull=FALSE, technical=list(message=FALSE,
-                                                                                    parallel=FALSE))
+                                                                                    parallel=FALSE), ...)
         ret <- list(LL=tmpmod@logLik, vals=mod2values(tmpmod))
         ret
     }
 
-    f.min <- function(value, dat, model, which, sv, get.LL, large, parprior, parnames, asigns){
+    f.min <- function(value, dat, model, which, sv, get.LL, large, parprior, parnames, asigns, 
+                      print_debug = FALSE, ...){
         sv$est[which] <- FALSE
         sv$value[which] <- value
         if(sv$class[which] == 'graded'){
@@ -65,7 +69,7 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL){
                 sv$value[itemsv$parnum] <- ds
             }
         }
-        got.LL <- try(compute.LL(dat=dat, model=model, sv=sv, large=large, parprior=parprior), 
+        got.LL <- try(compute.LL(dat=dat, model=model, sv=sv, large=large, parprior=parprior, ...), 
                       silent=TRUE)
         sv2 <- got.LL$vals
         got.LL <- got.LL$LL
@@ -73,12 +77,14 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL){
         if(sum(asigns * sign(as)) < 0L) return(1e8)
         if(is(got.LL, 'try-error')) return(1e8)
         ret <- (got.LL - get.LL)^2
+        if(print_debug) cat('parnum = ', which, '; value = ', round(value, 3),
+                            '; min = ', round(ret, 3), '\n')
         attr(ret, 'value') <- value
         ret
     }
 
     LLpar <- function(parnum, parnums, parnames, lbound, ubound, dat, model, large, 
-                      sv, get.LL, parprior, asigns){
+                      sv, get.LL, parprior, asigns, ...){
         lower <- ifelse(lbound[parnum] == -Inf, -15, lbound[parnum])
         upper <- ifelse(ubound[parnum] == Inf, 15, ubound[parnum])
         mid <- pars[parnum]
@@ -91,12 +97,12 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL){
         if(mid > lower){
             opt.lower <- optimize(f.min, lower = lower, upper = mid, dat=dat, model=model, 
                                   large=large, which=parnums[parnum], sv=sv, get.LL=get.LL, 
-                                  parprior=parprior, parnames=parnames, asigns=asigns, tol = .01)
+                                  parprior=parprior, parnames=parnames, asigns=asigns, ..., tol = .01)
         } else opt.lower <- list(minimum = lower)
         if(mid < upper){
             opt.upper <- optimize(f.min, lower = mid, upper = upper, dat=dat, model=model, 
                                   large=large, which=parnums[parnum], sv=sv, get.LL=get.LL, 
-                                  parprior=parprior, parnames=parnames, asigns=asigns, tol = .01)
+                                  parprior=parprior, parnames=parnames, asigns=asigns, ..., tol = .01)
         } else opt.upper <- list(minimum = upper)
         c(lower=opt.lower$minimum, upper=opt.upper$minimum)
     }
@@ -131,7 +137,7 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL){
     get.LL <- LL - qchisq(1-alpha, 1)/2
     result <- mySapply(X=1L:length(parnums), FUN=LLpar, parnums=parnums, asigns=asigns,
                        parnames=parnames, lbound=lbound, ubound=ubound, dat=dat, 
-                       model=model, large=large, sv=sv, get.LL=get.LL, parprior=parprior)
+                       model=model, large=large, sv=sv, get.LL=get.LL, parprior=parprior, ...)
     colnames(result) <- c(paste0('lower_', alpha/2*100), paste0('upper_', (1-alpha/2)*100))
     ret <- data.frame(Item=sv$item[parnums], class=itemtypes, parnam=sv$name[parnums], 
                       parnum=parnums, value=pars, result, row.names=NULL)

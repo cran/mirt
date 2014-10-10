@@ -4,7 +4,7 @@ setMethod(
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP",
                           quadpts = NULL, response.pattern = NULL, theta_lim, MI, 
 	                      returnER = FALSE, verbose = TRUE, gmean, gcov, scores.only,
-	                      full.scores.SE, return.acov = FALSE, ...)
+	                      full.scores.SE, return.acov = FALSE, QMC, digits=4, ...)
 	{
 	    #local functions for apply
 	    MAP <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
@@ -115,7 +115,8 @@ setMethod(
                                    tabdatalong=large$tabdata, Freq=large$Freq)
                 ret <- fscores(newmod, rotate=rotate, full.scores=TRUE, scores.only=FALSE,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
-                               response.pattern=NULL, return.acov=return.acov, ...)
+                               response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
+                               MI=MI, mean=gmean, cov=gcov, ...)
             } else {
                 pick <- which(!is.na(response.pattern))
                 rp <- response.pattern[,pick,drop=FALSE]
@@ -128,7 +129,8 @@ setMethod(
                 newmod@K <- object@K[pick]
                 ret <- fscores(newmod, rotate=rotate, full.scores=TRUE, scores.only=FALSE,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
-                               response.pattern=NULL, return.acov=return.acov, ...)
+                               response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
+                               MI=MI, mean=gmean, cov=gcov, ...)
                 if(return.acov) return(ret)
                 ret <- cbind(response.pattern, ret[,c(paste0('F', 1L:nfact), 
                                                       paste0('SE_F', 1L:nfact)), drop=FALSE])
@@ -140,6 +142,11 @@ setMethod(
             return(ret)
         }
         dots <- list(...)
+        discrete <- FALSE
+        if(method == 'Discrete' || method == 'DiscreteSum'){
+            discrete <- TRUE
+            method <- ifelse(method == 'Discrete', 'EAP', 'EAPsum')
+        }
         mirtCAT <- FALSE
         if(!is.null(dots$mirtCAT)) mirtCAT <- TRUE
         pars <- object@pars
@@ -163,7 +170,8 @@ setMethod(
         if(!is.null(gcov)) gp$gcov <- gcov
         if(method == 'EAPsum') return(EAPsum(object, full.scores=full.scores,
                                              quadpts=quadpts, gp=gp, verbose=verbose, 
-                                             CUSTOM.IND=CUSTOM.IND, theta_lim=theta_lim))
+                                             CUSTOM.IND=CUSTOM.IND, theta_lim=theta_lim,
+                                             discrete=discrete, QMC=QMC))
 		theta <- as.matrix(seq(theta_lim[1L], theta_lim[2L], length.out=quadpts))
 		fulldata <- object@Data$data
 		tabdata <- object@Data$tabdatalong
@@ -196,10 +204,17 @@ setMethod(
                 }
             }
             if(nfact < 3 || method == 'EAP' && !mirtCAT){
-                ThetaShort <- Theta <- thetaComb(theta,nfact)
-                if(length(prodlist) > 0L)
-                    Theta <- prodterms(Theta,prodlist)
-                W <- mirt_dmvnorm(ThetaShort,gp$gmeans,gp$gcov)
+                if(discrete){
+                    ThetaShort <- Theta <- object@Theta
+                    W <- object@Prior[[1L]]
+                } else {
+                    ThetaShort <- Theta <- if(QMC){
+                        qnorm(sfsmisc::QUnif(quadpts, min=0, max=1, p=nfact, leap = 409), sd=2)
+                    } else thetaComb(theta,nfact)
+                    if(length(prodlist) > 0L)
+                        Theta <- prodterms(Theta,prodlist)
+                    W <- mirt_dmvnorm(ThetaShort,gp$gmeans,gp$gcov)
+                }
                 itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc, 
                                               CUSTOM.IND=CUSTOM.IND)
                 log_itemtrace <- log(itemtrace)
@@ -312,15 +327,15 @@ setMethod(
             reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))
             names(reliability) <- colnames(scores)
             if(returnER) return(reliability)
-			if(verbose){
+			if(verbose && !discrete){
                 cat("\nMethod: ", method)
                 cat("\n\nEmpirical Reliability:\n")
-                print(round(reliability, 4L))
+                print(round(reliability, digits))
 			}
 			colnames(SEscores) <- paste('SE_', colnames(scores), sep='')
             ret <- cbind(object@Data$tabdata[keep, ,drop=FALSE],scores,SEscores)
             if(nrow(ret) > 1L) ret <- ret[do.call(order, as.data.frame(ret[,1L:J])), ]
-			return(ret)
+			return(round(ret, digits))
 		}
 	}
 )
@@ -346,11 +361,52 @@ setMethod(
 #------------------------------------------------------------------------------
 setMethod(
     f = "fscores.internal",
-    signature = 'MultipleGroupClass',
+    signature = 'DiscreteClass',
     definition = function(object, rotate = '', full.scores = FALSE, method = "EAP",
                           quadpts = NULL, response.pattern = NULL, theta_lim, MI,
                           returnER = FALSE, verbose = TRUE, gmean, gcov, scores.only,
                           full.scores.SE, return.acov = FALSE, ...)
+    {
+        class(object) <- 'MultipleGroupClass'
+        if(!any(method %in% c('EAP', 'EAPsum')))
+            stop('Only EAP and EAPsum methods are supported for DiscreteClass objects')
+        method <- ifelse(method == 'EAP', 'Discrete', 'DiscreteSum')
+        ret <- fscores(object, full.scores=full.scores, method=method, quadpts=quadpts,
+                       response.pattern=response.pattern, returnER=FALSE, verbose=verbose,
+                       mean=gmean, cov=gcov, scores.only=scores.only, theta_lim=theta_lim, MI=MI,
+                       full.scores.SE=FALSE, return.acov = FALSE, ...)
+        if(!full.scores){
+            if(method == 'Discrete'){
+                nclass <- ncol(object@Theta)
+                ret <- lapply(ret, function(x, nclass){
+                  nx <- x[,1L:(ncol(x)-nclass)]
+                  names <- colnames(x)
+                  colnames(nx) <- c(names[1:(ncol(nx)-nclass)], paste0('Class_', 1L:nclass))
+                  nx
+                }, nclass=nclass)
+            } else if(method == 'DiscreteSum'){
+                names <- paste0('Class_', 1L:object@nfact)
+                names2 <- paste0('SE.Theta.', 1L:object@nfact)
+                ret <- lapply(ret, function(x, names, names2){
+                    nx <- x[,!(colnames(x) %in% names2)]
+                    colnames(nx) <- c('Sum.Scores', names, 'observed', 'expected')
+                    nx
+                }, names=names, names2=names2)
+            }
+        }
+        if(length(ret) == 1L) ret <- ret[[1L]]
+        return(ret)
+    }
+)
+
+#------------------------------------------------------------------------------
+setMethod(
+    f = "fscores.internal",
+    signature = 'MultipleGroupClass',
+    definition = function(object, rotate = '', full.scores = FALSE, method = "EAP",
+                          quadpts = NULL, response.pattern = NULL, theta_lim, MI,
+                          returnER = FALSE, verbose = TRUE, gmean, gcov, scores.only,
+                          full.scores.SE, return.acov = FALSE, QMC, ...)
     {
         pars <- object@pars
         ngroups <- length(pars)
@@ -369,7 +425,7 @@ setMethod(
             ret[[g]] <- fscores(tmp, rotate = 'CONFIRMATORY', full.scores=full.scores, method=method,
                            quadpts=quadpts, returnER=returnER, verbose=verbose, theta_lim=theta_lim,
                                 mean=gmean[[g]], cov=gcov[[g]], scores.only=FALSE, MI=MI,
-                           full.scores.SE=full.scores.SE, return.acov=return.acov)
+                           full.scores.SE=full.scores.SE, return.acov=return.acov, QMC=QMC)
         }
         names(ret) <- object@Data$groupNames
         if(full.scores){
@@ -457,7 +513,7 @@ gradnorm.WLE <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND
 }
 
 EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, verbose, CUSTOM.IND,
-                   theta_lim){
+                   theta_lim, discrete, QMC){
     calcL1 <- function(itemtrace, K, itemloc){
         J <- length(K)
         L0 <- L1 <- matrix(1, sum(K-1L) + 1L, ncol(itemtrace))
@@ -481,10 +537,21 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
         }
         list(L1=L1, Sum.Scores=Sum.Scores)
     }
-    theta <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
-    Theta <- thetaComb(theta, x@nfact)
-    prior <- mirt_dmvnorm(Theta,gp$gmeans,gp$gcov)
-    prior <- prior/sum(prior)
+    prodlist <- attr(x@pars, 'prodlist')
+    if(discrete){
+        Theta <- ThetaShort <- x@Theta
+        prior <- x@Prior[[1L]]
+    } else {
+        nfact <- x@nfact
+        theta <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
+        ThetaShort <- Theta <- if(QMC){
+            qnorm(sfsmisc::QUnif(quadpts, min=0, max=1, p=nfact, leap = 409), sd=2)
+        } else thetaComb(theta,nfact)
+        prior <- mirt_dmvnorm(Theta,gp$gmeans,gp$gcov)
+        prior <- prior/sum(prior)
+        if(length(prodlist) > 0L)
+            Theta <- prodterms(Theta, prodlist)
+    }
     pars <- x@pars
     K <- x@K
     J <- length(K)
@@ -517,8 +584,8 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
     }
     thetas <- SEthetas <- matrix(0, nrow(L1), x@nfact)
     for(i in 1L:nrow(thetas)){
-        thetas[i,] <- colSums(Theta * L1[i, ] * prior / sum(L1[i,] * prior))
-        SEthetas[i,] <- sqrt(colSums((t(t(Theta) - thetas[i,]))^2 * L1[i, ] * prior / 
+        thetas[i,] <- colSums(ThetaShort * L1[i, ] * prior / sum(L1[i,] * prior))
+        SEthetas[i,] <- sqrt(colSums((t(t(ThetaShort) - thetas[i,]))^2 * L1[i, ] * prior / 
                                          sum(L1[i,] * prior)))
     }
     ret <- data.frame(Sum.Scores=Sum.Scores, Theta=thetas, SE.Theta=SEthetas)
@@ -558,7 +625,7 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
         attr(ret, 'fit') <- data.frame(df=df, X2=X2, p.X2 = pchisq(X2, df, lower.tail=FALSE),
                                        G2=G2, p.G2 = pchisq(G2, df, lower.tail=FALSE),
                                        rxx=as.list(rxx))
-        if(verbose){
+        if(verbose && !discrete){
             print(attr(ret, 'fit'))
             cat('\n')
         }

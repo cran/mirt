@@ -14,7 +14,8 @@ PrepData <- function(data, model, itemtype, guess, upper,
     exploratory <- FALSE
     if(!is.null(nominal.highlow)){
         if(!is.matrix(nominal.highlow)) stop('nominal.highlow must be a matrix')
-        if(all(dim(nominal.highlow) != c(2,J))) stop('nominal.highlow does not have the correct dimensions')
+        if(!all(dim(nominal.highlow) == c(2,J))) 
+            stop('nominal.highlow does not have the correct dimensions')
         if(any(nominal.highlow[1L, ] == nominal.highlow[2L, ]))
             stop('nominal.highlow low and high categories must differ')
     }
@@ -95,6 +96,7 @@ PrepData <- function(data, model, itemtype, guess, upper,
                            parnumber=parnumber, BFACTOR=BFACTOR, D=D, mixed.design=mixed.design,
                            customItems=customItems, key=key, nominal.highlow=nominal.highlow)
     prodlist <- attr(pars, 'prodlist')
+    exploratory <- attr(pars, 'exploratory')
     if(is(pars[[1L]], 'numeric') || is(pars[[1L]], 'logical')){
         names(pars) <- c(itemnames, 'Group_Parameters')
         attr(pars, 'parnumber') <- NULL

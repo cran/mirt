@@ -24,6 +24,9 @@
 #' @param CI numeric value from 0 to 1 indicating the range of the confidence interval for 
 #'   RMSEA. Default returns the 90\% interval
 #' @param residmat logical; return the residual matrix used to compute the SRMSR statistic?
+#' @param QMC logical; use quasi-Monte Carlo integration? Useful for higher dimensional models.
+#'   If \code{quadpts} not specified, 2000 nodes are used by default
+#' @param ... additional arguments to pass
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
 #' Cai, L. & Hansen, M. (2013). Limited-information goodness-of-fit testing of 
@@ -49,7 +52,7 @@
 #'
 #' }
 M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, CI = .9,
-               residmat = FALSE){
+               residmat = FALSE, QMC=FALSE, ...){
     
     fn <- function(collect, obj, Theta, ...){
         dat <- imputeMissing(obj, Theta)
@@ -66,6 +69,13 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     #if MG loop
     if(is(obj, 'MixedClass'))
         stop('mixedmirt objects not yet supported')
+    if(QMC && is.null(quadpts)) quadpts <- 2000L
+    discrete <- FALSE
+    if(is(obj, 'DiscreteClass')){
+        discrete <- TRUE
+        class(obj) <- 'MultipleGroupClass'
+        calcNull <- FALSE
+    }   
     if(any(is.na(obj@Data$data))){
         if(impute == 0 || is.null(Theta))
             stop('Fit statistics cannot be computed when there are missing data. Pass suitable
@@ -94,9 +104,14 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         for(g in 1L:ngroups){
             attr(pars[[g]], 'MG') <- g
             pars[[g]]@bfactor <- obj@bfactor
+            if(discrete){
+                pars[[g]]@Prior <- list(obj@Prior[[g]])
+                pars[[g]]@Theta <- obj@Theta
+            }
             pars[[g]]@Data <- list(data=obj@Data$data[obj@Data$group == obj@Data$groupName[g], ],
                                    mins=obj@Data$mins)
-            ret[[g]] <- M2(pars[[g]], calcNull=FALSE, quadpts=quadpts, residmat=residmat)
+            ret[[g]] <- M2(pars[[g]], calcNull=FALSE, quadpts=quadpts, residmat=residmat,
+                           discrete=discrete, QMC=QMC)
         }
         if(residmat){
             names(ret) <- obj@Data$groupNames
@@ -112,9 +127,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         for(g in 1L:ngroups) Tsum <- Tsum + ret[[g]]$nrowT
         newret$df <- Tsum - obj@nest
         newret$p <- 1 - pchisq(newret$Total.M2, newret$df)
-        newret$RMSEA <- ifelse((newret$Total.M2 - newret$df) > 0,
-                                  sqrt(newret$Total.M2 - newret$df) / 
-                                      sqrt(newret$df * (obj@Data$N-1)), 0)
+        newret$RMSEA <- rmsea(X2=newret$Total.M2, df=newret$df, N=obj@Data$N)
         RMSEA.90_CI <- RMSEA.CI(newret$Total.M2, newret$df, obj@Data$N, 
                                 ci.lower=alpha, ci.upper=1-alpha)
         newret[[paste0("RMSEA_", alpha*100)]]  <- RMSEA.90_CI[1L]
@@ -130,7 +143,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
             null.mod <- try(multipleGroup(obj@Data$data, 1, group=obj@Data$group, 
                                           TOL=1e-3, technical=list(NULL.MODEL=TRUE),
                                           verbose=FALSE))
-            null.fit <- M2(null.mod, calcNull=FALSE, quadpts=quadpts)
+            null.fit <- M2(null.mod, calcNull=FALSE)
             newret$TLI <- (null.fit$Total.M2 / null.fit$df - newret$Total.M2/newret$df) /
                 (null.fit$Total.M2 / null.fit$df - 1)
             newret$CFI <- 1 - (newret$Total.M2 - newret$df) / 
@@ -150,9 +163,15 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     }
     
     if(!all(sapply(obj@pars, class) %in% c('dich', 'graded', 'gpcm', 'nominal', 
-                                           'ideal', 'GroupPars')))
+                                           'ideal', 'lca', 'GroupPars')))
        stop('M2 currently only supported for \'dich\', \'ideal\', \'graded\', 
             \'gpcm\', and \'nominal\' objects')
+    dots <- list(...)
+    discrete <- FALSE
+    if(!is.null(dots$discrete)){
+        discrete <- dots$discrete
+        calcNull <- ifelse(discrete, FALSE, calcNull)
+    }
     ret <- list()
     group <- if(is.null(attr(obj, 'MG'))) 1 else attr(obj, 'MG')
     nitems <- ncol(obj@Data$data)
@@ -164,28 +183,37 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     p  <- colMeans(dat)
     cross <- crossprod(dat, dat)
     p <- c(p, cross[lower.tri(cross)]/N)
+    prodlist <- attr(obj@pars, 'prodlist')
     K <- obj@K
     pars <- obj@pars
     if(is.null(quadpts)) 
-        quadpts <- switch(as.character(obj@nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
+        quadpts <- select_quadpts(obj@nfact)
     estpars <- c()
     for(i in 1L:(nitems+1L))
         estpars <- c(estpars, pars[[i]]@est)
     itemloc <- obj@itemloc
     bfactorlist <- obj@bfactor
-    theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
-    if(is.null(bfactorlist$Priorbetween[[1L]])){
-        Theta <- thetaComb(theta, obj@nfact)
-        prior <- Priorbetween <- sitems <- specific <- NULL
-        gstructgrouppars <- ExtractGroupPars(pars[[nitems+1L]])
-        Prior <- Prior <- mirt_dmvnorm(Theta,gstructgrouppars$gmeans,
+    if(!discrete){
+        theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
+        if(is.null(bfactorlist$Priorbetween[[1L]])){
+            prior <- Priorbetween <- sitems <- specific <- NULL
+            Theta <- if(QMC) qnorm(sfsmisc::QUnif(quadpts, min=0, max=1, p=obj@nfact, leap=409), sd=2)
+                else thetaComb(theta, obj@nfact)
+            gstructgrouppars <- ExtractGroupPars(pars[[nitems+1L]])
+            Prior <- mirt_dmvnorm(Theta,gstructgrouppars$gmeans,
                                            gstructgrouppars$gcov)
-        Prior <- Prior/sum(Prior)
+            Prior <- Prior/sum(Prior)
+            if(length(prodlist) > 0L)
+                Theta <- prodterms(Theta, prodlist)
+        } else {
+            Theta <- obj@Theta        
+            prior <- bfactorlist$prior[[group]]; Priorbetween <- bfactorlist$Priorbetween[[group]]
+            sitems <- bfactorlist$sitems; specific <- bfactorlist$specific; 
+            Prior <- bfactorlist$Prior[[group]]
+        }
     } else {
-        Theta <- obj@Theta        
-        prior <- bfactorlist$prior[[group]]; Priorbetween <- bfactorlist$Priorbetween[[group]]
-        sitems <- bfactorlist$sitems; specific <- bfactorlist$specific; 
-        Prior <- bfactorlist$Prior[[group]]
+        Theta <- obj@Theta
+        Prior <- obj@Prior[[1L]]
     }
     E1 <- E11 <- numeric(nitems)
     E2 <- matrix(NA, nitems, nitems)
@@ -266,8 +294,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         df <- length(p) - obj@nest
         ret$df <- df
         ret$p <- 1 - pchisq(M2, ret$df)
-        ret$RMSEA <- ifelse((M2 - ret$df) > 0,
-                               sqrt(M2 - ret$df) / sqrt(ret$df * (N-1)), 0)
+        ret$RMSEA <- rmsea(X2=M2, df=ret$df, N=N)
         RMSEA.90_CI <- RMSEA.CI(M2, df, N, ci.lower=alpha, ci.upper=1-alpha)
         ret[[paste0("RMSEA_", alpha*100)]]  <- RMSEA.90_CI[1L]
         ret[[paste0("RMSEA_", (1-alpha)*100)]] <- RMSEA.90_CI[2L]

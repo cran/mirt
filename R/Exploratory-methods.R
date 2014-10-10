@@ -7,7 +7,7 @@
 #'
 #' @name print-method
 #' @aliases print,ExploratoryClass-method print,ConfirmatoryClass-method
-#'   print,MultipleGroupClass-method print,MixedClass-method
+#'   print,MultipleGroupClass-method print,MixedClass-method print,DiscreteClass-method
 #' @docType methods
 #' @rdname print-method
 #' @examples
@@ -28,15 +28,18 @@ setMethod(
         method <- x@method
         if(method == 'MIXED') method <- 'MHRM'
         if(x@converge == 1)
-            cat("Converged within ", x@TOL, ' tolerance after ', x@iter, ' ', 
+            cat("Converged within ", x@TOL, ' tolerance after ', x@iter, ' ',
                 method, " iterations.\n", sep = "")
         else
-            cat("FAILED TO CONVERGE within ", x@TOL, ' tolerance after ', 
+            cat("FAILED TO CONVERGE within ", x@TOL, ' tolerance after ',
                 x@iter, ' ', method, " iterations.\n", sep="")
-        cat('M-step optimizer used:', x@Moptim, '\n')
-        if(method == 'EM' || method == 'BL')
-            cat('Number of rectangular quadrature used:', x@quadpts)
-        cat('\n')
+        cat('mirt version:', as.character(packageVersion('mirt')), '\n')
+        cat('M-step optimizer:', x@Moptim, '\n')
+        if(method == 'EM' || method == 'BL'){
+            cat('EM acceleration:', x@accelerate)
+            cat('\nNumber of rectangular quadrature:', x@quadpts)
+            cat('\n')
+        }
         if(!is.nan(x@condnum)){
             cat("\nInformation matrix estimated with method:", x@infomethod)
             cat("\nCondition number of information matrix = ", x@condnum,
@@ -67,7 +70,7 @@ setMethod(
 #'
 #' @name show-method
 #' @aliases show,ExploratoryClass-method show,ConfirmatoryClass-method
-#'   show,MultipleGroupClass-method show,MixedClass-method
+#'   show,MultipleGroupClass-method show,MixedClass-method show,DiscreteClass-method
 #' @docType methods
 #' @rdname show-method
 #' @examples
@@ -91,13 +94,13 @@ setMethod(
 #'
 #' @param object an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
-#' @param rotate a string indicating which rotation to use for exploratory models, primarily 
+#' @param rotate a string indicating which rotation to use for exploratory models, primarily
 #'   from the \code{GPArotation} package (see documentation therein).
-#'   
-#'   Rotations currently supported are: \code{'promax'}, \code{'oblimin'}, \code{'varimax'}, 
-#'   \code{'quartimin'}, \code{'targetT'}, \code{'targetQ'}, \code{'pstT'}, \code{'pstQ'}, 
-#'   \code{'oblimax'}, \code{'entropy'}, \code{'quartimax'}, \code{'simplimax'}, 
-#'   \code{'bentlerT'}, \code{'bentlerQ'}, \code{'tandemI'}, \code{'tandemII'}, 
+#'
+#'   Rotations currently supported are: \code{'promax'}, \code{'oblimin'}, \code{'varimax'},
+#'   \code{'quartimin'}, \code{'targetT'}, \code{'targetQ'}, \code{'pstT'}, \code{'pstQ'},
+#'   \code{'oblimax'}, \code{'entropy'}, \code{'quartimax'}, \code{'simplimax'},
+#'   \code{'bentlerT'}, \code{'bentlerQ'}, \code{'tandemI'}, \code{'tandemII'},
 #'   \code{'geominT'}, \code{'geominQ'}, \code{'cfT'}, \code{'cfQ'}, \code{'infomaxT'},
 #'   \code{'infomaxQ'}, \code{'mccammon'}, \code{'bifactorT'}, \code{'bifactorQ'}
 #' @param Target a dummy variable matrix indicting a target rotation pattern
@@ -112,7 +115,7 @@ setMethod(
 #'
 #' @name summary-method
 #' @aliases summary,ExploratoryClass-method summary,ConfirmatoryClass-method
-#'   summary,MultipleGroupClass-method summary,MixedClass-method
+#'   summary,MultipleGroupClass-method summary,MixedClass-method summary,DiscreteClass-method
 #' @docType methods
 #' @rdname summary-method
 #' @seealso \code{\link{coef-method}}
@@ -122,7 +125,7 @@ setMethod(
 #' x <- mirt(Science, 2)
 #' summary(x)
 #' summary(x, rotate = 'varimax')
-#' 
+#'
 #' #print confidence interval (requires computed information matrix)
 #' x2 <- mirt(Science, 1, SE=TRUE)
 #' summary(x2, printCI=.95)
@@ -170,8 +173,8 @@ setMethod(
             if(!rotF$orthogonal){
                 Phi <- rotF$Phi
                 Phi <- round(Phi, digits)
-                colnames(Phi) <- rownames(Phi) <- colnames(F)
             }
+            colnames(Phi) <- rownames(Phi) <- colnames(F)
             if(verbose){
                 cat("\nRotation: ", rotate, "\n")
                 cat("\nRotated factor loadings: \n\n")
@@ -209,7 +212,7 @@ setMethod(
 #'
 #' @name coef-method
 #' @aliases coef,ExploratoryClass-method coef,ConfirmatoryClass-method
-#'   coef,MultipleGroupClass-method coef,MixedClass-method
+#'   coef,MultipleGroupClass-method coef,MixedClass-method coef,DiscreteClass-method
 #' @docType methods
 #' @rdname coef-method
 #' @seealso \code{\link{summary-method}}
@@ -236,15 +239,11 @@ setMethod(
 setMethod(
     f = "coef",
     signature = 'ExploratoryClass',
-    definition = function(object, CI = .95, printSE = FALSE, rotate = '', Target = NULL, digits = 3,
+    definition = function(object, CI = .95, printSE = FALSE, rotate = 'none', Target = NULL, digits = 3,
                           IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE, verbose = TRUE, ...){
         if(printSE) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
             stop('CI must be between 0 and 1')
-        if(rotate == ''){
-            rotate <- try(slot(object, 'rotate'), TRUE)
-            if(is(rotate, 'try-error')) rotate <- 'none'
-        }
         z <- abs(qnorm((1 - CI)/2))
         SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
@@ -322,7 +321,7 @@ setMethod(
 #'
 #' @name anova-method
 #' @aliases anova,ExploratoryClass-method anova,ConfirmatoryClass-method
-#'   anova,MultipleGroupClass-method anova,MixedClass-method
+#'   anova,MultipleGroupClass-method anova,MixedClass-method anova,DiscreteClass-method
 #' @docType methods
 #' @rdname anova-method
 #' @examples
@@ -341,6 +340,12 @@ setMethod(
             temp <- object
             object <- object2
             object2 <- temp
+        } else if(df == 0){
+            if((2*object2@logLik - 2*object@logLik) < 0){
+                temp <- object
+                object <- object2
+                object2 <- temp
+            }
         }
         X2 <- round(2*object2@logLik - 2*object@logLik, 3)
         if(verbose){
@@ -390,7 +395,7 @@ setMethod(
 #'
 #' @name residuals-method
 #' @aliases residuals,ExploratoryClass-method residuals,ConfirmatoryClass-method
-#'   residuals,MultipleGroupClass-method
+#'   residuals,MultipleGroupClass-method residuals,DiscreteClass-method
 #' @docType methods
 #' @rdname residuals-method
 #' @references
@@ -421,6 +426,9 @@ setMethod(
     definition = function(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL, ...)
     {
+        dots <- list(...)
+        discrete <- FALSE
+        if(!is.null(dots$discrete)) discrete <- TRUE
         K <- object@K
         data <- object@Data$data
         N <- nrow(data)
@@ -430,38 +438,48 @@ setMethod(
         res <- matrix(0,J,J)
         diag(res) <- NA
         colnames(res) <- rownames(res) <- colnames(data)
-        quadpts <- object@quadpts
-        if(is.nan(quadpts))
-            quadpts <- switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)
-        bfactorlist <- object@bfactor
-        theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
-        if(type != 'Q3'){
-            if(is.null(bfactorlist$Priorbetween[[1L]])){
-                Theta <- thetaComb(theta, nfact)
-            } else {
-                Theta <- object@Theta
+        if(!discrete){
+            quadpts <- object@quadpts
+            if(is.nan(quadpts))
+                quadpts <- select_quadpts2(nfact)
+            bfactorlist <- object@bfactor
+            theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
+            if(type != 'Q3'){
+                if(is.null(bfactorlist$Priorbetween[[1L]])){
+                    Theta <- thetaComb(theta, nfact)
+                } else {
+                    Theta <- object@Theta
+                }
+            } else if(is.null(Theta)){
+                Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, scores.only=TRUE, ...)
             }
-        } else if(is.null(Theta)){
-            Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, scores.only=TRUE, ...)
+        } else {
+            Theta <- object@Theta
+            if(!any(type %in% c('exp', 'LD', 'LDG2')))
+                stop('residual type not supported for discrete latent variables')
         }
         itemnames <- colnames(data)
         listtabs <- list()
         calcG2 <- ifelse(type == 'LDG2', TRUE, FALSE)
         if(type %in% c('LD', 'LDG2')){
-            groupPars <- ExtractGroupPars(object@pars[[length(object@pars)]])
-            prior <- mirt_dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
-            prior <- prior/sum(prior)
+            if(!discrete){
+                groupPars <- ExtractGroupPars(object@pars[[length(object@pars)]])
+                prior <- mirt_dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
+                prior <- prior/sum(prior)
+            } else {
+                prior <- object@Prior[[1L]]
+            }
             df <- (object@K - 1) %o% (object@K - 1)
             diag(df) <- NA
             colnames(df) <- rownames(df) <- colnames(res)
-            for(i in 1:J){
-                for(j in 1:J){
+            for(i in 1L:J){
+                for(j in 1L:J){
                     if(i < j){
                         P1 <- ProbTrace(x=object@pars[[i]], Theta=Theta)
                         P2 <- ProbTrace(x=object@pars[[j]], Theta=Theta)
                         tab <- table(data[,i],data[,j])
                         Etab <- matrix(0,K[i],K[j])
-                        for(k in 1:K[i])
+                        for(k in 1L:K[i])
                             for(m in 1:K[j])
                                 Etab[k,m] <- N * sum(P1[,k] * P2[,m] * prior)
                         s <- gamma.cor(tab) - gamma.cor(Etab)
@@ -555,8 +573,8 @@ setMethod(
 #'
 #' Plot various test implied response functions from models estimated in the mirt package.
 #'
-#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass} or
-#'   \code{MultipleGroupClass}
+#' @param x an object of class \code{ExploratoryClass}, \code{ConfirmatoryClass},
+#'   \code{MultipleGroupClass}, or \code{DiscreteClass}
 #' @param y an arbitrary missing argument required for \code{R CMD check}
 #' @param type type of plot to view; can be \code{'info'} to show the test
 #'   information function, \code{'infocontour'} for the test information contours,
@@ -569,15 +587,15 @@ setMethod(
 #' @param theta_angle numeric values ranging from 0 to 90 used in \code{plot}.
 #'   If a vector is used then a bubble plot is created with the summed information across the angles specified
 #'   (e.g., \code{theta_angle = seq(0, 90, by=10)})
-#' @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is 
+#' @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is
 #'   used in conjunction with \code{npts}
 #' @param npts number of quadrature points to be used for plotting features.
 #'   Larger values make plots look smoother
 #' @param MI a single number indicating how many imputations to draw to form bootstrapped confidence
 #'   intervals for the selected test statistic. If greater than 0 a plot will be drawn with a shaded
 #'   region for the interval
-#' @param CI a number from 0 to 1 indicating the confidence interval to select when MI input is 
-#'   used. Default uses the 95\% confidence (CI = .95) 
+#' @param CI a number from 0 to 1 indicating the confidence interval to select when MI input is
+#'   used. Default uses the 95\% confidence (CI = .95)
 #' @param rot allows rotation of the 3D graphics
 #' @param which.items numeric vector indicating which items to be used when plotting. Default is
 #'   to use all available items
@@ -596,6 +614,7 @@ setMethod(
 #' @name plot-method
 #' @aliases plot,ExploratoryClass-method plot,ConfirmatoryClass-method
 #'   plot,MultipleGroupClass-method plot,ExploratoryClass,missing-method
+#'   plot,DiscreteClass,missing-method
 #' @docType methods
 #' @rdname plot-method
 #' @examples
@@ -607,7 +626,7 @@ setMethod(
 #' plot(x, type = 'infotrace')
 #' plot(x, type = 'infotrace', facet_items = FALSE)
 #' plot(x, type = 'infoSE')
-#' 
+#'
 #' # confidence interval plots when information matrix computed
 #' plot(x, type='score')
 #' plot(x, type='score', MI=100)
@@ -690,10 +709,10 @@ setMethod(
             }, split='\\.')
             imputenums <- do.call(c, tmp)
             CIscore <- CIinfo <- matrix(0, MI, length(plt$score))
-            for(i in 1L:MI){                
+            for(i in 1L:MI){
                 while(TRUE){
                     tmp <- try(imputePars(pars=x@pars, covB=covB,
-                                          imputenums=imputenums, constrain=x@constrain), 
+                                          imputenums=imputenums, constrain=x@constrain),
                                silent=TRUE)
                     if(!is(tmp, 'try-error')) break
                 }
@@ -753,17 +772,17 @@ setMethod(
                 bs_range <- function(x, CI){
                     ss <- sort(x)
                     N <- length(ss)
-                    ret <- c(upper = ss[ceiling(N * (1 - (1-CI)/2))],                
+                    ret <- c(upper = ss[ceiling(N * (1 - (1-CI)/2))],
                              middle = median(x),
                              lower = ss[floor(N * (1-CI)/2)])
                     ret
                 }
                 tmp <- apply(CIscore, 2, bs_range, CI=CI)
                 plt$CIscoreupper <- tmp['upper', ]
-                plt$CIscorelower <- tmp['lower', ]                
+                plt$CIscorelower <- tmp['lower', ]
                 tmp <- apply(CIinfo, 2, bs_range, CI=CI)
                 plt$CIinfoupper <- tmp['upper', ]
-                plt$CIinfolower <- tmp['lower', ]      
+                plt$CIinfolower <- tmp['lower', ]
                 plt$CISElower <- 1/sqrt(tmp['upper', ])
                 plt$CISEupper <- 1/sqrt(tmp['lower', ])
             }
@@ -771,10 +790,10 @@ setMethod(
                 if(is.null(main))
                     main <- 'Test Information'
                 if(MI > 0){
-                    return(xyplot(info ~ Theta, data=plt, 
-                                  upper=plt$CIinfoupper, lower=plt$CIinfolower, 
+                    return(xyplot(info ~ Theta, data=plt,
+                                  upper=plt$CIinfoupper, lower=plt$CIinfolower,
                                   panel = function(x, y, lower, upper, ...){
-                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)), 
+                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
                                                     col=grey(.9), border = FALSE, ...)
                                       panel.xyplot(x, y, type='l', lty=1,...)
                                   },
@@ -788,10 +807,10 @@ setMethod(
                 if(is.null(main))
                     main <- 'Test Standard Errors'
                 if(MI > 0){
-                    return(xyplot(SE ~ Theta, data=plt, 
-                                  upper=plt$CISEupper, lower=plt$CISElower, 
+                    return(xyplot(SE ~ Theta, data=plt,
+                                  upper=plt$CISEupper, lower=plt$CISElower,
                                   panel = function(x, y, lower, upper, ...){
-                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)), 
+                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
                                                     col=grey(.9), border = FALSE, ...)
                                       panel.xyplot(x, y, type='l', lty=1,...)
                                   },
@@ -858,14 +877,14 @@ setMethod(
                 if(is.null(main))
                     main <- 'Expected Total Score'
                 if(MI > 0){
-                    return(xyplot(score ~ Theta, data=plt, 
-                                  upper=plt$CIscoreupper, lower=plt$CIscorelower, 
+                    return(xyplot(score ~ Theta, data=plt,
+                                  upper=plt$CIscoreupper, lower=plt$CIscorelower,
                                   panel = function(x, y, lower, upper, ...){
-                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)), 
+                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
                                                     col=grey(.9), border = FALSE, ...)
                                       panel.xyplot(x, y, type='l', lty=1,...)
                                   },
-                                  main = main, 
+                                  main = main,
                                   ylab = expression(T(theta)), xlab = expression(theta), ...))
                 } else {
                     return(xyplot(score ~ Theta, plt,
