@@ -4,7 +4,7 @@ setMethod(
     signature = signature(x = 'MixedClass'),
     definition = function(x)
     {
-        class(x) <- 'ExploratoryClass'
+        class(x) <- 'SingleGroupClass'
         print(x)
     }
 )
@@ -20,10 +20,11 @@ setMethod(
 setMethod(
     f = "summary",
     signature = 'MixedClass',
-    definition = function(object, digits = 3, ...)
+    definition = function(object, digits = 3, verbose = TRUE, ...)
     {
-        cat("\nCall:\n", paste(deparse(object@Call), sep = "\n", collapse = "\n"),
-            "\n\n", sep = "")
+        if(verbose)
+            cat("\nCall:\n", paste(deparse(object@Call), sep = "\n", collapse = "\n"),
+                "\n\n", sep = "")
         nbetas <- ncol(object@pars[[1L]]@fixed.design)
         out <- data.frame()
         if(nbetas > 0L){
@@ -32,12 +33,14 @@ setMethod(
                                     row.names=names(object@pars[[1L]]@est[1L:nbetas]))
             out$'z.value' <- out$Estimate / out$'Std.Error'
         }
-        if(all(dim(out) != 0L)){
-            cat('--------------\nFIXED EFFECTS:\n')
-            print(round(out, digits))
+        if(verbose){
+            if(all(dim(out) != 0L)){
+                cat('--------------\nFIXED EFFECTS:\n')
+                print(round(out, digits))
+            }
+            cat('\n--------------\nRANDOM EFFECT COVARIANCE(S):\n')
+            cat('Correlations on upper diagonal\n')
         }
-        cat('\n--------------\nRANDOM EFFECT COVARIANCE(S):\n')
-        cat('Correlations on upper diagonal\n')
         par <- object@pars[[length(object@pars)]]@par[-c(1L:object@nfact)]
         sigma <- matrix(0, object@nfact, object@nfact)
         sigma[lower.tri(sigma, TRUE)] <- par
@@ -62,13 +65,30 @@ setMethod(
                 colnames(sigma) <- rownames(sigma) <-
                     paste0('COV_', colnames(object@random[[i]]@gdesign))
                 rand[[length(rand) + 1L]] <- sigma
-                listnames <- c(listnames, colnames(object@random[[i]]@gframe)[1L])
+                listnames <- c(listnames, colnames(object@random[[i]]@gdesign)[1L])
             }
         }
         names(rand) <- listnames
-        cat('\n')
-        print(rand, digits)
-        return(invisible(list(random=rand, fixed=out)))
+        if(verbose){
+            cat('\n')
+            print(rand, digits)
+        }
+        if(length(object@lrPars)){
+            betas <- object@lrPars@beta
+            SE.betas <- matrix(object@lrPars@SEpar, nrow(betas), ncol(betas),
+                               dimnames = list(rownames(betas), paste0('Std.Error_', colnames(betas))))
+            z <- betas/SE.betas
+            colnames(z) <- paste0('z_', colnames(betas))
+            keep <- colSums(betas != 0) > 0
+            lr.out <- data.frame(betas, SE.betas, z)
+            if(verbose){
+                cat('--------------\nLATENT REGRESSION FIXED EFFECTS:\n\n')
+                print(round(betas[, keep, drop=FALSE], digits))
+                cat("\n")
+                print(round(data.frame(SE.betas[, keep, drop=FALSE], z[, keep, drop=FALSE]), digits))
+            }
+        } else lr.out <- NULL
+        return(invisible(list(random=rand, fixed=out, lr.out=lr.out)))
     }
 )
 
@@ -128,7 +148,7 @@ setMethod(
                                      2, byrow = TRUE), digits)
                     rownames(allPars[[length(allPars)]]) <- c('par', 'SE')
                     colnames(allPars[[length(allPars)]]) <- names(object@random[[i]]@est)
-                    listnames <- c(listnames, colnames(object@random[[i]]@gframe)[1L])
+                    listnames <- c(listnames, colnames(object@random[[i]]@gdesign)[1L])
                 }
             } else {
                 for(i in 1L:length(object@random)){
@@ -139,9 +159,25 @@ setMethod(
                                      3, byrow = TRUE), digits)
                     rownames(allPars[[length(allPars)]]) <- c('par', SEnames)
                     colnames(allPars[[length(allPars)]]) <- names(object@random[[i]]@est)
-                    listnames <- c(listnames, colnames(object@random[[i]]@gframe)[1L])
+                    listnames <- c(listnames, colnames(object@random[[i]]@gdesign)[1L])
                 }
             }
+        }
+        if(length(object@lrPars)){
+            listnames <- c(listnames, 'lr.betas')
+            if(!printSE){
+                allPars[[length(allPars)+1L]] <- round(matrix(c(object@lrPars@par,
+                                                                object@lrPars@par - z*object@lrPars@SEpar,
+                                                                object@lrPars@par + z*object@lrPars@SEpar),
+                                                              3, byrow = TRUE), digits)
+                rownames(allPars[[length(allPars)]]) <- c('par', SEnames)
+            } else {
+                allPars[[length(allPars)+1L]] <- round(matrix(c(object@lrPars@par,
+                                                                object@lrPars@SEpar),
+                                                              2, byrow = TRUE), digits)
+                rownames(allPars[[length(allPars)]]) <- c('par', 'SE')
+            }
+            colnames(allPars[[length(allPars)]]) <- names(object@lrPars@est)
         }
         names(allPars) <- listnames
         return(allPars)
@@ -153,7 +189,7 @@ setMethod(
     signature = signature(object = 'MixedClass'),
     definition = function(object, object2, verbose = TRUE)
     {
-        class(object) <- 'ExploratoryClass'
+        class(object) <- 'SingleGroupClass'
         anova(object, object2, verbose=verbose)
     }
 )

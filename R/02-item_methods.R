@@ -472,7 +472,7 @@ setMethod(
     f = "GenRandomPars",
     signature = signature(x = 'ideal'),
     definition = function(x){
-        par <- c(rlnorm(x@nfact, meanlog=0, sdlog=.5), 
+        par <- c(rlnorm(x@nfact, meanlog=0, sdlog=.5),
                  -rlnorm(1, meanlog=0, sdlog=.5))
         x@par[x@est] <- par[x@est]
         x
@@ -708,6 +708,7 @@ setMethod(
     definition = function(x, Theta, pars, fulldata, itemloc, offterm0, CUSTOM.IND){
         J <- length(pars) - 1L
         theta0 <- x@drawvals
+        total_0 <- attr(theta0, 'log.lik_full')
         N <- nrow(theta0)
         unif <- runif(N)
         prior.mu <- rep(0, ncol(theta0))
@@ -717,48 +718,28 @@ setMethod(
         prior.t.var <- prior.t.var + t(prior.t.var) - d
         sigma <- if(ncol(theta0) == 1L) matrix(x@cand.t.var) else diag(rep(x@cand.t.var,ncol(theta0)))
         theta1 <- theta0 + mirt_rmvnorm(N, prior.mu, sigma)
-        log_den0 <- mirt_dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
+        if(is.null(total_0)) theta1 <- theta0 #for intial draw
         log_den1 <- mirt_dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
-        itemtrace0 <- itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(fulldata))
-        if(x@between){
-            offterm1 <- matrix(0, nrow(itemtrace0), J)
-            tmp1 <- rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
-            for(i in 1L:J) offterm1[,i] <- tmp1
-        } else {
-            tmp1 <- rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
-            offterm1 <- matrix(tmp1, nrow(itemtrace0), J, byrow = TRUE)
-        }
-        offterm1 <- offterm1 + offterm0
-        itemtrace0 <- computeItemtrace(pars, Theta=Theta, offterm=offterm0, 
+        itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(fulldata))
+        tmp1 <- rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
+        offterm1 <- matrix(tmp1, nrow(offterm0), ncol(offterm0))
+        itemtrace1 <- computeItemtrace(pars, Theta=Theta, offterm=offterm1,
                                        itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-        itemtrace1 <- computeItemtrace(pars, Theta=Theta, offterm=offterm1, 
-                                       itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-        if(x@between){
-            totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1,
-                            rep(0, nrow(fulldata)), rep(0, nrow(fulldata)), mirtClusterEnv$ncores)
-            total_0 <- totals[[1L]]
-            total_1 <- totals[[2L]]
-            total_0 <- tapply(total_0, x@mtch, sum) + log_den0
-            total_1 <- tapply(total_1, x@mtch, sum) + log_den1
-        } else {
-            totals <- .Call('denRowSums', t(fulldata), t(itemtrace0), t(itemtrace1),
-                            rep(0, ncol(fulldata)), rep(0, ncol(fulldata)), mirtClusterEnv$ncores)
-            tmp0 <- totals[[1L]]
-            tmp1 <- totals[[2L]]
-            LL0 <- LL1 <- numeric(J)
-            for(i in 1L:J){
-                LL0[i] <- sum(tmp0[itemloc[i]:(itemloc[i+1L] - 1L)])
-                LL1[i] <- sum(tmp1[itemloc[i]:(itemloc[i+1L] - 1L)])
-            }
-            total_0 <- LL0[x@mtch] + log_den0
-            total_1 <- LL1[x@mtch] + log_den1
+        LL <- fulldata * log(itemtrace1)
+        LL2 <- matrix(0, nrow(LL), J)
+        for(i in 1L:J)
+            LL2[,i] <- rowSums(LL[,itemloc[i]:(itemloc[i+1L] - 1L)])
+        total_1 <- tapply(LL2, x@mtch, sum) + log_den1
+        if(is.null(total_0)){ #for intial draw
+            attr(theta1, 'log.lik_full') <- total_1
+            return(theta1)
         }
         diff <- total_1 - total_0
-        accept <- diff > 0
-        accept[unif < exp(diff)] <- TRUE
+        accept <- unif < exp(diff)
         theta1[!accept, ] <- theta0[!accept, ]
         total_1[!accept] <- total_0[!accept]
         attr(theta1, "Proportion Accepted") <- sum(accept)/N
+        attr(theta1, 'log.lik_full') <- total_1
         return(theta1)
     }
 )

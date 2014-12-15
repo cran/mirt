@@ -1,22 +1,23 @@
 setMethod(
 	f = "fscores.internal",
-	signature = 'ExploratoryClass',
+	signature = 'SingleGroupClass',
 	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP",
-                          quadpts = NULL, response.pattern = NULL, theta_lim, MI, 
+                          quadpts = NULL, response.pattern = NULL, theta_lim, MI,
 	                      returnER = FALSE, verbose = TRUE, gmean, gcov, scores.only,
-	                      full.scores.SE, return.acov = FALSE, QMC, digits=4, ...)
+	                      plausible.draws, full.scores.SE, return.acov = FALSE,
+                          QMC, digits=4, ...)
 	{
 	    #local functions for apply
 	    MAP <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
 	                    hessian, mirtCAT, return.acov = FALSE){
             if(mirtCAT){
                 estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ],
-                                    itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian, 
-                                    CUSTOM.IND=CUSTOM.IND, iterlim=1, stepmax=1e-20))
+                                    itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian,
+                                    CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=1, stepmax=1e-20))
             } else {
     	        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ],
-    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian, 
-                                    CUSTOM.IND=CUSTOM.IND, iterlim=200))
+    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian,
+                                    CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=200))
             }
 	        if(is(estimate, 'try-error'))
 	            return(rep(NA, ncol(scores)*2))
@@ -34,13 +35,13 @@ setMethod(
                 return(c(scores[ID, ], rep(NA, ncol(scores))))
             if(mirtCAT){
                 estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars,patdata=tabdata[ID, ],
-                                    itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE, 
-                                    hessian=hessian, CUSTOM.IND=CUSTOM.IND, iterlim=1, 
+                                    itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE,
+                                    hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=1,
                                     stepmax=1e-20))
             } else {
     	        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars,patdata=tabdata[ID, ],
-    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE, 
-                                    hessian=hessian, CUSTOM.IND=CUSTOM.IND, iterlim=200))
+    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE,
+                                    hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=200))
             }
 	        if(is(estimate, 'try-error'))
 	            return(rep(NA, ncol(scores)*2))
@@ -70,7 +71,9 @@ setMethod(
 	    EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, return.acov = FALSE){
             nfact <- ncol(ThetaShort)
 	        L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
-	        thetas <- colSums(ThetaShort * exp(L) * W / sum(exp(L) * W))
+            expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
+            maxL <- max(expLW)
+	        thetas <- colSums(ThetaShort * expLW / (sum(expLW/maxL)*maxL))
             if(hessian){
     	        thetadif <- t((t(ThetaShort) - thetas))
                 Thetaprod <- matrix(0, nrow(ThetaShort), nfact * (nfact + 1L)/2L)
@@ -84,14 +87,30 @@ setMethod(
                     }
                 }
                 vcov <- matrix(0, nfact, nfact)
-                vcov[lower.tri(vcov, TRUE)] <- colSums(Thetaprod * exp(L) * W / sum(exp(L) * W))
+                vcov[lower.tri(vcov, TRUE)] <- colSums(Thetaprod * expLW / (sum(expLW/maxL)*maxL))
                 if(nfact > 1L) vcov <- vcov + t(vcov) - diag(diag(vcov))
                 if(return.acov) return(vcov)
     	        SE <- sqrt(diag(vcov))
             } else SE <- rep(NA, nfact)
 	        return(c(thetas, SE))
 	    }
-        
+
+        if(plausible.draws > 0){
+            fs <- fscores(object, rotate=rotate, full.scores = TRUE, method=method,
+                          quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
+                          return.acov = FALSE, QMC=QMC, ...)
+            fs_acov <- fscores(object, rotate = rotate, full.scores = TRUE, method=method,
+                          quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
+                          scores.only=TRUE, plausible.draws=0, full.scores.SE=FALSE,
+                          return.acov = TRUE, QMC=QMC, ...)
+            ret <- vector('list', plausible.draws)
+            for(i in 1L:plausible.draws){
+                jit <- lapply(fs_acov, function(x) mirt_rmvnorm(ncol(x), sigma = x))
+                jit <- do.call(rbind, jit)
+                ret[[i]] <- fs + jit
+            }
+            return(ret)
+        }
         if(return.acov && MI != 0)
             stop('simultaneous impute and return.acov option not supported')
 	    if(return.acov && returnER)
@@ -109,9 +128,9 @@ setMethod(
             colnames(response.pattern) <- colnames(object@Data$data)
             newmod <- object
             if(nrow(response.pattern) > 1L){
-                large <- suppressWarnings(mirt(response.pattern, nfact, technical=list(customK=object@K), 
+                large <- suppressWarnings(mirt(response.pattern, nfact, technical=list(customK=object@K),
                               large=TRUE))
-                newmod@Data <- list(data=response.pattern, tabdata=large$tabdata2, 
+                newmod@Data <- list(data=response.pattern, tabdata=large$tabdata2,
                                    tabdatalong=large$tabdata, Freq=large$Freq)
                 ret <- fscores(newmod, rotate=rotate, full.scores=TRUE, scores.only=FALSE,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
@@ -122,7 +141,7 @@ setMethod(
                 rp <- response.pattern[,pick,drop=FALSE]
                 large <- suppressWarnings(mirt(rp, nfact, large=TRUE,
                                             technical=list(customK=object@K[pick])))
-                newmod@Data <- list(data=rp, tabdata=large$tabdata2, 
+                newmod@Data <- list(data=rp, tabdata=large$tabdata2,
                                     tabdatalong=large$tabdata, Freq=large$Freq)
                 newmod@pars <- newmod@pars[c(pick, length(newmod@pars))]
                 newmod@itemloc <- c(1L, 1L + cumsum(object@K[pick]))
@@ -132,7 +151,7 @@ setMethod(
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
                                MI=MI, mean=gmean, cov=gcov, ...)
                 if(return.acov) return(ret)
-                ret <- cbind(response.pattern, ret[,c(paste0('F', 1L:nfact), 
+                ret <- cbind(response.pattern, ret[,c(paste0('F', 1L:nfact),
                                                       paste0('SE_F', 1L:nfact)), drop=FALSE])
             }
             if(return.acov) return(ret)
@@ -158,7 +177,7 @@ setMethod(
         nLambdas <- object@nfact
         itemloc <- object@itemloc
         gp <- ExtractGroupPars(object@pars[[length(itemloc)]])
-        if(rotate != 'CONFIRMATORY'){
+        if(object@exploratory){
             so <- summary(object, rotate = rotate, verbose = FALSE)
             a <- rotateLambdas(so)
             for(i in 1L:J)
@@ -169,18 +188,29 @@ setMethod(
         if(!is.null(gmean)) gp$gmeans <- gmean
         if(!is.null(gcov)) gp$gcov <- gcov
         if(method == 'EAPsum') return(EAPsum(object, full.scores=full.scores,
-                                             quadpts=quadpts, gp=gp, verbose=verbose, 
+                                             quadpts=quadpts, gp=gp, verbose=verbose,
                                              CUSTOM.IND=CUSTOM.IND, theta_lim=theta_lim,
                                              discrete=discrete, QMC=QMC))
 		theta <- as.matrix(seq(theta_lim[1L], theta_lim[2L], length.out=quadpts))
 		fulldata <- object@Data$data
-		tabdata <- object@Data$tabdatalong
-		keep <- object@Data$Freq[[1L]] > 0L
-		tabdata <- tabdata[keep, , drop=FALSE]
-        USETABDATA <- TRUE
+		LR <- .hasSlot(object@lrPars, 'beta')
+		USETABDATA <- TRUE
+		if(LR){
+            if(!(method %in% c('EAP', 'MAP')))
+                warning('Latent regression information only used in MAP and EAP estimates')
+            full.scores <- TRUE
+            USETABDATA <- FALSE
+		    gp$gmeans <- object@lrPars@X %*% object@lrPars@beta
+		    tabdata <- object@Data$fulldata[[1L]]
+            keep <- rep(TRUE, nrow(tabdata))
+		} else {
+    		tabdata <- object@Data$tabdatalong
+    		keep <- object@Data$Freq[[1L]] > 0L
+    		tabdata <- tabdata[keep, , drop=FALSE]
+		}
 		SEscores <- scores <- matrix(0, nrow(tabdata), nfact)
         list_SEscores <- list_scores <- vector('list', MI)
-        if(MI == 0) MI <- 1	    
+        if(MI == 0) MI <- 1
         impute <- MI > 1
         opars <- pars
         estHess <- !full.scores | return.acov | full.scores.SE
@@ -198,7 +228,7 @@ setMethod(
         for(mi in 1L:MI){
             if(impute){
                 while(TRUE){
-                    pars <- try(imputePars(pars=opars, covB=covB, imputenums=imputenums, 
+                    pars <- try(imputePars(pars=opars, covB=covB, imputenums=imputenums,
                                        constrain=object@constrain), silent=TRUE)
                     if(!is(pars, 'try-error')) break
                 }
@@ -213,9 +243,9 @@ setMethod(
                     } else thetaComb(theta,nfact)
                     if(length(prodlist) > 0L)
                         Theta <- prodterms(Theta,prodlist)
-                    W <- mirt_dmvnorm(ThetaShort,gp$gmeans,gp$gcov)
+                    W <- mirt_dmvnorm(ThetaShort,gp$gmeans,gp$gcov, quad=LR)
                 }
-                itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc, 
+                itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                               CUSTOM.IND=CUSTOM.IND)
                 log_itemtrace <- log(itemtrace)
                 if(method == 'EAP' && return.acov){
@@ -224,23 +254,23 @@ setMethod(
                 } else {
             	    tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=EAP, log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, hessian=estHess && method == 'EAP')
-            	    scores <- tmp[ ,1:nfact, drop = FALSE]
-            	    SEscores <- tmp[ ,-c(1:nfact), drop = FALSE]                
+            	    scores <- tmp[ ,1L:nfact, drop = FALSE]
+            	    SEscores <- tmp[ ,-c(1L:nfact), drop = FALSE]
                 }
             }
     		if(method == "EAP"){
                 #do nothing
     		} else if(method == "MAP"){
                 tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=MAP, scores=scores, pars=pars,
-                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, 
+                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist,
                                CUSTOM.IND=CUSTOM.IND, return.acov=return.acov, mirtCAT=mirtCAT, hessian=estHess)
     		} else if(method == "ML"){
-                isna <- apply(object@Data$tabdata[,-ncol(object@Data$tabdata),drop=FALSE], 1L, 
+                isna <- apply(object@Data$tabdata[,-ncol(object@Data$tabdata),drop=FALSE], 1L,
                               function(x) sum(is.na(x)))[keep]
     			allzero <- (rowSums(tabdata[,itemloc[-length(itemloc)], drop=FALSE]) + isna) == J
     			allmcat <- (rowSums(tabdata[,itemloc[-1L]-1L, drop=FALSE]) + isna) == J
     			scores[allmcat,] <- Inf
-                SEscores[allmcat,] <- NA                
+                SEscores[allmcat,] <- NA
                 scores[allzero,] <- -Inf
                 SEscores[allzero,] <- NA
                 tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=ML, scores=scores, pars=pars,
@@ -252,7 +282,7 @@ setMethod(
                 itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                               CUSTOM.IND=CUSTOM.IND)
                 tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=WLE, scores=scores, pars=pars,
-                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, 
+                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist,
                                CUSTOM.IND=CUSTOM.IND, hessian=estHess)
             } else {
                 stop('method not defined')
@@ -271,16 +301,10 @@ setMethod(
     		}
         }
         if(impute){
-            scores <- list_scores[[1L]]/MI
-            Ubar <- list_SEscores[[1L]]^2 / MI
-            for(i in 2L:MI){
-                scores <- list_scores[[i]]/MI + scores
-                Ubar <- list_SEscores[[i]]^2 / MI + Ubar
-            }
-            B <- matrix(0, nrow(scores), ncol(scores))
-            for(i in 1L:MI)
-                B <- B + (1 / (MI-1L)) * ((list_scores[[i]] - scores)^2)
-            SEscores <- sqrt(Ubar + (1 + 1/MI) * B)
+            tmp <- averageMI(list_scores, list_SEscores, as.data.frame=FALSE,
+                             digits = 200)
+            scores <- tmp[[1L]]
+            SEscores <- tmp[[2L]]
         }
 		if (full.scores){
             if(USETABDATA){
@@ -302,6 +326,13 @@ setMethod(
                 scoremat <- scores
                 SEscoremat <- SEscores
                 colnames(SEscoremat) <- paste0('SE_',colnames(scores))
+                if(return.acov){
+                    ret <- vector('list', nrow(scoremat))
+                    for(i in 1L:nrow(scoremat))
+                        ret[[i]] <- matrix(scoremat[i,], nfact, nfact)
+                    names(ret) <- 1:nrow(scoremat)
+                    return(ret)
+                }
             }
             if(full.scores.SE)
                 scoremat <- cbind(scoremat, SEscoremat)
@@ -337,24 +368,6 @@ setMethod(
             if(nrow(ret) > 1L) ret <- ret[do.call(order, as.data.frame(ret[,1L:J])), ]
 			return(round(ret, digits))
 		}
-	}
-)
-
-#------------------------------------------------------------------------------
-setMethod(
-	f = "fscores.internal",
-	signature = 'ConfirmatoryClass',
-	definition = function(object, rotate = '', full.scores = FALSE, method = "EAP",
-	                      quadpts = NULL, response.pattern = NULL, theta_lim, MI,
-	                      returnER = FALSE, verbose = TRUE, gmean, gcov, scores.only,
-	                      full.scores.SE, return.acov = FALSE, ...)
-	{
-        class(object) <- 'ExploratoryClass'
-        ret <- fscores(object, rotate = 'CONFIRMATORY', full.scores=full.scores, method=method, quadpts=quadpts,
-                       response.pattern=response.pattern, returnER=returnER, verbose=verbose,
-                       mean=gmean, cov=gcov, scores.only=scores.only, theta_lim=theta_lim, MI=MI,
-                       full.scores.SE=full.scores.SE, return.acov = return.acov, ...)
-        return(ret)
 	}
 )
 
@@ -411,7 +424,7 @@ setMethod(
         pars <- object@pars
         ngroups <- length(pars)
         for(g in 1L:ngroups)
-            class(pars[[g]]) <- 'ConfirmatoryClass'
+            class(pars[[g]]) <- 'SingleGroupClass'
         if(MI > 0){
             object <- assignInformationMG(object)
             pars <- object@pars
@@ -462,7 +475,8 @@ setMethod(
 )
 
 # MAP scoring for mirt
-MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ML=FALSE)
+MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID,
+                     ML=FALSE)
 {
     Theta <- matrix(Theta, nrow=1L)
     ThetaShort <- Theta
@@ -471,7 +485,8 @@ MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ML
     itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                   CUSTOM.IND=CUSTOM.IND)
     L <- sum(log(itemtrace)[as.logical(patdata)])
-    prior <- mirt_dmvnorm(ThetaShort, gp$gmeans, gp$gcov)
+    mu <- if(is.matrix(gp$gmeans)) gp$gmeans[ID, ] else gp$gmeans
+    prior <- mirt_dmvnorm(ThetaShort, mu, gp$gcov)
     L <- ifelse(ML, -L, (-1)*(L + log(prior)))
     L
 }
@@ -556,11 +571,12 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
     K <- x@K
     J <- length(K)
     itemloc <- x@itemloc
-    itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc, 
+    itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                   CUSTOM.IND=CUSTOM.IND)
     itemtrace <- t(itemtrace)
     tmp <- calcL1(itemtrace=itemtrace, K=K, itemloc=itemloc)
     L1 <- tmp$L1
+    maxLs <- apply(L1, 1L, max)
     Sum.Scores <- tmp$Sum.Scores
     if(S_X2){
         L1total <- L1 %*% prior
@@ -585,7 +601,7 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
     thetas <- SEthetas <- matrix(0, nrow(L1), x@nfact)
     for(i in 1L:nrow(thetas)){
         thetas[i,] <- colSums(ThetaShort * L1[i, ] * prior / sum(L1[i,] * prior))
-        SEthetas[i,] <- sqrt(colSums((t(t(ThetaShort) - thetas[i,]))^2 * L1[i, ] * prior / 
+        SEthetas[i,] <- sqrt(colSums((t(t(ThetaShort) - thetas[i,]))^2 * L1[i, ] * prior /
                                          sum(L1[i,] * prior)))
     }
     ret <- data.frame(Sum.Scores=Sum.Scores, Theta=thetas, SE.Theta=SEthetas)
@@ -620,7 +636,7 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
         tmp <- suppressWarnings(expand.table(cbind(ret[,2L:(ncol(ret)-1L)], ret$observed)))
         pick <- 1L:x@nfact
         rxx <- apply(tmp[,pick, drop=FALSE], 2L, var) /
-            (apply(tmp[,pick, drop=FALSE], 2L, var) + apply(tmp[,pick, drop=FALSE], 2L, 
+            (apply(tmp[,pick, drop=FALSE], 2L, var) + apply(tmp[,pick, drop=FALSE], 2L,
                                                             function(x) mean(x^2)))
         attr(ret, 'fit') <- data.frame(df=df, X2=X2, p.X2 = pchisq(X2, df, lower.tail=FALSE),
                                        G2=G2, p.G2 = pchisq(G2, df, lower.tail=FALSE),

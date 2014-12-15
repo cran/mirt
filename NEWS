@@ -1,3 +1,66 @@
+Changes in mirt 1.7
+
+MAJOR CHANGES
+
+  - improved estimation efficiency when using MH-RM algorithm. As a result,
+  the default seed was changed, therefore results from previous versions
+  will be slightly different
+
+  - objects of class 'ExploratoryClass' and 'ConfirmatoryClass' have been
+  merged into a single class 'SingleGroupClass' with an `exploratory`
+  logical slot
+
+  - the `technical = list(SEtol)` criteria for approximating the information
+  matrix was lowered to 1e-4 in `mixedmirt()` to provide better standard
+  error estiamtes
+
+NEW FEATURES
+
+  - `boot.mirt` now uses the optimizer used to estimate the model (default
+  previously was EM)
+
+  - `mixedmirt` now supports interaction effects in random intercepts,
+  including cross-level interactions
+
+  - added `averageMI()` function to compute multiple imputation averages
+  for the plausible values methodology using Rubin's 1987 method
+
+  - plausible value imputation now available in `fscores()` using the new
+  `plausible.draws` numeric input
+
+  - add `return.models` argument to `DIF()` to return estimated models with
+  free/constrained parameters
+
+  - latent regression models added to `mixedmirt()` for non-Rasch models
+  using the new `lr.formula` input
+
+  - `mirt.model()` syntax can now define within individual item equality
+  constraints by using more than 1 parameter specification name in the syntax
+
+  - latent regression models added to `mirt()` function by using the new
+  `covdata` and `formula` inputs
+
+  - added confidence envelope plots to `PLCI.mirt`, and throw warnings when
+  intervals could not be located
+
+  - `coef()` now accepts a `simplify` logical, indicating whether the
+  items should be collapsed to a matrix and returned as a list of length 2
+  (suggested by Michael Friendly)
+
+BUG FIXES
+
+  - bias correction in variance estimates `mixedmirt` when random effects
+  are included (reported by KK Sasa)
+
+  - fix missing data imputation bug in `itemfit()` (reported by KK Sasa)
+
+  - M2 statistic for bifactor/two-tier models was overly conservative
+
+  - better checks for numerical underflow issues
+
+  - use triangle 0's for identifying exploratory IFA models.  As such, standard
+  errors/condition numbers for exploratory models can be estimated again
+
 Changes in mirt 1.6.1
 
 MAJOR CHANGES

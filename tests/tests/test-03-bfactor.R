@@ -5,7 +5,7 @@ test_that('dich data', {
     data <- key2binary(SAT12, key)
     specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
     mod1 <- bfactor(data, specific, verbose=FALSE, SE = TRUE, SE.type = 'crossprod')
-    expect_is(mod1, 'ConfirmatoryClass')
+    expect_is(mod1, 'SingleGroupClass')
     expect_equal(mod1@df, 4294967199)
     cfs <- do.call(c, coef(mod1, digits=4))
     cfs <- as.numeric(na.omit(cfs[cfs != 0 & cfs != 1]))
@@ -22,13 +22,13 @@ test_that('dich data', {
     expect_equal(fs[1:3,'Theta.1'], c(-3.086056, -3.028396, -2.959453), tolerance = 1e-4)
     expect_equal(fs[1:3,'Theta.2'], c(-1.3570073, -1.0763397, -0.7812878), tolerance = 1e-4)
     fit <- M2(mod1)
-    expect_equal(fit$M2, 712.5701, tolerance = 1e-2)
+    expect_equal(fit$M2, 560.4704, tolerance = 1e-2)
     expect_equal(fit$df, 432, tolerance = 1e-2)
     pfit1 <- personfit(mod1)
     expect_is(pfit1, 'data.frame')
-    ifit <- itemfit(mod1)
+    ifit <- itemfit(mod1, digits = 20)
     expect_is(ifit, 'data.frame')
-    
+
     #nestlogit
     scoredSAT12 <- data
     scoredSAT12[,1:5] <- as.matrix(SAT12[,1:5])
@@ -84,7 +84,7 @@ test_that('dich data', {
     specific <- c(rep(1,7),rep(2,7))
     items[items == 'dich'] <- '2PL'
     simmod <- bfactor(dataset, specific, itemtype = items, verbose=FALSE, TOL=3e-3)
-    expect_is(simmod, 'ConfirmatoryClass')
+    expect_is(simmod, 'SingleGroupClass')
     expect_equal(simmod@df, 442315)
     cfs <- as.numeric(do.call(c, coef(simmod, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
@@ -92,7 +92,7 @@ test_that('dich data', {
                  tolerance = 1e-2)
     specific[1] <- NA
     simmod2 <- bfactor(dataset, specific, itemtype = items, verbose=FALSE, TOL=3e-3)
-    expect_is(simmod2, 'ConfirmatoryClass')
+    expect_is(simmod2, 'SingleGroupClass')
     expect_equal(simmod2@df, 442316)
     cfs <- as.numeric(do.call(c, coef(simmod2, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
@@ -127,22 +127,22 @@ test_that('dich data', {
         1,0,NA,NA,0.5,
         1,0,NA,NA,0.5,
         1,0,NA,NA,0.5),ncol=5,byrow=TRUE)
-    
+
     d <- matrix(rnorm(16))
     items <- rep('dich', 16)
-    
+
     sigma <- diag(5)
     sigma[1,2] <- sigma[2,1] <- .7
     dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
-    
+
     specific <- c(rep(1,5),rep(2,6),rep(3,5))
     model <- mirt.model('
         G1 = 1-8
         G2 = 9-16
         COV = G1*G2')
-    
+
     simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 5e-3, verbose=FALSE)
-    expect_is(simmod, 'ConfirmatoryClass')
+    expect_is(simmod, 'SingleGroupClass')
     expect_equal(simmod@df, 65486)
     cfs <- as.numeric(do.call(c, coef(simmod, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]

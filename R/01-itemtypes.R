@@ -37,6 +37,30 @@ setClass("RandomPars",
                         prior_2='numeric')
 )
 
+setClass("lrPars",
+         representation(par='numeric',
+                        SEpar='numeric',
+                        est='logical',
+                        beta='matrix',
+                        sigma = 'matrix',
+                        mus='matrix',
+                        df='data.frame',
+                        parnum='numeric',
+                        nfact='integer',
+                        nfixed='integer',
+                        X='matrix',
+                        tXX='matrix',
+                        inv_tXX='matrix',
+                        lbound='numeric',
+                        ubound='numeric',
+                        any.prior='logical',
+                        prior.type='integer',
+                        prior_1='numeric',
+                        prior_2='numeric',
+                        formula='list',
+                        EM='logical')
+)
+
 setClass("AllItemsClass",
          representation(par='numeric',
                         SEpar='numeric',

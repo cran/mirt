@@ -18,12 +18,25 @@
 #' for each dimensions, but this can be over-written by passing a \code{quadpts = #}
 #' argument.
 #'
+#' The two-tier model has a specific block diagonal covariance structure between the primary and
+#' secondary latent traits. Namely, the secondary latent traits are assumed to be orthogonal to
+#' all traits and have a fixed variance of 1, while the primary traits can be organized to vary
+#' and covary with other primary traits in the model.
+#'
+#' \deqn{\Sigma_{two-tier} = \left(\begin{array}{cc} G & 0 \\ 0 & diag(S) \end{array} \right)}
+#'
+#' The bifactor model is a special case of the two-tier model when \eqn{G} above is a 1x1 matrix,
+#' and therefore only 1 primary factor is being modeled. Evaluation of the numerical integrals
+#' for the two-tier model requires only \eqn{ncol(G) + 1} dimensions for integration since the
+#' \eqn{S} second order (or 'specific') factors require only 1 integration grid due to the
+#' dimension reduction technique.
+#'
 #' Note: for multiple group two-tier analyses only the second-tier means and variances
 #' should be freed since the specific factors are not treated independently due to the
 #' dimension reduction technique.
-#' 
-#' @return function returns an object of class \code{ConfirmatoryClass} 
-#'   (\link{ConfirmatoryClass-class}) or \code{MultipleGroupClass}(\link{MultipleGroupClass-class}).
+#'
+#' @return function returns an object of class \code{SingleGroupClass}
+#'   (\link{SingleGroupClass-class}) or \code{MultipleGroupClass}(\link{MultipleGroupClass-class}).
 #'
 #' @aliases bfactor
 #' @param data a \code{matrix} or \code{data.frame} that consists of
@@ -34,7 +47,7 @@
 #'   on the last two, then the vector is \code{c(1,1,2,2)}. For items that should only load
 #'   on the second-tier factors (have no specific component) \code{NA} values may
 #'   be used as place-holders. These numbers will be translated into a format suitable for
-#'   \code{mirt.model()}, combined with the definition in \code{model2}, with the letter 'S' 
+#'   \code{mirt.model()}, combined with the definition in \code{model2}, with the letter 'S'
 #'   added to the respective factor number
 #' @param model2 a two-tier model specification object defined by \code{mirt.model()}. By default
 #'   the model will fit a unidimensional model in the second-tier, and therefore be equivalent to
@@ -178,10 +191,10 @@
 #'
 #' #quadpts dropped for faster estimation, but not as precise
 #' simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3)
-#' coef(simmod)
+#' coef(simmod, simplify=TRUE)
 #' summary(simmod)
 #' itemfit(simmod, QMC=TRUE)
-#' M2(simmod)
+#' M2(simmod, QMC=TRUE)
 #'
 #'     }
 #'
@@ -206,7 +219,7 @@ bfactor <- function(data, model, model2 = mirt.model(paste0('G = 1-', ncol(data)
     mod <- ESTIMATION(data=data, model=model, group=group,
                       method = 'EM', quadpts=quadpts,
                       BFACTOR = TRUE, ...)
-    if(is(mod, 'ConfirmatoryClass') || is(mod, 'MultipleGroupClass'))
+    if(is(mod, 'SingleGroupClass') || is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)
 }

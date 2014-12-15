@@ -33,32 +33,30 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
     J <- length(pars) - 1L
     unif <- runif(N)
     sigma <- if(ncol(theta0) == 1L) matrix(cand.t.var) else diag(rep(cand.t.var,ncol(theta0)))
-    theta1 <- theta0 + mirt_rmvnorm(N,prior.mu, sigma)
-    log_den0 <- mirt_dmvnorm(theta0,prior.mu,prior.t.var,log=TRUE)
+    total_0 <- attr(theta0, 'log.lik_full')
+    theta1 <- theta0 + mirt_rmvnorm(N, sigma = sigma)
+    if(is.null(total_0)) theta1 <- theta0 #for intial draw
     log_den1 <- mirt_dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
-    if(length(prodlist) > 0L){
-        theta0 <- prodterms(theta0,prodlist)
+    if(length(prodlist) > 0L)
         theta1 <- prodterms(theta1,prodlist)
-    }
-    itemtrace0 <- computeItemtrace(pars=pars, Theta=theta0, itemloc=itemloc,
-                                   offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
     itemtrace1 <- computeItemtrace(pars=pars, Theta=theta1, itemloc=itemloc,
                                    offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
-    totals <- .Call('denRowSums', fulldata, itemtrace0, itemtrace1, log_den0,
-                    log_den1, mirtClusterEnv$ncores)
-    total_0 <- totals[[1L]]
-    total_1 <- totals[[2L]]
+    total_1 <- rowSums(fulldata * log(itemtrace1)) + log_den1
+    if(!is.null(prodlist))
+        theta1 <- theta1[ ,1L:(pars[[1L]]@nfact - pars[[1L]]@nfixedeffects -
+                                   length(prodlist)), drop=FALSE]
+    if(is.null(total_0)){ #for intial draw
+        attr(theta1, 'log.lik_full') <- total_1
+        return(theta1)
+    }
     diff <- total_1 - total_0
-    accept <- diff > 0
-    accept[unif < exp(diff)] <- TRUE
+    accept <- unif < exp(diff)
     theta1[!accept, ] <- theta0[!accept, ]
     total_1[!accept] <- total_0[!accept]
     log.lik <- sum(total_1)
-    if(!is.null(prodlist))
-        theta1 <- theta1[ ,1L:(pars[[1L]]@nfact - pars[[1L]]@nfixedeffects -
-                                  length(prodlist)), drop=FALSE]
     attr(theta1, "Proportion Accepted") <- sum(accept)/N
     attr(theta1, "log.lik") <- log.lik
+    attr(theta1, 'log.lik_full') <- total_1
     return(theta1)
 }
 
@@ -239,7 +237,6 @@ Lambdas <- function(pars, Names, explor = FALSE, alpha = .05){
         tmpcov[1L:ncol(gcov), 1L:ncol(gcov)] <- gcov
         gcov <- tmpcov
     }
-    chl <- chol(gcov)
     z <- qnorm(1 - alpha/2)
     rownames(lambdas) <- rownames(upperlambdas) <- rownames(lowerlambdas) <- Names
     for(i in 1L:J){
@@ -250,7 +247,7 @@ Lambdas <- function(pars, Names, explor = FALSE, alpha = .05){
         tmp@par <- pars[[i]]@par + z * pars[[i]]@SEpar
         upperlambdas[i,] <- ExtractLambdas(tmp) /1.702
     }
-    norm <- sqrt(1 + rowSums((lambdas%*%chl)^2))
+    norm <- sqrt(1 + rowSums(lambdas^2))
     F <- as.matrix(lambdas/norm)
     if(!explor){
         norml <- sqrt(1 + rowSums(lowerlambdas^2, na.rm=TRUE))
@@ -310,8 +307,8 @@ bfactor2mod <- function(model, J){
     return(model)
 }
 
-updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
-                        BFACTOR, sitems, cycles, rlist, prior){
+updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J, N,
+                        BFACTOR, sitems, cycles, rlist, prior, lrPars = list(), full=FALSE){
     Prior <- Priorbetween <- vector('list', ngroups)
     if(list$EH){
         Prior[[1L]] <- list$EHPrior[[1L]]
@@ -328,8 +325,14 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
                 Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
                 next
             }
-            Prior[[g]] <- mirt_dmvnorm(Theta[ ,1L:nfact,drop=FALSE], gp$gmeans, gp$gcov)
-            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+            if(full){
+                Prior[[g]] <- mirt_dmvnorm(Theta[ ,1L:nfact,drop=FALSE], lrPars@mus, gp$gcov,
+                                           quad=TRUE)
+                Prior[[g]] <- Prior[[g]]/rowSums(Prior[[g]])
+            } else {
+                Prior[[g]] <- mirt_dmvnorm(Theta[ ,1L:nfact,drop=FALSE], gp$gmeans, gp$gcov)
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+            }
         }
     }
     if(list$EH){
@@ -385,10 +388,13 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                     for(g in 1L:ngroups){
                         constr <- c()
                         p <- pars[[g]]
-                        sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-2L)])
+                        sel <- suppressWarnings(
+                            as.numeric(esplit[[i]][1L:(length(esplit[[i]])-1L)]))
+                        picknames <- c(is.na(sel), FALSE)
+                        sel <- na.omit(sel)
                         for(j in 1L:length(sel)){
-                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) ==
-                                                           esplit[[i]][length(esplit[[i]])-1L]]
+                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) %in%
+                                                           esplit[[i]][picknames]]
                             if(!length(pick))
                                 stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
                             constr <- c(constr, pick)
@@ -633,7 +639,7 @@ UpdatePrior <- function(PrepList, model, groupNames){
     return(PrepList)
 }
 
-ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
+ReturnPars <- function(PrepList, itemnames, random, lrPars, MG = FALSE){
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
@@ -674,6 +680,21 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
             item <- c(item, rep('RANDOM', length(random[[i]]@parnum)))
         }
     }
+    if(length(lrPars) > 0L){
+        parname <- c(parname, names(lrPars@est))
+        parnum <- c(parnum, lrPars@parnum)
+        par <- c(par, lrPars@par)
+        est <- c(est, lrPars@est)
+        lbound <- c(lbound, lrPars@lbound)
+        ubound <- c(ubound, lrPars@ubound)
+        tmp <- sapply(as.character(lrPars@prior.type),
+                      function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+        prior.type <- c(prior.type, tmp)
+        prior_1 <- c(prior_1, lrPars@prior_1)
+        prior_2 <- c(prior_2, lrPars@prior_2)
+        class <- c(class, rep('lrPars', length(lrPars@parnum)))
+        item <- c(item, rep('BETA', length(lrPars@parnum)))
+    }
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
     ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum, value=par,
@@ -682,8 +703,9 @@ ReturnPars <- function(PrepList, itemnames, random, MG = FALSE){
     ret
 }
 
-UpdatePrepList <- function(PrepList, pars, random, MG = FALSE){
-    currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random, MG = TRUE)
+UpdatePrepList <- function(PrepList, pars, random, lrPars = list(), MG = FALSE){
+    currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random,
+                                lrPars=lrPars, MG = TRUE)
     if(nrow(currentDesign) != nrow(pars))
         stop('Rows in supplied and starting value data.frame objects do not match. Were the
              data or itemtype input arguments modified?')
@@ -896,7 +918,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     ret
 }
 
-makeLmats <- function(pars, constrain, random = NULL){
+makeLmats <- function(pars, constrain, random = list(), lrPars = list()){
     f <- function(k) (k+1) / (k*2)
     ngroups <- length(pars)
     J <- length(pars[[1L]]) - 1L
@@ -907,6 +929,8 @@ makeLmats <- function(pars, constrain, random = NULL){
     if(length(random))
         for(i in 1L:length(random))
             L <- c(L, random[[i]]@est)
+    if(length(lrPars))
+        L <- c(L, lrPars@est)
     L <- diag(as.numeric(L))
     redun_constr <- rep(FALSE, ncol(L))
     if(length(constrain) > 0L){
@@ -936,6 +960,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         stop('method argument not supported')
     D <- 1
     opts$method = method
+    if(draws < 1) stop('draws must be greater than 0')
     opts$draws = draws
     opts$calcLL = calcLL
     opts$quadpts = quadpts
@@ -1105,34 +1130,30 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
         splt <- strsplit(f, '\\|')[[1L]]
         gframe <- model.frame(as.formula(paste0('~',splt[2L])), longdata)
         sframe <- model.frame(as.formula(paste0('~',splt[1L])), longdata)
-        if(colnames(gframe) %in% covnames){
-            between <- TRUE
-        } else if(colnames(gframe) %in% itemcovnames){
-            between <- FALSE
-        } else stop('grouping variable not in itemdesign or covdata')
-        if(between){
-            gframe <- gframe[1L:N, , drop=FALSE]
-            sframe <- sframe[1L:N, , drop=FALSE]
-        } else {
-            gframe <- itemdesign[, which(colnames(gframe) == itemcovnames), drop=FALSE]
-            sframe <- itemdesign[, which(colnames(sframe) == itemcovnames), drop=FALSE]
-        }
-        matpar <- diag(ncol(gframe) + ncol(sframe))
+        levels <- interaction(gframe)
+        uniq_levels <- unique(levels)
+        matpar <- diag(1L + ncol(sframe))
         estmat <- lower.tri(matpar, diag=TRUE)
         ndim <- ncol(matpar)
         if(strsplit(f, '+')[[1L]][[1L]] == '-')
             estmat[lower.tri(estmat)] <- FALSE
-        fn <- paste0('COV_', c(colnames(gframe), colnames(sframe)))
-        FNCOV <- outer(fn, c(colnames(gframe), colnames(sframe)), FUN=paste, sep='_')
+        fn <- paste0('COV_', c(splt[2L], colnames(sframe)))
+        FNCOV <- outer(fn, c(splt[2L], colnames(sframe)), FUN=paste, sep='_')
         par <- matpar[lower.tri(matpar, diag=TRUE)]
         est <- estmat[lower.tri(estmat, diag=TRUE)]
         names(par) <- names(est) <- FNCOV[lower.tri(FNCOV, diag=TRUE)]
-        drawvals <- matrix(0, length(unique(gframe)[[1L]]), ndim,
-                           dimnames=list(unique(gframe)[[1L]], NULL))
-        mtch <- match(gframe[[1L]], rownames(drawvals))
-        gdesign <- matrix(1, nrow(gframe), 1L, dimnames = list(NULL, colnames(gframe)))
-        if(ncol(sframe) != 0L)
-            gdesign <- cbind(model.matrix(as.formula(paste0('~',splt[1L])), sframe), gdesign)
+        drawvals <- matrix(0, length(uniq_levels), ndim,
+                           dimnames=list(uniq_levels, NULL))
+        mtch <- match(levels, rownames(drawvals))
+        gdesign <- matrix(1, length(levels), 1L, dimnames = list(NULL, splt[2L]))
+        if(ncol(sframe) != 0L){
+            if(grepl('-1+', splt[1L])){
+                splt[1L] <- strsplit(splt[1L], '-1\\+')[[1]][2]
+            } else if(grepl('0+', splt[1L]))
+                splt[1L] <- strsplit(splt[1L], '0\\+')[[1]][2]
+            gdesign <- cbind(gdesign,
+                             model.matrix(as.formula(paste0('~',splt[1L])), sframe)[,-1L,drop=FALSE])
+        }
         tmp <- matrix(-Inf, ndim, ndim)
         diag(tmp) <- 1e-4
         lbound <- tmp[lower.tri(tmp, diag=TRUE)]
@@ -1145,7 +1166,6 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
                         ubound=rep(Inf, length(par)),
                         gframe=gframe,
                         gdesign=gdesign,
-                        between=between,
                         cand.t.var=.5,
                         any.prior=FALSE,
                         prior.type=rep(0L, length(par)),
@@ -1157,20 +1177,73 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
     ret
 }
 
-OffTerm <- function(random, J, N){
-    ret <- matrix(0, N, J)
-    for(i in 1L:length(random)){
-        if(random[[i]]@between){
-            tmp <- rowSums(random[[i]]@gdesign*random[[i]]@drawvals[random[[i]]@mtch, ,drop=FALSE])
-            for(j in 1L:J) ret[,j] <- ret[,j] + tmp
-        } else {
-            tmp <- matrix(rowSums(random[[i]]@gdesign *
-                          random[[i]]@drawvals[random[[i]]@mtch, ,drop=FALSE]), nrow(ret), J,
-                          byrow=TRUE)
-            ret <- ret + tmp
+make.lrdesign <- function(df, formula, factorNames, EM=FALSE){
+    nfact <- length(factorNames)
+    if(is.list(formula)){
+        if(!all(names(formula) %in% factorNames))
+            stop('List of fixed effect names do not match factor names')
+        estnames <- X <- vector('list', length(formula))
+        for(i in 1L:length(formula)){
+            X[[i]] <- model.matrix(formula[[i]], df)
+            estnames[[i]] <- colnames(X[[i]])
         }
+        X <- do.call(cbind, X)
+        X <- X[,unique(colnames(X))]
+    } else {
+        X <- model.matrix(formula, df)
     }
+    tXX <- t(X) %*% X
+    if(ncol(X) > 1) inv_tXX <- solve(tXX)
+    else inv_tXX <- matrix(0)
+    beta <- matrix(0, ncol(X), nfact)
+    sigma <- matrix(0, nfact, nfact)
+    diag(sigma) <- 1
+    if(is.list(formula)){
+        est <- matrix(FALSE, nrow(beta), ncol(beta))
+        for(i in 1L:length(formula)){
+            name <- names(formula)[[i]]
+            pick <- which(name == factorNames)
+            est[colnames(X) %in% estnames[[i]], pick] <- TRUE
+        }
+    } else est <- matrix(TRUE, nrow(beta), ncol(beta))
+    est[1,] <- FALSE
+    est <- as.logical(est)
+    names(est) <- as.character(t(outer(factorNames, colnames(X),
+                                     FUN = function(X, Y) paste(X,Y,sep="_"))))
+    colnames(beta) <- factorNames
+    rownames(beta) <- colnames(X)
+    par <- as.numeric(beta)
+    ret <- new('lrPars',
+               par=par,
+               SEpar=rep(NaN,length(par)),
+               est=est,
+               beta=beta,
+               sigma=sigma,
+               nfact=nfact,
+               nfixed=ncol(X),
+               df=df,
+               X=X,
+               tXX=tXX,
+               inv_tXX=inv_tXX,
+               lbound=rep(-Inf,length(par)),
+               ubound=rep(Inf,length(par)),
+               any.prior=FALSE,
+               prior.type=rep(0L, length(par)),
+               prior_1=rep(NaN,length(par)),
+               prior_2=rep(NaN,length(par)),
+               formula=if(!is.list(formula)) list(formula) else formula,
+               EM=EM)
     ret
+}
+
+
+OffTerm <- function(random, J, N){
+    ret <- numeric(N*J)
+    for(i in 1L:length(random)){
+        tmp <- rowSums(random[[i]]@gdesign*random[[i]]@drawvals[random[[i]]@mtch, ,drop=FALSE])
+        ret <- ret + tmp
+    }
+    return(matrix(ret, N, J))
 }
 
 reloadRandom <- function(random, longpars, parstart){
@@ -1271,7 +1344,7 @@ BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific,
             expected <- Estep.mirt(pars=pars2[[g]],
                                    tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
                                    Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
-                                   CUSTOM.IND=CUSTOM.IND)$expected
+                                   CUSTOM.IND=CUSTOM.IND, full=FALSE)$expected
         }
         LL <- LL + sum(Data$Freq[[g]] * log(expected), na.rm = TRUE)
     }
@@ -1305,18 +1378,29 @@ mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean
     retval
 }
 
-mirt_dmvnorm <- function(x, mean, sigma, log = FALSE)
+mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE)
 {
-    # Version modified from mvtnorm::dmvnorm, version 0.9-9996, 19-April, 2014.
-    if(is.vector(x)) x <- matrix(x, nrow=1L)
-    if (missing(mean)) mean <- rep(0, length = ncol(x))
-    if (missing(sigma)) sigma <- diag(ncol(x))
-    distval <- mahalanobis(x, center = mean, cov = sigma)
+    if(quad && is.matrix(mean)){
+        isigma <- solve(sigma)
+        distval <- matrix(0, nrow(mean), nrow(x))
+        for(i in 1L:nrow(mean)){
+            centered <- t(t(x) - mean[i,])
+            distval[i, ] <- rowSums((centered %*% isigma) * centered)
+        }
+    } else {
+        if(is.matrix(mean)){
+            centered <- x - mean
+            distval <- rowSums((centered %*% solve(sigma)) * centered)
+        } else {
+            distval <- mahalanobis(x, center = mean, cov = sigma)
+        }
+    }
     logdet <- sum(log(eigen(sigma, symmetric=TRUE,
                             only.values=TRUE)$values))
     logretval <- -(ncol(x)*log(2*pi) + logdet + distval)/2
     if(log) return(logretval)
     exp(logretval)
+
 }
 
 # prior for latent class analysis
@@ -1425,10 +1509,24 @@ collapseCells <- function(O, E, mincell = 1){
             }
         }
 
-        #merge across
+        #drop columns if they are very rare
+
         En[is.na(En)] <- 0
+        dropcol <- logical(ncol(En))
+        for(j in ncol(En):2L){
+            tmp <- sum(En[,j] > 0) / nrow(En)
+            if(tmp < .05){
+                dropcol[j] <- TRUE
+                En[,j-1L] <- En[,j-1L] + En[,j]
+                On[,j-1L] <- On[,j-1L] + On[,j]
+            }
+        }
+        En <- En[,!dropcol]; On <- On[,!dropcol]
+
+        #merge across
         L <- En < mincell & En != 0
         while(any(L, na.rm = TRUE)){
+            if(!is.matrix(L)) break
             whc <- min(which(rowSums(L) > 0L))
             if(whc == 1L){
                 En[2L,] <- En[2L, ] + En[1L,]
@@ -1436,8 +1534,8 @@ collapseCells <- function(O, E, mincell = 1){
                 En <- En[-1L,]; On <- On[-1L,]
             } else if(whc == nrow(En)){
                 En[nrow(En)-1L,] <- En[nrow(En)-1L, ] + En[nrow(En),]
-                On[nrow(En)-1L,] <- On[nrow(En)-1L, ] + On[nrow(En),]
-                En <- En[-nrow(En),]; On <- On[-nrow(En),]
+                On[nrow(On)-1L,] <- On[nrow(On)-1L, ] + On[nrow(On),]
+                En <- En[-nrow(En),]; On <- On[-nrow(On),]
             } else {
                 ss <- c(sum(On[whc-1L,]), sum(On[whc+1L,]))
                 up <- (min(ss) == ss)[1L]
@@ -1458,7 +1556,15 @@ collapseCells <- function(O, E, mincell = 1){
 rmsea <- function(X2, df, N){
     ret <- ifelse((X2 - df) > 0,
                   sqrt(X2 - df) / sqrt(df * (N-1)), 0)
+    ret <- ifelse(is.na(ret), NaN, ret)
     ret
+}
+
+controlCandVar <- function(PA, cand, min = .1, max = .6){
+    if(PA > max) cand <- cand * 1.05
+    else if(PA < min) cand <- cand * 0.9
+    if(cand < .001) cand <- .001
+    cand
 }
 
 mirtClusterEnv <- new.env()
