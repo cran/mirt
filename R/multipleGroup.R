@@ -49,7 +49,7 @@
 #'   for details and examples
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}
-#   \code{\link{DTF}}
+#'   \code{\link{DTF}}
 #' @keywords models
 #' @export multipleGroup
 #' @examples
@@ -86,10 +86,10 @@
 #' slot(mod_fullconstrain, 'time') #time of estimation componenets
 #'
 #' summary(mod_scalar2)
-#' coef(mod_scalar2)
+#' coef(mod_scalar2, simplify=TRUE)
 #' residuals(mod_scalar2)
 #' plot(mod_configural)
-#' plot(mod_configural, type = 'score')
+#' plot(mod_configural, type = 'info')
 #' plot(mod_configural, type = 'trace')
 #' plot(mod_configural, type = 'trace', which.items = 1:4)
 #' itemplot(mod_configural, 2)
@@ -113,7 +113,7 @@
 #'     F = 1-15
 #'     CONSTRAINB = (1-6, a1)')
 #' equalslopes <- multipleGroup(dat, newmodel, group = group)
-#' coef(equalslopes)
+#' coef(equalslopes, simplify=TRUE)
 #'
 #' #############
 #' #DIF test for each item (using all other items as anchors)
@@ -151,7 +151,7 @@
 #' #multiple factors
 #'
 #' a <- matrix(c(abs(rnorm(5,1,.3)), rep(0,15),abs(rnorm(5,1,.3)),
-#' rep(0,15),abs(rnorm(5,1,.3))), 15, 3)
+#'      rep(0,15),abs(rnorm(5,1,.3))), 15, 3)
 #' d <- matrix(rnorm(15,0,.7),ncol=1)
 #' mu <- c(-.4, -.7, .1)
 #' sigma <- matrix(c(1.21,.297,1.232,.297,.81,.252,1.232,.252,1.96),3,3)

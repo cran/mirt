@@ -346,8 +346,10 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J, N,
             }
         }
     } else if(!is.null(list$customPriorFun)){
-        for(g in 1L:ngroups)
+        for(g in 1L:ngroups){
             Prior[[g]] <- list$customPriorFun(Theta, Etable=rlist[[g]][[1L]])
+            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+        }
     }
     return(list(Prior=Prior, Priorbetween=Priorbetween))
 }
@@ -849,13 +851,21 @@ ItemInfo <- function(x, Theta, cosangle, total.info = TRUE){
     if(ncol(cosanglefull) < ncol(dx$grad[[1L]]))
         cosanglefull <- cbind(cosanglefull, matrix(1, nrow(cosanglefull),
                                                    ncol(dx$grad[[1L]]) - ncol(cosanglefull)))
-    for(i in 1L:x@ncat){
-        dx$grad[[i]] <- matrix(rowSums(dx$grad[[i]] * cosanglefull))
-        dx$hess[[i]] <- matrix(rowSums(dx$hess[[i]] * cosanglefull))
-    }
     for(i in 1L:x@ncat)
-        info[,i] <- (dx$grad[[i]])^2 / P[ ,i] - dx$hess[[i]]
+        dx$grad[[i]] <- matrix(rowSums(dx$grad[[i]] * cosanglefull))
+    for(i in 1L:x@ncat)
+        info[,i] <- (dx$grad[[i]])^2 / P[ ,i]
     if(total.info) info <- matrix(rowSums(info))
+    return(info)
+}
+
+ItemInfo2 <- function(x, Theta, total.info = TRUE){
+    P <- ProbTrace(x, Theta)
+    dx <- DerivTheta(x, Theta)
+    info <- matrix(0, nrow(Theta), ncol(P))
+    for(i in 1L:x@ncat)
+        info[,i] <- (dx$grad[[i]])^2 / P[ ,i]
+    if(total.info) info <- rowSums(info)
     return(info)
 }
 
@@ -955,6 +965,13 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                      optimizer = NULL, solnp_args = list(), alabama_args = list(), ...)
 {
     opts <- list()
+    tnames <- names(technical)
+    gnames <- c('MAXQUAD', 'NCYCLES', 'BURNIN', 'SEMCYCLES', 'set.seed', 'SEtol', 'symmetric_SEM',
+                'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
+                'parallel', 'NULL.MODEL')
+    if(!all(tnames %in% gnames))
+        stop('The following inputs to technical are invalid: ',
+             paste0(tnames[!(tnames %in% gnames)], ' '))
     if(method == 'MHRM' || method == 'MIXED') SE.type <- 'MHRM'
     if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM')))
         stop('method argument not supported')
@@ -1378,7 +1395,7 @@ mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean
     retval
 }
 
-mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE)
+mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE, ...)
 {
     if(quad && is.matrix(mean)){
         isigma <- solve(sigma)

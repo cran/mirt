@@ -137,23 +137,25 @@ setMethod(
                           printCI = FALSE, verbose = TRUE, ...){
         if(is.null(rotate)) rotate <- object@rotate
         nfact <- ncol(object@F)
-        if (!object@exploratory && rotate != 'none') {
+        if (!object@exploratory || rotate == 'none') {
             F <- object@F
             F[abs(F) < suppress] <- NA
             h2 <- as.matrix(object@h2)
             SS <- apply(F^2,2,sum)
-            Phi <- diag(ncol(F))
+            gp <- ExtractGroupPars(object@pars[[length(object@pars)]])
+            Phi <- cov2cor(gp$gcov)
             colnames(h2) <- "h2"
-            rownames(Phi) <- colnames(Phi) <- names(SS) <- colnames(F)
+            rownames(Phi) <- colnames(Phi) <- names(SS) <- colnames(F)[1L:object@nfact]
             loads <- round(cbind(F,h2),digits)
             rownames(loads) <- colnames(object@Data$data)
             if(verbose){
-                cat("\nUnrotated factor loadings: \n\n")
+                if(object@exploratory)
+                    cat("\nUnrotated factor loadings: \n\n")
                 print(loads)
                 cat("\nSS loadings: ",round(SS,digits), "\n")
                 cat("Proportion Var: ",round(SS/nrow(F),digits), "\n")
                 cat("\nFactor correlations: \n\n")
-                print(Phi)
+                print(round(Phi, digits))
             }
             invisible(list(rotF=F,h2=h2,fcor=matrix(1)))
         } else {
@@ -173,7 +175,6 @@ setMethod(
             Phi <- diag(ncol(F))
             if(!rotF$orthogonal){
                 Phi <- rotF$Phi
-                Phi <- round(Phi, digits)
             }
             colnames(Phi) <- rownames(Phi) <- colnames(F)
             if(verbose){
@@ -182,7 +183,7 @@ setMethod(
                 print(loads,digits)
                 cat("\nRotated SS loadings: ",round(SS,digits), "\n")
                 cat("\nFactor correlations: \n\n")
-                print(Phi)
+                print(round(Phi, digits))
             }
             if(any(h2 > 1))
                 warning("Solution has Heywood cases. Interpret with caution.")
@@ -320,8 +321,14 @@ setMethod(
                 rownames(items) <- colnames(object@Data$data)
                 allPars <- list(items=items, groupPars=allPars[length(allPars)][[1L]])
             } else {
-                message('Could not simplify. Returning default list')
+                message('Could not simplify items. Returning default list')
             }
+            means <- allPars[['groupPars']][1L:object@nfact]
+            names(means) <- colnames(allPars[['groupPars']])[1L:object@nfact]
+            covs <- matrix(NA, object@nfact, object@nfact)
+            covs[lower.tri(covs, TRUE)] <- allPars[['groupPars']][-c(1L:object@nfact)]
+            colnames(covs) <- rownames(covs) <- object@factorNames[1L:object@nfact]
+            allPars[['groupPars']] <- list(means=means, cov=covs)
         }
         if(.hasSlot(object@lrPars, 'beta'))
             allPars$lr.betas <- round(object@lrPars@beta, digits)
@@ -641,14 +648,14 @@ setMethod(
 #' \dontrun{
 #' x <- mirt(Science, 1, SE=TRUE)
 #' plot(x)
-#' plot(x, type = 'trace')
+#' plot(x, type = 'info')
 #' plot(x, type = 'infotrace')
 #' plot(x, type = 'infotrace', facet_items = FALSE)
 #' plot(x, type = 'infoSE')
 #'
 #' # confidence interval plots when information matrix computed
-#' plot(x, type='score')
-#' plot(x, type='score', MI=100)
+#' plot(x)
+#' plot(x, MI=100)
 #' plot(x, type='info', MI=100)
 #' plot(x, type='SE', MI=100)
 #'
@@ -659,22 +666,23 @@ setMethod(
 #' plot(x2, type = 'trace')
 #' plot(x2, type = 'trace', which.items = 1:2)
 #' plot(x2, type = 'trace', which.items = 1, facet_items = FALSE) #facet by group
-#' plot(x2, type = 'score')
+#' plot(x2, type = 'info')
 #'
 #' x3 <- mirt(Science, 2)
-#' plot(x3)
+#' plot(x3, type = 'info')
 #' plot(x3, type = 'SE')
 #'
 #' }
 setMethod(
     f = "plot",
     signature = signature(x = 'SingleGroupClass', y = 'missing'),
-    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
+    definition = function(x, y, type = 'score', npts = 50, theta_angle = 45,
                           theta_lim = c(-6,6), which.items = 1:ncol(x@Data$data),
                           MI = 0, CI = .95, rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE, auto.key = TRUE, main = NULL,
                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)
     {
+        dots <- list(...)
         if (any(theta_angle > 90 | theta_angle < 0))
             stop('Improper angle specified. Must be between 0 and 90.')
         if(length(theta_angle) > 1) type = 'infoangle'
@@ -689,9 +697,9 @@ setMethod(
         if(length(prodlist) > 0)
             ThetaFull <- prodterms(Theta,prodlist)
         info <- 0
-        if(any(sapply(x@pars, is , 'custom')) && type != 'trace')
+        if(any(sapply(x@pars, is , 'custom')) && type != 'trace' && type != 'score')
             stop('Information function for custom classes not available')
-        if(any(sapply(x@pars, is , 'ideal')) && type != 'trace')
+        if(any(sapply(x@pars, is , 'ideal')) && type != 'trace' && type != 'score')
             warning('Information function for ideal point models are currently experimental')
         if(all(!sapply(x@pars, is , 'custom'))){
             for(l in 1:length(theta_angle)){
@@ -702,12 +710,13 @@ setMethod(
             }
         }
         adj <- x@Data$mins
-        if (x@exploratory && x@rotate != 'none'){
-            rotname <- x@rotate
-            so <- summary(x, rotate=x@rotate, Target=NULL, verbose=FALSE, digits=5, ...)
-            a <- rotateLambdas(so) * 1.702
-            for(i in 1:J)
-                x@pars[[i]]@par[1:nfact] <- a[i, ]
+        if (x@exploratory){
+            if(!is.null(dots$rotate)){
+                so <- summary(x, verbose=FALSE, digits=5, ...)
+                a <- rotateLambdas(so) * 1.702
+                for(i in 1:J)
+                    x@pars[[i]]@par[1:nfact] <- a[i, ]
+            }
         }
         itemtrace <- computeItemtrace(x@pars, ThetaFull, x@itemloc, CUSTOM.IND=x@CUSTOM.IND)
         score <- c()
@@ -851,12 +860,14 @@ setMethod(
                     main <- 'Item trace lines'
                 P <- vector('list', length(which.items))
                 names(P) <- colnames(x@Data$data)[which.items]
+                ind <- 1L
                 for(i in which.items){
                     tmp <- probtrace(extract.item(x, i), ThetaFull)
                     if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
                     tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta),
                                                            labels=paste0('cat', 1L:ncol(tmp))))
-                    P[[i]] <- tmp2
+                    P[[ind]] <- tmp2
+                    ind <- ind + 1L
                 }
                 nrs <- sapply(P, nrow)
                 Pstack <- do.call(rbind, P)

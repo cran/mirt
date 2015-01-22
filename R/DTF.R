@@ -31,6 +31,10 @@
 #' @param ... additional arguments to be passed to lattice
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @references
+#' Chalmers, R. P., Counsell, A., and Flora, D. B. (in press). It might not
+#'   make a big DIF: Improved Differential Test Functioning statistics that account for
+#'   sampling variability. \emph{Educational and Psychological Measurement}.
 #' @seealso \code{\link{multipleGroup}}, \code{\link{DIF}}
 #' @keywords DTF
 #' @export DTF
@@ -55,11 +59,11 @@
 #' dat <- rbind(dat1, dat2)
 #' mod <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
 #'                      invariance=c('free_means', 'free_var'))
-#' plot(mod, type = 'score')
+#' plot(mod)
 #'
 #' DTF(mod)
 #' mirtCluster()
-#' DTF(mod, MI = 1000) #95% C.I. for sDTI containing 0. uDTF is very small
+#' DTF(mod, MI = 1000) #95% C.I. for sDTF containing 0. uDTF is very small
 #'
 #' ## -------------
 #' ## random slopes and intercepts for 15 items, and latent mean difference
@@ -69,11 +73,11 @@
 #'                 d + c(numeric(15), sign(rnorm(n-15))*runif(n-15, .5, 1)), N, itemtype = 'dich')
 #' dat <- rbind(dat1, dat2)
 #' mod1 <- multipleGroup(dat, 1, group=group)
-#' plot(mod1, type = 'score') #does not account for group differences! Need anchors
+#' plot(mod1) #does not account for group differences! Need anchors
 #'
 #' mod2 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type = 'crossprod',
 #'                       invariance=c('free_means', 'free_var'))
-#' plot(mod2, type = 'score')
+#' plot(mod2)
 #'
 #' #significant DIF in multiple items....
 #' DIF(mod2, which.par=c('a1', 'd'), items2test=16:30)
@@ -88,10 +92,10 @@
 #' dat <- rbind(dat1, dat2)
 #' mod3 <- multipleGroup(dat, model, group=group, SE=TRUE, SE.type='crossprod',
 #'                       invariance=c('free_means', 'free_var'))
-#' plot(mod3, type = 'score') #visable DTF happening
+#' plot(mod3) #visable DTF happening
 #'
 #' DIF(mod3, c('a1', 'd'), items2test=16:30)
-#' DTF(mod3) #unsigned bias. Signed bias indicates group 2 scores generally lower
+#' DTF(mod3) #unsigned bias. Signed bias indicates group 2 scores generally higher on average
 #' DTF(mod3, MI=1000)
 #' DTF(mod3, MI=1000, plot=TRUE)
 #'

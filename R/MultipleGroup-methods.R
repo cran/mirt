@@ -47,14 +47,6 @@ setMethod(
             if(verbose) cat('\n----------\nGROUP:', as.character(object@Data$groupNames[g]), '\n')
             ret[[g]] <- summary(object@pars[[g]], digits=digits, verbose=verbose, rotate =
                                     if(is.null(rotate)) object@pars[[1L]]@rotate else 'none', ...)
-            if(is(coeflist[[g]][[groupind]], 'matrix'))
-                ret[[g]]$mean <- coeflist[[g]][[groupind]][1, 1:nfact]
-            else ret[[g]]$mean <- coeflist[[g]][[groupind]][1:nfact]
-            names(ret[[g]]$mean) <- colnames(ret[[g]]$fcor)
-            if(verbose){
-                cat('\nFactor means:\n')
-                print(round(ret[[g]]$mean, digits))
-            }
         }
         invisible(ret)
     }
@@ -73,7 +65,7 @@ setMethod(
 setMethod(
     f = "plot",
     signature = signature(x = 'MultipleGroupClass', y = 'missing'),
-    definition = function(x, y, type = 'info', npts = 50, theta_angle = 45,
+    definition = function(x, y, type = 'score', npts = 50, theta_angle = 45,
                           which.items = 1:ncol(x@Data$data),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE, auto.key = TRUE,

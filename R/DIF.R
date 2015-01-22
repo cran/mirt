@@ -2,16 +2,17 @@
 #'
 #' This function runs the Wald and likelihood-ratio approaches for testing differential
 #' item functioning (DIF). This is primarily a convenience wrapper to the
-#' \code{\link{multipleGroup}} function for performing standard DIF procedures. Models can be
-#' estimated in parallel automatically by defining a parallel object with \code{\link{mirtCluster}},
+#' \code{\link{multipleGroup}} function for performing standard DIF procedures. Independent
+#' models can be estimated in parallel by defining a parallel object with \code{\link{mirtCluster}},
 #' which will help to decrease the runtime. For best results, the baseline model should contain
 #' a set of 'anchor' items and have freely estimated hyper-parameters in the focal groups.
 #'
 #' Generally, the precomputed baseline model should have been
-#' configured with two estimation properties: 1) a set of 'anchor' items exist,
+#' configured with two estimation properties: 1) a set of 'anchor' items,
 #' where the anchor items have various parameters that have been constrainted to be equal
 #' across the groups, and 2) contain freely estimated latent mean and variance terms in
-#' all but one group. These two properties help to fix the metric of the groups so that
+#' all but one group (the so-called 'reference' group).
+#' These two properties help to fix the metric of the groups so that
 #' item parameter estimates do not contain latent distribution characteristics.
 #'
 #' @aliases DIF
@@ -176,7 +177,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
         }
         newmodel <- multipleGroup(model@Data$data, model@model[[1L]], group=model@Data$group,
                                   invariance = invariance, constrain=constrain,
-                                  verbose = FALSE, ...)
+                                  itemtype = model@itemtype, verbose = FALSE, ...)
         aov <- anova(newmodel, model, verbose = FALSE)
         attr(aov, 'parnum') <- parnum
         if(return_models) aov <- newmodel
@@ -263,7 +264,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
                 }
             }
             updatedModel <- multipleGroup(MGmodel@Data$data, MGmodel@model[[1L]],
-                                          group=MGmodel@Data$group,
+                                          group=MGmodel@Data$group, itemtype=MGmodel@itemtype,
                                           invariance = invariance, constrain=constrain,
                                           verbose = FALSE, ...)
             pick <- !keep
@@ -271,19 +272,19 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
             tmp <- myLapply(X=items2test[pick], FUN=loop_test, model=updatedModel,
                             which.par=which.par, values=values, Wald=Wald, drop=drop,
                             itemnames=itemnames, invariance=invariance, return_models=FALSE, ...)
-            names(tmp) <- itemnames[pick]
+            names(tmp) <- itemnames[items2test][pick]
             for(i in names(tmp))
                 res[[i]] <- tmp[[i]]
             if(run_number == max_run) break
             run_number <- run_number + 1L
         }
         if(verbose)
-            cat('\nComputing final DIF estimates...')
+            cat('\nComputing final DIF estimates...\n')
         res <- myLapply(X=items2test[!keep], FUN=loop_test, model=updatedModel,
                         which.par=which.par, values=values, Wald=Wald, drop=FALSE,
                         itemnames=itemnames, invariance=invariance, return_models=return_models,
                         ...)
-        names(res) <- itemnames[!keep]
+        names(res) <- itemnames[items2test][!keep]
     }
 
     for(i in 1L:length(res))
@@ -324,7 +325,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
             keep <- statdiff > pval
         }
         which.item <- which(!keep)
-        print(plot(MGmodel, type = type, which.items=which.item, facet_items=TRUE, ...))
+        if(length(which.item)){
+            print(plot(MGmodel, type = type, which.items=which.item, facet_items=TRUE, ...))
+        } else {
+            message('No DIF items were detected for plotting.')
+        }
     }
     return(res)
 }

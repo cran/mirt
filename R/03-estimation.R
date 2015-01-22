@@ -362,7 +362,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         } else {
             if(is.null(opts$quadpts))
                 opts$quadpts <- select_quadpts2(nfact)
-            if(opts$quadpts < 3) stop('Must use more than 2 quadpts')
+            if(opts$quadpts < 3 && opts$warn) warning('Should use more than 2 quadpts')
             Theta <- theta <- as.matrix(seq(-(.8 * sqrt(opts$quadpts)), .8 * sqrt(opts$quadpts),
                                             length.out = opts$quadpts))
             if(opts$BFACTOR){
@@ -633,7 +633,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             h2 <- numeric(1)
         } else {
             Flist <- Lambdas(ESTIMATE$pars[[g]], Names=colnames(data), explor=TRUE)
-            colnames(Flist$F) <- PrepList[[g]]$factorNames
+            colnames(Flist$F) <- PrepList[[1L]]$factorNames
             h2 <- rowSums(Flist$F^2)
             F <- Flist$F
         }
@@ -697,8 +697,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         opts$calcNull <- FALSE
     }
     if(!opts$NULL.MODEL && opts$method != 'MIXED' && opts$calcNull && nmissingtabdata == 0L){
-        null.mod <- try(unclass(mirt(data, 1, itemtype=itemtype,
-                                     technical=list(NULL.MODEL=TRUE, TOL=opts$TOL,
+        null.mod <- try(unclass(mirt(data, 1L, itemtype=itemtype,
+                                     technical=list(NULL.MODEL=TRUE,
                                                     parallel=opts$technical$parallel),
                                      large=large, key=key, verbose=FALSE)))
         if(is(null.mod, 'try-error')){
@@ -808,7 +808,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 if (nfact == 1L) F <- as.matrix(V * sqrt(L))
                 else F <- V %*% sqrt(diag(L))
                 if (sum(F[ ,1L] < 0)) F <- (-1) * F
-                colnames(F) <- paste("F_", 1:ncol(F),sep="")
+                colnames(F) <- paste("F", 1L:ncol(F), sep="")
                 h2 <- rowSums(F^2)
                 mod <- new('SingleGroupClass',
                            Data=Data,
