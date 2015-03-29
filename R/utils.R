@@ -209,6 +209,18 @@ logit <- function(x){
 
 antilogit <- function(x) plogis(x)
 
+MPinv <- function(mat){
+    svd <- svd(mat)
+    d <- svd$d; v <- svd$v; u <- svd$u
+    P <- d > max(sqrt(.Machine$double.eps) * d[1L], 0)
+    if(all(P)){
+        mat <- v %*% (1/d * t(u))
+    } else {
+        mat <- v[ , P, drop=FALSE] %*% ((1/d[P]) * t(u[ , P, drop=FALSE]))
+    }
+    mat
+}
+
 test_info <- function(pars, Theta, Alist, K){
     infolist <- list()
     for(cut in 1L:length(Alist)){
@@ -373,7 +385,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             esplit <- lapply(esplit, function(x){
                             newx <- c()
                             if(length(x) < 3L)
-                                stop('PRIOR = ... has not been supplied enough arguments')
+                                stop('CONTRAIN = ... has not been supplied enough arguments')
                             for(i in 1L:(length(x)-2L)){
                                 if(grepl('-', x[i])){
                                     tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
@@ -394,12 +406,22 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                             as.numeric(esplit[[i]][1L:(length(esplit[[i]])-1L)]))
                         picknames <- c(is.na(sel), FALSE)
                         sel <- na.omit(sel)
-                        for(j in 1L:length(sel)){
-                            pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) %in%
-                                                           esplit[[i]][picknames]]
-                            if(!length(pick))
-                                stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
-                            constr <- c(constr, pick)
+                        if(sum(picknames) > 1L){
+                            if(sum(picknames) != length(sel))
+                                stop('Number of items selected not equal to number of parameter names')
+                            constr <- numeric(length(sel))
+                            for(j in 1L:length(sel)){
+                                whc <- esplit[[i]][which(picknames)[j]]
+                                constr[j] <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == whc]
+                            }
+                        } else {
+                            for(j in 1L:length(sel)){
+                                pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) %in%
+                                                               esplit[[i]][picknames]]
+                                if(!length(pick))
+                                    stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j])
+                                constr <- c(constr, pick)
+                            }
                         }
                         constrain[[length(constrain) + 1L]] <- constr
                     }
@@ -859,13 +881,19 @@ ItemInfo <- function(x, Theta, cosangle, total.info = TRUE){
     return(info)
 }
 
-ItemInfo2 <- function(x, Theta, total.info = TRUE){
+ItemInfo2 <- function(x, Theta, total.info = TRUE, MD = FALSE){
     P <- ProbTrace(x, Theta)
     dx <- DerivTheta(x, Theta)
-    info <- matrix(0, nrow(Theta), ncol(P))
-    for(i in 1L:x@ncat)
-        info[,i] <- (dx$grad[[i]])^2 / P[ ,i]
-    if(total.info) info <- rowSums(info)
+    if(MD){
+        info <- matrix(0, length(Theta), length(Theta))
+        for(i in 1L:x@ncat)
+            info <- info + outer(as.numeric(dx$grad[[i]]), as.numeric(dx$grad[[i]])) / P[ ,i]
+    } else {
+        info <- matrix(0, nrow(Theta), ncol(P))
+        for(i in 1L:x@ncat)
+            info[,i] <- (dx$grad[[i]])^2 / P[ ,i]
+        if(total.info) info <- rowSums(info)
+    }
     return(info)
 }
 
@@ -1440,7 +1468,7 @@ makeObstables <- function(dat, K){
         colnames(ret[[i]]) <- paste0(1L:K[i]-1L)
         rownames(ret[[i]]) <- paste0(1L:nrow(ret[[i]])-1L)
         split <- by(sumscore, dat[,i], table)
-        for(j in 1L:K[i]){
+        for(j in 1L:length(split)){
             m <- match(names(split[[j]]), rownames(ret[[i]]))
             ret[[i]][m,j] <- split[[j]]
         }
@@ -1570,6 +1598,15 @@ collapseCells <- function(O, E, mincell = 1){
     return(list(O=O, E=E))
 }
 
+MGC2SC <- function(x, which){
+    tmp <- x@pars[[which]]
+    tmp@Data <- x@Data
+    tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupName[which], , drop=FALSE]
+    tmp@Data$Freq[[1L]] <- tmp@Data$Freq[[which]]
+    tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[which]]
+    tmp
+}
+
 rmsea <- function(X2, df, N){
     ret <- ifelse((X2 - df) > 0,
                   sqrt(X2 - df) / sqrt(df * (N-1)), 0)
@@ -1583,6 +1620,9 @@ controlCandVar <- function(PA, cand, min = .1, max = .6){
     if(cand < .001) cand <- .001
     cand
 }
+
+missingMsg <- function(string)
+    stop(paste0('\'', string, '\' argument is missing.'))
 
 mirtClusterEnv <- new.env()
 mirtClusterEnv$ncores <- 1L

@@ -247,7 +247,7 @@ setMethod(
     definition = function(object, CI = .95, printSE = FALSE, rotate = 'none', Target = NULL, digits = 3,
                           IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE,
                           simplify=FALSE, verbose = TRUE, ...){
-        if(printSE) rawug <- TRUE
+        if(printSE && length(object@pars[[1L]]@SEpar)) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
             stop('CI must be between 0 and 1')
         z <- abs(qnorm((1 - CI)/2))
@@ -275,17 +275,22 @@ setMethod(
             for(i in 1:(J+1))
                 allPars[[i]] <- round(mirt2traditional(object@pars[[i]]), digits)
         } else {
-            if(length(object@pars[[1]]@SEpar) > 0){
+            if(length(object@pars[[1L]]@SEpar)){
                 if(printSE){
-                    for(i in 1:(J+1)){
+                    for(i in 1L:(J+1L)){
                         allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
                                                        object@pars[[i]]@SEpar),
                                                      2, byrow = TRUE), digits)
                         rownames(allPars[[i]]) <- c('par', 'SE')
-                        colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
+                        nms <- names(object@pars[[i]]@est)
+                        if(i <= J && object@itemtype[i] != 'custom'){
+                            nms[nms == 'g'] <- 'logit(g)'
+                            nms[nms == 'u'] <- 'logit(u)'
+                        }
+                        colnames(allPars[[i]]) <- nms
                     }
                 } else {
-                    for(i in 1:(J+1)){
+                    for(i in 1L:(J+1L)){
                         allPars[[i]] <- round(matrix(c(object@pars[[i]]@par,
                                                        object@pars[[i]]@par - z*object@pars[[i]]@SEpar,
                                                        object@pars[[i]]@par + z*object@pars[[i]]@SEpar),
@@ -295,7 +300,7 @@ setMethod(
                     }
                 }
             } else {
-                for(i in 1:(J+1)){
+                for(i in 1L:(J+1L)){
                     allPars[[i]] <- matrix(round(object@pars[[i]]@par, digits), 1L)
                     colnames(allPars[[i]]) <- names(object@pars[[i]]@est)
                     rownames(allPars[[i]]) <- 'par'
@@ -312,23 +317,20 @@ setMethod(
         if(as.data.frame)
             allPars <- t(as.data.frame(allPars))
         if(simplify && !as.data.frame){
-            nms <- lapply(allPars, colnames)[1:(length(allPars)-1)]
-            isTRUE <- all(sapply(nms[2:length(nms)], function(x, first) all(x %in% first),
-                                 first=nms[[1L]]))
-            if(isTRUE){
-                allPars <- lapply(allPars, function(x) x[1L, , drop=FALSE])
-                items <- do.call(rbind, allPars[1L:(length(allPars)-1)])
-                rownames(items) <- colnames(object@Data$data)
-                allPars <- list(items=items, groupPars=allPars[length(allPars)][[1L]])
-            } else {
-                message('Could not simplify items. Returning default list')
-            }
-            means <- allPars[['groupPars']][1L:object@nfact]
-            names(means) <- colnames(allPars[['groupPars']])[1L:object@nfact]
+            allPars <- lapply(allPars, function(x) x[1L, , drop=FALSE])
+            items.old <- allPars[1L:(length(allPars)-1L)]
+            nms <- lapply(items.old, colnames)
+            unms <- unique(do.call(c, nms))
+            items <- matrix(NA, length(items.old), length(unms))
+            rownames(items) <- names(items.old)
+            colnames(items) <- unms
+            for(i in 1L:nrow(items))
+                items[i, nms[[i]]] <- items.old[[i]]
+            means <- allPars$GroupPars[1L:object@nfact]
             covs <- matrix(NA, object@nfact, object@nfact)
-            covs[lower.tri(covs, TRUE)] <- allPars[['groupPars']][-c(1L:object@nfact)]
-            colnames(covs) <- rownames(covs) <- object@factorNames[1L:object@nfact]
-            allPars[['groupPars']] <- list(means=means, cov=covs)
+            covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-c(1L:object@nfact)]
+            colnames(covs) <- rownames(covs) <- names(means) <- object@factorNames[1L:object@nfact]
+            allPars <- list(items=items, means=means, cov=covs)
         }
         if(.hasSlot(object@lrPars, 'beta'))
             allPars$lr.betas <- round(object@lrPars@beta, digits)
@@ -417,6 +419,9 @@ setMethod(
 #' @param Theta a matrix of factor scores used for statistics that require empirical estimates (i.e., Q3).
 #'   If supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
 #'   be used instead
+#' @param suppress a numeric value indiciating which parameter local dependency combinations
+#'   to flag as being too high. Absolute values for the standardized estimates greater than
+#'   this value will be returned, while all values less than this value will be set to NA
 #' @param ... additional arguments to be passed to \code{fscores()}
 #'
 #' @name residuals-method
@@ -439,6 +444,7 @@ setMethod(
 #' residuals(x)
 #' residuals(x, tables = TRUE)
 #' residuals(x, type = 'exp')
+#' residuals(x, suppress = .15)
 #'
 #' # with and without supplied factor scores
 #' Theta <- fscores(x, full.scores=TRUE, scores.only=TRUE)
@@ -450,7 +456,8 @@ setMethod(
     f = "residuals",
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
-                          printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL, ...)
+                          printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
+                          suppress = 1, ...)
     {
         dots <- list(...)
         discrete <- FALSE
@@ -533,6 +540,10 @@ setMethod(
                 cat("\n")
             }
             if(verbose) cat("LD matrix (lower triangle) and standardized values:\n\n")
+            if(suppress < 1){
+                pick <- abs(res[upper.tri(res)]) < suppress
+                res[lower.tri(res)] <- res[upper.tri(res)][pick] <- NA
+            }
             res <- round(res,digits)
             return(res)
         } else if(type == 'exp'){
@@ -586,6 +597,10 @@ setMethod(
                 }
             }
             if(verbose) cat("Q3 matrix:\n\n")
+            if(suppress < 1){
+                pick <- abs(res[upper.tri(res)]) < suppress
+                res[lower.tri(res)] <- res[upper.tri(res)][pick] <- NA
+            }
             res <- round(res,digits)
             return(res)
         } else {
@@ -659,6 +674,11 @@ setMethod(
 #' plot(x, type='info', MI=100)
 #' plot(x, type='SE', MI=100)
 #'
+#' # use the directlabels package to put labels on tracelines
+#' library(directlabels)
+#' plt <- plot(x, type = 'trace')
+#' direct.label(plt, 'top.points')
+#'
 #' set.seed(1234)
 #' group <- sample(c('g1','g2'), nrow(Science), TRUE)
 #' x2 <- multipleGroup(Science, 1, group)
@@ -685,13 +705,17 @@ setMethod(
         dots <- list(...)
         if (any(theta_angle > 90 | theta_angle < 0))
             stop('Improper angle specified. Must be between 0 and 90.')
-        if(length(theta_angle) > 1) type = 'infoangle'
         rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
         nfact <- x@nfact
-        if(nfact > 2) stop("Can't plot high dimensional solutions.")
+        if(length(theta_angle) > nfact) type = 'infoangle'
+        if(nfact > 3) stop("Can't plot high dimensional solutions.")
+        if(nfact == 2 && length(theta_angle) == 1L)
+            theta_angle <- c(theta_angle, 90 - theta_angle)
+        if(nfact == 3 && length(theta_angle) == 1L) theta_angle <- rep(90/3, 3)
         if(nfact == 1) theta_angle <- 0
         J <- length(x@pars) - 1
         theta <- seq(theta_lim[1L],theta_lim[2L],length.out=npts)
+        if(nfact == 3) theta <- seq(theta_lim[1L],theta_lim[2L], length.out=20)
         ThetaFull <- Theta <- thetaComb(theta, nfact)
         prodlist <- attr(x@pars, 'prodlist')
         if(length(prodlist) > 0)
@@ -705,6 +729,7 @@ setMethod(
             for(l in 1:length(theta_angle)){
                 ta <- theta_angle[l]
                 if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
+                if(nfact == 3) ta <- theta_angle
                 for(i in 1:J)
                     info <- info + iteminfo(x=x@pars[[i]], Theta=ThetaFull, degrees=ta)
             }
@@ -750,7 +775,49 @@ setMethod(
                 CIinfo[i, ] <- testinfo(tmpx, ThetaFull)[,1L]
             }
         }
-        if(nfact == 2){
+        if(nfact == 3){
+            colnames(plt) <- c("info", "score", "Theta1", "Theta2", "Theta3")
+            plt$SE <- 1 / sqrt(plt$info)
+            if(type == 'infocontour'){
+                if(is.null(main))
+                    main <- paste("Test Information Contour")
+                return(contourplot(info ~ Theta1 * Theta2 | Theta3, data = plt,
+                                   main = main, xlab = expression(theta[1]),
+                                   ylab = expression(theta[2]), ...))
+            } else if(type == 'scorecontour'){
+                if(is.null(main))
+                    main <- paste("Expected Score Contour")
+                return(contourplot(score ~ Theta1 * Theta2 | Theta3, data = plt,
+                                   main = main, xlab = expression(theta[1]),
+                                   ylab = expression(theta[2]), ...))
+            } else if(type == 'info'){
+                if(is.null(main))
+                    main <- "Test Information"
+                return(wireframe(info ~ Theta1 + Theta2 | Theta3, data = plt, main = main,
+                                 zlab=expression(I(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
+            } else if(type == 'SEcontour'){
+                if(is.null(main))
+                    main <- "Test Standard Errors"
+                return(contourplot(score ~ Theta1 * Theta2 | Theta3, data = plt,
+                                          main = main, xlab = expression(theta[1]),
+                                          ylab = expression(theta[2]), ...))
+            } else if(type == 'score'){
+                if(is.null(main))
+                    main <- "Expected Total Score"
+                return(wireframe(score ~ Theta1 + Theta2 | Theta3, data = plt, main = main,
+                                 zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
+            } else if(type == 'SE'){
+                if(is.null(main))
+                    main <- "Test Standard Errors"
+                return(wireframe(SE ~ Theta1 + Theta2 | Theta3, data = plt, main = main,
+                                 zlab=expression(SE(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
+            } else {
+                stop('plot type not supported for three dimensional model')
+            }
+        } else if(nfact == 2){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2")
             plt$SE <- 1 / sqrt(plt$info)
             if(type == 'infocontour'){
@@ -758,25 +825,31 @@ setMethod(
                     main <- paste("Test Information Contour")
                 return(contourplot(info ~ Theta1 * Theta2, data = plt,
                                    main = main, xlab = expression(theta[1]),
-                                   ylab = expression(theta[2])))
+                                   ylab = expression(theta[2]), ...))
             } else if(type == 'scorecontour'){
                 if(is.null(main))
                     main <- paste("Expected Score Contour")
                     return(contourplot(score ~ Theta1 * Theta2, data = plt,
                                        main = main, xlab = expression(theta[1]),
-                                       ylab = expression(theta[2])))
+                                       ylab = expression(theta[2]), ...))
             } else if(type == 'info'){
                 if(is.null(main))
                     main <- "Test Information"
                 return(wireframe(info ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(I(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
+            } else if(type == 'SEcontour'){
+                if(is.null(main))
+                    main <- "Test Standard Errors"
+                return(contourplot(score ~ Theta1 * Theta2, data = plt,
+                                          main = main, xlab = expression(theta[1]),
+                                          ylab = expression(theta[2]), ...))
             } else if(type == 'score'){
                 if(is.null(main))
                     main <- "Expected Total Score"
                 return(wireframe(score ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
             } else if(type == 'infoangle'){
                 if(is.null(main))
                     main <- 'Information across different angles'
@@ -788,7 +861,7 @@ setMethod(
                     main <- "Test Standard Errors"
                 return(wireframe(SE ~ Theta1 + Theta2, data = plt, main = main,
                                  zlab=expression(SE(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
-                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape))
+                                 scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
             } else {
                 stop('plot type not supported for two dimensional model')
             }
@@ -845,7 +918,7 @@ setMethod(
                                   ylab = expression(I(theta)), xlab = expression(theta), ...))
                 } else {
                     return(xyplot(SE~Theta, plt, type='l', main = main,
-                           xlab = expression(theta), ylab=expression(SE(theta))))
+                           xlab = expression(theta), ylab=expression(SE(theta)), ...))
                 }
             } else if(type == 'infoSE'){
                 if(is.null(main))
@@ -854,7 +927,7 @@ setMethod(
                                xlab = expression(theta), ylab=expression(I(theta)))
                 obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)))
                 if(!require(latticeExtra)) require(latticeExtra)
-                return(doubleYScale(obj1, obj2, add.ylab2 = add.ylab2))
+                return(doubleYScale(obj1, obj2, add.ylab2 = add.ylab2, ...))
             } else if(type == 'trace'){
                 if(is.null(main))
                     main <- 'Item trace lines'
@@ -865,7 +938,7 @@ setMethod(
                     tmp <- probtrace(extract.item(x, i), ThetaFull)
                     if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
                     tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta),
-                                                           labels=paste0('cat', 1L:ncol(tmp))))
+                                                           labels=paste0('P', 1L:ncol(tmp))))
                     P[[ind]] <- tmp2
                     ind <- ind + 1L
                 }

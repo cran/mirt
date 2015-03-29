@@ -26,6 +26,7 @@
 #'
 #' }
 randef <- function(x, ndraws = 1000, thin = 10, return.draws=FALSE){
+    if(missing(x)) missingMsg('x')
     if(!is(x, 'MixedClass'))
         stop('Only applicable to MixedClass objects')
     div <- ndraws / thin
@@ -46,7 +47,7 @@ randef <- function(x, ndraws = 1000, thin = 10, return.draws=FALSE){
     gstructgrouppars <- ExtractGroupPars(x@pars[[J+1L]])
     CUSTOM.IND <- x@CUSTOM.IND
     if(length(x@lrPars))
-        gstructgrouppars$gmeans <- x@lrPars@X %*% x@lrPars@beta
+        gstructgrouppars$gmeans <- fixef(x)
     for(i in 1L:20L){
         tmpTheta <- draw.thetas(theta0=tmpTheta, pars=x@pars, fulldata=x@Data$fulldata[[1L]],
                                 itemloc=x@itemloc, cand.t.var=x@cand.t.var,

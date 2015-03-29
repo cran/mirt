@@ -124,6 +124,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         return(itemfit(tmpmod, Theta=Theta, digits = 200, ...))
     }
 
+    if(missing(x)) missingMsg('x')
     if(is(x, 'MixedClass'))
         stop('mixedmirt objects not supported')
     discrete <- FALSE
@@ -140,6 +141,8 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         collect <- vector('list', impute)
         vals <- mod2values(x)
         vals$est <- FALSE
+        if(sum(is.na(x@Data$data)) / (prod(dim(x@Data$data))) > 0.05)
+            warning('Imputation may not be effective for large amounts of missing data.')
         collect <- myLapply(collect, fn, obj=x, Theta=Theta, vals=vals,
                             Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
                             S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
@@ -167,10 +170,8 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
             Theta <- fscores(x, method=method, scores.only=TRUE, full.scores=TRUE, ...)
         for(g in 1L:length(x@pars)){
             tmpTheta <- Theta[x@Data$groupNames[g] == x@Data$group, , drop=FALSE]
-            tmp <- x@pars[[g]]
-            tmp@Data <- x@Data
-            tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[g]]
-            ret[[g]] <- itemfit(tmp, Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
+            tmp_obj <- MGC2SC(x, g)
+            ret[[g]] <- itemfit(tmp_obj, Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
                                 S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
                                 Theta=tmpTheta, empirical.CI=empirical.CI, method=method,
                                 impute=impute, discrete=discrete, digits=digits, ...)

@@ -252,9 +252,10 @@
 #'   or \code{'MHRM'} should be used when the dimensions are 3 or more
 #' @param optimizer a character indicating which numerical optimizer to use. By default, the EM
 #'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds, and
-#'   \code{'L-BFGS-B'} when there are. Other options include the Newton-Raphson (\code{'NR'}),
+#'   \code{'L-BFGS-B'} when there are. Another good option which supports bound constraints is
+#'   the \code{'nlminb'}. Other options include the Newton-Raphson (\code{'NR'}),
 #'   which often will be more efficient than the \code{'BFGS'} but not as stable for more complex
-#'   models (such as the nominal or nested logit models) and does not support
+#'   IRT models (such as the nominal or nested logit models) and does not support
 #'   upper and lower bound constraints. As well, the \code{'Nelder-Mead'} and \code{'SANN'}
 #'   estimators are also available, but their routine use generally is not required or recommended.
 #'   The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed.
@@ -341,6 +342,14 @@
 #'   weighting to be applied
 #' @param GenRandomPars logical; generate random starting values prior to optimization instead of
 #'   using the fixed internal starting values?
+#' @param gpcm_mats a list of matricies specifying how the scoring coefficients in the (generalized)
+#'   partial credit model should be constructed. If ommited, the standard gpcm format will be used
+#'   (i.e., \code{seq(0, k, by = 1)} for each trait). This input should be used if traits
+#'   should be scored different for each category (e.g., \code{matrix(c(0:3, 1,0,0,0), 4, 2)} for a
+#'   two-dimensional model where the first trait is scored like a gpcm, but the second trait is only
+#'   positively indicated when the first category is selected). Can be used when \code{itemtype}s
+#'   are \code{'gpcm'} or \code{'Rasch'}, but only when the respective element in
+#'   \code{gpcm_mats} is not \code{NULL}
 #' @param grsm.block an optional numeric vector indicating where the blocking should occur when
 #'   using the grsm, NA represents items that do not belong to the grsm block (other items that may
 #'   be estimated in the test data). For example, to specify two blocks of 3 with a 2PL item for
@@ -426,12 +435,15 @@
 #'   equality constraints, inequality constriants, etc
 #' @param alabama_args a list of arguments to be passed to the \code{alabama::constrOptim.nl()}
 #'   function for equality constraints, inequality constriants, etc
+#' @param control a list passed to the respective optimizers (i.e., \code{optim()}, \code{nlminb()},
+#'   etc)
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso  \code{\link{bfactor}},  \code{\link{multipleGroup}},  \code{\link{mixedmirt}},
 #'   \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{mod2values}},
 #'   \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}},
-#'   \code{\link{probtrace}}, \code{\link{simdata}}, \code{\link{averageMI}}
+#'   \code{\link{probtrace}}, \code{\link{simdata}}, \code{\link{averageMI}},
+#'   \code{\link{fixef}}
 #'
 #' @references
 #'
@@ -881,13 +893,14 @@
 #'
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
-                 covdata = NULL, formula = NULL,
-                 SE.type = 'crossprod', method = 'EM', optimizer = NULL, pars = NULL,
-                 constrain = NULL, parprior = NULL, calcNull = TRUE, draws = 5000,
-                 survey.weights = NULL, rotate = 'oblimin', Target = NaN, quadpts = NULL,
-                 TOL = NULL, grsm.block = NULL, key = NULL, nominal.highlow = NULL, large = FALSE,
+                 covdata = NULL, formula = NULL, SE.type = 'crossprod', method = 'EM',
+                 optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
+                 calcNull = TRUE, draws = 5000, survey.weights = NULL,
+                 rotate = 'oblimin', Target = NaN, quadpts = NULL,
+                 TOL = NULL, gpcm_mats = list(), grsm.block = NULL, key = NULL,
+                 nominal.highlow = NULL, large = FALSE,
                  GenRandomPars = FALSE, accelerate = 'Ramsay', empiricalhist = FALSE, verbose = TRUE,
-                 solnp_args = list(), alabama_args = list(), technical = list(), ...)
+                 solnp_args = list(), alabama_args = list(), control = list(), technical = list(), ...)
 {
     Call <- match.call()
     if(!is.null(covdata) && !is.null(formula)){
@@ -914,7 +927,8 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       nominal.highlow=nominal.highlow, accelerate=accelerate, draws=draws,
                       empiricalhist=empiricalhist, GenRandomPars=GenRandomPars,
                       optimizer=optimizer, solnp_args=solnp_args, alabama_args=alabama_args,
-                      latent.regression=latent.regression, ...)
+                      latent.regression=latent.regression, gpcm_mats=gpcm_mats,
+                      control=control, ...)
     if(is(mod, 'SingleGroupClass'))
         mod@Call <- Call
     return(mod)

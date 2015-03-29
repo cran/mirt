@@ -136,11 +136,14 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_
                     "unsigned.DTF" = uDTF, "unsigned.DTF(%)" = uDTF_percent)
         ret
     }
-
+    if(missing(mod)) missingMsg('mod')
     if(class(mod) != 'MultipleGroupClass')
         stop('mod input was not estimated by multipleGroup()')
     if(length(mod@pars) != 2L)
         stop('DTF only supports two group models at a time')
+    if(!any(sapply(mod@pars, function(x) x@pars[[length(x@pars)]]@est)))
+        message('No hyper-parameters were estimated in the DIF model. For effective
+                \tDTF testing, freeing the focal group hyper-parameters is recommend.')
     if(!is.null(Theta_nodes)){
         if(!is.matrix(Theta_nodes))
             stop('Theta_nodes must be a matrix')
@@ -190,6 +193,8 @@ DTF <- function(mod, MI = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), Theta_
     }
 
     theta <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=npts))
+    if(mod@nfact != 1L)
+        stop('DTF only supports unidimensional tests for now.')
     Theta <- thetaComb(theta, mod@nfact)
     max_score <- sum(mod@Data$mins + mod@Data$K - 1L)
     list_scores <- myLapply(1L, fn, omod=mod, impute=FALSE, covBs=NULL, Theta_nodes=Theta_nodes,

@@ -2,6 +2,8 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
                        lrPars = list(), DERIV)
 {
     if(is.null(random)) random <- list()
+    itemtype <- sapply(pars[[1]], class)
+    has_graded <- any(itemtype == 'graded')
     lr.random <- list() #FIXME overwrite later
     RAND <- length(random) > 0L; LR.RAND <- length(lr.random) > 0L
     LRPARS <- length(lrPars) > 0L
@@ -151,6 +153,18 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
         #Reload pars list
         if(list$USEEM) longpars <- list$startlongpars
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+        if(has_graded){
+            for(g in 1L:length(pars)){
+                pars[[g]][1L:J] <- lapply(pars[[g]][1L:J], function(x){
+                    if(class(x) == 'graded'){
+                        ds <- x@par[-(1L:x@nfact)]
+                        x@par[-(1L:x@nfact)] <- sort(ds, decreasing = TRUE)
+                        names(x@par) <- names(x@est)
+                    }
+                    return(x)
+                })
+            }
+        }
         for(g in 1L:ngroups)
             gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
         if(LRPARS){
@@ -356,17 +370,11 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
                                     cycles-BURNIN-SEMCYCLES, LL, CTV, AR)
         }
         if(stagecycle < 3L){
-            if(qr(ave.h)$rank != ncol(ave.h)){
-                ev <- eigen(ave.h)
-                eval <- ev$values
-                eval[eval < 0] <- 100*.Machine$double.eps
-                eval <- eval / sum(eval) * sum(ev$values)
-                ave.h <- ev$vectors %*% diag(eval) %*% t(ev$vectors)
-                noninvcount <- noninvcount + 1L
-                if(noninvcount == 3L)
-                    stop('\nEstimation halted during burn in stages, solution is unstable')
+            correction <- try(solve(ave.h, grad), TRUE)
+            if(is(correction, 'try-error')){
+                ave.h.inv <- MPinv(ave.h)
+                correction <- as.vector(grad %*% ave.h.inv)
             }
-            correction <- solve(ave.h, grad)
             correction[correction > 1] <- 1
             correction[correction < -1] <- -1
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
@@ -387,17 +395,11 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
 
         #Step 3. Update R-M step
         Tau <- Tau + gamma*(ave.h - Tau)
-        if(qr(Tau)$rank != ncol(Tau)){
-            ev <- eigen(Tau)
-            eval <- ev$values
-            eval[eval < 0] <- 100*.Machine$double.eps
-            eval <- eval / sum(eval) * sum(ev$values)
-            Tau <- ev$vectors %*% diag(eval) %*% t(ev$vectors)
-            noninvcount <- noninvcount + 1L
-            if(noninvcount == 3L)
-                stop('\nEstimation halted during burn in stages, solution is unstable')
+        correction <- try(solve(Tau, grad), TRUE)
+        if(is(correction, 'try-error')){
+            Tau.inv <- MPinv(Tau)
+            correction <- as.vector(grad %*% Tau.inv)
         }
-        correction <- solve(Tau, grad)
         correction[gamma*correction > .25] <- .25/gamma
         correction[gamma*correction < -.25] <- -.25/gamma
         longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction

@@ -11,7 +11,7 @@
 #' @examples
 #'
 #' \dontrun{
-#' #' set.seed(12345)
+#' set.seed(12345)
 #' a <- matrix(abs(rnorm(15,1,.3)), ncol=1)
 #' d <- matrix(rnorm(15,0,.7),ncol=1)
 #' itemtype <- rep('dich', nrow(a))
@@ -28,6 +28,8 @@
 #' plot(group.1)
 #' }
 extract.group <- function(x, group){
+    if(missing(x)) missingMsg('x')
+    if(missing(group)) missingMsg('group')
     if(!is(x, 'MultipleGroupClass'))
         stop('Model was not estimated with multipleGroup()')
     if(missing(group)) stop('Must specify group number')
@@ -37,6 +39,6 @@ extract.group <- function(x, group){
                 pars = 'values', technical = list(customK = x@Data$K))
     sv$value <- vals$value
     mod <- mirt(x@Data$data[x@Data$group == x@Data$groupNames[group], ], x@nfact,
-                pars = sv, technical = list(customK = x@Data$K), TOL = NaN)
+                pars = sv, technical = list(customK = x@Data$K, warn=FALSE), TOL = NaN, quadpts=1L)
     return(mod)
 }

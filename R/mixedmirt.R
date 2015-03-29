@@ -92,8 +92,14 @@
 #'   \code{\link{mirt}} for more details and examples
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
-#' @seealso \code{\link{mirt}}, \code{\link{randef}}, \code{\link{boot.mirt}}
+#' @seealso \code{\link{mirt}}, \code{\link{randef}}, \code{\link{fixef}}, \code{\link{boot.mirt}}
 #' @export mixedmirt
+#'
+#' @references
+#'
+#' Chalmers, R. P. (2015, in press). Extended Mixed-Effects Item Response Models
+#' with the MH-RM Algorithm. \emph{Journal of Educational Measurement}.
+#'
 #' @examples
 #'
 #' \dontrun{

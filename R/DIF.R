@@ -184,6 +184,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
         return(aov)
     }
 
+    if(missing(MGmodel)) missingMsg('MGmodel')
+    if(missing(which.par)) missingMsg('which.par')
+    if(!any(sapply(MGmodel@pars, function(x) x@pars[[length(x@pars)]]@est)))
+        message('No hyper-parameters were estimated in the DIF model. For effective
+                \tDIF testing, freeing the focal group hyper-parameters is recommend.')
     bfactorlist <- MGmodel@bfactor
     if(!is.null(bfactorlist$Priorbetween[[1L]]))
         stop('bifactor models are currently not supported in this function')
@@ -200,6 +205,8 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
         if(length(MGmodel@information) == 1)
             stop('Information matrix was not calculated')
     }
+    if(plotdif && any(scheme %in% c('drop', 'drop_sequential')))
+        stop('plotdif not supported for dropping schemes')
     pval <- 0
     if(is.numeric(seq_stat)){
         pval <- seq_stat

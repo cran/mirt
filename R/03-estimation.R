@@ -2,9 +2,13 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        invariance = '', pars = NULL, constrain = NULL, key = NULL,
                        parprior = NULL, mixed.design = NULL, customItems = NULL,
                        nominal.highlow = NULL, GenRandomPars = FALSE, large = FALSE,
-                       survey.weights = NULL, discrete=FALSE, latent.regression = NULL, ...)
+                       survey.weights = NULL, discrete=FALSE, latent.regression = NULL,
+                       gpcm_mats=list(), control = list(), ...)
 {
     start.time=proc.time()[3L]
+    if(missing(data)) missingMsg('data')
+    if(missing(model)) missingMsg('model')
+    if(missing(group)) missingMsg('group')
     if(is.logical(large) && large){
         Data <- opts <- list()
         data <- as.matrix(data)
@@ -89,16 +93,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         rownames(data) <- 1L:nrow(data)
         if(is.null(colnames(data)))
             colnames(data) <- paste0('Item.', 1L:ncol(data))
-        tmp <- apply(data, 2L, function(x){
-            good <- seq(from=min(x, na.rm=TRUE), to=max(x, na.rm=TRUE), by = 1L)
-            if(!all(good %in% na.omit(unique(x))))
-                stop('Items contain category scoring spaces greater than 1.
-                    Use apply(data, 2, table) to inspect and fix')
-            invisible()
-        })
         Data$data <- data
         if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
-        if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
+        # if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
         Data$group <- factor(group)
         Data$groupNames <- unique(Data$group)
         if(any(grepl('-', Data$groupNames)))
@@ -125,8 +122,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                      upper=upper, parprior=parprior, verbose=opts$verbose,
                      technical=opts$technical, parnumber=1L, BFACTOR=opts$BFACTOR,
                      grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
-                     D=opts$D, mixed.design=mixed.design, customItems=customItems,
-                     fulldata=opts$PrepList[[1L]]$fulldata, key=key, nominal.highlow=nominal.highlow)
+                     mixed.design=mixed.design, customItems=customItems,
+                     fulldata=opts$PrepList[[1L]]$fulldata, key=key, nominal.highlow=nominal.highlow,
+                     gpcm_mats=gpcm_mats)
         if(any(PrepListFull$itemtype == 'nominal') && is.null(nominal.highlow) && !opts$NULL.MODEL
            && opts$verbose)
             if(opts$message)
@@ -429,7 +427,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          customPriorFun=opts$customPriorFun, Moptim=opts$Moptim, warn=opts$warn,
                                          message=opts$message, BL=opts$method == 'BL', full=opts$full,
                                          lrPars=lrPars),
-                             Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args)
+                             Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         lrPars <- ESTIMATE$lrPars
         startlongpars <- ESTIMATE$longpars
         rlist <- ESTIMATE$rlist
@@ -578,7 +576,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                           message=opts$message, full=opts$full, lrPars=lrPars),
                               Theta=Theta, theta=theta, ESTIMATE=ESTIMATE, from=from, to=to,
                               DERIV=DERIV, is.latent=is.latent, Ls=Ls, PrepList=PrepList,
-                              solnp_args=opts$solnp_args)
+                              solnp_args=opts$solnp_args, control=control)
                 if(!opts$technical$parallel)
                     mirtClusterEnv$ncores <- ncores
                 ESTIMATE$pars <- reloadPars(longpars=ESTIMATE$longpars, pars=ESTIMATE$pars,
@@ -965,7 +963,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             info <- mod@information[!isna, !isna]
             inv_info <- try(solve(info), silent=TRUE)
             if(!is(inv_info, 'try-error')){
-                mod@condnum <- norm(info, type='2') * norm(solve(info), type='2')
+                mod@condnum <- kappa(info, exact=TRUE)
                 mod@secondordertest <- TRUE
             } else mod@secondordertest <- FALSE
         } else mod@secondordertest <- FALSE
