@@ -5,7 +5,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        survey.weights = NULL, discrete=FALSE, latent.regression = NULL,
                        gpcm_mats=list(), control = list(), ...)
 {
-    start.time=proc.time()[3L]
+    start.time <- proc.time()[3L]
     if(missing(data)) missingMsg('data')
     if(missing(model)) missingMsg('model')
     if(missing(group)) missingMsg('group')
@@ -28,11 +28,13 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         PrepListFull <- list(K=K, itemloc=itemloc, Names=NULL, itemnames=colnames(Data$data))
     } else {
         if(missing(data) || is.null(nrow(data)))
-            stop('data argument is required')
-        if(missing(model) || !is(model, 'numeric') && !is(model, 'mirt.model'))
-            stop('model argument (numeric or from mirt.model() function) is required')
+            stop('data argument is required', call.=FALSE)
+        if(missing(model) || !is(model, 'numeric') && !is(model, 'mirt.model') &&
+           !is(model, 'character'))
+            stop('model argument (numeric, character, or from mirt.model() function) is required',
+                 call.=FALSE)
         if(!(is.factor(group) || is.character(group)) || length(group) != nrow(data))
-            stop('group input provided is not valid')
+            stop('group input provided is not valid', call.=FALSE)
         if(!is.null(itemtype))
             stopifnot(is(itemtype, 'character'))
         if(!is.null(constrain))
@@ -57,7 +59,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             data <- data[!is.na(group), ]
             group <- group[!is.na(group)]
         }
-        if(!is.null(customItems)) opts$calcNull <- FALSE
+        if(!is.null(customItems) || any(itemtype %in% Experimental_itemtypes()))
+            opts$calcNull <- FALSE
         opts$times <- list(start.time=start.time)
         # on exit, reset the seed to override internal
         if(opts$method == 'MHRM' || opts$method == 'MIXED')
@@ -73,10 +76,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
         if(length(group) != nrow(data))
-            stop('length of group not equal to number of rows in data.')
+            stop('length of group not equal to number of rows in data.', call.=FALSE)
         if(any(is.na(group)))
             stop('Unknown group memberships cannot be estimated. Please remove the NA values in group
-                    and the associated rows in the data input.')
+                    and the associated rows in the data input.', call.=FALSE)
 
         #####
         ### uncomment when building html examples
@@ -86,24 +89,39 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         Data <- list()
         data <- as.matrix(data)
         if(!all(apply(data, 2L, class) %in% c('integer', 'numeric')))
-            stop('Input data must be integer or numeric values only')
+            stop('Input data must be integer or numeric values only', call.=FALSE)
         if(is.numeric(data))
             data <- matrix(as.integer(data), nrow(data),
                            dimnames=list(rownames(data), colnames(data)))
         rownames(data) <- 1L:nrow(data)
         if(is.null(colnames(data)))
             colnames(data) <- paste0('Item.', 1L:ncol(data))
+        data <- apply(data, 2L, function(x, message){
+            s <- sort(unique(x))
+            se <- min(s, na.rm = TRUE):max(x, na.rm = TRUE)
+            if(length(s) != length(se)){
+                if(message)
+                    message('Item re-scored so that all values are within a distance of 1')
+                for(i in 2L:length(s))
+                    x <- ifelse(x == s[i], se[i], x)
+            }
+            x
+        }, message = opts$message)
         Data$data <- data
         if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
         # if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
         Data$group <- factor(group)
         Data$groupNames <- unique(Data$group)
         if(any(grepl('-', Data$groupNames)))
-            stop('Group names cannot contain a dash (-) character')
+            stop('Group names cannot contain a dash (-) character', call.=FALSE)
         Data$ngroups <- length(Data$groupNames)
         Data$nitems <- ncol(Data$data)
         Data$N <- nrow(Data$data)
         Data$mins <- apply(data, 2L, min, na.rm=TRUE)
+        if(is.character(model)){
+            tmp <- any(sapply(colnames(data), grepl, x=model))
+            model <- mirt.model(model, itemnames = if(tmp) colnames(data) else NULL)
+        }
         oldmodel <- model
         if(length(model) == 1L){
             newmodel <- list()
@@ -130,6 +148,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             if(opts$message)
                 message('\'nominal.highlow\' matrix not specified, highest and lowest categories are used by default')
         parnumber <- max(PrepList[[1L]]$pars[[Data$nitems+1L]]@parnum) + 1L
+        attr(PrepListFull$pars, 'nclasspars') <- attr(PrepList[[1L]]$pars, 'nclasspars') <-
+            sapply(PrepListFull$pars, function(y) length(y@parnum))
         for(g in 1L:Data$ngroups){
             if(g != 1L){
                 PrepList[[g]] <- list(pars=PrepList[[1L]]$pars)
@@ -153,7 +173,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             parnumber <- max(lrPars@parnum) + 1L
         } else lrPars <- list()
         if(length(latent.regression$lr.random) > 0L){
-            stop('lr.random input not yet supported')
+            stop('lr.random input not yet supported', call.=FALSE)
         }
     }
     if(!is.null(opts$PrepList)){
@@ -227,22 +247,29 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Data$K <- PrepList[[1L]]$K
     nfact <- PrepList[[1L]]$pars[[nitems+1L]]@nfact
     if(nfact != 1L && any(c('Rasch') %in% itemtype ) && PrepList[[1L]]$exploratory)
-       stop('Rasch itemtypes are for confimatory models only.')
+       stop('Rasch itemtypes are for confimatory models only.', call.=FALSE)
     nLambdas <- PrepList[[1L]]$pars[[1L]]@nfact
     if(is.null(constrain)) constrain <- list()
+    nspec <- ifelse(!is.null(attr(model[[1L]], 'nspec')), attr(model[[1L]], 'nspec'), 1L)
     #default MG uses configural model (independent groups but each identified)
     if('free_means' %in% invariance ){ #Free factor means (means 0 for ref)
-        for(g in 2L:Data$ngroups)
-            pars[[g]][[nitems + 1L]]@est[1L:nfact] <- TRUE
+        if(opts$BFACTOR){
+            for(g in 2L:Data$ngroups)
+                pars[[g]][[nitems + 1L]]@est[1L:(nfact-nspec)] <- TRUE
+        } else {
+            for(g in 2L:Data$ngroups)
+                pars[[g]][[nitems + 1L]]@est[1L:nfact] <- TRUE
+        }
     }
     dummymat <- matrix(FALSE, pars[[1L]][[nitems + 1L]]@nfact, pars[[1L]][[nitems + 1L]]@nfact)
-    if(any(c('free_cov', 'free_varcov') %in% invariance)){ #Free factor covs (vars 1 for ref)
-        dummymat <- matrix(TRUE, pars[[1L]][[nitems + 1L]]@nfact, pars[[1L]][[nitems + 1L]]@nfact)
-        diag(dummymat) <- FALSE
-    }
-    if(any(c('free_var', 'free_varcov') %in% invariance)) #Free factor vars (vars 1 for ref)
-        diag(dummymat) <- TRUE
-    if(any(c('free_var', 'free_varcov', 'free_cov') %in% invariance)){
+    if(any('free_var' %in% invariance)){ #Free factor vars (vars 1 for ref)
+        if(opts$BFACTOR){
+            tmp <- dummymat[1L:(nfact-nspec),1L:(nfact-nspec), drop=FALSE]
+            diag(tmp) <- TRUE
+            dummymat[1L:(nfact-nspec),1L:(nfact-nspec)] <- tmp
+        } else {
+            diag(dummymat) <- TRUE
+        }
         tmp <- dummymat[lower.tri(dummymat, TRUE)]
         for(g in 2L:Data$ngroups){
             pars[[g]][[nitems + 1L]]@est <- c(pars[[g]][[nitems + 1L]]@est[1L:pars[[g]][[nitems + 1L]]@nfact], tmp)
@@ -263,13 +290,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     startlongpars <- c()
     if(opts$NULL.MODEL){
         constrain <- list()
-        for(i in 1L:nitems){
-            pars[[1L]][[i]]@par[1L] <- 0
-            pars[[1L]][[i]]@est[1L] <- FALSE
-            if(is(pars[[1L]][[i]], 'nominal'))
-                pars[[1L]][[i]]@est[(nfact+1L):(nfact + Data$K[i])] <- FALSE
-            if(is(pars[[1L]][[i]], 'nestlogit'))
-                pars[[1L]][[i]]@est[(nfact+5L):(nfact + Data$K[i] + 1L)] <- FALSE
+        for(g in 1L:length(pars)){
+            for(i in 1L:nitems){
+                pars[[g]][[i]] <- set_null_model(pars[[g]][[i]])
+            }
         }
     }
     rr <- 0L
@@ -297,7 +321,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     dfsubtr <- nestpars - nconstr
     if(df <= dfsubtr)
         stop('Too few degrees of freedom. There are only ', df, ' degrees of freedom but ',
-             dfsubtr, ' parameters were freely estimated.')
+             dfsubtr, ' parameters were freely estimated.', call.=FALSE)
     df <- df - dfsubtr
     if(!is.null(customItems)){
         for(g in 1L:Data$ngroups)
@@ -311,27 +335,26 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             DERIV[[g]][[i]] <- selectMethod(Deriv, c(class(pars[[g]][[i]]), 'matrix'))
     }
     Ls <- makeLmats(pars, constrain, random = mixed.design$random, lrPars=lrPars)
-    CUSTOM.IND <- which(sapply(pars[[1L]], class) %in% c('custom', 'ideal', 'lca'))
-    SLOW.IND <- which(sapply(pars[[1L]], class) %in% c('custom', 'rating', 'rsm', 'partcomp',
-                                                      'nestlogit', 'ideal', 'lca')) #lca later TODO
+    CUSTOM.IND <- which(sapply(pars[[1L]], class) %in% Use_R_ProbTrace())
+    SLOW.IND <- which(sapply(pars[[1L]], class) %in% Use_R_Deriv())
     #warnings
     wmsg <- 'Lower and upper bound parameters (g and u) should use \'norm\' (i.e., logit) prior'
     for(g in 1L:length(pars)){
         for(i in 1L:length(pars[[1L]])){
             if(class(pars[[g]][[i]]) == 'dich'){
                 pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg)
-                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg)
+                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
+                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
                 next
             } else if(class(pars[[g]][[i]]) == 'partcomp'){
                 pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg)
-                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg)
+                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
+                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
                 next
             } else if(class(pars[[g]][[i]]) == 'nestlogit'){
                 pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[nfact + 2L] %in% c(0L, 1L))) warning(wmsg)
-                if(!(pt[nfact + 3L] %in% c(0L, 1L))) warning(wmsg)
+                if(!(pt[nfact + 2L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
+                if(!(pt[nfact + 3L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
                 next
             }
         }
@@ -348,7 +371,6 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             opts$SE <- FALSE
             opts$full <- TRUE
         } else opts$full <- FALSE
-        nspec <- ifelse(!is.null(attr(model[[1L]], 'nspec')), attr(model[[1L]], 'nspec'), 1L)
         temp <- matrix(0L,nrow=nitems,ncol=nspec)
         sitems <- matrix(0L, nrow=sum(PrepList[[1L]]$K), ncol=nspec)
         specific <- NULL
@@ -358,11 +380,16 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             opts$quadpts <- nrow(Theta)
             opts$customPriorFun <- lca_prior
         } else {
-            if(is.null(opts$quadpts))
-                opts$quadpts <- select_quadpts2(nfact)
-            if(opts$quadpts < 3 && opts$warn) warning('Should use more than 2 quadpts')
-            Theta <- theta <- as.matrix(seq(-(.8 * sqrt(opts$quadpts)), .8 * sqrt(opts$quadpts),
-                                            length.out = opts$quadpts))
+            if(is.null(opts$quadpts)){
+                tmp <- if(opts$BFACTOR) PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec') + 1L
+                    else nfact
+                opts$quadpts <- select_quadpts(tmp)
+            }
+            if(opts$quadpts < 3 && opts$warn) warning('Should use more than 2 quadpts', call.=FALSE)
+            theta <- 1
+            if(opts$method != 'QMCEM')
+                theta <- as.matrix(seq(opts$theta_lim[1L], opts$theta_lim[2L],
+                                       length.out = opts$quadpts))
             if(opts$BFACTOR){
                 for(g in 1L:length(pars)){
                     tmp <- pars[[g]][[nitems+1L]]
@@ -376,11 +403,12 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     lgcov <- gp2$gcov[ind, ind, drop=FALSE]
                     if(any(lgmeans != 0) || any(lgcov != 0))
                         stop('Cannot freely estimate specific factor parameters in
-                             quadrature reduction method')
+                             quadrature reduction method', call.=FALSE)
                     if(!all(gmeans == 0))
-                        stop('Means for specific factors must be 0')
+                        stop('Means for specific factors must be 0', call.=FALSE)
                     if(!all(gcov == diag(ncol(sitems))))
-                        stop('Covariance matrix for specific factors must be an identity matrix')
+                        stop('Covariance matrix for specific factors must be an identity matrix',
+                             call.=FALSE)
                 }
                 specific <- attr(oldmodel, 'specific')
                 specific[is.na(specific)] <- 1L
@@ -392,19 +420,19 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                         ind <- ind + 1L
                     }
                 }
-                theta <- seq(-4, 4, length.out = opts$quadpts)
-                tmp <- PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec') + 1L
-                Theta <- thetaComb(theta, tmp)
-                Theta <- cbind(Theta[,1L:(tmp-1L),drop=FALSE],
-                               matrix(Theta[,tmp], nrow=nrow(Theta), ncol=ncol(sitems)))
+                nfact2 <- PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec') + 1L
+                Theta <- thetaComb(theta, nfact2)
+                Theta <- cbind(Theta[,1L:(nfact2-1L),drop=FALSE],
+                               matrix(Theta[,nfact2], nrow=nrow(Theta), ncol=ncol(sitems)))
             } else {
                 if(opts$method == 'QMCEM'){
-                    Theta <- qnorm(sfsmisc::QUnif(opts$quadpts, min=0, max=1, p=nfact, leap=409), sd=2)
+                    Theta <- QMC_quad(npts=opts$quadpts, nfact=nfact, lim=opts$theta_lim,
+                                      norm=TRUE)
                 } else {
                     if(opts$quadpts^nfact <= opts$MAXQUAD){
                         if(is.null(opts$technical$customTheta))
                             Theta <- thetaComb(theta, nfact)
-                    } else stop('Greater than ', opts$MAXQUAD, ' quadrature points.')
+                    } else stop('Greater than ', opts$MAXQUAD, ' quadrature points.', call.=FALSE)
                     if(opts$message && nfact > 3L)
                         message('EM quadrature for high dimensional models are better handled
                                  \twith the \"QMCEM\" method')
@@ -412,7 +440,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
             if(!is.null(opts$technical$customTheta)){
                 Theta <- opts$technical$customTheta
-                if(!is.matrix(Theta)) stop('customTheta input must be a matrix')
+                if(!is.matrix(Theta)) stop('customTheta input must be a matrix', call.=FALSE)
                 opts$quadpts <- nrow(Theta)
             }
         } #end Theta def
@@ -428,13 +456,15 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          message=opts$message, BL=opts$method == 'BL', full=opts$full,
                                          lrPars=lrPars),
                              Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
+        opts$Moptim <- ESTIMATE$Moptim
         lrPars <- ESTIMATE$lrPars
         startlongpars <- ESTIMATE$longpars
         rlist <- ESTIMATE$rlist
         logLik <- G2 <- SElogLik <- 0
+        logPrior <- ESTIMATE$logPrior
         for(g in 1L:Data$ngroups){
             Pl <- rlist[[g]]$expected
-            if(length(Pl) == nrow(Data$fulldata[[g]])){
+            if(opts$full){
                 rg <- 1
                 G2group[g] <- NaN
             } else {
@@ -546,7 +576,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             if(from == to){
                 if(opts$warn)
                     warning('SEM window is too small to compute information matrix.
-                            Consider changing the starting values')
+                            Consider changing the starting values', call.=FALSE)
                 dontrun <- TRUE
             }
             lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
@@ -587,7 +617,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 if(opts$technical$symmetric_SEM) info <- (info + t(info)) / 2
                 if(is(info, 'try-error')){
                     if(opts$warn)
-                        warning('information matrix in SEM could not be computed due to instability')
+                        warning('Information matrix in SEM could not be computed due to instability',
+                                call.=FALSE)
                 } else ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain,
                                                     warn=opts$warn)
             }
@@ -598,7 +629,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                               CUSTOM.IND=CUSTOM.IND, EHPrior=ESTIMATE$Prior, warn=opts$warn)
         } else if(opts$SE.type == 'MHRM' && opts$method == 'EM'){
             if(opts$empiricalhist)
-                stop('MHRM standard error not available when using empirical histograms')
+                stop('MHRM standard error not available when using empirical histograms', call.=FALSE)
             ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
                                    list = list(NCYCLES=1000L, BURNIN=1L, SEMCYCLES=2L,
                                                KDRAWS=opts$KDRAWS, TOL=opts$SEtol, USEEM=opts$USEEM,
@@ -609,14 +640,19 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                                startlongpars=startlongpars, SE=opts$SE, warn=opts$warn),
                                    DERIV=DERIV)
         } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich')) && opts$method != 'MIXED'){
+            if(logPrior != 0 && opts$warn)
+                warning('Information matrix with the crossprod, Louis, and sandwich method
+                        do not account for prior parameter distribution information')
             ESTIMATE <- SE.simple(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
                                   constrain=constrain, Ls=Ls, N=nrow(data), type=opts$SE.type,
                                   CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn,
                                   message=opts$message)
-
         } else if(opts$SE.type == 'Fisher' && opts$method != 'MIXED'){
+            if(logPrior != 0 && opts$warn)
+                warning('Information matrix with the Fisher method does not
+                        account for prior parameter distribution information')
             ESTIMATE <- SE.Fisher(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
-                                  constrain=constrain, Ls=Ls, N=nrow(data),
+                                  constrain=constrain, Ls=Ls, N=nrow(data), full=opts$full,
                                   CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn)
         }
         ESTIMATE$cycles <- tmp$cycles
@@ -625,6 +661,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     opts$times$end.time.SE <- proc.time()[3L]
     opts$times$start.time.post <- proc.time()[3L]
     cmods <- vector('list', Data$ngroups)
+    if(is.null(opts$theta_lim))
+        opts$theta_lim <- numeric(1)
+    lrPars <- ESTIMATE$lrPars
+    class(lrPars) <- 'S4'
     for(g in 1L:Data$ngroups){
         if(opts$method == 'MIXED'){
             F <- matrix(NA)
@@ -640,7 +680,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                           nfact=nfact, constrain=constrain, G2=G2group[g], Pl = rlist[[g]]$expected,
                           factorNames=PrepList[[1L]]$factorNames, random=ESTIMATE$random,
                           CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, exploratory=PrepList[[1L]]$exploratory,
-                          itemtype=PrepList[[1L]]$itemtype, K=Data$K, rotate=opts$rotate)
+                          itemtype=PrepList[[1L]]$itemtype, K=Data$K, theta_lim=opts$theta_lim, lrPars=lrPars)
         if(discrete){
             cmods[[g]]@Theta <- Theta
             cmods[[g]]@Prior <- list(ESTIMATE$Prior[[g]])
@@ -656,6 +696,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             ncores <- mirtClusterEnv$ncores
             mirtClusterEnv$ncores <- 1L
         }
+        logPrior <- 0
         for(g in 1L:Data$ngroups){
             cmods[[g]]@Data <- list(data=Data$data[Data$group == Data$groupName[g], ],
                                    fulldata=Data$fulldata[[g]], tabdata=Data$tabdata,
@@ -664,6 +705,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                      lrPars=ESTIMATE$lrPars)
             cmods[[g]]@Data <- list()
             logLik <- logLik + cmods[[g]]@logLik
+            logPrior <- logPrior + cmods[[g]]@logPrior
             SElogLik <- SElogLik + cmods[[g]]@SElogLik
             G2 <- G2 + cmods[[g]]@G2
             Pl[[g]] <- cmods[[g]]@Pl
@@ -682,10 +724,16 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     r <- rr
     N <- sum(r)
     tmp <- dfsubtr
-    AIC <- (-2) * logLik + 2 * tmp
-    AICc <- AIC + 2 * tmp * (tmp + 1) / (N - tmp - 1L)
-    BIC <- (-2) * logLik + tmp*log(N)
-    SABIC <- (-2) * logLik + tmp*log((N+2)/24)
+    if(logPrior != 0){
+        AIC <- AICc <- BIC <- SABIC <- NaN
+        DIC <- -2 * (logLik + logPrior) + 2 * tmp
+    } else {
+        AIC <- (-2) * logLik + 2 * tmp
+        AICc <- AIC + 2 * tmp * (tmp + 1) / (N - tmp - 1L)
+        BIC <- (-2) * logLik + tmp*log(N)
+        SABIC <- (-2) * logLik + tmp*log((N+2)/24)
+        DIC <- AIC
+    }
     p.G2 <- 1 - pchisq(G2,df)
     RMSEA.G2 <- rmsea(X2=G2, df=df, N=N)
     null.mod <- unclass(new('SingleGroupClass'))
@@ -695,27 +743,21 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         opts$calcNull <- FALSE
     }
     if(!opts$NULL.MODEL && opts$method != 'MIXED' && opts$calcNull && nmissingtabdata == 0L){
-        null.mod <- try(unclass(mirt(data, 1L, itemtype=itemtype,
-                                     technical=list(NULL.MODEL=TRUE,
-                                                    parallel=opts$technical$parallel),
-                                     large=large, key=key, verbose=FALSE)))
+        null.mod <- try(unclass(computeNullModel(data=data, itemtype=itemtype,
+                                                 group=if(length(pars) > 1L) group else NULL)))
         if(is(null.mod, 'try-error')){
-            if(opts$message)
-                message('Null model calculation did not converge.')
+            if(opts$warn)
+                warning('Null model calculation did not converge.')
             null.mod <- unclass(new('SingleGroupClass'))
         } else if(!is.nan(G2)) {
-            TLI.G2 <- (null.mod@G2 / null.mod@df - G2/df) / (null.mod@G2 / null.mod@df - 1)
-            CFI.G2 <- 1 - (G2 - df) / (null.mod@G2 - null.mod@df)
-            CFI.G2 <- ifelse(CFI.G2 > 1, 1, CFI.G2)
-            CFI.G2 <- ifelse(CFI.G2 < 0, 0, CFI.G2)
+            TLI.G2 <- tli(X2=G2, X2.null=null.mod@G2, df=df, df.null=null.mod@df)
+            CFI.G2 <- cfi(X2=G2, X2.null=null.mod@G2, df=df, df.null=null.mod@df)
         }
     }
     if(nmissingtabdata > 0L)
         p.G2 <- RMSEA.G2 <- G2 <- TLI.G2 <- CFI.G2 <-  NaN
     if(is.null(parprior)) parprior <- list()
     if(is.null(opts$quadpts)) opts$quadpts <- NaN
-    lrPars <- ESTIMATE$lrPars
-    class(lrPars) <- 'S4'
     opts$times$end.time.post <- proc.time()[3L]
     if(discrete){
         mod <- new('DiscreteClass',
@@ -733,12 +775,14 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                    quadpts=opts$quadpts,
                    df=df,
                    logLik=logLik,
+                   logPrior=logPrior,
                    method=opts$method,
                    SElogLik=SElogLik,
                    AIC=AIC,
                    AICc=AICc,
                    BIC=BIC,
                    SABIC=SABIC,
+                   DIC=DIC,
                    nfact=nfact,
                    G2=G2,
                    p=p.G2,
@@ -774,7 +818,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            AICc=AICc,
                            BIC=BIC,
                            SABIC=SABIC,
+                           DIC=DIC,
                            logLik=logLik,
+                           logPrior=logPrior,
                            SElogLik=SElogLik,
                            F=F,
                            h2=h2,
@@ -825,7 +871,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            AICc=AICc,
                            BIC=BIC,
                            SABIC=SABIC,
+                           DIC=DIC,
                            logLik=logLik,
+                           logPrior=logPrior,
                            SElogLik=SElogLik,
                            F=F,
                            h2=h2,
@@ -842,9 +890,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            K=Data$K,
                            collectLL=ESTIMATE$collectLL,
                            quadpts=opts$quadpts,
-                           rotate=opts$rotate,
+                           theta_lim=opts$theta_lim,
                            null.mod=null.mod,
-                           Target=opts$Target,
                            factorNames=PrepList[[1L]]$factorNames,
                            constrain=constrain,
                            parprior=parprior,
@@ -861,7 +908,6 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            iter=ESTIMATE$cycles,
                            pars=cmods[[1L]]@pars,
                            model=list(oldmodel),
-                           rotate='none',
                            G2=G2,
                            p=p.G2,
                            TLI=TLI.G2,
@@ -873,7 +919,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            AICc=AICc,
                            BIC=BIC,
                            SABIC=SABIC,
+                           DIC=DIC,
                            logLik=logLik,
+                           logPrior=logPrior,
                            SElogLik=SElogLik,
                            F=F,
                            h2=h2,
@@ -881,6 +929,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                            CUSTOM.IND=CUSTOM.IND,
                            SLOW.IND=SLOW.IND,
                            Theta=Theta,
+                           theta_lim=opts$theta_lim,
                            method=opts$method,
                            Pl=Pl[[1L]],
                            empiricalhist=opts$empiricalhist,
@@ -923,12 +972,14 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        invariance=invariance,
                        df=df,
                        logLik=logLik,
+                       logPrior=logPrior,
                        method=opts$method,
                        SElogLik=SElogLik,
                        AIC=AIC,
                        AICc=AICc,
                        BIC=BIC,
                        SABIC=SABIC,
+                       DIC=DIC,
                        nfact=nfact,
                        G2=G2,
                        p=p.G2,

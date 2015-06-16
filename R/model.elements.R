@@ -106,7 +106,8 @@ model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K
             lambdas[!estlam] <- 0
     }
     if(exploratory && any(itemtype %in% c('PC2PL', 'PC3PL')))
-        stop('Partially compensatory models can only be estimated within a confirmatory model')
+        stop('Partially compensatory models can only be estimated within a confirmatory model',
+             call.=FALSE)
     ret <- LoadPars(itemtype=itemtype, itemloc=itemloc, lambdas=lambdas, zetas=zetas,
                     guess=guess, upper=upper, fulldata=fulldata, J=J, K=K,
                     nfact=nfact+length(prodlist), parprior=parprior,
@@ -114,18 +115,131 @@ model.elements <- function(model, factorNames, itemtype, nfactNames, nfact, J, K
                     mixed.design=mixed.design, customItems=customItems, key=key,
                     nominal.highlow=nominal.highlow, gpcm_mats=gpcm_mats)
     if(any(model[,1L] == 'START')){
-        start <- gsub(" ","", model[model[,1] == 'START', ])
-        start <- strsplit(start[2], '),')[[1]]
-        start <- sapply(start, function(x) gsub("\\(","", x))
-        start <- sapply(start, function(x) gsub("\\)","", x))
-        for(i in 1L:length(start)){
-            tmp <- strsplit(start[i], ',')[[1L]]
-            ret[[as.integer(tmp[1L])]]@par[tmp[2L]] <- as.numeric(tmp[3L])
+        input <- gsub(" ","", model[model[,1L] == 'START', 2L])
+        elements <- strsplit(input, '\\),\\(')[[1L]]
+        elements <- gsub('\\(', replacement='', x=elements)
+        elements <- gsub('\\)', replacement='', x=elements)
+        esplit <- strsplit(elements, ',')
+        esplit <- lapply(esplit, function(x){
+            newx <- c()
+            if(length(x) < 3L)
+                stop('START = ... has not been supplied enough arguments', call.=FALSE)
+            for(i in 1L:(length(x)-2L)){
+                if(grepl('-', x[i])){
+                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                    newx <- c(newx, tmp[1L]:tmp[2L])
+                } else newx <- c(newx, x[i])
+            }
+            x <- c(newx, x[length(x)-1L], x[length(x)])
+            x
+        })
+        picks <- lapply(esplit, function(x) as.integer(x[1L:(length(x)-2)]))
+        for(i in 1L:length(picks)){
+            tmp <- ret[picks[[i]]]
+            len <- length(esplit[[i]])
+            tmp <- lapply(tmp, function(x, which, val){
+                if(which %in% c('g', 'u')) val <- qlogis(val)
+                x@par[names(x@parnum) == which] <- val
+                x
+            }, which=esplit[[i]][len-1L], val = as.numeric(esplit[[i]][len]))
+            ret[picks[[i]]] <- tmp
+        }
+    }
+    if(any(model[,1L] == 'FIXED')){
+        input <- gsub(" ","", model[model[,1L] == 'FIXED', 2L])
+        elements <- strsplit(input, '\\),\\(')[[1L]]
+        elements <- gsub('\\(', replacement='', x=elements)
+        elements <- gsub('\\)', replacement='', x=elements)
+        esplit <- strsplit(elements, ',')
+        esplit <- lapply(esplit, function(x){
+            newx <- c()
+            if(length(x) < 2L)
+                stop('FIXED = ... has not been supplied enough arguments', call.=FALSE)
+            for(i in 1L:(length(x)-1L)){
+                if(grepl('-', x[i])){
+                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                    newx <- c(newx, tmp[1L]:tmp[2L])
+                } else newx <- c(newx, x[i])
+            }
+            x <- c(newx, x[length(x)])
+            x
+        })
+        picks <- lapply(esplit, function(x) as.integer(x[1L:(length(x)-1L)]))
+        for(i in 1L:length(picks)){
+            tmp <- ret[picks[[i]]]
+            len <- length(esplit[[i]])
+            tmp <- lapply(tmp, function(x, which){
+                x@est[names(x@parnum) == which] <- FALSE
+                x
+            }, which=esplit[[i]][len])
+            ret[picks[[i]]] <- tmp
         }
     }
     ret[[length(ret) + 1L]] <- LoadGroupPars(gmeans=gmeans, gcov=gcov, estgmeans=estgmeans,
                                             estgcov=estgcov, parnumber=attr(ret, 'parnumber'),
                                             parprior=parprior, Rasch=all(itemtype %in% c('Rasch', 'rsm')))
+    if(any(model[,1L] == 'LBOUND')){
+        input <- gsub(" ","", model[model[,1L] == 'LBOUND', 2L])
+        elements <- strsplit(input, '\\),\\(')[[1L]]
+        elements <- gsub('\\(', replacement='', x=elements)
+        elements <- gsub('\\)', replacement='', x=elements)
+        esplit <- strsplit(elements, ',')
+        esplit <- lapply(esplit, function(x){
+            newx <- c()
+            if(length(x) < 3L)
+                stop('LBOUND = ... has not been supplied enough arguments', call.=FALSE)
+            for(i in 1L:(length(x)-2L)){
+                if(grepl('-', x[i])){
+                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                    newx <- c(newx, tmp[1L]:tmp[2L])
+                } else newx <- c(newx, x[i])
+            }
+            x <- c(newx, x[length(x)-1L], x[length(x)])
+            x
+        })
+        picks <- lapply(esplit, function(x) as.integer(x[1L:(length(x)-2)]))
+        for(i in 1L:length(picks)){
+            tmp <- ret[picks[[i]]]
+            len <- length(esplit[[i]])
+            tmp <- lapply(tmp, function(x, which, val){
+                if(which %in% c('g', 'u')) val <- qlogis(val)
+                x@lbound[names(x@parnum) == which] <- val
+                x
+            }, which=esplit[[i]][len-1L], val = as.numeric(esplit[[i]][len]))
+            ret[picks[[i]]] <- tmp
+        }
+    }
+    if(any(model[,1L] == 'UBOUND')){
+        input <- gsub(" ","", model[model[,1L] == 'UBOUND', 2L])
+        elements <- strsplit(input, '\\),\\(')[[1L]]
+        elements <- gsub('\\(', replacement='', x=elements)
+        elements <- gsub('\\)', replacement='', x=elements)
+        esplit <- strsplit(elements, ',')
+        esplit <- lapply(esplit, function(x){
+            newx <- c()
+            if(length(x) < 3L)
+                stop('UBOUND = ... has not been supplied enough arguments', call.=FALSE)
+            for(i in 1L:(length(x)-2L)){
+                if(grepl('-', x[i])){
+                    tmp <- as.numeric(strsplit(x[i], '-')[[1L]])
+                    newx <- c(newx, tmp[1L]:tmp[2L])
+                } else newx <- c(newx, x[i])
+            }
+            x <- c(newx, x[length(x)-1L], x[length(x)])
+            x
+        })
+        picks <- lapply(esplit, function(x) as.integer(x[1L:(length(x)-2)]))
+        for(i in 1L:length(picks)){
+            tmp <- ret[picks[[i]]]
+            len <- length(esplit[[i]])
+            tmp <- lapply(tmp, function(x, which, val){
+                if(which %in% c('g', 'u')) val <- qlogis(val)
+                x@ubound[names(x@parnum) == which] <- val
+                x
+            }, which=esplit[[i]][len-1L], val = as.numeric(esplit[[i]][len]))
+            ret[picks[[i]]] <- tmp
+        }
+    }
     attr(ret, 'prodlist') <- prodlist
     attr(ret, 'exploratory') <- exploratory
     return(ret)

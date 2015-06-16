@@ -14,9 +14,7 @@
 #' Nested models may be compared via an approximate
 #' chi-squared difference test or by a reduction in AIC or BIC (accessible via
 #' \code{\link{anova}}). See \code{\link{mirt}} for more details regarding the
-#' IRT estimation approach used in this package. The default is to use 21 quadrature
-#' for each dimensions, but this can be over-written by passing a \code{quadpts = #}
-#' argument.
+#' IRT estimation approach used in this package.
 #'
 #' The two-tier model has a specific block diagonal covariance structure between the primary and
 #' secondary latent traits. Namely, the secondary latent traits are assumed to be orthogonal to
@@ -49,11 +47,16 @@
 #'   be used as place-holders. These numbers will be translated into a format suitable for
 #'   \code{mirt.model()}, combined with the definition in \code{model2}, with the letter 'S'
 #'   added to the respective factor number
-#' @param model2 a two-tier model specification object defined by \code{mirt.model()}. By default
+#' @param model2 a two-tier model specification object defined by \code{mirt.model()} or
+#'   a string to be passed to \code{\link{mirt.model}}. By default
 #'   the model will fit a unidimensional model in the second-tier, and therefore be equivalent to
 #'   the bifactor model
 #' @param group a factor variable indicating group membership used for multiple group analyses
-#' @param quadpts number of quadrature nodes to use. Default is 21
+#' @param quadpts number of quadrature nodes to use after accounting for the reduced number of dimensions.
+#'   Scheme is the same as the one used in \code{\link{mirt}}, however it is in regardes to the reduced
+#'   dimensions (e.g., a bifactor model has 2 dimensions to be integrated)
+#' @param invariance see \code{\link{multipleGroup}} for details, however, the specific factor variances
+#'   and means will be constrained according to the dimensional reduction algorithm
 #' @param ... additional arguments to be passed to the estimation engine. See \code{\link{mirt}}
 #'   for more details and examples
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
@@ -184,10 +187,10 @@
 #' dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
 #'
 #' specific <- c(rep(1,5),rep(2,6),rep(3,5))
-#' model <- mirt.model('
+#' model <- '
 #'     G1 = 1-8
 #'     G2 = 9-16
-#'     COV = G1*G2')
+#'     COV = G1*G2'
 #'
 #' #quadpts dropped for faster estimation, but not as precise
 #' simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3)
@@ -198,28 +201,32 @@
 #'
 #'     }
 #'
-bfactor <- function(data, model, model2 = mirt.model(paste0('G = 1-', ncol(data))),
-                    group = NULL, quadpts = 21, ...)
+bfactor <- function(data, model, model2 = paste0('G = 1-', ncol(data)),
+                    group = NULL, quadpts = NULL, invariance = '', ...)
 {
     Call <- match.call()
     if(missing(model)) missingMsg('model')
     if(!is.numeric(model))
-        stop('model must be a numeric vector')
+        stop('model must be a numeric vector', call.=FALSE)
     if(is.numeric(model))
         if(length(model) != ncol(data))
-            stop('length of model must equal the number of items')
+            stop('length of model must equal the number of items', call.=FALSE)
     nspec <- length(na.omit(unique(model)))
     specific <- model
+    if(is.character(model2)){
+        tmp <- any(sapply(colnames(data), grepl, x=model2))
+        model2 <- mirt.model(model2, itemnames = if(tmp) colnames(data) else NULL)
+    }
     if(!is(model2, 'mirt.model'))
-        stop('model2 must be an appropriate second-tier model defined with mirt.model()')
+        stop('model2 must be an appropriate second-tier model', call.=FALSE)
     model <- bfactor2mod(model, ncol(data))
     model$x <- rbind(model2$x, model$x)
     attr(model, 'nspec') <- nspec
     attr(model, 'specific') <- specific
     if(is.null(group)) group <- rep('all', nrow(data))
     mod <- ESTIMATION(data=data, model=model, group=group,
-                      method = 'EM', quadpts=quadpts,
-                      BFACTOR = TRUE, ...)
+                      method='EM', quadpts=quadpts,
+                      BFACTOR = TRUE, invariance=invariance, ...)
     if(is(mod, 'SingleGroupClass') || is(mod, 'MultipleGroupClass'))
         mod@Call <- Call
     return(mod)

@@ -1,4 +1,4 @@
-#' Methods for Function fscores
+#' Compute factor score estimates (a.k.a, ability estimates, latent trait estimates, etc)
 #'
 #' Computes MAP, EAP, ML (Embretson & Reise, 2000), EAP for sum-scores (Thissen et al., 1995),
 #' or WLE (Warm, 1989) factor scores with a multivariate normal
@@ -10,7 +10,7 @@
 #' information matrix was computed, which are useful if the sample size/number of items were small.
 #' As well, if the model contained latent regression predictors this information will
 #' be used in computing MAP and EAP estimates (for these models, \code{full.scores=TRUE}
-#' by default). Finaly, plausible value imputation is also available, and will also account
+#' by default). Finally, plausible value imputation is also available, and will also account
 #' for latent regression predictor effects.
 #'
 #' The function will return either a table with the computed scores and standard errors,
@@ -30,12 +30,12 @@
 #' @param object a computed model object of class \code{SingleGroupClass},
 #'   \code{MultipleGroupClass}, or \code{DiscreteClass}
 #' @param full.scores if \code{FALSE} (default) then a summary table with
-#'   factor scores for each unique pattern is displayed. Otherwise the original
-#'   data matrix is returned with the computed factor scores appended to the
-#'   rightmost column
-#' @param rotate rotation declaration to be used when estimating the factor scores. If \code{""}
-#'   then the \code{object@@rotate} default value is used (only applicable to
-#'   \code{SingleGroupClass} objects which have non-unique slopes)
+#'   factor scores for each unique pattern is displayed. Otherwise a matrix of factor scores
+#'   for each response pattern in the data is returned
+#' @param rotate prior rotation to be used when estimating the factor scores. See
+#'   \code{\link{summary-method}} for details. If the object is not an exploratory model
+#'   then this argument is ignored
+#' @param Target target rotation; see \code{\link{summary-method}} for details
 #' @param plausible.draws number of plausible values to draw for future researchers
 #'   to perform secondary analyses of the latent trait scores. Typically used in conjunction
 #'   with latent regression predictors (see \code{\link{mirt}} for details), but can
@@ -51,7 +51,8 @@
 #'   (and therefore for estimates such as EAP, will be less accurate). This is determined from
 #'   the switch statement
 #'   \code{quadpts <- switch(as.character(nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)}
-#' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension
+#' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension. If
+#'   omitted, a range will be generated automatically based on the number of dimensions
 #' @param mean a vector for custom latent variable means. If NULL, the default for 'group' values
 #'   from the computed mirt object will be used
 #' @param cov a custom matrix of the latent variable covariance matrix. If NULL, the default for
@@ -62,15 +63,13 @@
 #'   errors for a given response vector or matrix/data.frame
 #' @param returnER logical; return empirical reliability (also known as marginal reliability)
 #'   estimates as a numeric values?
-#' @param return.acov logical; return a list containing covariance matricies instead of factors
+#' @param return.acov logical; return a list containing covariance matrices instead of factors
 #'   scores? \code{impute = TRUE} not supported with this option
 #' @param full.scores.SE logical; when \code{full.scores == TRUE}, also return the
 #'   standard errors associated with each respondent? Default is \code{FALSE}
 #' @param verbose logical; print verbose output messages?
-#' @param scores.only logical; return only the factor scores (only applicable when
-#'   \code{full.scores = TRUE})
 #' @param QMC logical; use quasi-Monte Carlo integration? If \code{quadpts} is omitted the
-#'   default number of nodes is 2000
+#'   default number of nodes is 15000
 #' @param custom_den a function used to define the integration density (if required). The NULL default
 #'   assumes that the multivariate normal distribution with the 'GroupPars' hyper-parameters are
 #'   used. At the minimum must be of the form:
@@ -82,7 +81,10 @@
 #'   Additional arguments may included and are caught through the \code{fscores(...)} input. The
 #'   function \emph{must} return a numeric vector of density weights (one for each row in Theta)
 #' @param custom_theta a matrix of custom integration nodes to use instead of the default, where
-#'   each column correspends to the respective dimension in the model
+#'   each column corresponds to the respective dimension in the model
+#' @param min_expected when computing goodness of fit tests when \code{method = 'EAPsum'}, this value is used
+#'   to collapse across the conditioned total scores until the expected values are greater than this value. Note
+#'   that this only affect the goodness of fit tests and not the returned EAP for sum scores table
 #' @param ... additional arguments to be passed to \code{nlm}
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords factor.scores
@@ -111,7 +113,7 @@
 #' head(fullscores)
 #' head(fullscores_with_SE)
 #'
-#' #chage method argument to use MAP estimates
+#' #change method argument to use MAP estimates
 #' fullscores <- fscores(mod, full.scores = TRUE, method='MAP')
 #' head(fullscores)
 #'
@@ -147,14 +149,14 @@
 #' head(fscores(mod, custom_den = fun, method = 'MAP'))
 #'
 #'}
-fscores <- function(object, rotate = NULL, full.scores = FALSE, method = "EAP",
+fscores <- function(object, rotate = 'oblimin', Target = NULL, full.scores = FALSE, method = "EAP",
                     quadpts = NULL, response.pattern = NULL, plausible.draws = 0,
                     returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
-                    scores.only = TRUE, full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
-                    QMC = FALSE, custom_den = NULL, custom_theta = NULL, ...)
+                    full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
+                    QMC = FALSE, custom_den = NULL, custom_theta = NULL, min_expected = 1, ...)
 {
     if(!is(object, 'DiscreteClass')){
-        if(QMC && is.null(quadpts)) quadpts <- 2000
+        if(QMC && is.null(quadpts)) quadpts <- 15000
         if(is.null(quadpts))
             quadpts <- switch(as.character(object@nfact),
                               '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
@@ -166,9 +168,9 @@ fscores <- function(object, rotate = NULL, full.scores = FALSE, method = "EAP",
     ret <- fscores.internal(object=object, rotate=rotate, full.scores=full.scores, method=method,
                             quadpts=quadpts, response.pattern=response.pattern, QMC=QMC,
                             verbose=verbose, returnER=returnER, gmean=mean, gcov=cov,
-                            scores.only=scores.only, theta_lim=theta_lim, MI=MI,
+                            theta_lim=theta_lim, MI=MI,
                             full.scores.SE=full.scores.SE, return.acov=return.acov,
                             plausible.draws = plausible.draws, custom_den=custom_den,
-                            custom_theta=custom_theta, ...)
+                            custom_theta=custom_theta, Target=Target, min_expected=min_expected, ...)
     ret
 }

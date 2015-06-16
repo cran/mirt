@@ -1,4 +1,4 @@
-#' Compute M2 statistic
+#' Compute the M2 model fit statistic
 #'
 #' Computes the M2 (Maydeu-Olivares & Joe, 2006) statistic for dichotomous data and the
 #' M2* statistic for polytomous data (collapsing over response categories for better stability;
@@ -16,7 +16,7 @@
 #'   on the rubric found in \code{\link{fscores}}
 #' @param calcNull logical; calculate statistics for the null model as well?
 #'   Allows for statistics such as the limited information TLI and CFI
-#' @param Theta a matrix of factor scores for each person used for imputation
+#' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension
 #' @param impute a number indicating how many imputations to perform
 #'   (passed to \code{\link{imputeMissing}}) when there are missing data present. This requires
 #'   a precomputed \code{Theta} input. Will return a data.frame object with the mean estimates
@@ -24,12 +24,14 @@
 #' @param CI numeric value from 0 to 1 indicating the range of the confidence interval for
 #'   RMSEA. Default returns the 90\% interval
 #' @param residmat logical; return the residual matrix used to compute the SRMSR statistic?
+#'   Only the lower triangle of the residual correlation matrix will be returned
+#'   (the upper triangle is filled with NA's)
 #' @param QMC logical; use quasi-Monte Carlo integration? Useful for higher dimensional models.
-#'   If \code{quadpts} not specified, 2000 nodes are used by default
-#' @param suppress a numeric value indiciating which parameter residual dependency combinations
+#'   If \code{quadpts} not specified, 15000 nodes are used by default
+#' @param suppress a numeric value indicating which parameter residual dependency combinations
 #'   to flag as being too high. Absolute values for the standardized residuals greater than
 #'   this value will be returned, while all values less than this value will be set to NA.
-#'   Must be used in conjunction with the arguement \code{residmat = TRUE}
+#'   Must be used in conjunction with the argument \code{residmat = TRUE}
 #' @param ... additional arguments to pass
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -46,19 +48,19 @@
 #' dat <- expand.table(LSAT7)
 #' (mod1 <- mirt(dat, 1))
 #' M2(mod1)
+#' M2(mod1, residmat=TRUE) #lower triangle of residual correlation matrix
 #'
 #' #M2 imputed with missing data present (run in parallel)
 #' dat[sample(1:prod(dim(dat)), 250)] <- NA
 #' mod2 <- mirt(dat, 1)
 #' mirtCluster()
-#' Theta <- fscores(mod2, full.scores=TRUE)
-#' M2(mod2, Theta=Theta, impute = 10)
+#' M2(mod2, impute = 10)
 #'
 #' }
-M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, CI = .9,
-               residmat = FALSE, QMC=FALSE, suppress = 1, ...){
+M2 <- function(obj, calcNull = TRUE, quadpts = NULL, theta_lim = c(-6, 6),
+               impute = 0, CI = .9, residmat = FALSE, QMC = FALSE, suppress = 1, ...){
 
-    fn <- function(collect, obj, Theta, ...){
+    fn <- function(Theta, obj, ...){
         dat <- imputeMissing(obj, Theta)
         tmpobj <- obj
         tmpobj@Data$data <- dat
@@ -73,8 +75,8 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     #if MG loop
     if(missing(obj)) missingMsg('obj')
     if(is(obj, 'MixedClass'))
-        stop('mixedmirt objects not yet supported')
-    if(QMC && is.null(quadpts)) quadpts <- 2000L
+        stop('mixedmirt objects not yet supported', call.=FALSE)
+    if(QMC && is.null(quadpts)) quadpts <- 15000L
     discrete <- FALSE
     if(is(obj, 'DiscreteClass')){
         discrete <- TRUE
@@ -82,21 +84,22 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         calcNull <- FALSE
     }
     if(any(is.na(obj@Data$data))){
-        if(impute == 0 || is.null(Theta))
-            stop('Fit statistics cannot be computed when there are missing data. Pass suitable
-                 Theta and impute arguments to compute statistics following multiple
-                 data inputations')
-        collect <- vector('list', impute)
-        collect <- myLapply(collect, fn, obj=obj, Theta=Theta, calcNull=calcNull,
+        if(impute == 0)
+            stop('Fit statistics cannot be computed when there are missing data. Pass a suitable
+                 impute argument to compute statistics following multiple
+                 data inputations', call.=FALSE)
+        Theta <- fscores(obj, plausible.draws = impute)
+        collect <- myLapply(Theta, fn, obj=obj, calcNull=calcNull,
                             quadpts=quadpts)
         ave <- SD <- collect[[1L]]
         ave[ave!= 0] <- SD[SD!=0] <- 0
         for(i in 1L:impute)
             ave <- ave + collect[[i]]
         ave <- ave/impute
+        vars <- 0
         for(i in 1L:impute)
-            SD <- (ave - collect[[i]])^2
-        SD <- sqrt(SD/impute)
+            vars <- vars + (ave - collect[[i]])^2
+        SD <- sqrt(vars/impute)
         ret <- rbind(ave, SD)
         rownames(ret) <- c('stats', 'SD_stats')
         return(ret)
@@ -145,16 +148,14 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
             SRMSR <- as.list(SRMSR)
         } else SRMSR <- numeric(0)
         if(calcNull){
-            null.mod <- try(multipleGroup(obj@Data$data, 1, group=obj@Data$group,
-                                          TOL=1e-3, technical=list(NULL.MODEL=TRUE),
-                                          verbose=FALSE))
+            null.mod <- try(computeNullModel(data=obj@Data$data, itemtype=obj@itemtype, group=obj@Data$group))
+            if(is(null.mod, 'try-error'))
+                stop('Null model did not converge or is not supported', call.=FALSE)
             null.fit <- M2(null.mod, calcNull=FALSE)
-            newret$TLI <- (null.fit$Total.M2 / null.fit$df - newret$Total.M2/newret$df) /
-                (null.fit$Total.M2 / null.fit$df - 1)
-            newret$CFI <- 1 - (newret$Total.M2 - newret$df) /
-                (null.fit$Total.M2 - null.fit$df)
-            if(newret$CFI > 1) newret$CFI <- 1
-            if(newret$CFI < 0 ) newret$CFI <- 0
+            newret$TLI <- tli(X2=newret$Total.M2, X2.null=null.fit$Total.M2, df=newret$df,
+                              df.null=null.fit$df)
+            newret$CFI <- cfi(X2=newret$Total.M2, X2.null=null.fit$Total.M2, df=newret$df,
+                              df.null=null.fit$df)
         }
         M2s <- as.numeric(newret$M2)
         names(M2s) <- paste0(obj@Data$groupNames, '.M2')
@@ -167,10 +168,6 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         return(newret)
     }
 
-    if(!all(sapply(obj@pars, class) %in% c('dich', 'graded', 'gpcm', 'nominal',
-                                           'ideal', 'lca', 'GroupPars')))
-       stop('M2 currently only supported for \'dich\', \'ideal\', \'graded\',
-            \'gpcm\', and \'nominal\' objects')
     dots <- list(...)
     discrete <- FALSE
     if(!is.null(dots$discrete)){
@@ -181,7 +178,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     group <- if(is.null(attr(obj, 'MG'))) 1 else attr(obj, 'MG')
     nitems <- ncol(obj@Data$data)
     if(any(is.na(obj@Data$data)))
-        stop('M2 can not be calulated for data with missing values.')
+        stop('M2 can not be calulated for data with missing values.', call.=FALSE)
     adj <- obj@Data$mins
     dat <- t(t(obj@Data$data) - adj)
     N <- nrow(dat)
@@ -198,13 +195,18 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         estpars <- c(estpars, pars[[i]]@est)
     itemloc <- obj@itemloc
     bfactorlist <- obj@bfactor
+    if(.hasSlot(obj@lrPars, 'beta'))
+        stop('Latent regression models not yet supported')
     if(!discrete){
-        theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
 #         if(is.null(bfactorlist$Priorbetween[[1L]])){
         if(TRUE){ #TODO bifactor reduction possibilty? Not as effective at computing marginals
             prior <- Priorbetween <- sitems <- specific <- NULL
-            Theta <- if(QMC) qnorm(sfsmisc::QUnif(quadpts, min=0, max=1, p=obj@nfact, leap=409), sd=2)
-                else thetaComb(theta, obj@nfact)
+            if(QMC){
+                Theta <- QMC_quad(npts=quadpts, nfact=obj@nfact, lim=theta_lim)
+            } else {
+                theta <- as.matrix(seq(theta_lim[1L], theta_lim[2L], length.out = quadpts))
+                Theta <- thetaComb(theta, obj@nfact)
+            }
             gstructgrouppars <- ExtractGroupPars(pars[[nitems+1L]])
             Prior <- mirt_dmvnorm(Theta,gstructgrouppars$gmeans,
                                            gstructgrouppars$gcov)
@@ -293,7 +295,7 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
     Xi2 <- rbind(cbind(Xi2els$Xi11, Xi2els$Xi12), cbind(t(Xi2els$Xi12), Xi2els$Xi22))
     tmp <- qr.Q(qr(delta), complete=TRUE)
     if((ncol(delta) + 1L) > ncol(tmp))
-        stop('M2 cannot be calulated since df is too low')
+        stop('M2 cannot be calulated since df is too low', call.=FALSE)
     deltac <- tmp[,(ncol(delta) + 1L):ncol(tmp), drop=FALSE]
     C2 <- deltac %*% solve(t(deltac) %*% Xi2 %*% deltac) %*% t(deltac)
     M2 <- N * t(p - e) %*% C2 %*% (p - e)
@@ -307,14 +309,11 @@ M2 <- function(obj, calcNull = TRUE, quadpts = NULL, Theta = NULL, impute = 0, C
         ret[[paste0("RMSEA_", alpha*100)]]  <- RMSEA.90_CI[1L]
         ret[[paste0("RMSEA_", (1-alpha)*100)]] <- RMSEA.90_CI[2L]
         if(calcNull){
-            null.mod <- try(mirt(obj@Data$data, 1, TOL=1e-3, technical=list(NULL.MODEL=TRUE),
-                                 verbose=FALSE))
+            null.mod <- try(computeNullModel(data=obj@Data$data, itemtype=obj@itemtype))
+            if(is(null.mod, 'try-error')) stop('Null model did not converge', call.=FALSE)
             null.fit <- M2(null.mod, calcNull=FALSE, quadpts=quadpts)
-            ret$TLI <- (null.fit$M2 / null.fit$df - ret$M2/ret$df) /
-                (null.fit$M2 / null.fit$df - 1)
-            ret$CFI <- 1 - (ret$M2 - ret$df) / (null.fit$M2 - null.fit$df)
-            if(ret$CFI > 1) ret$CFI <- 1
-            if(ret$CFI < 0) ret$CFI <- 0
+            ret$TLI <- tli(X2=ret$M2, X2.null=null.fit$M2, df=ret$df, df.null=null.fit$df)
+            ret$CFI <- cfi(X2=ret$M2, X2.null=null.fit$M2, df=ret$df, df.null=null.fit$df)
         }
     } else {
         ret$nrowT <- length(p)

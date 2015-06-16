@@ -19,10 +19,10 @@ test_that('dich data', {
     sum <- summary(mod1, verbose = FALSE)
     expect_is(sum, 'list')
     fs <- fscores(mod1, method = 'EAPsum', verbose = FALSE)
-    expect_equal(fs[1:3,'Theta.1'], c(-3.086056, -3.028396, -2.959453), tolerance = 1e-4)
-    expect_equal(fs[1:3,'Theta.2'], c(-1.3570073, -1.0763397, -0.7812878), tolerance = 1e-4)
+    expect_equal(fs[1:3,'Theta.1'], c(-3.086119, -3.028427, -2.959479), tolerance = 1e-4)
+    expect_equal(fs[1:3,'Theta.2'], c(-1.3570059, -1.0763476, -0.7813406), tolerance = 1e-4)
     fit <- M2(mod1)
-    expect_equal(fit$M2, 560.4704, tolerance = 1e-2)
+    expect_equal(fit$M2, 553.6781, tolerance = 1e-2)
     expect_equal(fit$df, 432, tolerance = 1e-2)
     pfit1 <- personfit(mod1)
     expect_is(pfit1, 'data.frame')
@@ -141,11 +141,11 @@ test_that('dich data', {
         G2 = 9-16
         COV = G1*G2')
 
-    simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 5e-3, verbose=FALSE)
+    simmod <- bfactor(dataset, specific, model, quadpts = 11, TOL = 1e-2, verbose=FALSE)
     expect_is(simmod, 'SingleGroupClass')
     expect_equal(simmod@df, 65486)
     cfs <- as.numeric(do.call(c, coef(simmod, digits=4)))
     cfs <- cfs[cfs != 0 & cfs != 1]
-    expect_equal(cfs, c(1.1435,0.2137,-1.1342,0.8516,0.5232,0.2348,1.3427,0.1383,1.1393,0.9688,0.6237,-2.2923,1.0951,0.4546,0.4806,1.1037,0.4254,0.5886,1.0589,0.5667,-0.6587,1.1585,0.6428,-0.5176,0.907,0.4958,-0.4842,1.1138,0.6011,-0.9722,1.0039,0.5618,-0.4866,1.057,0.4562,-1.0027,1.0099,0.206,-0.7226,1.1979,0.441,0.0331,0.9131,0.4524,0.8878,0.9367,0.5476,-0.0577,0.6691),
+    expect_equal(cfs, c(1.1321,0.2722,-1.136,0.8387,0.4794,0.2329,1.3158,0.2305,1.136,0.9552,0.636,-2.2913,1.0799,0.4976,0.4818,1.1128,0.4093,0.5901,1.0672,0.5455,-0.6589,1.1664,0.6226,-0.5177,0.9135,0.4828,-0.4833,1.1199,0.5909,-0.9722,1.0074,0.5479,-0.4852,1.0437,0.4742,-1.001,0.9845,0.2785,-0.7205,1.1877,0.4952,0.035,0.9067,0.4603,0.8892,0.9204,0.5322,-0.0561,0.6478),
                  tolerance = 1e-2)
 })

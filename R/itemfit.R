@@ -4,7 +4,8 @@
 #' \eqn{\chi^2} values for unidimensional models, and S-X2 statistics for unidimensional and
 #' multidimensional models (Kang & Chen, 2007; Orlando & Thissen, 2000).
 #' For Rasch, partial credit, and rating scale models infit and outfit statistics are
-#' also produced.
+#' also produced. Poorly fitting items should be inspected with \code{\link{itemGAM}} to diagnose
+#' whether the functional form of the IRT model was misspecified or could be improved.
 #'
 #' @aliases itemfit
 #' @param x a computed model object of class \code{SingleGroupClass},
@@ -31,8 +32,8 @@
 #'   ignored and these values will be used instead. Also required when estimating statistics
 #'   with missing data via imputation
 #' @param impute a number indicating how many imputations to perform (passed to
-#'   \code{\link{imputeMissing}}) when there are missing data present. This requires a
-#'   precomputed \code{Theta} input. Will return a data.frame object with the mean estimates
+#'   \code{\link{imputeMissing}}) when there are missing data present.
+#'   Will return a data.frame object with the mean estimates
 #'   of the stats and their imputed standard deviations
 #' @param digits number of digits to round result to. Default is 4
 #' @param ... additional arguments to be passed to \code{fscores()}
@@ -41,7 +42,7 @@
 #' @export itemfit
 #'
 #' @seealso
-#' \code{\link{personfit}}
+#' \code{\link{personfit}}, \code{\link{itemGAM}}
 #'
 #' @references
 #'
@@ -78,10 +79,12 @@
 #'
 #' itemfit(x, empirical.plot = 1) #empirical item plot
 #' itemfit(x, empirical.plot = 1, empirical.CI = .99) #empirical item plot with 99% CI's
+#'
 #' #method='ML' agrees better with eRm package
 #' itemfit(raschfit, method = 'ML') #infit and outfit stats
+#'
 #' #same as above, but inputting ML estimates instead
-#' Theta <- fscores(raschfit, method = 'ML', full.scores=TRUE, scores.only=TRUE)
+#' Theta <- fscores(raschfit, method = 'ML', full.scores=TRUE)
 #' itemfit(raschfit, Theta=Theta)
 #'
 #' #similar example to Kang and Chen 2007
@@ -107,9 +110,8 @@
 #' data[sample(1:prod(dim(data)), 500)] <- NA
 #' raschfit <- mirt(data, 1, itemtype='Rasch')
 #'
-#' mirtCluster()
-#' Theta <- fscores(raschfit, method = 'ML', full.scores=TRUE)
-#' itemfit(raschfit, impute = 10, Theta=Theta)
+#' mirtCluster() # run in parallel
+#' itemfit(raschfit, impute = 10)
 #'
 #'   }
 #'
@@ -117,7 +119,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
                     empirical.plot = NULL, empirical.CI = 0, method = 'EAP', Theta = NULL,
                     impute = 0, digits = 4, ...){
 
-    fn <- function(collect, obj, Theta, digits, ...){
+    fn <- function(Theta, obj, digits, ...){
         tmpdat <- imputeMissing(obj, Theta)
         tmpmod <- mirt(tmpdat, obj@nfact, pars = vals, itemtype = obj@itemtype)
         tmpmod@pars <- obj@pars
@@ -126,24 +128,24 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
 
     if(missing(x)) missingMsg('x')
     if(is(x, 'MixedClass'))
-        stop('mixedmirt objects not supported')
+        stop('mixedmirt objects not supported', call.=FALSE)
     discrete <- FALSE
     if(is(x, 'DiscreteClass')){
         class(x) <- 'MultipleGroupClass'
         discrete <- TRUE
     }
 
-    if(any(is.na(x@Data$data)) && !is(x, 'MultipleGroupClass')){
-        if(impute == 0 || is.null(Theta))
-            stop('Fit statistics cannot be computed when there are missing data. Pass suitable
-                 Theta and impute arguments to compute statistics following multiple data
-                 inputations')
+    if((impute != 0 || any(is.na(x@Data$data))) && !is(x, 'MultipleGroupClass')){
+        if(impute == 0)
+            stop('Fit statistics cannot be computed when there are missing data. Pass a suitable
+                 impute argument to compute statistics following multiple data
+                 imputations', call.=FALSE)
+        stopifnot(impute > 1L)
+        Theta <- fscores(x, plausible.draws = impute)
         collect <- vector('list', impute)
         vals <- mod2values(x)
         vals$est <- FALSE
-        if(sum(is.na(x@Data$data)) / (prod(dim(x@Data$data))) > 0.05)
-            warning('Imputation may not be effective for large amounts of missing data.')
-        collect <- myLapply(collect, fn, obj=x, Theta=Theta, vals=vals,
+        collect <- myLapply(Theta, fn, obj=x, vals=vals,
                             Zh=Zh, X2=X2, group.size=group.size, mincell=mincell,
                             S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
                             empirical.CI=empirical.CI, method=method, impute=0,
@@ -156,7 +158,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
             ave[pick1, pick2] <- ave[pick1, pick2] + collect[[i]][pick1, pick2]
         ave[pick1, pick2] <- ave[pick1, pick2]/impute
         for(i in 1L:impute)
-            SD[pick1, pick2] <- (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
+            SD[pick1, pick2] <- SD[pick1, pick2] + (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
         SD[pick1, pick2] <- sqrt(SD[pick1, pick2]/impute)
         SD$item <- paste0('SD_', SD$item)
         SD <- rbind(NA, SD)
@@ -167,7 +169,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
     if(is(x, 'MultipleGroupClass')){
         ret <- vector('list', length(x@pars))
         if(is.null(Theta))
-            Theta <- fscores(x, method=method, scores.only=TRUE, full.scores=TRUE, ...)
+            Theta <- fscores(x, method=method, full.scores=TRUE, ...)
         for(g in 1L:length(x@pars)){
             tmpTheta <- Theta[x@Data$groupNames[g] == x@Data$group, , drop=FALSE]
             tmp_obj <- MGC2SC(x, g)
@@ -189,8 +191,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
     pars <- x@pars
     if(Zh || X2){
         if(is.null(Theta))
-            Theta <- fscores(x, verbose=FALSE, full.scores=TRUE,
-                             scores.only=TRUE, method=method, ...)
+            Theta <- fscores(x, verbose=FALSE, full.scores=TRUE, method=method, ...)
         prodlist <- attr(pars, 'prodlist')
         nfact <- x@nfact + length(prodlist)
         fulldata <- x@Data$fulldata[[1L]]
@@ -260,7 +261,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         n.uniqueGroups <- length(unique(Groups))
         X2 <- df <- RMSEA <- rep(0, J)
         if(!is.null(empirical.plot)){
-            if(nfact > 1L) stop('Cannot make empirical plot for multidimensional models')
+            if(nfact > 1L) stop('Cannot make empirical plot for multidimensional models', call.=FALSE)
             theta <- seq(-4,4, length.out=40)
             ThetaFull <- thetaComb(theta, nfact)
             if(!is.numeric(empirical.plot)){
@@ -335,13 +336,11 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         }
         ret$X2 <- X2
         ret$df <- df
-        ret$p.X2 <- round(1 - pchisq(X2, df), 4)
+        ret$p.X2 <- 1 - pchisq(X2, df)
     }
     if(S_X2){
         dat <- x@Data$data
         adj <- x@Data$mins
-        if(any(adj > 0))
-            message('Data adjusted so that the lowest category score for every item is 0')
         dat <- t(t(dat) - adj)
         S_X2 <- df.S_X2 <- numeric(J)
         O <- makeObstables(dat, x@K)
@@ -349,7 +348,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         dots <- list(...)
         QMC <- ifelse(is.null(dots$QMC), FALSE, dots$QMC)
         quadpts <- dots$quadpts
-        if(is.null(quadpts) && QMC) quadpts <- 2000L
+        if(is.null(quadpts) && QMC) quadpts <- 15000L
         if(is.null(quadpts)) quadpts <- select_quadpts(x@nfact)
         theta_lim <- dots$theta_lim
         if(is.null(theta_lim)) theta_lim <- c(-6,6)
@@ -370,7 +369,7 @@ itemfit <- function(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150, min
         S_X2[df.S_X2 <= 0] <- NaN
         ret$S_X2 <- S_X2
         ret$df.S_X2 <- df.S_X2
-        ret$p.S_X2 <- round(1 - pchisq(S_X2, df.S_X2), 4)
+        ret$p.S_X2 <- 1 - pchisq(S_X2, df.S_X2)
     }
     ret[,sapply(ret, class) == 'numeric'] <- round(ret[,sapply(ret, class) == 'numeric'], digits)
     return(ret)

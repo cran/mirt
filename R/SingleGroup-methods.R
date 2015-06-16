@@ -48,10 +48,16 @@ setMethod(
                         'is a possible local maximum', '\n', sep = "")
         }
         if(length(x@logLik) > 0){
-            cat("\nLog-likelihood = ", x@logLik, if(method == 'MHRM')
-                paste(', SE =', round(x@SElogLik,3)), "\n",sep='')
-            cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
-            cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
+            if(x@logPrior != 0){
+                cat("\nLog-posterior = ", x@logLik + x@logPrior, if(method == 'MHRM')
+                    paste(', SE =', round(x@SElogLik,3)), "\n",sep='')
+                cat("DIC = ", x@DIC, "\n", sep='')
+            } else {
+                cat("\nLog-likelihood = ", x@logLik, if(method == 'MHRM')
+                    paste(', SE =', round(x@SElogLik,3)), "\n",sep='')
+                cat("AIC = ", x@AIC, "; AICc = ", x@AICc, "\n", sep='')
+                cat("BIC = ", x@BIC, "; SABIC = ", x@SABIC, "\n", sep='')
+            }
             if(!is.nan(x@p)){
                 cat("G2 (", x@df,") = ", round(x@G2,2), ", p = ", round(x@p,4), sep='')
                 cat("\nRMSEA = ", round(x@RMSEA,3), ", CFI = ", round(x@CFI,3),
@@ -102,8 +108,11 @@ setMethod(
 #'   \code{'oblimax'}, \code{'entropy'}, \code{'quartimax'}, \code{'simplimax'},
 #'   \code{'bentlerT'}, \code{'bentlerQ'}, \code{'tandemI'}, \code{'tandemII'},
 #'   \code{'geominT'}, \code{'geominQ'}, \code{'cfT'}, \code{'cfQ'}, \code{'infomaxT'},
-#'   \code{'infomaxQ'}, \code{'mccammon'}, \code{'bifactorT'}, \code{'bifactorQ'}
-#' @param Target a dummy variable matrix indicting a target rotation pattern
+#'   \code{'infomaxQ'}, \code{'mccammon'}, \code{'bifactorT'}, \code{'bifactorQ'}.
+#'
+#'   For models that are not exploratory this input will automatically be set to \code{'none'}
+#' @param Target a dummy variable matrix indicting a target rotation pattern. This is required for
+#'   rotations such as \code{'targetT'}, \code{'targetQ'}, \code{'pstT'}, and \code{'pstQ'}
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #'   loadings should be suppressed. Typical values are around .3 in most
 #'   statistical software. Default is 0 for no suppression
@@ -133,9 +142,8 @@ setMethod(
 setMethod(
     f = "summary",
     signature = 'SingleGroupClass',
-    definition = function(object, rotate = NULL, Target = NULL, suppress = 0, digits = 3,
+    definition = function(object, rotate = 'oblimin', Target = NULL, suppress = 0, digits = 3,
                           printCI = FALSE, verbose = TRUE, ...){
-        if(is.null(rotate)) rotate <- object@rotate
         nfact <- ncol(object@F)
         if (!object@exploratory || rotate == 'none') {
             F <- object@F
@@ -157,15 +165,11 @@ setMethod(
                 cat("\nFactor correlations: \n\n")
                 print(round(Phi, digits))
             }
-            invisible(list(rotF=F,h2=h2,fcor=matrix(1)))
+            invisible(list(rotF=F,h2=h2,fcor=Phi))
         } else {
             F <- object@F
             h2 <- as.matrix(object@h2)
             colnames(h2) <- "h2"
-            if(rotate == ''){
-                rotate <- object@rotate
-                Target <- object@Target
-            }
             rotF <- Rotate(F, rotate, Target = Target, ...)
             SS <- apply(rotF$loadings^2,2,sum)
             L <- rotF$loadings
@@ -186,7 +190,7 @@ setMethod(
                 print(round(Phi, digits))
             }
             if(any(h2 > 1))
-                warning("Solution has Heywood cases. Interpret with caution.")
+                warning("Solution has Heywood cases. Interpret with caution.", call.=FALSE)
             invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))
         }
     }
@@ -202,7 +206,7 @@ setMethod(
 #'   95 percent confidence intervals
 #' @param IRTpars logical; convert slope intercept parameters into traditional IRT parameters?
 #'   Only applicable to unidimensional models
-#' @param rotate see \code{\link{mirt}} for details
+#' @param rotate see \code{\link{mirt}} for details. The default rotation is \code{'none'}
 #' @param Target a dummy variable matrix indicting a target rotation pattern
 #' @param printSE logical; print the standard errors instead of the confidence intervals?
 #' @param digits number of significant digits to be rounded
@@ -228,6 +232,7 @@ setMethod(
 #' x <- mirt(dat, 1)
 #' coef(x)
 #' coef(x, IRTpars = TRUE)
+#' coef(x, simplify = TRUE)
 #'
 #' #with computed information matrix
 #' x <- mirt(dat, 1, SE = TRUE)
@@ -249,7 +254,7 @@ setMethod(
                           simplify=FALSE, verbose = TRUE, ...){
         if(printSE && length(object@pars[[1L]]@SEpar)) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
-            stop('CI must be between 0 and 1')
+            stop('CI must be between 0 and 1', call.=FALSE)
         z <- abs(qnorm((1 - CI)/2))
         SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         K <- object@K
@@ -260,8 +265,7 @@ setMethod(
             a[i, ] <- ExtractLambdas(object@pars[[i]])
 
         if (object@exploratory && rotate != 'none'){
-            rotname <- ifelse(rotate == '', object@rotate, rotate)
-            if(verbose) cat("\nRotation: ", rotname, "\n\n")
+            if(verbose) cat("\nRotation: ", rotate, "\n\n")
             so <- summary(object, rotate=rotate, Target=Target, verbose=FALSE, digits=digits, ...)
             a <- rotateLambdas(so) * 1.702
             for(i in 1:J)
@@ -271,7 +275,8 @@ setMethod(
         allPars <- list()
         if(IRTpars){
             if(object@nfact > 1L)
-                stop('traditional parameterization is only available for unidimensional models')
+                stop('traditional parameterization is only available for unidimensional models',
+                     call.=FALSE)
             for(i in 1:(J+1))
                 allPars[[i]] <- round(mirt2traditional(object@pars[[i]]), digits)
         } else {
@@ -338,7 +343,7 @@ setMethod(
     }
 )
 
-#' Compare nested models
+#' Compare nested models with likelihood-based statistics
 #'
 #' Compare nested models using likelihood ratio, AIC, BIC, etc.
 #'
@@ -375,7 +380,6 @@ setMethod(
                 object2 <- temp
             }
         }
-        X2 <- round(2*object2@logLik - 2*object@logLik, 3)
         if(verbose){
             cat('\nModel 1: ')
             print(object@Call)
@@ -383,14 +387,21 @@ setMethod(
             print(object2@Call)
             cat('\n')
         }
-        ret <- data.frame(AIC = c(object@AIC, object2@AIC),
-                          AICc = c(object@AICc, object2@AICc),
-                          SABIC = c(object@SABIC, object2@SABIC),
-                          BIC = c(object@BIC, object2@BIC),
-                          logLik = c(object@logLik, object2@logLik),
-                          X2 = c(NaN, X2),
-                          df = c(NaN, abs(df)),
-                          p = c(NaN, round(1 - pchisq(X2,abs(df)),4)))
+        if(any(object2@logPrior != 0 || object@logPrior != 0)){
+            BF <- (object@logLik + object@logPrior) - (object2@logLik + object2@logPrior)
+            ret <- data.frame(DIC = c(object@DIC, object2@DIC),
+                              Bayes_Factor = c(NA, exp(BF)))
+        } else {
+            X2 <- round(2*object2@logLik - 2*object@logLik, 3)
+            ret <- data.frame(AIC = c(object@AIC, object2@AIC),
+                              AICc = c(object@AICc, object2@AICc),
+                              SABIC = c(object@SABIC, object2@SABIC),
+                              BIC = c(object@BIC, object2@BIC),
+                              logLik = c(object@logLik, object2@logLik),
+                              X2 = c(NaN, X2),
+                              df = c(NaN, abs(df)),
+                              p = c(NaN, round(1 - pchisq(X2,abs(df)),4)))
+        }
         return(ret)
     }
 )
@@ -419,7 +430,10 @@ setMethod(
 #' @param Theta a matrix of factor scores used for statistics that require empirical estimates (i.e., Q3).
 #'   If supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
 #'   be used instead
-#' @param suppress a numeric value indiciating which parameter local dependency combinations
+#' @param theta_lim range for the integration grid
+#' @param quadpts number of quadrature nodes to use. The default is extracted from model (if available)
+#'   or generated automatically if not available
+#' @param suppress a numeric value indicating which parameter local dependency combinations
 #'   to flag as being too high. Absolute values for the standardized estimates greater than
 #'   this value will be returned, while all values less than this value will be set to NA
 #' @param ... additional arguments to be passed to \code{fscores()}
@@ -447,7 +461,7 @@ setMethod(
 #' residuals(x, suppress = .15)
 #'
 #' # with and without supplied factor scores
-#' Theta <- fscores(x, full.scores=TRUE, scores.only=TRUE)
+#' Theta <- fscores(x, full.scores=TRUE)
 #' residuals(x, type = 'Q3', Theta=Theta)
 #' residuals(x, type = 'Q3', method = 'ML')
 #'
@@ -457,9 +471,11 @@ setMethod(
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, type = 'LD', digits = 3, df.p = FALSE, full.scores = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
-                          suppress = 1, ...)
+                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, ...)
     {
         dots <- list(...)
+        if(.hasSlot(object@lrPars, 'beta'))
+            stop('Latent regression models not yet supported')
         discrete <- FALSE
         if(!is.null(dots$discrete)) discrete <- TRUE
         K <- object@K
@@ -472,11 +488,12 @@ setMethod(
         diag(res) <- NA
         colnames(res) <- rownames(res) <- colnames(data)
         if(!discrete){
-            quadpts <- object@quadpts
+            if(is.null(quadpts))
+                quadpts <- object@quadpts
             if(is.nan(quadpts))
-                quadpts <- select_quadpts2(nfact)
+                quadpts <- select_quadpts(nfact)
             bfactorlist <- object@bfactor
-            theta <- as.matrix(seq(-(.8 * sqrt(quadpts)), .8 * sqrt(quadpts), length.out = quadpts))
+            theta <- as.matrix(seq(theta_lim[1L], theta_lim[2L], length.out = quadpts))
             if(type != 'Q3'){
                 if(is.null(bfactorlist$Priorbetween[[1L]])){
                     Theta <- thetaComb(theta, nfact)
@@ -484,12 +501,12 @@ setMethod(
                     Theta <- object@Theta
                 }
             } else if(is.null(Theta)){
-                Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, scores.only=TRUE, ...)
+                Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, ...)
             }
         } else {
             Theta <- object@Theta
             if(!any(type %in% c('exp', 'LD', 'LDG2')))
-                stop('residual type not supported for discrete latent variables')
+                stop('residual type not supported for discrete latent variables', call.=FALSE)
         }
         itemnames <- colnames(data)
         listtabs <- list()
@@ -572,7 +589,7 @@ setMethod(
             } else {
                 tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
                 if(!is.null(printvalue)){
-                    if(!is.numeric(printvalue)) stop('printvalue is not a number.')
+                    if(!is.numeric(printvalue)) stop('printvalue is not a number.', call.=FALSE)
                     tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
                 }
                 return(tabdata)
@@ -604,13 +621,13 @@ setMethod(
             res <- round(res,digits)
             return(res)
         } else {
-            stop('specified type does not exist')
+            stop('specified type does not exist', call.=FALSE)
         }
 
     }
 )
 
-#' Plot various test implied functions from models
+#' Plot various test-implied functions from models
 #'
 #' Plot various test implied response functions from models estimated in the mirt package.
 #'
@@ -618,7 +635,8 @@ setMethod(
 #'   \code{MultipleGroupClass}, or \code{DiscreteClass}
 #' @param y an arbitrary missing argument required for \code{R CMD check}
 #' @param type type of plot to view; can be \code{'info'} to show the test
-#'   information function, \code{'infocontour'} for the test information contours,
+#'   information function, \code{'rxx'} for the reliability function,
+#'   \code{'infocontour'} for the test information contours,
 #'   \code{'SE'} for the test standard error function, \code{'trace'} and \code{'infotrace'}
 #'   for all item probability information or trace lines (only available when all items are dichotomous),
 #'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} and
@@ -667,12 +685,14 @@ setMethod(
 #' plot(x, type = 'infotrace')
 #' plot(x, type = 'infotrace', facet_items = FALSE)
 #' plot(x, type = 'infoSE')
+#' plot(x, type = 'rxx')
 #'
 #' # confidence interval plots when information matrix computed
 #' plot(x)
 #' plot(x, MI=100)
 #' plot(x, type='info', MI=100)
 #' plot(x, type='SE', MI=100)
+#' plot(x, type='rxx', MI=100)
 #'
 #' # use the directlabels package to put labels on tracelines
 #' library(directlabels)
@@ -703,12 +723,15 @@ setMethod(
                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE, ...)
     {
         dots <- list(...)
+        if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score',
+                       'infocontour', 'infotrace', 'scorecontour', 'empiricalhist')))
+            stop('type supplied is not supported')
         if (any(theta_angle > 90 | theta_angle < 0))
-            stop('Improper angle specified. Must be between 0 and 90.')
+            stop('Improper angle specified. Must be between 0 and 90.', call.=FALSE)
         rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
         nfact <- x@nfact
         if(length(theta_angle) > nfact) type = 'infoangle'
-        if(nfact > 3) stop("Can't plot high dimensional solutions.")
+        if(nfact > 3) stop("Can't plot high dimensional solutions.", call.=FALSE)
         if(nfact == 2 && length(theta_angle) == 1L)
             theta_angle <- c(theta_angle, 90 - theta_angle)
         if(nfact == 3 && length(theta_angle) == 1L) theta_angle <- rep(90/3, 3)
@@ -720,12 +743,8 @@ setMethod(
         prodlist <- attr(x@pars, 'prodlist')
         if(length(prodlist) > 0)
             ThetaFull <- prodterms(Theta,prodlist)
-        info <- 0
-        if(any(sapply(x@pars, is , 'custom')) && type != 'trace' && type != 'score')
-            stop('Information function for custom classes not available')
-        if(any(sapply(x@pars, is , 'ideal')) && type != 'trace' && type != 'score')
-            warning('Information function for ideal point models are currently experimental')
-        if(all(!sapply(x@pars, is , 'custom'))){
+        info <- numeric(nrow(ThetaFull))
+        if(type %in% c('info', 'infocontour', 'rxx', 'SE', 'infoSE', 'infotrace')){
             for(l in 1:length(theta_angle)){
                 ta <- theta_angle[l]
                 if(nfact == 2) ta <- c(theta_angle[l], 90 - theta_angle[l])
@@ -752,18 +771,19 @@ setMethod(
         if(MI > 0L && nfact == 1L){
             tmpx <- x
             if(is(try(chol(x@information), silent=TRUE), 'try-error'))
-                stop('Proper information matrix must be precomputed in model')
+                stop('Proper information matrix must be precomputed in model', call.=FALSE)
             tmppars <- x@pars
             covB <- solve(x@information)
+            pre.ev <- eigen(covB)
             names <- colnames(covB)
             tmp <- lapply(names, function(x, split){
                 as.numeric(strsplit(x, split=split)[[1L]][-1L])
             }, split='\\.')
             imputenums <- do.call(c, tmp)
-            CIscore <- CIinfo <- matrix(0, MI, length(plt$score))
+            CIscore <- CIinfo <- rxx <- CIrxx <- matrix(0, MI, length(plt$score))
             for(i in 1L:MI){
                 while(TRUE){
-                    tmp <- try(imputePars(pars=x@pars, covB=covB,
+                    tmp <- try(imputePars(pars=x@pars, pre.ev=pre.ev,
                                           imputenums=imputenums, constrain=x@constrain),
                                silent=TRUE)
                     if(!is(tmp, 'try-error')) break
@@ -773,6 +793,7 @@ setMethod(
                 tmpscore <- rowSums(score * itemtrace)
                 CIscore[i, ] <- tmpscore
                 CIinfo[i, ] <- testinfo(tmpx, ThetaFull)[,1L]
+                CIrxx[i, ] <- CIinfo[i, ] / (CIinfo[i, ] + 1)
             }
         }
         if(nfact == 3){
@@ -815,7 +836,7 @@ setMethod(
                                  zlab=expression(SE(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
                                  scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
             } else {
-                stop('plot type not supported for three dimensional model')
+                stop('plot type not supported for three dimensional model', call.=FALSE)
             }
         } else if(nfact == 2){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2")
@@ -863,11 +884,12 @@ setMethod(
                                  zlab=expression(SE(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
                                  scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape, ...))
             } else {
-                stop('plot type not supported for two dimensional model')
+                stop('plot type not supported for two dimensional model', call.=FALSE)
             }
         } else {
             colnames(plt) <- c("info", "score", "Theta")
             plt$SE <- 1 / sqrt(plt$info)
+            plt$rxx <- plt$info / (plt$info + 1)
             if(MI > 0){
                 bs_range <- function(x, CI){
                     ss <- sort(x)
@@ -885,6 +907,9 @@ setMethod(
                 plt$CIinfolower <- tmp['lower', ]
                 plt$CISElower <- 1/sqrt(tmp['upper', ])
                 plt$CISEupper <- 1/sqrt(tmp['lower', ])
+                tmp <- apply(CIrxx, 2, bs_range, CI=CI)
+                plt$CIrxxupper <- tmp['upper', ]
+                plt$CIrxxlower <- tmp['lower', ]
             }
             if(type == 'info'){
                 if(is.null(main))
@@ -902,6 +927,23 @@ setMethod(
                 } else {
                     return(xyplot(info~Theta, plt, type='l', main = main,
                                   xlab = expression(theta), ylab=expression(I(theta)), ...))
+                }
+            } else if(type == 'rxx'){
+                if(is.null(main))
+                    main <- 'Reliability'
+                if(MI > 0){
+                    return(xyplot(rxx ~ Theta, data=plt,
+                                  upper=plt$CIrxxupper, lower=plt$CIrxxlower,
+                                  panel = function(x, y, lower, upper, ...){
+                                      panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
+                                                    col=grey(.9), border = FALSE, ...)
+                                      panel.xyplot(x, y, type='l', lty=1,...)
+                                  },
+                                  main = main, ylim=c(-0.1, 1.1),
+                                  ylab = expression(r[xx](theta)), xlab = expression(theta), ...))
+                } else {
+                    return(xyplot(rxx~Theta, plt, type='l', main = main, ylim=c(-0.1, 1.1),
+                                  xlab = expression(theta), ylab=expression(r[xx](theta)), ...))
                 }
             } else if(type == 'SE'){
                 if(is.null(main))
@@ -997,7 +1039,8 @@ setMethod(
                 if(is.null(main))
                     main <- 'Empirical Histogram'
                 Prior <- x@Prior[[1L]]
-                if(!x@empiricalhist) stop('Empirical histogram was not estimated for this object')
+                if(!x@empiricalhist)
+                    stop('Empirical histogram was not estimated for this object', call.=FALSE)
                 Theta <- as.matrix(seq(-(.8 * sqrt(x@quadpts)), .8 * sqrt(x@quadpts),
                                     length.out = x@quadpts))
                 Prior <- Prior * nrow(x@Data$data)
@@ -1012,7 +1055,7 @@ setMethod(
                               xlab = expression(theta), ylab = 'Expected Frequency',
                               type = 'b', main = main, ...))
             } else {
-                stop('plot not supported for unidimensional models')
+                stop('plot not supported for unidimensional models', call.=FALSE)
             }
         }
     }
@@ -1097,7 +1140,7 @@ traditional2mirt <- function(x, cls, ncat, digits = 3){
         par <- c(a1, ak, dk)
         names(par) <- c('a1', paste0('ak', 0:(ncat-1)), paste0('d', 0:(ncat-1)))
     } else {
-        stop('traditional2mirt item class not supported')
+        stop('traditional2mirt item class not supported', call.=FALSE)
     }
     par
 }

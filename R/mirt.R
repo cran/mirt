@@ -25,10 +25,9 @@
 #' including predictors is currently limited to the \code{\link{mixedmirt}} function.
 #'
 #' When specifying a single number greater than 1 as the \code{model} input to mirt
-#' an exploratory IRT model will be estimated. Rotation and target matrix options will be
-#' used in this subroutine and will be
-#' passed to the returned object for use in generic functions such as \code{summary()} and
-#' \code{fscores()}. Again, factor means and variances are fixed to ensure proper identification.
+#' an exploratory IRT model will be estimated. Rotation and target matrix options are available
+#' if they are passed to generic functions such as \code{\link{summary-method}} and
+#' \code{\link{fscores}}. Factor means and variances are fixed to ensure proper identification.
 #'
 #' If the model is an exploratory item factor analysis estimation will begin
 #' by computing a matrix of quasi-polychoric correlations. A
@@ -228,10 +227,10 @@
 #' @aliases mirt
 #' @param data a \code{matrix} or \code{data.frame} that consists of
 #'   numerically ordered data, with missing data coded as \code{NA}
-#' @param model an object returned from \code{mirt.model()} declaring how
-#'   the factor model is to be estimated, or a single numeric value indicating the number
-#'   of exploratory factors to estimate. See \code{\link{mirt.model}} for
-#'   more details
+#' @param model a string to be passed (or an object returned from) \code{\link{mirt.model}},
+#'   declaring how the IRT model is to be estimated (loadings, constraints, priors, etc).
+#'   For exploratory IRT models, a single numeric value indicating the number
+#'   of factors to extract is also supported
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
 #'   which will be repeated globally. The NULL default assumes that the items follow a graded or
 #'   2PL structure, however they may be changed to the following: 'Rasch', '2PL', '3PL', '3PLu',
@@ -269,7 +268,11 @@
 #'   to the objective function, and group hyper-parameters are omitted.
 #'   Equality an inequality functions should be of the form \code{function(p, optim_args)},
 #'   where \code{optim_args} is a list of internally parameters that largely can be ignored
-#'   when defining constraints (though use of \code{browser()} here may be helpful)
+#'   when defining constraints (though use of \code{browser()} here may be helpful). Note:
+#'   for the \code{'alabama'} optimizer, the starting values
+#'   should be adjusted such that all constraints are met prior to the first maximization-step.
+#'   The \code{'solnp'} optimizer is less sensative to this initial conditoin restriction, but it may also
+#'   if the model is unstable early in the EM cycles
 #' @param SE logical; estimate the standard errors by computing the parameter information matrix?
 #'    See \code{SE.type} for the type of estimates available
 #' @param SE.type type of estimation method to use for calculating the parameter information matrix
@@ -319,9 +322,9 @@
 #'   into the estimation with \code{pars = mymodifiedpars}
 #' @param quadpts number of quadrature points per dimension (must be larger than 2).
 #'   By default the number of quadrature uses the following scheme:
-#'   \code{switch(as.character(nfact), '1'=41, '2'=21, '3'=11, '4'=7, '5'=5, 3)}.
+#'   \code{switch(as.character(nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)}.
 #'   However, if the method input is set to \code{'QMCEM'} and this argument is left blank then
-#'   the default number of quasi-Monte Carlo integration nodes will be set to 2000
+#'   the default number of quasi-Monte Carlo integration nodes will be set to 5000 in total
 #' @param TOL convergence threshold for EM or MH-RM; defaults are .0001 and .001. If
 #'   \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}.
 #'   If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5}
@@ -342,8 +345,8 @@
 #'   weighting to be applied
 #' @param GenRandomPars logical; generate random starting values prior to optimization instead of
 #'   using the fixed internal starting values?
-#' @param gpcm_mats a list of matricies specifying how the scoring coefficients in the (generalized)
-#'   partial credit model should be constructed. If ommited, the standard gpcm format will be used
+#' @param gpcm_mats a list of matrices specifying how the scoring coefficients in the (generalized)
+#'   partial credit model should be constructed. If omitted, the standard gpcm format will be used
 #'   (i.e., \code{seq(0, k, by = 1)} for each trait). This input should be used if traits
 #'   should be scored different for each category (e.g., \code{matrix(c(0:3, 1,0,0,0), 4, 2)} for a
 #'   two-dimensional model where the first trait is scored like a gpcm, but the second trait is only
@@ -365,12 +368,6 @@
 #' @param key a numeric vector of the response scoring key. Required when using nested logit item
 #'   types, and must be the same length as the number of items used. Items that are not nested logit
 #'   will ignore this vector, so use \code{NA} in item locations that are not applicable
-#' @param rotate type of rotation to perform after the initial orthogonal
-#'   parameters have been extracted by using \code{summary}; default is \code{'oblimin'}.
-#'   If \code{rotate != ''} in the \code{summary}
-#'   input then the default from the object is ignored and the new rotation from the list
-#'   is used instead. See \code{\link{summary-method}} for a list of supported rotation options.
-#' @param Target a dummy variable matrix indicting a target rotation pattern
 #' @param calcNull logical; calculate the Null model for additional fit statistics (e.g., TLI)?
 #'   Only applicable if the data contains no NA's and the data is not overly sparse, otherwise
 #'   it is ignored
@@ -394,7 +391,8 @@
 #' @param technical a list containing lower level technical parameters for estimation. May be:
 #'   \describe{
 #'     \item{MAXQUAD}{maximum number of quadratures, which you can increase if you have more than
-#'       4GB or RAM on your PC; default 10000}
+#'       4GB or RAM on your PC; default 20000}
+#'     \item{theta_lim}{range of integration grid for each dimension; default is \code{c(-6, 6)}}
 #'     \item{NCYCLES}{maximum number of EM or MH-RM cycles; defaults are 500 and 2000}
 #'     \item{BURNIN}{number of burn in cycles (stage 1) in MH-RM; default 150}
 #'     \item{SEMCYCLES}{number of SEM cycles (stage 2) in MH-RM; default 50}
@@ -432,9 +430,9 @@
 #'       Default is TRUE}
 #'   }
 #' @param solnp_args a list of arguments to be passed to the \code{solnp::solnp()} function for
-#'   equality constraints, inequality constriants, etc
+#'   equality constraints, inequality constraints, etc
 #' @param alabama_args a list of arguments to be passed to the \code{alabama::constrOptim.nl()}
-#'   function for equality constraints, inequality constriants, etc
+#'   function for equality constraints, inequality constraints, etc
 #' @param control a list passed to the respective optimizers (i.e., \code{optim()}, \code{nlminb()},
 #'   etc)
 #' @param ... additional arguments to be passed
@@ -542,8 +540,8 @@
 #' #internally g and u pars are stored as logits, so usually a good idea to include normal prior
 #' #  to help stabilize the parameters. For a value around .182 use a mean
 #' #  of -1.5 (since 1 / (1 + exp(-(-1.5))) == .182)
-#' model <- mirt.model('F = 1-5
-#'                      PRIOR = (5, g, norm, -1.5, 3)')
+#' model <- 'F = 1-5
+#'          PRIOR = (5, g, norm, -1.5, 3)'
 #' mod1.3PL.norm <- mirt(data, model, itemtype = c('2PL', '2PL', '2PL', '2PL', '3PL'))
 #' coef(mod1.3PL.norm)
 #' #limited information fit statistics
@@ -564,14 +562,20 @@
 #'
 #' anova(mod1, mod2) #compare the two models
 #' scores <- fscores(mod2) #save factor score table
-#' scoresfull <- fscores(mod2, full.scores = TRUE, scores.only = TRUE) #factor scores
+#' scoresfull <- fscores(mod2, full.scores = TRUE) #factor scores for each response pattern
 #'
 #' #confirmatory (as an example, model is not identified since you need 3 items per factor)
+#' # Two ways to define a confirmatory model: with mirt.model, or with a string
+#'
+#' # these model definitions are equivalent
 #' cmodel <- mirt.model('
 #'    F1 = 1,4,5
 #'    F2 = 2,3')
+#' cmodel2 <- 'F1 = 1,4,5
+#'             F2 = 2,3'
 #'
 #' cmod <- mirt(data, cmodel)
+#' # cmod <- mirt(data, cmodel2) # same as above
 #' coef(cmod)
 #' anova(cmod, mod2)
 #' #check if identified by computing information matrix
@@ -591,9 +595,8 @@
 #' coef(pmod1_equalslopes)
 #'
 #' # using mirt.model syntax, constrain all item slopes to be equal
-#' model <- mirt.model('
-#'    F = 1-4
-#'    CONSTRAIN = (1-4, a1)')
+#' model <- 'F = 1-4
+#'           CONSTRAIN = (1-4, a1)'
 #' (pmod1_equalslopes <- mirt(Science, model))
 #' coef(pmod1_equalslopes)
 #'
@@ -746,10 +749,10 @@
 #' #analyses
 #' #CIFA for 2 factor crossed structure
 #'
-#' model.1 <- mirt.model('
+#' model.1 <- '
 #'   F1 = 1-4
 #'   F2 = 4-8
-#'   COV = F1*F2')
+#'   COV = F1*F2'
 #'
 #' #compute model, and use parallel computation of the log-likelihood
 #' mirtCluster()
@@ -760,10 +763,10 @@
 #'
 #' #####
 #' #bifactor
-#' model.3 <- mirt.model('
+#' model.3 <- '
 #'   G = 1-8
 #'   F1 = 1-4
-#'   F2 = 5-8')
+#'   F2 = 5-8'
 #'
 #' mod3 <- mirt(dataset,model.3, method = 'MHRM')
 #' coef(mod3)
@@ -777,15 +780,15 @@
 #' data <- key2binary(SAT12,
 #'                   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #'
-#' model.quad <- mirt.model('
+#' model.quad <- '
 #'        F1 = 1-32
-#'   (F1*F1) = 1-32')
+#'   (F1*F1) = 1-32'
 #'
 #'
-#' model.combo <- mirt.model('
+#' model.combo <- '
 #'        F1 = 1-16
 #'        F2 = 17-32
-#'   (F1*F2) = 1-8')
+#'   (F1*F2) = 1-8'
 #'
 #' (mod.quad <- mirt(data, model.quad))
 #' summary(mod.quad)
@@ -799,7 +802,7 @@
 #' itemplot(mod.combo, 2, type = 'score')
 #' itemplot(mod.combo, 2, type = 'infocontour')
 #'
-#' ## empical histogram examples (normal, skew and bimodality)
+#' ## empirical histogram examples (normal, skew and bimodality)
 #' #make some data
 #' set.seed(1234)
 #' a <- matrix(rlnorm(50, .2, .2))
@@ -830,9 +833,9 @@
 #' dat <- expand.table(LSAT6)
 #'
 #' #free latent mean and variance terms
-#' model <- mirt.model('Theta = 1-5
-#'                     MEAN = Theta
-#'                     COV = Theta*Theta')
+#' model <- 'Theta = 1-5
+#'           MEAN = Theta
+#'           COV = Theta*Theta'
 #'
 #' #view how vector of parameters is organized internally
 #' sv <- mirt(dat, model, itemtype = 'Rasch', pars = 'values')
@@ -891,13 +894,41 @@
 #' SEpar <- lapply(so, function(x) x$coefficients[, 'Std. Error'])
 #' averageMI(par, SEpar)
 #'
+#' ############
+#' # Example using Guass-Hermite quadrature with custom input functions
+#'
+#' library(fastGHQuad)
+#' data(SAT12)
+#' data <- key2binary(SAT12,
+#'                    key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#' GH <- gaussHermiteData(50)
+#' Theta <- matrix(GH$x)
+#'
+#' # This prior works for uni- and multi-dimensional models
+#' prior <- function(Theta, Etable){
+#'     P <- grid <- GH$w / sqrt(pi)
+#'     if(ncol(Theta) > 1)
+#'         for(i in 2:ncol(Theta))
+#'             P <- expand.grid(P, grid)
+#'      if(!is.vector(P)) P <- apply(P, 1, prod)
+#'      P
+#' }
+#'
+#' GHmod1 <- mirt(data, 1, optimizer = 'NR',
+#'               technical = list(customTheta = Theta, customPriorFun = prior))
+#' coef(GHmod1, simplify=TRUE)
+#'
+#' Theta2 <- as.matrix(expand.grid(Theta, Theta))
+#' GHmod2 <- mirt(data, 2, optimizer = 'NR', TOL = .0002,
+#'               technical = list(customTheta = Theta2, customPriorFun = prior))
+#' summary(GHmod2, suppress=.2)
+#'
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  covdata = NULL, formula = NULL, SE.type = 'crossprod', method = 'EM',
                  optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = TRUE, draws = 5000, survey.weights = NULL,
-                 rotate = 'oblimin', Target = NaN, quadpts = NULL,
-                 TOL = NULL, gpcm_mats = list(), grsm.block = NULL, key = NULL,
+                 quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL, key = NULL,
                  nominal.highlow = NULL, large = FALSE,
                  GenRandomPars = FALSE, accelerate = 'Ramsay', empiricalhist = FALSE, verbose = TRUE,
                  solnp_args = list(), alabama_args = list(), control = list(), technical = list(), ...)
@@ -905,11 +936,11 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
     Call <- match.call()
     if(!is.null(covdata) && !is.null(formula)){
         if(!is.data.frame(covdata))
-            stop('covdata must be a data.frame object')
+            stop('covdata must be a data.frame object', call.=FALSE)
         if(nrow(covdata) != nrow(data))
-            stop('number of rows in covdata do not match number of rows in data')
+            stop('number of rows in covdata do not match number of rows in data', call.=FALSE)
         if(!(method %in% c('EM', 'QMCEM')))
-            stop('method must be from the EM estimation family')
+            stop('method must be from the EM estimation family', call.=FALSE)
         tmp <- apply(covdata, 1, function(x) sum(is.na(x)) > 0)
         if(any(tmp)){
             message('removing rows with NAs in covdata')
@@ -921,7 +952,7 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)),
                       itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
                       pars=pars, method=method, constrain=constrain, SE=SE, TOL=TOL,
-                      parprior=parprior, quadpts=quadpts, rotate=rotate, Target=Target,
+                      parprior=parprior, quadpts=quadpts,
                       technical=technical, verbose=verbose, survey.weights=survey.weights,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
                       nominal.highlow=nominal.highlow, accelerate=accelerate, draws=draws,

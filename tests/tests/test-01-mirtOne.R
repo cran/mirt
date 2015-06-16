@@ -52,7 +52,7 @@ test_that('dich', {
     expect_equal(modm7@df, 11)
     expect_is(modm7, 'SingleGroupClass')
     cfs <- as.numeric(do.call(c, coef(modm7)))
-    expect_equal(cfs, c(5.077,8.486,0.154,0.859,5.863,3.665,0.16,0.843,10.021,10.732,0.155,0.862,1.282,0.854,0.153,0.845,4.634,8.911,0.154,0.859,0,1), tolerance = 1e-2)
+    expect_equal(cfs, c(5.143,8.598,0.154,0.859,5.86,3.667,0.16,0.843,10.273,11.019,0.155,0.861,1.281,0.854,0.153,0.845,4.686,9.008,0.154,0.859,0,1), tolerance = 1e-2)
     data[1,1] <- data[2,2] <- NA
     modm6 <- mirt(data, 1, verbose=FALSE)
     expect_equal(modm6@df, 21)
@@ -67,11 +67,11 @@ test_that('dich', {
     mod <- mirt(dat, 1, method = 'QMCEM', verbose=FALSE, optimizer='NR')
     expect_equal(mod@logLik, -2466.653, tolerance=1e-4)
     fs <- fscores(mod, QMC=TRUE, verbose=FALSE)
-    expect_equal(fs[1:3,'F1'], c(-1.697455, -1.319727, -1.301661), tolerance=1e-4)
+    expect_equal(fs[1:3,'F1'], c(-1.9607, -1.5228, -1.5019), tolerance=1e-4)
     m2 <- M2(mod, QMC=TRUE)
-    expect_equal(m2$M2, 4.738382, tolerance=1e-5)
+    expect_equal(m2$M2, 4.615544, tolerance=1e-5)
     ifit <- itemfit(mod, QMC=TRUE, digits = 20)
-    expect_equal(ifit$p.S_X2[1], .7986, tolerance = 1e-2)
+    expect_equal(ifit$p.S_X2[1], .7769, tolerance = 1e-2)
 
     fm1 <- fscores(modm1, verbose = FALSE)
     expect_is(fm1, 'matrix')
@@ -131,8 +131,8 @@ test_that('dich', {
     expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
 
     data <- expand.table(LSAT7)
-    model <- mirt.model('F1 = 1-3
-        F2 = 3-5', quiet = TRUE)
+    model <- 'F1 = 1-3
+              F2 = 3-5'
     modm1 <- mirt(data, model, verbose=FALSE)
     expect_equal(modm1@df, 20)
     modm2 <- mirt(data, model, itemtype=c('2PL','2PL', 'PC2PL','2PL', '2PL'), TOL=1e-3, verbose=FALSE)

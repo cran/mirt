@@ -1,3 +1,116 @@
+Changes in mirt 1.10
+
+  - when using prior distributions, starting values now automatically set
+  equal to the mode of the prior distribution, and appropriate lower and
+  upper parameter bounds are supplied
+
+  - added `NEXPLORE` term to `mirt.model()` to specify exploratory models
+  via the syntax
+
+  - add `itemGAM()` function to provide a non-linear smoother for better
+  understanding mis-functioning items (and without loosing established
+  precision by reverting to purely non-parametric IRT methods)
+
+  - category scores are now automatically recoded to have spaces of 1,
+  and a message is printed if/when this occurs
+
+  - added `MDISC()` and `MDIFF()` functions
+
+  - the inclusion of prior parameter distributions will now report the
+  log-posterior rather than the log-likelihood. Functions such as `anova()`
+  will also report Bayesian criteria rather than the previous likelihood-based
+  model comparison statistics
+
+  - `impute` argument in `itemfit()` and `M2()` now use plausible values
+  instead of point estimates
+
+  - `START` syntax element in `mirt.model()` now supports multiple parameters,
+  and `FIXED` argument added to declare parameters as 'fixed' at their
+  staring values
+
+  - added `LBOUND` and `UBOUND` syntax support in `mirt.model()`
+
+  - report proper lower and upper bounds in starting values data frame and
+  from `mod2values()`
+
+  - `invariance` argument to `bfactor()` now automatically indexes the
+  second-tier factors to make multiple-group testing with `bfactor()` easier
+
+  - remove `rotate` and `Target` arguments from model objects, and pass
+  these only through axillary functions such as `summary()`, `fscores()`, etc
+
+  - `model` based arguments now can be strings, which are passed to
+  `mirt.model()`. This is now the preferred method for defining models
+  syntactically, though the previous methods will still work
+
+  - integration range (`theta_lim`) globally set to `c(-6, 6)`, and number
+  of default quadrature nodes have systematically increased in parameter
+  estimation functions. This will slightly change some numerical results,
+  but provides more consistence throughout the package
+
+  - add `theta_lim` arguments to various functions
+
+  - better control of QMC grid, and more effective usage for higher dimensions
+
+  - internal code organization now makes it easier to add user defined
+  `itemtype`s (which can be natively added into the package, if requested)
+
+BUG FIXES
+
+  - fix conservative imputation standard errors in `itemfit()` and `M2()`
+  (reported by Irshad Mujawar)
+
+  - fixed plausible value draws for multidimensional latent regression models
+  (reported by Tongyun Li)
+
+  - don't allow crossprod, Louis, or sandwich information matrices when
+  using custom item types (reported by Charlie Rutgers)
+
+Changes in mirt 1.9
+
+  - when using `coef(mod, printSE=TRUE)` the `g` and `u` parameters are
+  relabeled to `logit(g)` and `logit(u)` to represent the internal labels
+
+  - added various facet plots for three dimensional models to `plot()` generic
+
+  - support `optimizer = 'nlminb'`, and pass optimizer control arguments to a
+  `contol` list
+
+  - added `fixef()` function to extract expected values implied by the fixed
+  effect parameters in latent regression models
+
+  - added `gpcm_mats` argument to estimation functions for specifying
+  a customize scoring pattern for multidimensional generalized partial
+  credit models
+
+  - added `custom_theta` input to `fscores()` for including customized
+  integration grids
+
+  - add a `suppress` argument to `residuals()` and `M2()` to suppress local
+  dependence values less than this specific value
+
+  - print a message in `DIF()` and `DTF()` when hyper-parameters are not
+  freely estimated in focal groups
+
+  - constraits for hetorogenous item names added to `mirt.model()` syntax
+
+  - WLE support for multidimensional models added
+
+  - added `'SEcontour'` argument to `plot()` generic
+
+  - use NA's in `fscores()` when response patterns contain all NA responses
+  (suggested by Tomasz Zoltak)
+
+BUG FIX
+
+  - S-X2 in `itemfit()` now returns appropriate values for multiple-group
+  models
+
+  - multidimensional plausible value imputation fix (reported by KK Sasa)
+
+  - `plot(..., type = 'infotrace')` for multiple group objects fixed (reported
+  by Danilo Pereira)
+
 Changes in mirt 1.8
 
   - `fscores()` nows accepts `method = "plausible"` to draw a single plausible

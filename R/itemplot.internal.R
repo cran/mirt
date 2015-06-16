@@ -81,7 +81,7 @@ setMethod(
                                        auto.key = auto.key, main = main,
                                        ylab = expression(RE(theta)), xlab = expression(theta), ...))
             } else {
-                stop('Plot type not supported for unidimensional model')
+                stop('Plot type not supported for unidimensional model', call.=FALSE)
             }
         }
         if(nfact == 2){
@@ -117,7 +117,7 @@ setMethod(
                                           scales = list(arrows = FALSE), screen=rot,
                                           auto.key = auto.key, ...))
             } else {
-                stop('Plot type not supported for 2 dimensional model')
+                stop('Plot type not supported for 2 dimensional model', call.=FALSE)
             }
         }
     }
@@ -128,12 +128,13 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                           theta_lim, cuts = 30, colorkey = TRUE, auto.key = TRUE, main = NULL,
                           add.ylab2 = TRUE, drape = TRUE, ...){
     if(drop.zeros){
-        if(x@exploratory) stop('Cannot drop zeros in exploratory models')
+        if(x@exploratory) stop('Cannot drop zeros in exploratory models', call.=FALSE)
         x@pars[[item]] <- extract.item(x, item, drop.zeros=TRUE)
     }
     nfact <- min(x@pars[[item]]@nfact, x@nfact)
-    if(nfact > 3) stop('Can not plot high dimensional models')
-    if(nfact == 2 && is.null(degrees)) stop('Please specify a vector of angles that sum to 90')
+    if(nfact > 3) stop('Can not plot high dimensional models', call.=FALSE)
+    if(nfact == 2 && is.null(degrees))
+        stop('Please specify a vector of angles that sum to 90', call.=FALSE)
     theta <- seq(theta_lim[1L],theta_lim[2L], length.out=40)
     if(nfact == 3) theta <- seq(theta_lim[1L],theta_lim[2L], length.out=20)
     prodlist <- attr(x@pars, 'prodlist')
@@ -147,15 +148,11 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
     }
     P <- ProbTrace(x=x@pars[[item]], Theta=ThetaFull)
     K <- x@pars[[item]]@ncat
-    info <- 0
-    if(is(x@pars[[item]], 'custom') && any(type %in% c('info', 'infocontour')))
-        stop('Unable to compute information for custom items')
-    if(is(x@pars[[item]], 'ideal') && any(type %in% c('info', 'infocontour')))
-        warning('Information function for ideal point models are currently experimental')
-    if(!class(x@pars[[item]]) %in% c('custom')){
+    info <- numeric(nrow(ThetaFull))
+    if(type %in% c('info', 'SE', 'infoSE', 'infotrace', 'RE', 'infocontour', 'RETURN')){
         if(nfact == 3){
             if(length(degrees) != 3 && any(type %in% 'info', 'SE')){
-                warning('Information plots require the degrees input to be of length 3')
+                warning('Information plots require the degrees input to be of length 3', call.=FALSE)
             } else {
                 info <- iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=degrees)
             }
@@ -167,12 +164,12 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
         } else {
             info <- iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=0)
         }
-    } else message('Information functions could not be computed')
+    }
     CEinfoupper <- CEinfolower <- info
     CEprobupper <- CEproblower <- P
     if(CE && nfact != 3){
         tmpitem <- x@pars[[item]]
-        if(length(tmpitem@SEpar) == 0) stop('Must calculate the information matrix first.')
+        if(length(tmpitem@SEpar) == 0) stop('Must calculate the information matrix first.', call.=FALSE)
         splt <- strsplit(colnames(x@information), '\\.')
         parnums <- as.numeric(do.call(rbind, splt)[,2])
         tmp <- x@pars[[item]]@parnum[x@pars[[item]]@est]
@@ -184,7 +181,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
         mu <- tmpitem@par[x@pars[[item]]@est]
         smallinfo <- try(solve(x@information[tmp, tmp]), TRUE)
         if(is(smallinfo, 'try-error'))
-            stop('Information matrix could not be inverted')
+            stop('Information matrix could not be inverted', call.=FALSE)
         #make symetric
         smallinfo <-(smallinfo + t(smallinfo))/2
         delta <- mirt_rmvnorm(CEdraws, mean=mu, sigma=smallinfo)
@@ -319,8 +316,11 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             obj1 <- xyplot(info~Theta, plt, type='l',
                            main = main, xlab = expression(theta), ylab=expression(I(theta)))
             obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)))
-            if(requireNamespace("latticeExtra", quietly = TRUE))
+            if(requireNamespace("latticeExtra", quietly = TRUE)){
                 return(latticeExtra::doubleYScale(obj1, obj2, add.ylab2 = add.ylab2))
+            } else {
+                stop('latticeExtra package is not available. Please install.', call.=FALSE)
+            }
         } else if(type == 'infotrace'){
             if(is.null(main))
                 main <- paste('Trace lines and information for item', item)
@@ -328,10 +328,13 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                            ylim = c(-0.1,1.1), ylab = expression(P(theta)), xlab = expression(theta), ... )
             obj2 <- xyplot(info~Theta, plt, type='l', xlab = expression(theta), ylab=expression(I(theta)),
                            ylim = c(-0.1,max(plt$info) + .5))
-            if(requireNamespace("latticeExtra", quietly = TRUE))
+            if(requireNamespace("latticeExtra", quietly = TRUE)){
                 return(latticeExtra::doubleYScale(obj1, obj2, add.ylab2 = add.ylab2))
+            } else {
+                stop('latticeExtra package is not available. Please install.', call.=FALSE)
+            }
         } else {
-            stop('Plot type not supported for unidimensional model')
+            stop('Plot type not supported for unidimensional model', call.=FALSE)
         }
     } else if(nfact == 2){
         plt <- data.frame(info = info, SE = 1/sqrt(info), Theta1 = Theta[,1], Theta2 = Theta[,2])
@@ -398,7 +401,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                                       scales = list(arrows = FALSE),
                                       colorkey = colorkey, drape = drape, screen=rot, ...))
         } else {
-            stop('Plot type not supported for 2 dimensional model')
+            stop('Plot type not supported for 2 dimensional model', call.=FALSE)
         }
     } else {
         plt <- data.frame(info = info, SE = 1/sqrt(info), Theta1 = Theta[,1], Theta2 = Theta[,2],
@@ -436,7 +439,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                                       scales = list(arrows = FALSE),
                                       colorkey = colorkey, drape = drape, screen=rot, ...))
         } else {
-            stop('Plot type not supported for 3 dimensional model')
+            stop('Plot type not supported for 3 dimensional model', call.=FALSE)
         }
 
     }

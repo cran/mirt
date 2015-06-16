@@ -46,7 +46,7 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
     specific <- list$specific
     ngroups <- ESTIMATE$ngroups
     NCYCLES <- ESTIMATE$cycles
-    if(NCYCLES <= 5L) stop('SEM can not be computed due to short EM history')
+    if(NCYCLES <= 5L) stop('SEM can not be computed due to short EM history', call.=FALSE)
     BFACTOR <- list$BFACTOR
     prior <- rlist <- vector('list', ngroups)
     estpars <- ESTIMATE$estpars
@@ -217,19 +217,9 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     whichitems <- unique(c(CUSTOM.IND, SLOW.IND))
     Igrad <- infolist[["Igrad"]]; IgradP <- infolist[["IgradP"]]; Ihess <- infolist[["Ihess"]]
     if(length(whichitems)){
-        message('Model contains items that have not been optimized. Information matrix
-                calculation may take longer than expected')
-        for(i in 1L:nrow(Data$tabdata)){
-            tmp <- fn(i, PrepList=PrepList, ngroups=ngroups, pars=pars, npars=ncol(L),
-                      Theta=Theta, Prior=Prior, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
-                      SLOW.IND=SLOW.IND, whichitems=whichitems, iscross=iscross,
-                      Data=Data)
-            Igrad <- Igrad + tmp$Igrad
-            if(!iscross){
-                IgradP <- IgradP + tmp$IgradP
-                Ihess <- Ihess + tmp$Ihess
-            }
-        }
+        warning('Internal information matrix computations currently not supported for at
+        least one of the supplied items. Information matrix/standard errors not computed', call.=FALSE)
+        return(ESTIMATE)
     }
     Igrad <- updateHess(Igrad, L=Ls$L)
     IgradP <- updateHess(IgradP, L=Ls$L)
@@ -265,7 +255,7 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
 }
 
 SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, SLOW.IND,
-                      warn, Data){
+                      warn, Data, full){
     pars <- ESTIMATE$pars
     itemloc <- PrepList[[1L]]$itemloc
     ngroups <- length(pars)
@@ -299,7 +289,7 @@ SE.Fisher <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, CUSTOM.IND, S
     for(pat in 1L:nrow(tabdata)){
         for(g in 1L:ngroups){
             gtabdata <- PrepList[[g]]$tabdata[pat, , drop=FALSE]
-            rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, freq=1L, CUSTOM.IND=CUSTOM.IND,
+            rlist <- Estep.mirt(pars=pars[[g]], tabdata=gtabdata, freq=1L, CUSTOM.IND=CUSTOM.IND, full=full,
                                 Theta=Theta, prior=Prior[[g]], itemloc=itemloc, deriv=TRUE)
             for(i in 1L:nitems){
                 tmp <- c(itemloc[i]:(itemloc[i+1L] - 1L))

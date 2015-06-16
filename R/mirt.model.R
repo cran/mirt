@@ -2,7 +2,8 @@
 #'
 #' The \code{mirt.model} function scans/reads user input to specify the
 #' confirmatory model. Item locations must be used in the specifications if no
-#' \code{itemnames} argument is supplied.
+#' \code{itemnames} argument is supplied. This is called implicitly by estimation functions
+#' when a string is passed to the \code{model} argument.
 #'
 #' Factors are first named and then specify which numerical items they affect
 #' (i.e., where the slope is not equal to 0), separated either by commas or by
@@ -30,6 +31,7 @@
 #'   \code{CONSTRAIN = (items, ..., parameterName(s), OptionalGroup),
 #'   (items, ..., parameterName, OptionalGroup)}.
 #'   If \code{OptionalGroup} is omitted then the constraints are applied within all groups.
+#'
 #'   For example, in a single group 10-item dichotomous tests, using the default 2PL model,
 #'   the first and last 5 item slopes (a1) can be constrained to be equal by using
 #'   \code{CONSTRAIN = (1-5, a1), (6-10, a1)}, or some combination
@@ -43,6 +45,7 @@
 #'  \item{CONSTRAINB}{A bracketed, comma separate list specifying equality constrains between groups.
 #'   The input format is \code{CONSTRAINB = (items, ..., parameterName),
 #'   (items, ..., parameterName)}.
+#'
 #'   For example, in a two group 10-item dichotomous tests, using the default 2PL model, the first
 #'   5 item slopes (a1) can be constrained to be equal across both groups by using
 #'   \code{CONSTRAINB = (1-5, a1)}, or some combination such as \code{CONSTRAINB = (1-3,4,5,a1)}}
@@ -52,16 +55,42 @@
 #'   \code{PRIOR = (items, ..., parameterName, priorType, val1, val2, OptionalGroup),
 #'   (items, ..., parameterName, priorType, val1, val2, OptionalGroup)}.
 #'   If \code{OptionalGroup} is omitted then the priors are defined for all groups.
+#'
 #'   For example, in a single group 10-item dichotomous tests, using the default 2PL model,
 #'   defining a normal prior of N(0,2) for the first 5 item intercepts (d) can be defined by
 #'   \code{PRIOR = (1-5, d, norm, 0, 2)}}
 #'
-#'   \item{START}{A bracketed, comma separate list specifying the starting values for individual parameters.
-#'   The input is of the form \code{(item_number, parname, value)}. For instance, setting the 10th item
-#'   slope parameter (a1) to 1.0 is specified with \code{START = (1, a1, 1.0)}
+#' \item{LBOUND}{A bracketed, comma separate list specifying lower bounds for estimated
+#'   parameters (used in optimizers such as \code{L-BFGS-B} and \code{nlminb}).
+#'   The input format is \code{LBOUND = (items, ..., parameterName, value),
+#'   (items, ..., parameterName, value)}.
+#'
+#'   For example, in a single group 10-item dichotomous tests, using the 3PL model and
+#'   setting lower bounds for the 'g' parameters for the first 5 items to 0.2 is accomplished with
+#'   \code{LBOUND = (1-5, g, 0.2)}}
+#'
+#' \item{UBOUND}{same as LBOUND, but specifying upper bounds in estimated parameters}
+#'
+#' \item{START}{A bracketed, comma separate list specifying the starting values for individual parameters.
+#'   The input is of the form \code{(items, ..., parameterName, value)}. For instance, setting the 10th and
+#'   12th to 15th item slope parameters (a1) to 1.0 is specified with \code{START = (10, 12-15, a1, 1.0)}
 #'
 #'   For more hands on control of the starting values pass the argument \code{pars = 'values'} through
 #'   whatever estimation function is being used}
+#'
+#' \item{FIXED}{A bracketed, comma separate list specifying which parameters should be fixed at their
+#'   starting values (i.e., not freely estimated).
+#'   The input is of the form \code{(items, ..., parameterName)}. For instance, fixing the 10th and
+#'   12th to 15th item slope parameters (a1) is accomplished with \code{FIXED = (10, 12-15, a1)}
+#'
+#'   For more hands on control of the estimated values pass the argument \code{pars = 'values'} through
+#'   whatever estimation function is being used}
+#'
+#'   \item{NEXPLORE}{Number of exploratory factors to extract. Usually this is not required
+#'     because passing a numeric value to the \code{model} argument in the estimation function
+#'     will generate an exploratory factor analysis model, however if different start values,
+#'     priors, lower and upper bounds, etc, are desired then this input can be used}
+#'
 #' }
 #' @param input input for writing out the model syntax. Can either be a string declaration of
 #'   class character or the so-called Q-matrix or class \code{matrix} that specifies the model
@@ -98,6 +127,10 @@
 #'       (F1*F2) = 1,2,3,4-10
 #'       COV = F1*F2'
 #' model <- mirt.model(s)
+#'
+#' # strings can also be passed to the estimation functions directly,
+#' #   which silently calls mirt.model(). E.g., using the string above:
+#' # mod <- mirt(data, s)
 #'
 #'
 #' #Q-matrix specification

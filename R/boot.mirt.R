@@ -32,7 +32,7 @@
 #' }
 boot.mirt <- function(x, R = 100, ...){
     boot.draws <- function(orgdat, ind, npars, constrain, parprior, model, itemtype, group,
-                           class, LR, obj, ...) {
+                           class, LR, obj, DTF = NULL, ...) {
         ngroup <- length(unique(group))
         dat <- orgdat[ind, ]
         rownames(dat) <- NULL
@@ -74,6 +74,11 @@ boot.mirt <- function(x, R = 100, ...){
                             covdata=df, method=x@method, draws=1, SE=FALSE, ...))
             }
         }
+        if(!is.null(DTF)){
+            if(is(mod, 'try-error')) return(rep(NA, 4L))
+            return(calc_DTFs(mod=mod, Theta = DTF$Theta, max_score = DTF$max_score, plot='none',
+                             type=DTF$type))
+        }
         if(is(mod, 'try-error')) return(rep(NA, npars))
         structure <- mod2values(mod)
         longpars <- structure$value[structure$est]
@@ -82,6 +87,9 @@ boot.mirt <- function(x, R = 100, ...){
     }
 
     if(missing(x)) missingMsg('x')
+    if(x@exploratory)
+        message('Note: bootstrapped standard errors for slope parameters in exploratory
+                       models are not meaningful.')
     return.boot <- TRUE
     dat <- x@Data$data
     method <- x@method
@@ -99,16 +107,14 @@ boot.mirt <- function(x, R = 100, ...){
     structure <- mod2values(x)
     longpars <- structure$value
     npars <- sum(structure$est)
-    if(requireNamespace("boot")){
+    if(requireNamespace("boot", quietly = TRUE)){
       boots <- boot::boot(dat, boot.draws, R=R, npars=npars, constrain=constrain, class=class,
                     parprior=parprior, model=model, itemtype=itemtype, group=group, LR=LR,
                     obj=x, ...)
     }
+    if(!is.null(DTF)) return(boots)
     names(boots$t0) <- paste(paste(structure$item[structure$est],
                              structure$name[structure$est], sep='.'),
                              structure$parnum[structure$est], sep='_')
-    if(x@exploratory)
-        message('Note: bootstrapped standard errors for slope parameters in exploratory
-                       models are not meaningful.')
     return(boots)
 }

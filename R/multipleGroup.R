@@ -21,8 +21,8 @@
 #' @aliases multipleGroup
 #' @param data a \code{matrix} or \code{data.frame} that consists of
 #'   numerically ordered data, with missing data coded as \code{NA}
-#' @param model a single model object returned from \code{mirt.model()} declaring how
-#'   the factor model is to be estimated. See \code{\link{mirt.model}} for more details
+#' @param model string to be passed to, or a model object returned from, \code{\link{mirt.model}}
+#'   declaring how the global model is to be estimated (useful to apply constraints here)
 #' @param group a character vector indicating group membership
 #' @param rotate rotation if models are exploratory (see \code{\link{mirt}} for details)
 #' @param invariance a character vector containing the following possible options:
@@ -31,9 +31,6 @@
 #'       (reference group constrained to 0)}
 #'     \item{\code{'free_var'}}{for freely estimating all latent variances
 #'       (reference group constrained to 1's)}
-#'     \item{\code{'free_cov'}}{for freely estimating all latent covariances
-#'       (reference group constrained to an Identity matrix)}
-#'     \item{\code{'free_varcov'}}{calls both \code{'free_var'} and \code{'free_cov'}}
 #'     \item{\code{'slopes'}}{to constrain all the slopes to be equal across all groups}
 #'     \item{\code{'intercepts'}}{to constrain all the intercepts to be equal across all
 #'       groups, note for nominal models this also includes the category specific slope parameters}
@@ -49,7 +46,7 @@
 #'   for details and examples
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}
-#'   \code{\link{DTF}}
+#   \code{\link{DTF}}
 #' @keywords models
 #' @export multipleGroup
 #' @examples
@@ -64,7 +61,7 @@
 #' dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))
-#' models <- mirt.model('F1 = 1-15')
+#' models <- 'F1 = 1-15'
 #'
 #' mod_configural <- multipleGroup(dat, models, group = group) #completely separate analyses
 #' #limited information fit statistics
@@ -83,7 +80,7 @@
 #' #optionally use Newton-Raphson for (generally) faster convergence in the M-step's
 #' mod_fullconstrain <- multipleGroup(dat, models, group = group, optimizer = 'NR',
 #'                              invariance=c('slopes', 'intercepts'))
-#' slot(mod_fullconstrain, 'time') #time of estimation componenets
+#' slot(mod_fullconstrain, 'time') #time of estimation components
 #'
 #' summary(mod_scalar2)
 #' coef(mod_scalar2, simplify=TRUE)
@@ -109,9 +106,9 @@
 #' anova(equalslopes, mod_configural)
 #'
 #' #same as above, but using mirt.model syntax
-#' newmodel <- mirt.model('
+#' newmodel <- '
 #'     F = 1-15
-#'     CONSTRAINB = (1-6, a1)')
+#'     CONSTRAINB = (1-6, a1)'
 #' equalslopes <- multipleGroup(dat, newmodel, group = group)
 #' coef(equalslopes, simplify=TRUE)
 #'
@@ -119,13 +116,13 @@
 #' #DIF test for each item (using all other items as anchors)
 #' itemnames <- colnames(dat)
 #' refmodel <- multipleGroup(dat, models, group = group, SE=TRUE,
-#'                              invariance=c('free_means', 'free_varcov', itemnames))
+#'                              invariance=c('free_means', 'free_var', itemnames))
 #'
 #' #loop over items (in practice, run in parallel to increase speed). May be better to use ?DIF
 #' estmodels <- vector('list', ncol(dat))
 #' for(i in 1:ncol(dat))
 #'     estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, calcNull=FALSE,
-#'                              invariance=c('free_means', 'free_varcov', itemnames[-i]))
+#'                              invariance=c('free_means', 'free_var', itemnames[-i]))
 #'
 #' (anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
 #'
@@ -138,7 +135,7 @@
 #' estmodels <- vector('list', ncol(dat))
 #' for(i in 1:ncol(dat))
 #'     estmodels[[i]] <- multipleGroup(dat, models, group = group, verbose = FALSE, calcNull=FALSE,
-#'                              invariance=c('free_means', 'free_varcov', 'intercepts',
+#'                              invariance=c('free_means', 'free_var', 'intercepts',
 #'                              itemnames[-i]))
 #'
 #' (anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
@@ -163,10 +160,10 @@
 #' group <- c(rep('D1', N), rep('D2', N))
 #'
 #' #group models
-#' model <- mirt.model('
+#' model <- '
 #'    F1 = 1-5
 #'    F2 = 6-10
-#'    F3 = 11-15')
+#'    F3 = 11-15'
 #'
 #' #define mirt cluster to use parallel architecture
 #' mirtCluster()
@@ -201,7 +198,7 @@
 #' dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))
-#' model <- mirt.model('F1 = 1-15')
+#' model <- 'F1 = 1-15'
 #'
 #' mod_configural <- multipleGroup(dat, model, group = group)
 #' plot(mod_configural)
@@ -213,8 +210,8 @@
 #' fscores(mod_configural, method = 'EAPsum')
 #'
 #' # constrain slopes within each group to be equal (but not across groups)
-#' model2 <- mirt.model('F1 = 1-15
-#'                       CONSTRAIN = (1-15, a1)')
+#' model2 <- 'F1 = 1-15
+#'            CONSTRAIN = (1-15, a1)'
 #' mod_configural2 <- multipleGroup(dat, model2, group = group)
 #' plot(mod_configural2, type = 'SE')
 #' plot(mod_configural2, type = 'RE')
@@ -232,7 +229,7 @@
 #' group <- rep(c('G1', 'G2'), each=2000)
 #'
 #' EH <- multipleGroup(dat, 1, group=group, empiricalhist = TRUE, invariance = colnames(dat))
-#' coef(EH)
+#' coef(EH, simplify=TRUE)
 #' plot(EH, type = 'empiricalhist', npts = 60)
 #'
 #' #dif test for item 1
@@ -246,11 +243,12 @@ multipleGroup <- function(data, model, group, invariance = '', method = 'EM', ro
     Call <- match.call()
     dots <- list(...)
     constrain <- dots$constrain
-    invariance.check <- invariance %in% c('free_means', 'free_var', 'free_varcov')
+    invariance.check <- invariance %in% c('free_means', 'free_var')
     if(missing(model)) missingMsg('model')
     if(!is.null(dots$empiricalhist))
         if(dots$empiricalhist && any(invariance.check))
-            stop('freeing group parameters not meaningful when estimating empirical histograms')
+            stop('freeing group parameters not meaningful when estimating empirical histograms',
+                 call.=FALSE)
     if(sum(invariance.check == 2L) && length(constrain) == 0){
         warn <- TRUE
         if(is(model, 'mirt.model')){
@@ -259,7 +257,7 @@ multipleGroup <- function(data, model, group, invariance = '', method = 'EM', ro
         }
         if(warn)
             stop('Model is not identified without further constrains (may require additional
-                 anchoring items).')
+                 anchoring items).', call.=FALSE)
     }
     mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, method=method,
                       rotate=rotate, ...)

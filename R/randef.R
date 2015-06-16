@@ -1,4 +1,4 @@
-#' Compute random effects
+#' Compute posterior estimates of random effect
 #'
 #' Stochastically compute random effects for \code{MixedClass} objects with Metropolis-Hastings
 #' samplers and averaging over the draws. Returns a list of the estimated effects.
@@ -28,10 +28,10 @@
 randef <- function(x, ndraws = 1000, thin = 10, return.draws=FALSE){
     if(missing(x)) missingMsg('x')
     if(!is(x, 'MixedClass'))
-        stop('Only applicable to MixedClass objects')
+        stop('Only applicable to MixedClass objects', call.=FALSE)
     div <- ndraws / thin
     if(!closeEnough(floor(ndraws/thin) == (ndraws/thin), -1e4, 1e4))
-        stop('ndraws and thin are not the correct dimensions')
+        stop('ndraws and thin are not the correct dimensions', call.=FALSE)
     random <- x@random
     if(length(random) > 0L){
         Random <- vector('list', length(random))

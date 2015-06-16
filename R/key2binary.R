@@ -1,4 +1,4 @@
-#' Convert response patterns to binary data
+#' Score a test by converting response patterns to binary data
 #'
 #' The \code{key2binary} function will convert response pattern data to a
 #' dichotomous format, given a response key.
@@ -20,12 +20,13 @@
 #' key <- c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5)
 #'
 #' dicho.SAT12 <- key2binary(SAT12,key)
+#' head(dicho.SAT12)
 #'     }
 #'
 key2binary <- function (fulldata, key){
     if(missing(fulldata)) missingMsg('fulldata')
     if(missing(key)) missingMsg('key')
-    if (ncol(fulldata) != length(key)) stop("Key is not the correct length.\n")
+    if (ncol(fulldata) != length(key)) stop("Key is not the correct length.\n", call.=FALSE)
     colname <- colnames(fulldata)
     X <- as.matrix(fulldata)
     colnames(X) <- colname

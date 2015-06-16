@@ -1,4 +1,4 @@
-#' Compute latent regression fixed effects
+#' Compute latent regression fixed effect expected values
 #'
 #' Create expected values for fixed effects parameters in latent regression models.
 #'
@@ -29,19 +29,21 @@
 #' mod1 <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2)
 #'
 #' #latent regression fixed effects (i.e., expected values)
-#' fixef(mod1)
+#' fe <- fixef(mod1)
+#' head(fe)
 #'
 #' # with mixedmirt()
 #' mod1b <- mixedmirt(dat, covdata, 1, lr.fixed = ~ X1 + X2, fixed = ~ 0 + items)
-#' fixef(mod1b)
+#' fe2 <- fixef(mod1b)
+#' head(fe2)
 #'
 #' }
 fixef <- function(x){
     if(missing(x)) missingMsg('x')
     if(!(is(x, 'MixedClass') || is(x, 'SingleGroupClass')))
-        stop('Only applicable to MixedClass and SingleGroupClass objects')
+        stop('Only applicable to MixedClass and SingleGroupClass objects', call.=FALSE)
     if(!length(x@lrPars))
-        stop('No latent regression parameters were defined in the supplied model')
+        stop('No latent regression parameters were defined in the supplied model', call.=FALSE)
     ret <- x@lrPars@X %*% x@lrPars@beta
     ret
 }

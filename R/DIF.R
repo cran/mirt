@@ -1,4 +1,4 @@
-#' Differential item functioning tests
+#' Differential item functioning statistics
 #'
 #' This function runs the Wald and likelihood-ratio approaches for testing differential
 #' item functioning (DIF). This is primarily a convenience wrapper to the
@@ -9,7 +9,7 @@
 #'
 #' Generally, the precomputed baseline model should have been
 #' configured with two estimation properties: 1) a set of 'anchor' items,
-#' where the anchor items have various parameters that have been constrainted to be equal
+#' where the anchor items have various parameters that have been constrained to be equal
 #' across the groups, and 2) contain freely estimated latent mean and variance terms in
 #' all but one group (the so-called 'reference' group).
 #' These two properties help to fix the metric of the groups so that
@@ -56,7 +56,7 @@
 #'   or p > .05 in the drop scheme), along with the specified \code{p.adjust} input
 #' @param max_run a number indicating the maximum number of cycles to perform in sequential
 #'   searches. The default is to perform search until no further DIF is found
-#' @param plotdif logical; create itemplots for items that are displaying DIF according to the
+#' @param plotdif logical; create item plots for items that are displaying DIF according to the
 #'   \code{seq_stat} criteria? Only available for 'add' type schemes
 #' @param type the \code{type} of plot argument passed to \code{plot()}. Default is 'trace', though
 #'   another good option is 'infotrace'. For ease of viewing, the \code{facet_item} argument to
@@ -67,7 +67,8 @@
 #' @param ... additional arguments to be passed to \code{\link{multipleGroup}} and \code{plot}
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords DIF
-#' @seealso \code{\link{multipleGroup}}, \code{\link{DTF}}
+#' @seealso \code{\link{multipleGroup}}
+#, \code{\link{DTF}}
 #' @export DIF
 #' @examples
 #' \dontrun{
@@ -152,7 +153,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
         if(!length(parnum))
             stop('Item ', item, ' does not contain any of the parameters defined in which.par.
                  Consider removing it from the item2test input or adding relevant parameters
-                 to which.par')
+                 to which.par', call.=FALSE)
         if(Wald){
             wv <- wald(model)
             infoname <- wv[1L, ]
@@ -188,31 +189,31 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
     if(missing(which.par)) missingMsg('which.par')
     if(!any(sapply(MGmodel@pars, function(x) x@pars[[length(x@pars)]]@est)))
         message('No hyper-parameters were estimated in the DIF model. For effective
-                \tDIF testing, freeing the focal group hyper-parameters is recommend.')
+                \tDIF testing, freeing the focal group hyper-parameters is recommended.')
     bfactorlist <- MGmodel@bfactor
     if(!is.null(bfactorlist$Priorbetween[[1L]]))
-        stop('bifactor models are currently not supported in this function')
+        stop('bifactor models are currently not supported in this function', call.=FALSE)
     itemnames <- colnames(MGmodel@Data$data)
     if(!any(scheme %in% c('add', 'drop', 'add_sequential', 'drop_sequential')))
-        stop('scheme input is not valid')
+        stop('scheme input is not valid', call.=FALSE)
     if(return_models){
         if(Wald)
-            stop('return_models argument only valid for likelihood ratio tests')
+            stop('return_models argument only valid for likelihood ratio tests', call.=FALSE)
     }
     if(Wald){
         if(scheme != 'add')
-            stop('Wald tests are only appropriate when add scheme is used')
+            stop('Wald tests are only appropriate when add scheme is used', call.=FALSE)
         if(length(MGmodel@information) == 1)
-            stop('Information matrix was not calculated')
+            stop('Information matrix was not calculated', call.=FALSE)
     }
     if(plotdif && any(scheme %in% c('drop', 'drop_sequential')))
-        stop('plotdif not supported for dropping schemes')
+        stop('plotdif not supported for dropping schemes', call.=FALSE)
     pval <- 0
     if(is.numeric(seq_stat)){
         pval <- seq_stat
         seq_stat <- 'p'
     } else if(!any(seq_stat %in% c('p', 'AIC', 'AICc', 'SABIC', 'BIC'))){
-        stop('Invalid seq_stat input')
+        stop('Invalid seq_stat input', call.=FALSE)
     }
     if(is.character(items2test)) items2test <- which(items2test %in% itemnames)
     data <- MGmodel@Data$data
@@ -220,7 +221,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
     values <- mod2values(MGmodel)
     drop <- scheme == 'drop' || scheme == 'drop_sequential'
     invariance <- MGmodel@invariance[MGmodel@invariance %in%
-                                         c('free_means', 'free_var', 'free_varcov', 'free_cov')]
+                                         c('free_means', 'free_var')]
     if(!length(invariance)) invariance <- ''
     res <- myLapply(X=items2test, FUN=loop_test, model=MGmodel, which.par=which.par, values=values,
                     Wald=Wald, drop=drop, itemnames=itemnames, invariance=invariance,
@@ -231,7 +232,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:ncol(MGmodel@
         updatedModel <- MGmodel
         run_number <- 2L
         if(run_number > max_run)
-            stop('max_run number must be greater than 1 for sequential searches')
+            stop('max_run number must be greater than 1 for sequential searches', call.=FALSE)
         while(TRUE){
             statdiff <- do.call(c, lapply(res, function(x, stat){
                 if(stat == 'p') return(x[2L, 'p'])

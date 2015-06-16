@@ -76,13 +76,16 @@ itemplot <- function(object, item, type = 'trace', degrees = 45, CE = FALSE, CEa
                      rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                      theta_lim = c(-6,6), shiny = FALSE, ...){
     if(shiny){
-        if(requireNamespace("shiny", quietly = TRUE))
+        if(requireNamespace("shiny", quietly = TRUE)){
             shiny::runApp(shinyItemplot(), ...)
+        } else {
+            stop('shiny package is not available. Please install.', call.=FALSE)
+        }
     }
     if(missing(object)) missingMsg('object')
     if(missing(item)) missingMsg('item')
     if(is(object, 'DiscreteClass'))
-        stop('Discrete latent structures not yet supported')
+        stop('Discrete latent structures not yet supported', call.=FALSE)
     if(is.list(object)) inames <- colnames(object[[1]]@Data$data)
     else inames <- colnames(object@Data$data)
     ind <- 1:length(inames)

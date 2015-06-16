@@ -64,8 +64,7 @@
 #' dataset2 <- simdata(a, d, N, itemtype, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))
-#' MGmodel1 <- 'F1 = 1-15'
-#' models <- mirt.model(MGmodel1, quiet = TRUE)
+#' models <- 'F1 = 1-15'
 #' mod_Rasch <- multipleGroup(dat, models, itemtype = 'Rasch', group = group)
 #' coef(mod_Rasch)
 #' pf <- personfit(mod_Rasch, method='MAP')
@@ -76,13 +75,13 @@
 personfit <- function(x, method = 'EAP', Theta = NULL, stats.only = TRUE, ...){
     if(missing(x)) missingMsg('x')
     if(is(x, 'DiscreteClass'))
-        stop('Discrete latent structures not yet supported')
+        stop('Discrete latent structures not yet supported', call.=FALSE)
     if(any(is.na(x@Data$data)))
-        stop('Fit statistics cannot be computed when there are missing data.')
+        stop('Fit statistics cannot be computed when there are missing data.', call.=FALSE)
     if(is(x, 'MultipleGroupClass')){
         ret <- vector('list', length(x@pars))
         if(is.null(Theta))
-            Theta <- fscores(x, method=method, scores.only=TRUE, full.scores=TRUE, ...)
+            Theta <- fscores(x, method=method, full.scores=TRUE, ...)
         for(g in 1L:length(x@pars)){
             pick <- x@Data$groupNames[g] == x@Data$group
             tmp_obj <- MGC2SC(x, g)
@@ -99,8 +98,7 @@ personfit <- function(x, method = 'EAP', Theta = NULL, stats.only = TRUE, ...){
         return(as.data.frame(ret2))
     }
     if(is.null(Theta))
-        Theta <- fscores(x, verbose=FALSE, full.scores=TRUE,
-                         scores.only=TRUE, method=method, ...)
+        Theta <- fscores(x, verbose=FALSE, full.scores=TRUE, method=method, ...)
     J <- ncol(x@Data$data)
     itemloc <- x@itemloc
     pars <- x@pars

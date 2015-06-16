@@ -20,7 +20,7 @@
 #' dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))
-#' models <- mirt.model('F1 = 1-15')
+#' models <- 'F1 = 1-15'
 #'
 #' mod_configural <- multipleGroup(dat, models, group = group)
 #' group.1 <- extract.group(mod_configural, 1) #extract first group
@@ -31,8 +31,8 @@ extract.group <- function(x, group){
     if(missing(x)) missingMsg('x')
     if(missing(group)) missingMsg('group')
     if(!is(x, 'MultipleGroupClass'))
-        stop('Model was not estimated with multipleGroup()')
-    if(missing(group)) stop('Must specify group number')
+        stop('Model was not estimated with multipleGroup()', call.=FALSE)
+    if(missing(group)) stop('Must specify group number', call.=FALSE)
     vals <- mod2values(x)
     vals <- vals[vals$group == x@Data$groupNames[group], ]
     sv <- mirt(x@Data$data[x@Data$group == x@Data$groupNames[group], ], x@nfact,

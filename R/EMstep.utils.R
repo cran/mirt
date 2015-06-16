@@ -101,6 +101,8 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                                      ineqUB = solnp_args$ineqUB, LB = solnp_args$LB, UB = solnp_args$UB,
                                      control = control, optim_args=optim_args), silent=TRUE)
                     if(!is(opt, 'try-error')) opt$par <- opt$pars
+                } else {
+                    stop('Rsolnp package is not available. Please install.', call.=FALSE)
                 }
             } else {
                 if(requireNamespace("alabama", quietly = TRUE)){
@@ -110,6 +112,8 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                                               control.outer = solnp_args$control.outer,
                                               control.optim = solnp_args$control.optim, optim_args=optim_args),
                                silent=TRUE)
+                } else {
+                    stop('alabama package is not available. Please install.', call.=FALSE)
                 }
             }
         } else if(Moptim == 'nlminb'){
@@ -121,10 +125,10 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                               upper=UBOUND[est], control=control),
                        silent=TRUE)
         } else {
-            stop('M-step optimizer not supported')
+            stop('M-step optimizer not supported', call.=FALSE)
         }
         if(is(opt, 'try-error'))
-            stop(opt)
+            stop(opt, call.=FALSE)
         longpars[est] <- opt$par
     }
     if(!full){
@@ -136,7 +140,7 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                            Thetabetween=Thetabetween, ubound=UBOUND[groupest], lbound=LBOUND[groupest],
                            iterlim=maxit),
                        silent=TRUE)
-            if(is(res, 'try-error')) stop(res)
+            if(is(res, 'try-error')) stop(res, call.=FALSE)
             longpars[groupest] <- res$estimate
         }
     } else {
@@ -266,6 +270,8 @@ Mstep.NR <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L,  A
                      TOL, control)
 {
     plast2 <- plast <- p
+    ubound <- UBOUND[est]
+    lbound <- LBOUND[est]
     if(is.null(control$maxit)) control$maxit <- 50L
     for(iter in 1L:control$maxit){
         longpars[est] <- p
@@ -294,7 +300,7 @@ Mstep.NR <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L,  A
         }
         g <- grad[est]
         h <- hess[est, est]
-        inv <- MPinv(h)
+        inv <- MPinv(h) #TODO this could be avoided if no constrains present
         change <- as.vector(g %*% inv)
         change <- ifelse(change > .25, .25, change)
         change <- ifelse(change < -.25, -.25, change)
@@ -305,6 +311,8 @@ Mstep.NR <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L,  A
             flip <- (sign(lastchange) * sign(change)) == -1L
             p[flip] <- (plast[flip] + p[flip]) / 2
         }
+        p[p > ubound] <- ubound[p > ubound]
+        p[p < lbound] <- lbound[p < lbound]
         dif <- plast - p
         if(all(abs(dif) < TOL)) break
         lastchange <- change

@@ -1,4 +1,4 @@
-#' Wald test for mirt models
+#' Wald statistics for mirt models
 #'
 #' Compute a Wald test given an \code{L} vector or matrix of numeric contrasts. Requires that the
 #' model information matrix be computed (including \code{SE = TRUE} when using the EM method). Use
@@ -43,8 +43,8 @@
 #' wald(mod, L)
 #'
 #' #logLiklihood tests (requires estimating a new model)
-#' cmodel <- mirt.model('theta = 1-5
-#'                       CONSTRAIN = (1,2, a1), (4,5, a1)')
+#' cmodel <- 'theta = 1-5
+#'            CONSTRAIN = (1,2, a1), (4,5, a1)'
 #' mod2 <- mirt(data, cmodel)
 #' #or, eqivalently
 #' #mod2 <- mirt(data, 1, constrain = list(c(1,5), c(13,17)))
@@ -55,7 +55,7 @@ wald <- function(object, L, C = 0){
     if(missing(object)) missingMsg('object')
     if(all(dim(object@information) == c(1,1)))
         if(object@information[1,1] == 0L)
-            stop('No information matrix has been calculated for the model')
+            stop('No information matrix has been calculated for the model', call.=FALSE)
     info <- object@information
     keep <- !is.na(diag(info))
     info <- info[keep, keep, drop=FALSE]
@@ -68,20 +68,21 @@ wald <- function(object, L, C = 0){
         return(ret)
     }
     if(!is.matrix(L)){
-        stop('L must be a matrix')
+        stop('L must be a matrix', call.=FALSE)
     } else if(ncol(L) != length(Names)){
-        stop('L does not have an appropriate number of columns')
+        stop('L does not have an appropriate number of columns', call.=FALSE)
     }
     if(!is.vector(C))
-        stop('C must be a vector of constant population parameters')
+        stop('C must be a vector of constant population parameters', call.=FALSE)
     if(length(C) == 1L){
         C <- numeric(ncol(L))
     } else if(length(C) != ncol(L)){
-        stop('length(C) must be the same as ncol(L)')
+        stop('length(C) must be the same as ncol(L)', call.=FALSE)
     }
     covB <- try(solve(info), silent=TRUE)
     if(is(covB, 'try-error'))
-        stop('Could not properly invert information matrix to obtain parameter covariance matrix')
+        stop('Could not properly invert information matrix to obtain parameter covariance matrix',
+             call.=FALSE)
     W <- t(L %*% (B - C)) %*% solve(L %*% covB %*% t(L)) %*% (L %*% (B - C))
     W <- ifelse(W < 0, 0, W)
     ret <- list(W=W, df = nrow(L))

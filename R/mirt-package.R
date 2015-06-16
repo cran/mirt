@@ -25,7 +25,7 @@
 #' @useDynLib mirt
 #' @importFrom stats anova residuals
 # @importFrom MASS ginv
-#' @import lattice GPArotation Rcpp stats4 methods sfsmisc
+#' @import lattice GPArotation Rcpp stats4 methods sfsmisc mgcv
 #' @exportMethod anova
 #' @exportMethod residuals
 #' @exportMethod summary
@@ -134,8 +134,8 @@ NULL
 #' \dontrun{
 #' dat <- expand.table(LSAT6)
 #' head(dat)
-#' model <- mirt.model('F = 1-5
-#'                      CONSTRAIN = (1-5, a1)')
+#' model <- 'F = 1-5
+#'          CONSTRAIN = (1-5, a1)'
 #' (mod <- mirt(dat, model))
 #' coef(mod)
 #'

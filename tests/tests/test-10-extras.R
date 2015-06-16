@@ -6,9 +6,9 @@ test_that('extras', {
     data <- rbind(data, data)
     mod1 <- mirt(data, 1, verbose=FALSE, SE=TRUE)
 
-    fun <- function(Thetas, min, max, ...) as.numeric(dunif(Thetas, min=min, max=max))
-    fs1 <- fscores(mod1, custom_den = fun, min = -3, max = 3, verbose = FALSE)
-    fs2 <- suppressWarnings(fscores(mod1, custom_den = fun, min = -3, max = 3, verbose = FALSE, method = 'MAP'))
+    fun <- function(Thetas, MIN, MAX, ...) as.numeric(dunif(Thetas, min=MIN, max=MAX))
+    fs1 <- fscores(mod1, verbose = FALSE, custom_den = fun, MIN = -3, MAX = 3)
+    fs2 <- suppressWarnings(fscores(mod1, custom_den = fun, MIN = -3, MAX = 3, verbose = FALSE, method = 'MAP'))
     expect_equal(as.numeric(fs1[1,c('F1', 'SE_F1')]), c(-2.4766, .4988), tolerance = 1e-3)
     expect_equal(as.numeric(fs2[5,c('F1', 'SE_F1')]), c(-1.9121, .9381), tolerance = 1e-3)
 
@@ -33,8 +33,8 @@ test_that('extras', {
     modideal <- mirt(dataset1, model = mirt.model('F1 = 1-6
                                                   F2 = 5-10'), 'ideal', verbose = FALSE)
     cfs <- as.numeric(coef(modideal, digits=5, verbose=FALSE)[[5]])
-    expect_equal(modideal@logLik, -6435.657, tolerance = 1e-3)
-    expect_equal(cfs, c(0.73246, 1.26111, -1.41768), tolerance = 1e-3)
+    expect_equal(modideal@logLik, -6435.647, tolerance = 1e-3)
+    expect_equal(cfs, c(0.73123, 1.26069, -1.41785), tolerance = 1e-3)
 
     acov <- fscores(mod1, return.acov=TRUE)
     expect_equal(acov[[1]][1], 0.4799239, tolerance=1e-3)
@@ -96,6 +96,8 @@ test_that('extras', {
     pick <- c('a1', 'a2', 'd1', 'd2', 'd3')
     expect_true(sum(abs(s1[,pick] - s2[,pick])) < 1e-10)
     mod3 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats, TOL = 1e-2, verbose=FALSE)
-    expect_equal(mod2values(mod3)$value, c(-0.8158204,0.2025502,0,1,2,3,0,1,2,3,0,2.795077,5.278498,3.958811,-0.827882,2.994309,0,1,2,3,0,1,2,3,0,4.781181,6.39139,2.522749,-0.7776257,0.8309647,0,1,2,3,0,1,2,3,0,2.882842,4.403226,3.176488,-5.718852,-0.3656946,0,1,2,3,0,1,2,3,0,9.564832,12.51259,7.53257,-0.266517,-0.4696018,0,1,2,3,4,5,1,1,0,0,0,0,0,2.366882,5.073178,5.333866,5.057924,3.734561,-0.2301817,-3.788106,0,1,2,3,4,5,1,1,0,0,0,0,0,2.5019,6.20009,6.441911,6.165128,4.129652,-0.3391893,-0.9902323,0,1,2,3,4,5,1,1,0,0,0,0,0,2.177612,4.038893,4.233308,3.905202,2.659554,-1.239488,0,0,1,2,3,4,5,1,1,0,0,0,0,0,3.291313,5.343707,5.969602,5.167208,2.056287,0,0,1,0,1), tolerance=1e-4)
+    expect_equal(mod3@logLik, -3708.0, tolerance = 1e-4)
+    cfs <- as.vector(coef(mod3, simplify=TRUE, digits = 5)$items)
+    expect_equal(cfs, c(-1.23177,-2.76946,-1.54897,-1.34947,-0.41973,-0.45958,-0.71595,-0.58334,-0.29564,4.58694,0.36752,-0.31281,0.4241,-2.90723,-0.16516,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3.69493,7.87579,3.59178,3.00087,2.60806,2.7068,2.83078,2.07429,6.50601,10.34317,5.36289,4.0315,5.42778,5.57857,4.69492,3.43515,4.9848,4.17678,3.89073,2.40695,5.74,5.87555,5.00542,3.86719,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,5.43095,5.52149,4.54781,3.38757,NA,NA,NA,NA,3.98583,3.27075,2.90466,1.19029), tolerance=1e-4)
 })
 

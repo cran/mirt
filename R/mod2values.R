@@ -1,4 +1,4 @@
-#' Convert an estimated mirt model to special data.frame
+#' Convert an estimated mirt model to a data.frame
 #'
 #' Given an estimated model from any of mirt's model fitting functions this function will convert
 #' the model parameters into the design data frame of starting values and other parameter
@@ -89,6 +89,8 @@ mod2values <- function(x){
     }
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
+    lbound[parname %in% c('g', 'u')] <- antilogit(lbound[parname %in% c('g', 'u')])
+    ubound[parname %in% c('g', 'u')] <- antilogit(ubound[parname %in% c('g', 'u')])
     prior.type <- sapply(as.character(prior.type),
                          function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
     ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum, value=par,
