@@ -6,7 +6,7 @@
 \usage{
 simdata(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
   upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(),
-  returnList = FALSE)
+  returnList = FALSE, model = NULL, mins = 0)
 }
 \arguments{
 \item{a}{a matrix of slope parameters. If slopes are to be constrained to
@@ -51,7 +51,8 @@ constrained to 0 and the last will be constrained to the number of categories mi
 so it is best to set these as the values for the first and last categories as well}
 
 \item{Theta}{a user specified matrix of the underlying ability parameters,
-where \code{nrow(Theta) == N} and \code{ncol(Theta) == ncol(a)}}
+where \code{nrow(Theta) == N} and \code{ncol(Theta) == ncol(a)}. When this is supplied the
+\code{N} input is not required}
 
 \item{gpcm_mats}{a list of matricies specifying the scoring scheme for generalized partial
 credit models (see \code{\link{mirt}} for details)}
@@ -59,6 +60,14 @@ credit models (see \code{\link{mirt}} for details)}
 \item{returnList}{logical; return a list containing the data, item objects defined
 by \code{mirt} containing the population parameters and item structure, and the
 latent trait matrix \code{Theta}? Default is FALSE}
+
+\item{model}{a single group object, typically returned by functions such as \code{\link{mirt}} or
+\code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the Theta
+input) redundent}
+
+\item{mins}{an integer vector (or single value to be used for each item) indicating what
+  the lowest category should be. If \code{model} is supplied then this will be extracted from
+  \code{slot(mod, 'Data')$mins}, otherwise the default is 0}
 }
 \description{
 Simulates response patterns for compensatory and noncompensatory MIRT models
@@ -180,7 +189,7 @@ a <- matrix(c(
 d <- matrix(rnorm(6))
 itemtype <- rep('dich',6)
 
-nonlindata <- simdata(a,d,2000,itemtype,Theta=Theta)
+nonlindata <- simdata(a=a, d=d, itemtype=itemtype, Theta=Theta)
 
 #model <- '
 #F1 = 1-6
@@ -215,7 +224,28 @@ dataset <- simdata(a,d,2000,items,nominal=nominal)
 listobj <- simdata(a,d,2000,items,nominal=nominal, returnList=TRUE)
 str(listobj)
 
+# generate dataset from converged model
+mod <- mirt(Science, 1, itemtype = c(rep('gpcm', 3), 'nominal'))
+sim <- simdata(model=mod, N=1000)
+head(sim)
 
+Theta <- matrix(rnorm(100))
+sim <- simdata(model=mod, Theta=Theta)
+head(sim)
+
+# alternatively, define a suitable object with functions from the mirtCAT package
+# help(generate.mirt_object)
+library(mirtCAT)
+
+nitems <- 50
+a1 <- rlnorm(nitems, .2,.2)
+d <- rnorm(nitems)
+g <- rbeta(nitems, 20, 80)
+pars <- data.frame(a1=a1, d=d, g=g)
+head(pars)
+
+obj <- generate.mirt_object(pars, '3PL')
+dat <- simdata(N=200, model=obj)
    }
 }
 \author{

@@ -72,7 +72,12 @@ effects across persons and items? Default is TRUE. Setting this to FALSE runs th
 underidentification}
 
 \item{technical}{the technical list passed to the MH-RM estimation engine, with the
-SEtol default increased to .0001. See \code{\link{mirt}} for further details}
+SEtol default increased to .0001. Additionally, the argument \code{RANDSTART} is available
+to incidicate at which iteration (during the burn-in stage) the additional random effect
+variables should begin to be approximated (i.e.,
+elements in \code{lr.random} and \code{random}). The default for \code{RANDSTART} is to start
+at iteration 100, and when random effects are included the default number of burn-in iterations is incrased
+from 150 to 200. See \code{\link{mirt}} for further details}
 
 \item{...}{additional arguments to be passed to the MH-RM estimation engine. See
   \code{\link{mirt}} for more details and examples}
@@ -340,8 +345,8 @@ anova(mod1, mod2)
 Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
-Chalmers, R. P. (2015, in press). Extended Mixed-Effects Item Response Models
-with the MH-RM Algorithm. \emph{Journal of Educational Measurement}.
+Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-RM Algorithm.
+\emph{Journal of Educational Measurement, 52}, 200-222.
 }
 \seealso{
 \code{\link{mirt}}, \code{\link{randef}}, \code{\link{fixef}}, \code{\link{boot.mirt}}

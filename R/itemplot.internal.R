@@ -65,19 +65,19 @@ setMethod(
             if(type == 'info'){
                 if(is.null(main))
                     main <- paste('Information for item', item)
-                return(xyplot(info ~ Theta, dat, group=group, type = 'l',
+                return(xyplot(info ~ Theta, dat, groups=dat$group, type = 'l',
                                        auto.key = auto.key, main = main,
                                        ylab = expression(I(theta)), xlab = expression(theta), ...))
             } else if(type == 'trace'){
                 if(is.null(main))
                     main <- paste("Item", item, "Trace")
-                return(xyplot(P  ~ Theta | cat, dat2, group=group, type = 'l',
+                return(xyplot(P  ~ Theta | cat, dat2, groups=dat2$group, type = 'l',
                             auto.key = auto.key, main = main, ylim = c(-0.1,1.1),
                             ylab = expression(P(theta)), xlab = expression(theta), ...))
             } else if(type == 'RE'){
                 if(is.null(main))
                     main <- paste('Relative efficiency for item', item)
-                return(xyplot(info ~ Theta, dat, group=group, type = 'l',
+                return(xyplot(info ~ Theta, dat, groups=dat$group, type = 'l',
                                        auto.key = auto.key, main = main,
                                        ylab = expression(RE(theta)), xlab = expression(theta), ...))
             } else {
@@ -94,7 +94,7 @@ setMethod(
             if(type == 'info'){
                 if(is.null(main))
                     main <- paste("Item", item, "Information")
-                return(wireframe(info ~ Theta1 + Theta2, data = dat, group=group, main=main,
+                return(wireframe(info ~ Theta1 + Theta2, data = dat, group=dat$group, main=main,
                                           zlab=expression(I(theta)), xlab=expression(theta[1]),
                                           ylab=expression(theta[2]), screen=rot,
                                           scales = list(arrows = FALSE),
@@ -102,7 +102,7 @@ setMethod(
             } else if(type == 'trace'){
                 if(is.null(main))
                     main <- paste("Item", item, "Trace")
-                return(wireframe(P ~ Theta1 + Theta2|cat, data = dat2, group = group, main = main,
+                return(wireframe(P ~ Theta1 + Theta2|cat, data = dat2, group = dat2$group, main = main,
                                           zlab=expression(P(theta)),
                                           xlab=expression(theta[1]),
                                           ylab=expression(theta[2]), zlim = c(-0.1,1.1),
@@ -111,7 +111,7 @@ setMethod(
             } else if(type == 'RE'){
                 if(is.null(main))
                     main <- paste("Relative efficiency for item", item)
-                return(wireframe(info ~ Theta1 + Theta2, data = dat, group=group, main=main,
+                return(wireframe(info ~ Theta1 + Theta2, data = dat, group=dat$group, main=main,
                                           zlab=expression(RE(theta)), xlab=expression(theta[1]),
                                           ylab=expression(theta[2]),
                                           scales = list(arrows = FALSE), screen=rot,
@@ -149,6 +149,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
     P <- ProbTrace(x=x@pars[[item]], Theta=ThetaFull)
     K <- x@pars[[item]]@ncat
     info <- numeric(nrow(ThetaFull))
+    if(K == 2L) auto.key <- FALSE
     if(type %in% c('info', 'SE', 'infoSE', 'infotrace', 'RE', 'infocontour', 'RETURN')){
         if(nfact == 3){
             if(length(degrees) != 3 && any(type %in% 'info', 'SE')){
@@ -158,9 +159,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             }
         }
         if(nfact == 2){
-            for(i in 1:length(degrees))
-                info <- info + iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=c(degrees[i],
-                                                                                 90 - degrees[i]))
+            info <- iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=degrees)
         } else {
             info <- iteminfo(x=x@pars[[item]], Theta=ThetaFull, degrees=0)
         }
@@ -191,7 +190,6 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
         upper <- sorttmp[ceiling(length(tmp) * (1-CEalpha/2))]
         delta <- delta[tmp < upper & tmp > lower, , drop=FALSE]
         tmpitem@par[tmpitem@est] <- delta[1, ]
-        degrees <- if(nfact == 2) c(degrees[i], 90 - degrees[i]) else 0
         CEinfoupper <- CEinfolower <- iteminfo(tmpitem, ThetaFull, degrees=degrees)
         CEprobupper <- CEproblower <- ProbTrace(tmpitem, ThetaFull)
         CEscoreupper <- CEscorelower <- expected.item(tmpitem, ThetaFull, min = x@Data$mins[item])
@@ -244,13 +242,13 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                            upper <- upper[subscripts]
                            lower <- lower[subscripts]
                            panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
-                                         col=grey(.9), border = FALSE, ...)
+                                         col="#E6E6E6", border = FALSE, ...)
                            panel.xyplot(x, y, type='l', lty=1,...)
                        },
-                       main = main, ylim = c(-0.1,1.1),
+                       main = main, ylim = c(-0.1,1.1), auto.key = auto.key,
                        ylab = expression(P(theta)), xlab = expression(theta), ...))
             } else {
-                return(xyplot(P ~ Theta, plt2, group = time, type = 'l', auto.key = auto.key,
+                return(xyplot(P ~ Theta, plt2, groups = time, type = 'l', auto.key = auto.key,
                                 main = main, ylim = c(-0.1,1.1),
                                 ylab = expression(P(theta)), xlab = expression(theta), ... ))
             }
@@ -258,11 +256,11 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             if(is.null(main))
                 main <- paste('Information for item', item)
             if(CE){
-                return(xyplot(info ~ Theta, data=plt,
+                return(xyplot(info ~ Theta, data=plt, auto.key = auto.key,
                               upper=plt$CEinfoupper, lower=plt$CEinfolower,
                               panel = function(x, y, lower, upper, ...){
                                   panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
-                                                col=grey(.9), border = FALSE, ...)
+                                                col="#E6E6E6", border = FALSE, ...)
                                   panel.xyplot(x, y, type='l', lty=1,...)
                               },
                               main = main, ylim=c(min(plt$CEinfolower), max(plt$CEinfoupper)),
@@ -276,11 +274,11 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             if(is.null(main))
                 main <- paste('Expected score for item', item)
             if(CE){
-                return(xyplot(score ~ Theta, data=plt,
+                return(xyplot(score ~ Theta, data=plt, auto.key = auto.key,
                               upper=plt$CEscoreupper, lower=plt$CEscorelower,
                               panel = function(x, y, lower, upper, ...){
                                   panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
-                                                col=grey(.9), border = FALSE, ...)
+                                                col="#E6E6E6", border = FALSE, ...)
                                   panel.xyplot(x, y, type='l', lty=1,...)
                               },
                               main = main, ylim=c(min(plt$CEscorelower), max(plt$CEscoreupper)),
@@ -296,11 +294,11 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             if(CE){
                 plt$CESEupper <- 1/sqrt(CEinfolower)
                 plt$CESElower <- 1/sqrt(CEinfoupper)
-                return(xyplot(SE ~ Theta, data=plt,
+                return(xyplot(SE ~ Theta, data=plt, auto.key = auto.key,
                               upper=plt$CESEupper, lower=plt$CESElower,
                               panel = function(x, y, lower, upper, ...){
                                   panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
-                                                col=grey(.9), border = FALSE, ...)
+                                                col="#E6E6E6", border = FALSE, ...)
                                   panel.xyplot(x, y, type='l', lty=1,...)
                               },
                               main = main, ylim=c(min(plt$CESElower), max(plt$CESEupper)),
@@ -324,7 +322,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
         } else if(type == 'infotrace'){
             if(is.null(main))
                 main <- paste('Trace lines and information for item', item)
-            obj1 <- xyplot(P ~ Theta, plt2, type = 'l', lty = c(1:K), group=time, main = main,
+            obj1 <- xyplot(P ~ Theta, plt2, type = 'l', lty = c(1:K), groups=time, main = main,
                            ylim = c(-0.1,1.1), ylab = expression(P(theta)), xlab = expression(theta), ... )
             obj2 <- xyplot(info~Theta, plt, type='l', xlab = expression(theta), ylab=expression(I(theta)),
                            ylim = c(-0.1,max(plt$info) + .5))

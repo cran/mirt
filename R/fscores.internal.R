@@ -109,6 +109,9 @@ setMethod(
             fs <- fscores(object, rotate=rotate, Target=Target, full.scores = TRUE, method=method,
                           quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
                           return.acov = FALSE, QMC=QMC, custom_den = NULL, ...)
+            if(any(is.na(fs)))
+                stop('Plausible values cannot be drawn for completely empty response patterns.
+                     Please remove these from your analysis.', call.=FALSE)
             fs_acov <- fscores(object, rotate = rotate, Target=Target, full.scores = TRUE, method=method,
                           quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
                           plausible.draws=0, full.scores.SE=FALSE,
@@ -163,6 +166,8 @@ setMethod(
                 newmod@pars <- newmod@pars[c(pick, length(newmod@pars))]
                 newmod@itemloc <- c(1L, 1L + cumsum(object@K[pick]))
                 newmod@K <- object@K[pick]
+                if(newmod@exploratory)
+                    stop('exploratory models not supported for single response pattern inputs', call.=FALSE)
                 ret <- fscores(newmod, rotate=rotate, Target=Target, full.scores=TRUE,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
@@ -179,6 +184,9 @@ setMethod(
         }
         dots <- list(...)
         discrete <- FALSE
+        if(object@nfact > 3L && !QMC && method %in% c('EAP', 'EAPsum'))
+            warning('High-dimensional models should use quasi-Monte Carlo integration. Pass QMC=TRUE',
+                    call.=FALSE)
         if(method == 'Discrete' || method == 'DiscreteSum'){
             discrete <- TRUE
             method <- ifelse(method == 'Discrete', 'EAP', 'EAPsum')
@@ -337,6 +345,9 @@ setMethod(
             scores <- tmp[[1L]]
             SEscores <- tmp[[2L]]
         }
+        if(any(is.na(scores)))
+            warning('NAs returned for response patterns with no data. Consider removing',
+                    call.=FALSE)
 		if (full.scores){
             if(USETABDATA){
                 tabdata2 <- object@Data$tabdata[keep, , drop=FALSE]
@@ -449,7 +460,7 @@ setMethod(
     definition = function(object, rotate, full.scores = FALSE, method = "EAP",
                           quadpts = NULL, response.pattern = NULL, theta_lim, MI,
                           returnER = FALSE, verbose = TRUE, gmean, gcov,
-                          full.scores.SE, return.acov = FALSE, QMC, ...)
+                          full.scores.SE, return.acov = FALSE, QMC, plausible.draws, ...)
     {
         pars <- object@pars
         ngroups <- length(pars)
@@ -464,10 +475,25 @@ setMethod(
             tmp_obj <- MGC2SC(object, g)
             ret[[g]] <- fscores(tmp_obj, rotate = rotate, full.scores=full.scores, method=method,
                            quadpts=quadpts, returnER=returnER, verbose=verbose, theta_lim=theta_lim,
-                                mean=gmean[[g]], cov=gcov[[g]], MI=MI,
+                                mean=gmean[[g]], cov=gcov[[g]], MI=MI, plausible.draws=plausible.draws,
                            full.scores.SE=full.scores.SE, return.acov=return.acov, QMC=QMC, ...)
         }
         names(ret) <- object@Data$groupNames
+        if(plausible.draws > 0){
+            pv <- plausible.draws
+            out <- matrix(NA, nrow(object@Data$data), ncol(ret[[1L]][[1L]]))
+            out2 <- vector('list', pv)
+            colnames(out) <- colnames(ret[[1L]][[1L]])
+            for(i in 1L:pv){
+                for(g in 1L:object@Data$ngroups){
+                    wch <- which(object@Data$group == object@Data$groupNames[g])
+                    for(j in 1L:ncol(ret[[1L]][[1L]]))
+                        out[wch, j] <- ret[[g]][[i]][,j]
+                }
+                out2[[i]] <- out
+            }
+            return(out2)
+        }
         if(full.scores){
             if(return.acov){
                 group <- object@Data$group
