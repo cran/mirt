@@ -406,7 +406,7 @@
 #'       categories for each item. This should only be used when constructing mirt model for
 #'       reasons other than parameter estimation (such as to obtain factor scores), and requires
 #'       that the input data all have 0 as the lowest category. The format is the same as the
-#'       \code{mod@@K} slot in all converged models}
+#'       \code{extract.mirt(mod, 'K')} slot in all converged models}
 #'     \item{customPriorFun}{a custom function used to determine the normalized density for
 #'       integration in the EM algorithm. Must be of the form \code{function(Theta, Etable){...}},
 #'       and return a numeric vector with the same length as number of rows in \code{Theta}. The
@@ -418,6 +418,8 @@
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
+#'     \item{removeEmptyRows}{logical; remove response vectors that only contain \code{NA}'s?
+#'       Default is FALSE}
 #'     \item{gain}{a vector of two values specifying the numerator and exponent
 #'          values for the RM gain function \eqn{(val1 / cycle)^val2}.
 #'          Default is \code{c(0.10, 0.75)}}
@@ -442,7 +444,7 @@
 #'   \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{mod2values}},
 #'   \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}},
 #'   \code{\link{probtrace}}, \code{\link{simdata}}, \code{\link{averageMI}},
-#'   \code{\link{fixef}}
+#'   \code{\link{fixef}}, \code{\link{extract.mirt}}
 #'
 #' @references
 #'
@@ -487,6 +489,9 @@
 #' Maydeu-Olivares, A., Hernandez, A. & McDonald, R. P. (2006).
 #' A Multidimensional Ideal Point Item Response Theory Model for Binary Data.
 #' \emph{Multivariate Behavioral Research, 41}, 445-471.
+#'
+#' Muraki, E. (1990). Fitting a polytomous item response model to Likert-type data.
+#' \emph{Applied Psychological Measurement, 14}, 59-71.
 #'
 #' Muraki, E. (1992). A generalized partial credit model: Application of an EM algorithm.
 #' \emph{Applied Psychological Measurement, 16}, 159-176.
@@ -562,8 +567,10 @@
 #' plot(mod2, rotate = 'oblimin')
 #'
 #' anova(mod1, mod2) #compare the two models
-#' scores <- fscores(mod2) #save factor score table
-#' scoresfull <- fscores(mod2, full.scores = TRUE) #factor scores for each response pattern
+#' scoresfull <- fscores(mod2) #factor scores for each response pattern
+#' head(scoresfull)
+#' scorestable <- fscores(mod2, full.scores = FALSE) #save factor score table
+#' head(scorestable)
 #'
 #' #confirmatory (as an example, model is not identified since you need 3 items per factor)
 #' # Two ways to define a confirmatory model: with mirt.model, or with a string
@@ -638,11 +645,11 @@
 #'   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #'
 #' mod1 <- mirt(data, 1)
-#' slot(mod1, 'time') #time elapsed for each estimation component
+#' extract.mirt(mod1, 'time') #time elapsed for each estimation component
 #'
 #' #optionally use Newton-Raphson for (generally) faster convergence in the M-step's
 #' mod1 <- mirt(data, 1, optimizer = 'NR')
-#' slot(mod1, 'time')
+#' extract.mirt(mod1, 'time')
 #'
 #' mod2 <- mirt(data, 2, optimizer = 'NR')
 #' #difficulty converging with reduced quadpts, reduce TOL

@@ -30,7 +30,7 @@ test_that('exploratory mods', {
     expect_message(modm7 <- mirt(fulldata, 1, '4PL', verbose=FALSE, parprior = list(c(3,7,11,15,19,'norm', -1.7, 1),
                                                                      c(4,8,12,16,20,'norm', 1.7, 1)), method = 'MHRM', draws = 10),
                             "MHRM terminated after 2000 iterations.")
-    expect_equal(modm7@df, 11)
+    expect_equal(extract.mirt(modm7, 'df'), 11)
     expect_is(modm7, 'SingleGroupClass')
     cfs <- as.numeric(do.call(c, coef(modm7)))
     expect_equal(cfs, c(5.103,7.255,0.148,0.895,8.396,1.902,0.323,0.891,10.745,6.593,0.356,0.926,5.189,5.404,0.148,0.696,2.352,3.802,0.338,0.897,0,1), tolerance = 1e-2)
@@ -41,12 +41,12 @@ test_that('exploratory mods', {
     expect_equal(cfs, c(0.969,1.8464,0,1,1.0833,0.806,0,1,1.6824,1.7834,0,1,0.7595,0.4829,0,1,0.7681,1.8658,0,1,0,1),
                  tolerance = 1e-2)
 
-    fs1 <- fscores(onefact, verbose = FALSE, mean=c(1), cov=matrix(2))
+    fs1 <- fscores(onefact, verbose = FALSE, mean=c(1), cov=matrix(2), full.scores=FALSE)
     expect_is(fs1, 'matrix')
     expect_true(mirt:::closeEnough(fs1[1:3,'F1'] - c(-2.1821, -1.6989, -1.6807), -1e-2, 1e-2))
-    fs2 <- fscores(twofact, verbose = FALSE)
+    fs2 <- fscores(twofact, verbose = FALSE, full.scores=FALSE)
     expect_is(fs2, 'matrix')
-    fs3 <- fscores(onefactmissing, verbose = FALSE)
+    fs3 <- fscores(onefactmissing, verbose = FALSE, full.scores=FALSE)
     expect_is(fs3, 'matrix')
 })
 

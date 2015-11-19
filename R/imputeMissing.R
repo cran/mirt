@@ -22,7 +22,7 @@
 #' for(i in 1:20)
 #'     dat[NAperson[i], NAitem[i]] <- NA
 #' (mod <- mirt(dat, 1))
-#' scores <- fscores(mod, method = 'MAP', full.scores = TRUE)
+#' scores <- fscores(mod, method = 'MAP')
 #'
 #' #re-estimate imputed dataset (good to do this multiple times and average over)
 #' fulldata <- imputeMissing(mod, scores)
@@ -32,7 +32,7 @@
 #' set.seed(1)
 #' group <- sample(c('group1', 'group2'), 1000, TRUE)
 #' mod2 <- multipleGroup(dat, 1, group, TOL=1e-2)
-#' fs <- fscores(mod2, full.scores=TRUE)
+#' fs <- fscores(mod2)
 #' fulldata2 <- imputeMissing(mod2, fs)
 #'
 #' }
@@ -42,9 +42,12 @@ imputeMissing <- function(x, Theta, ...){
     if(is(x, 'MixedClass'))
         stop('mixedmirt xs not yet supported', call.=FALSE)
     if(is(x, 'MultipleGroupClass')){
-        pars <- x@pars
+        pars <- x@ParObjects$pars
         group <- x@Data$group
         data <- x@Data$data
+        if(sum(is.na(data))/length(data) > .1)
+            warning('Imputing too much data can lead to very conservative results. Use with caution',
+                    call.=FALSE)
         uniq_rows <- apply(data, 2L, function(x) list(sort(na.omit(unique(x)))))
         for(g in 1L:length(pars)){
             sel <- group == x@Data$groupNames[g]
@@ -56,7 +59,7 @@ imputeMissing <- function(x, Theta, ...){
         return(data)
     }
     dots <- list(...)
-    pars <- x@pars
+    pars <- x@ParObjects$pars
     nfact <- pars[[1L]]@nfact
     if(!is(Theta, 'matrix') || nrow(Theta) != nrow(x@Data$data) || ncol(Theta) != nfact)
         stop('Theta must be a matrix of size N x nfact', call.=FALSE)
@@ -70,9 +73,12 @@ imputeMissing <- function(x, Theta, ...){
             }
         }
     }
-    K <- x@K
+    K <- x@Data$K
     J <- length(K)
     data <- x@Data$data
+    if(sum(is.na(data))/length(data) > .1)
+        warning('Imputing too much data can lead to very conservative results. Use with caution',
+                call.=FALSE)
     N <- nrow(data)
     Nind <- 1L:N
     for (i in 1L:J){
