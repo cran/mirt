@@ -1,4 +1,4 @@
-SE.BL <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMATE, constrain, Ls,
+SE.BL <- function(pars, Theta, theta, BFACTOR, itemloc, PrepList, ESTIMATE, constrain, Ls,
                   CUSTOM.IND, specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL, warn, Data){
     longpars <- ESTIMATE$longpars
     rlist <- ESTIMATE$rlist
@@ -32,8 +32,9 @@ SE.BL <- function(pars, Theta, theta, prior, BFACTOR, itemloc, PrepList, ESTIMAT
     return(ESTIMATE)
 }
 
-SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV,
+SE.SEM <- function(index, estmat, pars, constrain, Ls, PrepList, list, Theta, theta, BFACTOR, ESTIMATE, DERIV,
                    collectLL, from, to, is.latent, Data, solnp_args, control){
+    est <- estmat[,index]
     lrPars <- list$lrPars
     full <- list$full
     TOL <- list$TOL
@@ -61,7 +62,6 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
     nfact <- ncol(Theta)
     ANY.PRIOR <- rep(FALSE, ngroups)
     converged <- logical(sum(estpars & !redun_constr))
-    if(!is.latent[est]) converged[is.latent] <- TRUE
     rijfull <- rep(NA, length(converged))
     if(length(prodlist) > 0L)
         Theta <- prodterms(Theta, prodlist)
@@ -77,6 +77,7 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         ANY.PRIOR[g] <- any(sapply(pars[[g]], function(x) x@any.prior))
         gTheta[[g]] <- Theta
     }
+    converged <- FALSE
 
     for (cycles in from:to){
 
@@ -116,7 +117,7 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
                           rlist=rlist, constrain=constrain, DERIV=DERIV, groupest=ESTIMATE$groupest,
                           CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND, BFACTOR=list$BFACTOR,
                           Moptim=Moptim, Mrate=1, TOL=list$MSTEPTOL, solnp_args=solnp_args, full=full,
-                          lrPars=lrPars, control=control)
+                          Thetabetween=Thetabetween, lrPars=lrPars, control=control)
         rijlast <- rij
         denom <- (EMhistory[cycles, estindex] - MLestimates[estindex])
         rij <- (longpars[estpars & !redun_constr] - MLestimates[estpars & !redun_constr]) / denom
@@ -124,10 +125,14 @@ SE.SEM <- function(est, pars, constrain, Ls, PrepList, list, Theta, theta, BFACT
         converged <- diff | converged
         which <- is.na(rijfull) & converged
         rijfull[which] <- rij[which]
-        if(all(!is.na(rijfull))) break
+        if(all(!is.na(rijfull))){
+            converged <- TRUE
+            break
+        }
     } #END EM
 
     rijfull[is.na(rijfull)] <- rij[is.na(rijfull)]
+    attr(rijfull, 'converged') <- converged
     return(rijfull)
 }
 

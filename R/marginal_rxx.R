@@ -9,6 +9,8 @@
 #'   normal (Gaussian) distribution
 #' @param theta_lim a vector containing the range of integration
 #' @param ... additional arguments passed to the density function
+#'
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords reliability
 #' @export marginal_rxx
 #' @seealso \code{\link{empirical_rxx}}, \code{\link{extract.group}}, \code{\link{testinfo}}
@@ -32,7 +34,7 @@
 #'
 #' }
 marginal_rxx <- function(mod, density = dnorm, theta_lim = c(-6,6), ...){
-    stopifnot(mod@Model$nfact == 1L)
+    stopifnot(extract.mirt(mod, 'nfact') == 1L)
     stopifnot(is(mod, 'SingleGroupClass'))
     Theta <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out = 1000L))
     TI <- testinfo(mod, Theta)

@@ -1,9 +1,10 @@
 #' Compute multidimensional discrimination index
 #'
-#' Returns a vector containing the MDSIC values (Reckase, 2009).
+#' Returns a vector containing the MDISC values for each item in the model input object (Reckase, 2009).
 #'
 #' @aliases MDISC
 #' @param x an object of class 'SingleGroupClass'
+#'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
 #' Reckase, M. D. (2009). Multidimensional Item Response Theory. Springer.
@@ -22,12 +23,12 @@
 MDISC <- function(x){
     if(missing(x)) missingMsg('x')
     stopifnot(class(x) == 'SingleGroupClass')
-    ret <- numeric(x@Data$nitems)
+    ret <- numeric(extract.mirt(x, 'nitems'))
     for(i in 1L:length(ret)){
         item <- extract.item(x, i)
         as <- ExtractLambdas(item)
         ret[i] <- as %*% as
     }
-    names(ret) <- colnames(x@Data$data)
+    names(ret) <- extract.mirt(x, 'itemnames')
     ret
 }

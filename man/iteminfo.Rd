@@ -7,7 +7,7 @@
 iteminfo(x, Theta, degrees = NULL, total.info = TRUE)
 }
 \arguments{
-\item{x}{an extracted internal mirt object containing item information}
+\item{x}{an extracted internal mirt object containing item information (see \code{\link{extract.item}})}
 
 \item{Theta}{a vector (unidimensional) or matrix (multidimensional) of latent trait values}
 
@@ -52,6 +52,9 @@ plot(Theta, T2/T1, type = 'l', ylab = 'Relative Test Information', las = 1)
 lines(Theta, T1/T1, col = 'red')
 
 }
+}
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \seealso{
 \code{\link{extract.item}}

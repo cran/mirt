@@ -10,11 +10,10 @@ extract.mirt(x, what)
 \item{x}{mirt model of class 'SingleGroupClass', 'MultipleGroupClass', 'MixedClass' or
 'DiscreteGroupClass'}
 
-\item{what}{a character vector indicating what to extract. Can contain more than one element}
+\item{what}{a string indicating what to extract}
 }
 \description{
-A generic function to extract the internal objects from any estimated model. If possible, the
-function will returns a vector/scalar containing the desired elements, otherwise it will return a list.
+A generic function to extract the internal objects from estimated models.
 }
 \details{
 Objects which can be extracted from mirt objects include:
@@ -40,6 +39,13 @@ Objects which can be extracted from mirt objects include:
     in \code{freq}}
   \item{freq}{frequencies associated with \code{tabdata}}
   \item{K}{an integer vector indicating the number of unique elements for each item}
+  \item{mins}{an integer vector indicating the lowest category found in the input \code{data}}
+  \item{model}{input model syntax}
+  \item{method}{estimation method used}
+  \item{itemtype}{a vector of item types for each respective item (e.g., 'graded', '2PL', etc)}
+  \item{itemnames}{a vector of item names from the input data}
+  \item{data}{raw input data of item responses}
+  \item{covdata}{raw input data of data used as covariates}
   \item{tabdatalong}{similar to \code{tabdata}, however the responses have been transformed into
     dummy coded variables}
   \item{fulldatalong}{analogous to \code{tabdatafull}, but for the raw input data instead of the
@@ -52,10 +58,18 @@ Objects which can be extracted from mirt objects include:
   \item{parvec}{vector containing uniquely estimated parameters}
   \item{vcov}{parameter covariance matrix (associated with parvec)}
   \item{condnum}{the condition number of the Hessian (if computed). Otherwise NA}
+  \item{constrain}{a list of item parameter constraints to indicate which item parameters were equal
+    during estimation}
   \item{Prior}{prior density distribution for the latent traits}
   \item{nfact}{number of latent traits/factors}
+  \item{nitems}{number of items}
+  \item{ngroups}{number of groups}
+  \item{groupNames}{character vector of unique group names}
+  \item{group}{a character vector indicating the group membership}
   \item{secondordertest}{a logical indicating whether the model passed the second-order test
     based on the Hessian matrix. Indicates whether model is a potential local maximum solution}
+  \item{SEMconv}{logical; check whether the supplimented EM information matrix converged. Will be \code{NA}
+    if not applicable}
   \item{time}{estimation time, broken into different sections}
 }
 }
@@ -65,13 +79,23 @@ Objects which can be extracted from mirt objects include:
 mod <- mirt(Science, 1)
 
 extract.mirt(mod, 'logLik')
-extract.mirt(mod, c('G2', 'df', 'p'))
-extract.mirt(mod, c('F', 'h2'))
+extract.mirt(mod, 'F')
+
+#multiple group model
+grp <- rep(c('G1', 'G2'), each = nrow(Science)/2)
+mod2 <- multipleGroup(Science, 1, grp)
+
+grp1 <- extract.group(mod2, 1) #extract single group model
+extract.mirt(mod2, 'parvec')
+extract.mirt(grp1, 'parvec')
 
 }
 }
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}
 \seealso{
-\code{\link{extract.group}}
+\code{\link{extract.group}}, \code{\link{extract.item}}, \code{\link{mod2values}}
 }
 \keyword{extract}
 

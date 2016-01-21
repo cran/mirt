@@ -109,13 +109,21 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
             x
         }, message = opts$message)
-        Data$data <- data
         if(any(rowSums(is.na(data)) == ncol(data))){
             if(!opts$removeEmptyRows)
-                stop('data contains completely empty response patterns. Please
-                     remove manually or pass removeEmptyRows=TRUE to the technical list', call.=FALSE)
-            else data <- subset(data, rowSums(is.na(data)) != ncol(data))
+                stop('data contains completely empty response patterns.',
+                     'Please remove manually or pass removeEmptyRows=TRUE to the technical list',
+                     call.=FALSE)
+            else {
+                pick <- rowSums(is.na(data)) != ncol(data)
+                data <- subset(data, pick)
+                group <- subset(group, pick)
+                if(!is.null(latent.regression) || !is.null(mixed.design))
+                    stop('removeEmptyRows input not supported for latent regression/mixed effect models.',
+                         'Please remove the require rows manually for each object.', call.=FALSE)
+            }
         }
+        Data$data <- data
 
         if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
         else Data$grsm.block <- opts$grsm.block
@@ -155,7 +163,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                          grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
                          mixed.design=mixed.design, customItems=customItems,
                          fulldata=opts$PrepList[[1L]]$fulldata, key=key, nominal.highlow=nominal.highlow,
-                         gpcm_mats=gpcm_mats)
+                         gpcm_mats=gpcm_mats, internal_constraints=opts$internal_constraints)
             if(!is.null(dots$Return_PrepList)) return(PrepListFull)
         }
         if(any(PrepListFull$itemtype == 'nominal') && is.null(nominal.highlow) && !opts$NULL.MODEL
@@ -182,6 +190,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
         if(!is.null(latent.regression)){
+            if(length(PrepListFull$prodlist))
+                stop('Polynominal combinations currently not supported when latent regression effects are used', call.=FALSE)
             lrPars <- make.lrdesign(df=latent.regression$df, formula=latent.regression$formula,
                                     factorNames=PrepListFull$factorNames, EM=latent.regression$EM)
             lrPars@parnum <- parnumber:(parnumber - 1L + length(lrPars@par))
@@ -375,6 +385,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
     }
+    SEMconv <- NA
     opts$times$end.time.Data <- proc.time()[3L]
 
     #EM estimation
@@ -595,8 +606,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         } else if(opts$SE.type == 'SEM' && opts$method == 'EM'){
             collectLL <- as.numeric(ESTIMATE$collectLL)
             collectLL <- exp(c(NA, collectLL) - c(collectLL, NA))
-            from <- min(which(collectLL >= .9))
-            to <- min(which(collectLL >= (1 - opts$SEtol/10)))
+            from <- suppressWarnings(max(which(collectLL <= opts$SEM_from)))
+            if(from < 1L) from <- 1L
+            to <- min(which(collectLL >= opts$SEM_to))
             dontrun <- FALSE
             if(from == to){
                 if(opts$warn)
@@ -620,7 +632,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     ncores <- mirtClusterEnv$ncores
                     mirtClusterEnv$ncores <- 1L
                 }
-                DM <- myApply(X=estmat, MARGIN=1L, FUN=SE.SEM, pars=ESTIMATE$pars, constrain=constrain, Data=Data,
+                DM <- myLapply(1L:ncol(estmat), FUN=SE.SEM, estmat=estmat, pars=ESTIMATE$pars, constrain=constrain, Data=Data,
                               list = list(NCYCLES=opts$NCYCLES, TOL=opts$SEtol, MSTEPTOL=opts$MSTEPTOL,
                                           nfactNames=PrepList[[1L]]$nfactNames, theta=theta,
                                           itemloc=PrepList[[1L]]$itemloc, BFACTOR=opts$BFACTOR,
@@ -632,11 +644,21 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                               Theta=Theta, theta=theta, ESTIMATE=ESTIMATE, from=from, to=to,
                               DERIV=DERIV, is.latent=is.latent, Ls=Ls, PrepList=PrepList,
                               solnp_args=opts$solnp_args, control=control)
+                SEMconv <- sapply(DM, function(x) all(attr(x, 'converged')))
+                if(!all(SEMconv)){
+                    warning(sprintf(c('%i parameters did not converge in numerical SEM derivative.\n',
+                                    'Try using different starting values or passing GenRandomPars=TRUE'),
+                                    sum(!SEMconv)),
+                            call.=FALSE)
+                    SEMconv <- FALSE
+                } else SEMconv <- TRUE
+                DM <- do.call(rbind, DM)
                 if(!opts$technical$parallel)
                     mirtClusterEnv$ncores <- ncores
                 ESTIMATE$pars <- reloadPars(longpars=ESTIMATE$longpars, pars=ESTIMATE$pars,
                                             ngroups=Data$ngroups, J=Data$nitems)
-                DM[, is.latent] <- 0
+                DM[, is.latent] <- DM[is.latent, ]
+                DM[is.latent, is.latent] <- 0
                 info <- try(solve(-solve(ESTIMATE$hess) %*% solve(diag(ncol(DM)) - DM)), silent=TRUE)
                 info[,is.latent] <- t(info[is.latent, ,drop=FALSE])
                 if(opts$technical$symmetric_SEM) info <- (info + t(info)) / 2
@@ -808,7 +830,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Data$itemdesign <- attr(mixed.design, 'itemdesign')
     ParObjects <- list(pars=cmods, lrPars=lrPars, random=ESTIMATE$random)
     OptimInfo <- list(iter=ESTIMATE$cycles, converged=ESTIMATE$converge, cand.t.var=ESTIMATE$cand.t.var,
-                      condnum=NA, secondordertest=NA)
+                      condnum=NA, secondordertest=NA, SEMconv=SEMconv)
     vcov <- matrix(NA, 1, 1)
     if(Options$SE){
         information <- ESTIMATE$info
