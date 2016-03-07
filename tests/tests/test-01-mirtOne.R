@@ -21,7 +21,7 @@ test_that('dich', {
     expect_equal(cfs, c(0.9876, 0.6367, 1.3384, 1.8559, 1.5978, 2.1139, 0, NA, NA, 1, NA, NA, 1.0808, 0.7604, 1.4013, 0.808, 0.6335, 0.9825, 0, NA, NA, 1, NA, NA, 1.7075, 1.0868, 2.3281, 1.8052, 1.4028, 2.2076, 0, NA, NA, 1, NA, NA, 0.765, 0.5065, 1.0235, 0.486, 0.3114, 0.6606, 0, NA, NA, 1, NA, NA, 0.7357, 0.4246, 1.0467, 1.8545, 1.6332, 2.0757, 0, NA, NA, 1, NA, NA, 0, NA, NA, 1, NA, NA),
                  tolerance = 1e-2)
     expect_is(modm1, 'SingleGroupClass')
-    modm2 <- mirt(data, 1, SE = TRUE, SE.type = 'BL', verbose=FALSE)
+    modm2 <- mirt(data, 1, SE = TRUE, SE.type = 'Richardson', verbose=FALSE)
     cfs <- as.numeric(do.call(c, coef(modm2, digits=4)))
     expect_equal(extract.mirt(modm2, 'condnum'), 30.24068, tolerance = 1e-3)
     expect_equal(cfs, c(0.988, 0.6406, 1.3354, 1.8561, 1.5984, 2.1138, 0, NA, NA, 1, NA, NA, 1.081, 0.7501, 1.4119, 0.808, 0.6291, 0.9869, 0, NA, NA, 1, NA, NA, 1.706, 1.0779, 2.334, 1.8043, 1.4036, 2.205, 0, NA, NA, 1, NA, NA, 0.7651, 0.5022, 1.028, 0.486, 0.3392, 0.6328, 0, NA, NA, 1, NA, NA, 0.7358, 0.4395, 1.032, 1.8545, 1.6302, 2.0787, 0, NA, NA, 1, NA, NA, 0, NA, NA, 1, NA, NA),
@@ -30,12 +30,14 @@ test_that('dich', {
     modm3 <- mirt(data, 1, itemtype = 'Rasch', verbose=FALSE, SE=TRUE)
     expect_is(modm3, 'SingleGroupClass')
     expect_equal(extract.mirt(modm3, 'df'), 25)
-    expect_equal(extract.mirt(modm3, 'condnum'), 4.742197, tolerance = 1e-4)
+    expect_equal(extract.mirt(modm3, 'condnum'), 4.741137, tolerance = 1e-4)
+    LG <- lagrange(modm3, parnum = list(1, 5))
+    expect_equal(LG$X2, c(0.25555838, 0.02038625), tolerance = 1e-4)
     dat <- expand.table(LSAT6)
     modm3 <- mirt(dat, 1, itemtype = 'Rasch', SE = TRUE, SE.type = 'SEM', verbose=FALSE)
     expect_is(modm3, 'SingleGroupClass')
     cfs <- as.numeric(do.call(c, coef(modm3)))
-    expect_equal(cfs, c(1, NA, NA, 2.73, 2.476, 2.984, 0, NA, NA, 1, NA, NA, 1, NA, NA, 0.999, 0.844, 1.153, 0, NA, NA, 1, NA, NA, 1, NA, NA, 0.24, 0.099, 0.38, 0, NA, NA, 1, NA, NA, 1, NA, NA, 1.306, 1.142, 1.471, 0, NA, NA, 1, NA, NA, 1, NA, NA, 2.099, 1.893, 2.306, 0, NA, NA, 1, NA, NA, 0, NA, NA, 0.57, 0.368, 0.773),
+    expect_equal(cfs, c(1,NA,NA,2.73,2.455,3.005,0,NA,NA,1,NA,NA,1,NA,NA,0.999,0.827,1.17,0,NA,NA,1,NA,NA,1,NA,NA,0.24,0.096,0.384,0,NA,NA,1,NA,NA,1,NA,NA,1.306,1.12,1.493,0,NA,NA,1,NA,NA,1,NA,NA,2.099,1.873,2.326,0,NA,NA,1,NA,NA,0,NA,NA,0.57,0.339,0.802),
                  tolerance = 1e-2)
     model <- mirt.model('F = 1-5
                         CONSTRAIN = (1-5, a1)', quiet=TRUE)
@@ -129,7 +131,7 @@ test_that('dich', {
     expect_true(mirt:::closeEnough(fitm1$df.M2 - 5, -1e-4, 1e-4))
     fitm2 <- M2(modm3)
     expect_is(fitm2, 'data.frame')
-    expect_true(mirt:::closeEnough(fitm2$M2 - 5.256163, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fitm2$M2 - 5.256348, -1e-4, 1e-4))
     expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
 
     data <- expand.table(LSAT7)

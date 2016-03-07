@@ -4,8 +4,8 @@
 \alias{createItem}
 \title{Create a user defined item with correct generic functions}
 \usage{
-createItem(name, par, est, P, gr = NULL, hss = NULL, lbound = NULL,
-  ubound = NULL)
+createItem(name, par, est, P, gr = NULL, hss = NULL, gen = NULL,
+  lbound = NULL, ubound = NULL, derivType = "forward")
 }
 \arguments{
 \item{name}{a character indicating the item class name to be defined}
@@ -29,11 +29,20 @@ the complete data log-likelihood. If not specified a numeric approximation will 
 estimation. If not specified a numeric approximation will be used (required for the MH-RM
 algorithm only). The input is idential to the \code{gr} argument}
 
+\item{gen}{a function used when \code{GenRandomPars = TRUE} is passed to the estimation function
+to generate random starting values. Function must be of the form \code{function(object) ...}
+and must return a vector with properties equivalent to the \code{par} object. If NULL,
+parameters will remain at the defined starting values by default}
+
 \item{lbound}{optional vector indicating the lower bounds of the parameters. If not specified
 then the bounds will be set to -Inf}
 
 \item{ubound}{optional vector indicating the lower bounds of the parameters. If not specified
 then the bounds will be set to Inf}
+
+\item{derivType}{if the \code{gr} or \code{hss} terms are not specified this type will be used to
+obtain them numerically. Default is the 'forward' method (fastest), but more exact approaches
+include 'central' and 'Richardson'}
 }
 \description{
 Initializes the proper S4 class and methods necessary for mirt functions to use in estimation.
@@ -69,6 +78,33 @@ mod <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x))
 coef(mod)
 mod2 <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), method = 'MHRM')
 coef(mod2)
+
+#several secondary functions supported
+M2(mod, calcNull=FALSE)
+itemfit(mod)
+fscores(mod, full.scores=FALSE)
+plot(mod)
+
+# fit the same model, but specify gradient function explicitly (use of a brower() may be helpful)
+gr <- function(x, Theta){
+     # browser()
+     a <- x@par[1]
+     b <- x@par[2]
+     P <- probtrace(x, Theta)
+     PQ <- apply(P, 1, prod)
+     r_P <- x@dat / P
+     grad <- numeric(2)
+     grad[2] <- sum(-a * PQ * (r_P[,2] - r_P[,1]))
+     grad[1] <- sum((Theta - b) * PQ * (r_P[,2] - r_P[,1]))
+
+     ## check with internal numerical form to be safe
+     # numerical_deriv(x@par[x@est], mirt:::EML, obj=x, Theta=Theta, type='Richardson')
+     grad
+}
+
+x <- createItem(name, par=par, est=est, P=P.old2PL, gr=gr)
+mod <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x))
+coef(mod, simplify=TRUE)
 
 ###non-linear
 name <- 'nonlin'
@@ -109,7 +145,7 @@ P.nom <- function(par, Theta, ncat){
    P
 }
 
-nom1 <- createItem(name, par=par, est=est, P=P.nom)
+nom1 <- createItem(name, par=par, est=est, P=P.nom, derivType = 'central')
 nommod <- mirt(Science, 1, 'nom1', customItems=list(nom1=nom1))
 coef(nommod)
 Tnom.dev(4) \%*\% coef(nommod)[[1]][1:3] #a

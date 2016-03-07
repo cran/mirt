@@ -1,6 +1,6 @@
 Package: mirt
-Version: 1.15
-Date: 2016-01-21
+Version: 1.16
+Date: 2016-03-06
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", family="Chalmers", email =
@@ -16,7 +16,7 @@ Description: Analysis of dichotomous and polytomous response data using
     estimated with quadrature (EM) or stochastic (MHRM) methods. Confirmatory
     bi-factor and two-tier analyses are available for modeling item testlets.
     Multiple group analysis and mixed effects designs also are available for
-    detecting differential item and test functioning as well as modelling 
+    detecting differential item and test functioning as well as modelling
     item and person covariates.
 VignetteBuilder: knitr
 Depends: stats, R (>= 3.1.0), stats4, lattice, methods
@@ -35,11 +35,11 @@ URL: https://github.com/philchalmers/mirt,
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-01-21 14:54:56 UTC; phil
+Packaged: 2016-03-07 01:10:41 UTC; phil
 Author: Phil Chalmers [aut, cre, cph],
   Joshua Pritikin [ctb],
   Alexander Robitzsch [ctb],
   Mateusz Zoltak [ctb],
   KwonHyun Kim [ctb],
   Carl F. Falk [ctb]
-Date/Publication: 2016-01-21 17:03:54
+Date/Publication: 2016-03-07 07:59:53

@@ -20,14 +20,14 @@ test_that('mixed dich', {
     expect_equal(as.numeric(cfs$lr.betas), c(0.0000000, 0.9548921, 1.9383165, 0.1877870), tolerance=1e-4)
     set.seed(1234)
     plaus <- fscores(mod0, plausible.draws = 2)
-    expect_equal(plaus[[1]][1:4], c(-0.6074285, -0.4914628, -0.1991007, -0.9724681),
+    expect_equal(plaus[[1]][1:4], c(-0.6070500, -0.4914912, -0.1991549, -0.9720153),
                  tolerance = 1e-4)
     require(boot, quietly=TRUE, warn.conflicts=FALSE)
     set.seed(1)
     bs <- boot.mirt(mod0, R = 3)
     expect_is(bs, 'boot')
     fs <- fscores(mod0, full.scores.SE=TRUE, full.scores=FALSE)
-    expect_equal(as.numeric(head(fs)), c(-0.2823035,-0.5666475,-0.4925317,-0.3398507,-0.4864681,-0.4767635,0.2693515,0.2710047,0.2705827,0.2696926,0.2705478,0.270492), tolerance=1e-4)
+    expect_equal(as.numeric(head(fs)), c(-0.2820982,-0.5666356,-0.4924289,-0.3397344,-0.4862802,-0.4766593,0.2692081,0.2708598,0.2704379,0.2695491,0.2704026,0.2703473), tolerance=1e-4)
 
     #group as a fixed effect predictor (aka, uniform dif)
     mod1 <- mixedmirt(data, covdata, model, fixed = ~ 0 + items + group,
@@ -37,7 +37,7 @@ test_that('mixed dich', {
     expect_equal(cfs, c(1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-1.6979,-1.8905,-1.5053,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-2.1101,-2.3119,-1.9083,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-1.7048,-1.8975,-1.512,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-1.0493,-1.2334,-0.8652,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-0.3151,-0.4994,-0.1309,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-1.2453,-1.4313,-1.0594,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-1.6843,-1.8766,-1.4919,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-2.125,-2.3272,-1.9229,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,-2.029,-2.2287,-1.8292,0,NA,NA,1,NA,NA,1.111,0.9628,1.2593,2.2422,2.0891,2.3954,1,NA,NA,1.6114,1.3404,1.8824,0,NA,NA,1,NA,NA,0,NA,NA,0.1035,0.0541,0.1529),
                  tolerance = 1e-2)
     names <- wald(mod1)
-    L <- matrix(c(1, numeric(ncol(names) - 1L)), 1L)
+    L <- matrix(c(1, numeric(length(names) - 1L)), 1L)
     wld <- wald(mod1, L, C=as.numeric(L))
     expect_equal(wld$W[1], 2.156415, tolerance = 1e-4)
     set.seed(1)

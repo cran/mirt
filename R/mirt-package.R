@@ -26,9 +26,7 @@
 #' @import stats lattice GPArotation Rcpp stats4 methods sfsmisc mgcv
 #' @importFrom utils write.table flush.console packageVersion
 #' @importFrom graphics symbols
-#' @exportMethod anova
-#' @exportMethod residuals
-#' @exportMethod summary
+#' @exportMethod anova residuals summary logLik vcov
 #' @keywords package
 NULL
 
@@ -193,9 +191,7 @@ NULL
 #' table <- data.frame(fttd[,-ncol(fttd)], fs)
 #' table
 #'
-#' #using nominal.highlow matrix to specify lowest and highest categories
-#' (nominal.highlow <- matrix(c(4,4,4,1,1,1), 2, byrow = TRUE))
-#' mod <- mirt(dat, 1, 'nominal', nominal.highlow=nominal.highlow)
+#' mod <- mirt(dat, 1, 'nominal')
 #' coef(mod)
 #'
 #'  }

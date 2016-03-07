@@ -15,7 +15,8 @@
 #'   a suitable value will be chosen based
 #'   on the rubric found in \code{\link{fscores}}
 #' @param calcNull logical; calculate statistics for the null model as well?
-#'   Allows for statistics such as the limited information TLI and CFI
+#'   Allows for statistics such as the limited information TLI and CFI. Only valid when items all
+#'   have a suitable null model (e.g., those created via \code{\link{createItem}} will not)
 #' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension
 #' @param impute a number indicating how many imputations to perform
 #'   (passed to \code{\link{imputeMissing}}) when there are missing data present. This requires
@@ -46,7 +47,7 @@
 #' @export M2
 #' @examples
 #' \dontrun{
-#' dat <- expand.table(LSAT7)
+#' dat <- as.matrix(expand.table(LSAT7))
 #' (mod1 <- mirt(dat, 1))
 #' M2(mod1)
 #' M2(mod1, residmat=TRUE) #lower triangle of residual correlation matrix

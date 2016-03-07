@@ -41,7 +41,7 @@ setMethod(
             cat('\n')
         }
         if(!is.na(x@OptimInfo$condnum)){
-            cat("\nInformation matrix estimated with method:", x@Options$infomethod)
+            cat("\nInformation matrix estimated with method:", x@Options$SE.type)
             cat("\nCondition number of information matrix = ", x@OptimInfo$condnum,
                 '\nSecond-order test: model ', if(!x@OptimInfo$secondordertest)
                     'is not a maximum, or the information matrix is too inaccurate' else
@@ -116,8 +116,6 @@ setMethod(
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #'   loadings should be suppressed. Typical values are around .3 in most
 #'   statistical software. Default is 0 for no suppression
-#' @param printCI print a confidence interval for standardized loadings
-#'   (e.g., \code{printCI = .95} gives a 95\% confidence interval)
 #' @param digits number of significant digits to be rounded
 #' @param verbose logical; allow information to be printed to the console?
 #' @param ... additional arguments to be passed
@@ -135,15 +133,12 @@ setMethod(
 #' summary(x)
 #' summary(x, rotate = 'varimax')
 #'
-#' #print confidence interval (requires computed information matrix)
-#' x2 <- mirt(Science, 1, SE=TRUE)
-#' summary(x2, printCI=.95)
 #' }
 setMethod(
     f = "summary",
     signature = 'SingleGroupClass',
     definition = function(object, rotate = 'oblimin', Target = NULL, suppress = 0, digits = 3,
-                          printCI = FALSE, verbose = TRUE, ...){
+                          verbose = TRUE, ...){
         if (!object@Options$exploratory || rotate == 'none') {
             F <- object@Fit$F
             F[abs(F) < suppress] <- NA
@@ -213,6 +208,7 @@ setMethod(
 #' @param simplify logical; if all items have the same parameter names (indicating they are
 #'   of the same class) then they are collapsed to a matrix, and a list of length 2 is returned
 #'   containing a matrix of item parameters and group-level estimates
+#' @param unique return the vector of uniquely estimated parameters
 #' @param verbose logical; allow information to be printed to the console?
 #' @param rawug logical; return the untransformed internal g and u parameters?
 #'   If \code{FALSE}, g and u's are converted with the original format along with delta standard errors
@@ -250,7 +246,8 @@ setMethod(
     signature = 'SingleGroupClass',
     definition = function(object, CI = .95, printSE = FALSE, rotate = 'none', Target = NULL, digits = 3,
                           IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE,
-                          simplify=FALSE, verbose = TRUE, ...){
+                          simplify=FALSE, unique = FALSE, verbose = TRUE, ...){
+        if(unique) return(extract.mirt(object, 'parvec'))
         if(printSE && length(object@ParObjects$pars[[1L]]@SEpar)) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
             stop('CI must be between 0 and 1', call.=FALSE)
@@ -336,8 +333,22 @@ setMethod(
             colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[1L:nfact]
             allPars <- list(items=items, means=means, cov=covs)
         }
-        if(.hasSlot(object@Model$lrPars, 'beta'))
+        if(.hasSlot(object@Model$lrPars, 'beta')){
             allPars$lr.betas <- round(object@Model$lrPars@beta, digits)
+            if(!all(is.nan(object@Model$lrPars@SEpar))){
+                tmp <- allPars$lr.betas
+                if(printSE){
+                    tmp[] <- round(object@Model$lrPars@SEpar, digits)
+                    allPars$lr.betas <- list(betas=allPars$lr.betas, SE=tmp)
+                } else {
+                    low <- tmp - z*object@Model$lrPars@SEpar
+                    high <- tmp + z*object@Model$lrPars@SEpar
+                    allPars$lr.betas <- list(betas=allPars$lr.betas, low, high)
+                    names(allPars$lr.betas) <- c('betas', SEnames)
+                }
+            }
+
+        }
         return(allPars)
     }
 )
@@ -525,8 +536,7 @@ setMethod(
                     if(i < j){
                         P1 <- ProbTrace(x=object@ParObjects$pars[[i]], Theta=Theta)
                         P2 <- ProbTrace(x=object@ParObjects$pars[[j]], Theta=Theta)
-                        pick <- !is.na(data[,i]) & !is.na(data[,j])
-                        tab <- table(data[pick,i],data[pick,j])
+                        tab <- table(data[,i], data[,j], useNA = 'no')
                         Etab <- matrix(0,K[i],K[j])
                         NN <- sum(tab)
                         for(k in 1L:K[i])
@@ -545,7 +555,7 @@ setMethod(
                         } else {
                             res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
                         }
-                        res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (N*min(c(K[i],K[j]) - 1L)))
+                        res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (NN * min(c(K[i],K[j]) - 1L)))
                         df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                         if(tables){
                             tmp <- paste0(itemnames[i], '_', itemnames[j])
@@ -1210,3 +1220,57 @@ traditional2mirt <- function(x, cls, ncat, digits = 3){
     }
     par
 }
+
+#' Extract parameter variance covariance matrix
+#'
+#' Extract parameter variance covariance matrix
+#'
+#' @param object an object of class \code{SingleGroupClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#'
+#' @name vcov-method
+#' @aliases vcov,SingleGroupClass-method
+#'   vcov,MultipleGroupClass-method vcov,MixedClass-method vcov,DiscreteClass-method
+#' @docType methods
+#' @rdname vcov-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1, SE=TRUE)
+#' vcov(x)
+#'
+#' }
+setMethod(
+    f = "vcov",
+    signature = signature(object = 'SingleGroupClass'),
+    definition = function(object){
+        extract.mirt(object, 'vcov')
+    }
+)
+
+#' Extract log-likelihood
+#'
+#' Extract the observed-data log-likelihood.
+#'
+#' @param object an object of class \code{SingleGroupClass},
+#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#'
+#' @name logLik-method
+#' @aliases logLik,SingleGroupClass-method
+#'   logLik,MultipleGroupClass-method logLik,MixedClass-method logLik,DiscreteClass-method
+#' @docType methods
+#' @rdname logLik-method
+#' @examples
+#'
+#' \dontrun{
+#' x <- mirt(Science, 1)
+#' logLik(x)
+#'
+#' }
+setMethod(
+    f = "logLik",
+    signature = signature(object = 'SingleGroupClass'),
+    definition = function(object){
+        extract.mirt(object, 'logLik')
+    }
+)

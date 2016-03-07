@@ -12,7 +12,8 @@ M2(obj, calcNull = TRUE, quadpts = NULL, theta_lim = c(-6, 6),
 \item{obj}{an estimated model object from the mirt package}
 
 \item{calcNull}{logical; calculate statistics for the null model as well?
-Allows for statistics such as the limited information TLI and CFI}
+Allows for statistics such as the limited information TLI and CFI. Only valid when items all
+have a suitable null model (e.g., those created via \code{\link{createItem}} will not)}
 
 \item{quadpts}{number of quadrature points to use during estimation. If \code{NULL},
 a suitable value will be chosen based
@@ -55,7 +56,7 @@ fitting the null model.
 }
 \examples{
 \dontrun{
-dat <- expand.table(LSAT7)
+dat <- as.matrix(expand.table(LSAT7))
 (mod1 <- mirt(dat, 1))
 M2(mod1)
 M2(mod1, residmat=TRUE) #lower triangle of residual correlation matrix

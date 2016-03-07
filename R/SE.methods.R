@@ -1,5 +1,6 @@
-SE.BL <- function(pars, Theta, theta, BFACTOR, itemloc, PrepList, ESTIMATE, constrain, Ls,
-                  CUSTOM.IND, specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL, warn, Data){
+SE.Numerical <- function(pars, Theta, theta, BFACTOR, itemloc, PrepList, ESTIMATE, constrain, Ls,
+                  CUSTOM.IND, specific=NULL, sitems=NULL, EH = FALSE, EHPrior = NULL, warn, Data, type,
+                  delta, lrPars){
     longpars <- ESTIMATE$longpars
     rlist <- ESTIMATE$rlist
     infological=ESTIMATE$infological
@@ -19,11 +20,16 @@ SE.BL <- function(pars, Theta, theta, BFACTOR, itemloc, PrepList, ESTIMATE, cons
             pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
         }
     }
-    hess <- numDeriv::hessian(BL.LL, x=shortpars, est=est, longpars=longpars,
-                              pars=pars, ngroups=ngroups, J=J, itemloc=itemloc,
-                              Theta=Theta, PrepList=PrepList, BFACTOR=BFACTOR,
-                              specific=specific, sitems=sitems, CUSTOM.IND=CUSTOM.IND,
-                              EH=EH, EHPrior=EHPrior, Data=Data, theta=theta)
+    if(length(lrPars)){
+        est <- c(est, lrPars@est)
+        shortpars <- longpars[est]
+    }
+    hess <- numerical_deriv(shortpars, BL.LL, est=est, longpars=longpars, lrPars=lrPars,
+                            pars=pars, ngroups=ngroups, J=J, itemloc=itemloc,
+                            Theta=Theta, PrepList=PrepList, BFACTOR=BFACTOR, constrain=constrain,
+                            specific=specific, sitems=sitems, CUSTOM.IND=CUSTOM.IND,
+                            EH=EH, EHPrior=EHPrior, Data=Data, theta=theta, type=type,
+                            delta = delta, gradient = FALSE)
     Hess <- matrix(0, length(longpars), length(longpars))
     Hess[est, est] <- -hess
     Hess <- updateHess(h=Hess, L=Ls$L)
@@ -83,9 +89,7 @@ SE.SEM <- function(index, estmat, pars, constrain, Ls, PrepList, list, Theta, th
 
         longpars <- MLestimates
         longpars[estindex] <- EMhistory[cycles, estindex]
-        if(length(constrain) > 0L)
-            for(i in 1L:length(constrain))
-                longpars[constrain[[i]][-1L]] <- longpars[[constrain[[i]][1L]]]
+        longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
         tmp <- updatePrior(pars=pars, Theta=Theta, Thetabetween=Thetabetween,
                            list=list, ngroups=ngroups, nfact=nfact, prior=prior, lrPars=lrPars,
@@ -111,10 +115,10 @@ SE.SEM <- function(index, estmat, pars, constrain, Ls, PrepList, list, Theta, th
                 pars[[g]][[i]]@dat <- rlist[[g]]$r1[, tmp]
             }
         }
-        longpars <- Mstep(pars=pars, est=estpars & !ESTIMATE$groupest, longpars=longpars, ngroups=ngroups, J=J,
+        longpars <- Mstep(pars=pars, est=estpars, longpars=longpars, ngroups=ngroups, J=J,
                           gTheta=gTheta, itemloc=itemloc, Prior=Prior, ANY.PRIOR=ANY.PRIOR,
                           PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, nfact=nfact,
-                          rlist=rlist, constrain=constrain, DERIV=DERIV, groupest=ESTIMATE$groupest,
+                          rlist=rlist, constrain=constrain, DERIV=DERIV,
                           CUSTOM.IND=list$CUSTOM.IND, SLOW.IND=list$SLOW.IND, BFACTOR=list$BFACTOR,
                           Moptim=Moptim, Mrate=1, TOL=list$MSTEPTOL, solnp_args=solnp_args, full=full,
                           Thetabetween=Thetabetween, lrPars=lrPars, control=control)
@@ -248,13 +252,6 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     Igrad <- Igrad[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     IgradP <- IgradP[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
     Ihess <- Ihess[ESTIMATE$estindex_unique, ESTIMATE$estindex_unique]
-    lengthsplit <- do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'COV_'), length))
-    lengthsplit <- lengthsplit + do.call(c, lapply(strsplit(names(ESTIMATE$correct), 'MEAN_'), length))
-    if(!iscross){
-        is.latent <- lengthsplit > 2L
-        Ihess <- Ihess[!is.latent, !is.latent]; Igrad <- Igrad[!is.latent, !is.latent]
-        IgradP <- IgradP[!is.latent, !is.latent]
-    } else is.latent <- logical(length(lengthsplit))
     if(type == 'Louis'){
         info <- -Ihess - IgradP + Igrad
     } else if(type == 'crossprod'){
@@ -263,17 +260,8 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
         tmp <- solve(-Ihess - IgradP + Igrad)
         info <- solve(tmp %*% Igrad %*% tmp)
     }
-    colnames(info) <- rownames(info) <- names(ESTIMATE$correction)[!is.latent]
-    tmp <- matrix(NA, length(is.latent), length(is.latent))
-    tmp[!is.latent, !is.latent] <- info
-    ESTIMATE <- loadESTIMATEinfo(info=tmp, ESTIMATE=ESTIMATE, constrain=constrain, warn=warn)
-    if(!iscross && any(lengthsplit > 2L)){
-        for(g in 1L:ngroups){
-            tmp <- ESTIMATE$pars[[g]][[nitems+1L]]@SEpar
-            tmp[!is.na(tmp)] <- NaN
-            ESTIMATE$pars[[g]][[nitems+1L]]@SEpar <- tmp
-        }
-    }
+    colnames(info) <- rownames(info) <- names(ESTIMATE$correction)
+    ESTIMATE <- loadESTIMATEinfo(info=info, ESTIMATE=ESTIMATE, constrain=constrain, warn=warn)
     return(ESTIMATE)
 }
 

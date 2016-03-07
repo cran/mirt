@@ -4,8 +4,7 @@
 \alias{PLCI.mirt}
 \title{Compute profiled-likelihood (or posterior) confidence intervals}
 \usage{
-PLCI.mirt(mod, alpha = 0.05, parnum = NULL, plot = FALSE, npts = 24,
-  ...)
+PLCI.mirt(mod, alpha = 0.05, parnum = NULL, ...)
 }
 \arguments{
 \item{mod}{a converged mirt model}
@@ -15,10 +14,6 @@ PLCI.mirt(mod, alpha = 0.05, parnum = NULL, plot = FALSE, npts = 24,
 \item{parnum}{a numeric vector indicating which parameters to estimate.
 Use \code{\link{mod2values}} to determine parameter numbers. If \code{NULL}, all possible
 parameters are used}
-
-\item{plot}{logical; plot the parameter relationship in the likelihood space for two parameters?}
-
-\item{npts}{number of points to evaluate and plot if \code{plot = TRUE}}
 
 \item{...}{additional arguments to pass to the estimation functions}
 }
@@ -46,9 +41,6 @@ sv <- mod2values(mod2)
 parnum <- sv$parnum[sv$name == 'a1']
 result3 <- PLCI.mirt(mod2, parnum=parnum)
 result3
-
-# plot the confidence envelope for parameters 1 and 2
-PLCI.mirt(mod2, parnum=c(1,2), plot=TRUE)
 
 }
 }

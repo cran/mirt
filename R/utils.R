@@ -99,9 +99,7 @@ imputePars2 <- function(MGmod, shortpars, longpars, imputenums, pre.ev){
         shift <- mirt_rmvnorm(1L, mean=shortpars, pre.ev=pre.ev)
         longpars[imputenums] <- shift[1L,]
         constrain <- MGmod@Model$constrain
-        if(length(constrain) > 0L)
-            for(i in 1L:length(constrain))
-                longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
+        longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
         pars <- list(MGmod@ParObjects$pars[[1L]]@ParObjects$pars, MGmod@ParObjects$pars[[2L]]@ParObjects$pars)
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=2L, J=length(pars[[1L]])-1L)
         if(any(MGmod@Model$itemtype %in% c('graded', 'grsm'))){
@@ -263,37 +261,23 @@ test_info <- function(pars, Theta, Alist, K){
     info
 }
 
-Lambdas <- function(pars, Names, explor = FALSE, alpha = .05){
+Lambdas <- function(pars, Names){
     J <- length(pars) - 1L
-    lambdas <- lowerlambdas <- upperlambdas <-
-        matrix(NA, J, length(ExtractLambdas(pars[[1L]])))
+    lambdas <- matrix(NA, J, length(ExtractLambdas(pars[[1L]])))
     gcov <- ExtractGroupPars(pars[[J+1L]])$gcov
     if(ncol(gcov) < ncol(lambdas)){
         tmpcov <- diag(ncol(lambdas))
         tmpcov[1L:ncol(gcov), 1L:ncol(gcov)] <- gcov
         gcov <- tmpcov
     }
-    z <- qnorm(1 - alpha/2)
-    rownames(lambdas) <- rownames(upperlambdas) <- rownames(lowerlambdas) <- Names
+    rownames(lambdas) <- Names
     for(i in 1L:J){
         tmp <- pars[[i]]
         lambdas[i,] <- ExtractLambdas(tmp) /1.702
-        tmp@par <- pars[[i]]@par - z * pars[[i]]@SEpar
-        lowerlambdas[i,] <- ExtractLambdas(tmp) /1.702
-        tmp@par <- pars[[i]]@par + z * pars[[i]]@SEpar
-        upperlambdas[i,] <- ExtractLambdas(tmp) /1.702
     }
     norm <- sqrt(1 + rowSums(lambdas^2))
-    F <- as.matrix(lambdas/norm)
-    if(!explor){
-        norml <- sqrt(1 + rowSums(lowerlambdas^2, na.rm=TRUE))
-        normh <- sqrt(1 + rowSums(upperlambdas^2, na.rm=TRUE))
-        ret <- list(F=F, lower=as.matrix(lowerlambdas/norml),
-                    upper=as.matrix(upperlambdas/normh))
-    } else {
-        ret <- list(F=F, lower=list(), upper=list())
-    }
-    ret
+    F <- as.matrix(lambdas/norm) %*% chol(gcov)
+    F
 }
 
 #change long pars for groups into mean in sigma
@@ -519,7 +503,6 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             for(i in 1L:length(PrepList[[g]]$constrain))
                 constrain[[length(constrain) + 1L]] <- PrepList[[g]]$constrain[[i]]
     if('covariances' %in% invariance){ #Fix covariance accross groups (only makes sense with vars = 1)
-        tmpmat <- matrix(NA, nfact, nfact)
         tmp <- c()
         tmpmats <- tmpestmats <- matrix(NA, ngroups, nfact*(nfact+1L)/2)
         for(g in 1L:ngroups){
@@ -714,7 +697,7 @@ UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
     return(PrepList)
 }
 
-ReturnPars <- function(PrepList, itemnames, random, lrPars, MG = FALSE){
+ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG = FALSE){
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
@@ -770,6 +753,23 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, MG = FALSE){
         class <- c(class, rep('lrPars', length(lrPars@parnum)))
         item <- c(item, rep('BETA', length(lrPars@parnum)))
     }
+    if(length(lr.random) > 0L){
+        for(i in 1L:length(lr.random)){
+            parname <- c(parname, names(lr.random[[i]]@est))
+            parnum <- c(parnum, lr.random[[i]]@parnum)
+            par <- c(par, lr.random[[i]]@par)
+            est <- c(est, lr.random[[i]]@est)
+            lbound <- c(lbound, lr.random[[i]]@lbound)
+            ubound <- c(ubound, lr.random[[i]]@ubound)
+            tmp <- sapply(as.character(lr.random[[i]]@prior.type),
+                          function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+            prior.type <- c(prior.type, tmp)
+            prior_1 <- c(prior_1, lr.random[[i]]@prior_1)
+            prior_2 <- c(prior_2, lr.random[[i]]@prior_2)
+            class <- c(class, rep('LRRandomPars', length(lr.random[[i]]@parnum)))
+            item <- c(item, rep('LRRANDOM', length(lr.random[[i]]@parnum)))
+        }
+    }
     gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
     lbound[parname %in% c('g', 'u')] <- antilogit(lbound[parname %in% c('g', 'u')])
@@ -780,9 +780,9 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, MG = FALSE){
     ret
 }
 
-UpdatePrepList <- function(PrepList, pars, random, lrPars = list(), MG = FALSE){
+UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), MG = FALSE){
     currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random,
-                                lrPars=lrPars, MG = TRUE)
+                                lrPars=lrPars, lr.random=lr.random, MG = TRUE)
     if(nrow(currentDesign) != nrow(pars))
         stop('Rows in supplied and starting value data.frame objects do not match. Were the
              data or itemtype input arguments modified?', call.=FALSE)
@@ -796,8 +796,6 @@ UpdatePrepList <- function(PrepList, pars, random, lrPars = list(), MG = FALSE){
     if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm')))
         stop('prior.type input in pars contains invalid prior types', call.=FALSE)
     if(!MG) PrepList <- list(PrepList)
-    len <- length(PrepList[[length(PrepList)]]$pars)
-    maxparnum <- max(PrepList[[length(PrepList)]]$pars[[len]]@parnum)
     pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
     pars$lbound[pars$name %in% c('g', 'u')] <- logit(pars$lbound[pars$name %in% c('g', 'u')])
     pars$ubound[pars$name %in% c('g', 'u')] <- logit(pars$ubound[pars$name %in% c('g', 'u')])
@@ -839,6 +837,18 @@ UpdatePrepList <- function(PrepList, pars, random, lrPars = list(), MG = FALSE){
             }
         }
         attr(PrepList, 'random') <- random
+    }
+    if(length(lr.random) > 0L){
+        for(i in 1L:length(lr.random)){
+            for(j in 1L:length(lr.random[[i]]@par)){
+                lr.random[[i]]@par[j] <- pars[ind,'value']
+                lr.random[[i]]@est[j] <- as.logical(pars[ind,'est'])
+                lr.random[[i]]@lbound[j] <- pars[ind,'lbound']
+                lr.random[[i]]@ubound[j] <- pars[ind,'ubound']
+                ind <- ind + 1L
+            }
+        }
+        attr(PrepList, 'lr.random') <- lr.random
     }
     if(!MG) PrepList <- PrepList[[1L]]
     return(PrepList)
@@ -1010,8 +1020,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
     ret
 }
 
-makeLmats <- function(pars, constrain, random = list(), lrPars = list()){
-    f <- function(k) (k+1) / (k*2)
+makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.random = list()){
     ngroups <- length(pars)
     J <- length(pars[[1L]]) - 1L
     L <- c()
@@ -1023,6 +1032,9 @@ makeLmats <- function(pars, constrain, random = list(), lrPars = list()){
             L <- c(L, random[[i]]@est)
     if(length(lrPars))
         L <- c(L, lrPars@est)
+    if(length(lr.random))
+        for(i in 1L:length(lr.random))
+            L <- c(L, lr.random[[i]]@est)
     L <- diag(as.numeric(L))
     redun_constr <- rep(FALSE, ncol(L))
     if(length(constrain) > 0L){
@@ -1051,11 +1063,13 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     gnames <- c('MAXQUAD', 'NCYCLES', 'BURNIN', 'SEMCYCLES', 'set.seed', 'SEtol', 'symmetric_SEM',
                 'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
-                'internal_constraints', 'SEM_window')
+                'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
-    if(method == 'MHRM' || method == 'MIXED') SE.type <- 'MHRM'
+    if((method == 'MHRM' || method == 'MIXED') && SE.type == 'crossprod') SE.type <- 'MHRM'
+    if((method == 'MHRM' || method == 'MIXED') && !(SE.type %in% c('MHRM', 'FMHRM', 'none')))
+        stop('SE.type not supported for MHRM method', call.=FALSE)
     if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM')))
         stop('method argument not supported', call.=FALSE)
     opts$method = method
@@ -1074,6 +1088,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$customPriorFun = technical$customPriorFun
     opts$BFACTOR = BFACTOR
     opts$accelerate = accelerate
+    opts$delta <- ifelse(is.null(technical$delta), .001, technical$delta)
+    opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
     opts$TOL <- ifelse(is.null(TOL), if(method == 'EM' || method == 'QMCEM') 1e-4 else
         if(method == 'BL') 1e-8 else 1e-3, TOL)
     if(SE.type == 'SEM' && SE){
@@ -1098,6 +1114,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$SEM_to <- ifelse(is.null(technical$SEM_window), 1 - opts$SEtol, technical$SEM_window[2L])
     opts$KDRAWS  <- ifelse(is.null(technical$KDRAWS), 1L, technical$KDRAWS)
     opts$MHDRAWS  <- ifelse(is.null(technical$MHDRAWS), 5L, technical$MHDRAWS)
+    opts$MHRM_SE_draws  <- ifelse(is.null(technical$MHRM_SE_draws), 2000L, technical$MHRM_SE_draws)
     opts$internal_constraints  <- ifelse(is.null(technical$internal_constraints),
                                          TRUE, technical$internal_constraints)
     opts$empiricalhist <- empiricalhist
@@ -1142,6 +1159,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         if(is.null(alabama_args$control.outer$trace)) alabama_args$control.outer$trace <- FALSE
         opts$solnp_args <- alabama_args
     }
+    if(SE && opts$Moptim %in% c('solnp', 'alabama'))
+        stop('SE computations currently not supported for solnp or alabama optimizers', call. = FALSE)
     if(!is.null(large)){
         if(is.logical(large))
             if(large) opts$returnPrepList <- TRUE
@@ -1213,12 +1232,12 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
         }
     }
     ESTIMATE$pars <- pars
+    if(length(ESTIMATE$lrPars))
+        ESTIMATE$lrPars@SEpar <- SE[ESTIMATE$lrPars@parnum]
     return(ESTIMATE)
 }
 
-make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
-    itemcovnames <- colnames(itemdesign)
-    J <- nrow(itemdesign)
+make.randomdesign <- function(random, longdata, covnames, itemdesign, N, LR=FALSE){
     ret <- vector('list', length(random))
     for(i in 1L:length(random)){
         f <- gsub(" ", "", as.character(random[[i]])[2L])
@@ -1276,7 +1295,7 @@ make.randomdesign <- function(random, longdata, covnames, itemdesign, N){
     ret
 }
 
-make.lrdesign <- function(df, formula, factorNames, EM=FALSE){
+make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
     nfact <- length(factorNames)
     if(is.list(formula)){
         if(!all(names(formula) %in% factorNames))
@@ -1294,8 +1313,10 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE){
     tXX <- t(X) %*% X
     if(ncol(X) > 1L) inv_tXX <- try(solve(tXX), silent = TRUE)
     else inv_tXX <- matrix(0)
-    if(is(inv_tXX, 'try-error'))
-        stop('Latent regression design matrix contains multicollinear terms.', call. = FALSE)
+    if(!is.nan(TOL)){
+        if(is(inv_tXX, 'try-error'))
+            stop('Latent regression design matrix contains multicollinear terms.', call. = FALSE)
+    } else inv_tXX <- matrix(0, ncol(tXX), ncol(tXX))
     beta <- matrix(0, ncol(X), nfact)
     sigma <- matrix(0, nfact, nfact)
     diag(sigma) <- 1
@@ -1341,7 +1362,7 @@ update.lrPars <- function(df, lrPars){
     pick <- df$class == 'lrPars'
     df2 <- df[pick, , drop=FALSE]
     lrPars@est[] <- df2$est
-    lrPars@par <- df2$value
+    lrPars@par <- lrPars@beta[] <- df2$value
     if(!all(df2$lbound == -Inf))
         warning('latent regression parameters cannot be bounded. Ignoring constraint', call.=FALSE)
     if(!all(df2$ubound == Inf))
@@ -1362,12 +1383,10 @@ OffTerm <- function(random, J, N){
     return(matrix(ret, N, J))
 }
 
-reloadRandom <- function(random, longpars, parstart){
-    ind1 <- parstart
+reloadRandom <- function(random, longpars){
     for(i in 1L:length(random)){
-        ind2 <- ind1 + length(random[[i]]@par) - 1L
-        random[[i]]@par <- longpars[ind1:ind2]
-        ind1 <- ind2 + 1L
+        parnum <- random[[i]]@parnum
+        random[[i]]@par <- longpars[min(parnum):max(parnum)]
     }
     random
 }
@@ -1406,11 +1425,25 @@ RMSEA.CI <- function(X2, df, N, ci.lower=.05, ci.upper=.95) {
     return(c(RMSEA.lower, RMSEA.upper))
 }
 
+longpars_constrain <- function(longpars, constrain){
+    if(length(constrain))
+        for(i in 1L:length(constrain))
+            longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
+    longpars
+}
+
 BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
-               CUSTOM.IND, EH, EHPrior, Data, BFACTOR, itemloc, theta){
+               CUSTOM.IND, EH, EHPrior, Data, BFACTOR, itemloc, theta, constrain, lrPars){
     longpars[est] <- p
+    longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
     gstructgrouppars <- prior <- Prior <- vector('list', ngroups)
+    full <- length(lrPars) > 0L
+    if(full){
+        lrPars@par <- longpars[lrPars@parnum]
+        lrPars@beta[] <- lrPars@par
+        lrPars@mus <- lrPars@X %*% lrPars@beta
+    }
     if(EH){
         Prior[[1L]] <- EHPrior[[1L]]
     } else {
@@ -1422,25 +1455,24 @@ BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific,
                 Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
                 next
             }
-            Prior[[g]] <- mirt_dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
-                                       gstructgrouppars[[g]]$gcov)
-            Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+            if(full){
+                Prior[[g]] <- mirt_dmvnorm(Theta[ ,1L:ncol(lrPars@mus),drop=FALSE],
+                                           lrPars@mus, gstructgrouppars[[g]]$gcov, quad=TRUE)
+                Prior[[g]] <- Prior[[g]]/rowSums(Prior[[g]])
+            } else {
+                Prior[[g]] <- mirt_dmvnorm(Theta,gstructgrouppars[[g]]$gmeans,
+                                           gstructgrouppars[[g]]$gcov)
+                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+            }
         }
     }
     LL <- 0
     for(g in 1L:ngroups){
-        if(BFACTOR){
-            expected <- Estep.bfactor(pars=pars2[[g]],
-                                      tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
-                                      Theta=Theta, prior=prior[[g]],
-                                      specific=specific, sitems=sitems,
-                                      itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)$expected
-        } else {
-            expected <- Estep.mirt(pars=pars2[[g]],
-                                   tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
-                                   Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
-                                   CUSTOM.IND=CUSTOM.IND, full=FALSE)$expected
-        }
+        expected <- Estep.mirt(pars=pars2[[g]],
+                               tabdata=Data$tabdatalong,
+                               freq=if(full) rep(1L, nrow(Prior[[1L]])) else Data$Freq[[g]],
+                               Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
+                               CUSTOM.IND=CUSTOM.IND, full=full, Etable=FALSE)$expected
         LL <- LL + sum(Data$Freq[[g]] * log(expected), na.rm = TRUE)
     }
     LL
@@ -1662,8 +1694,148 @@ MGC2SC <- function(x, which){
     tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupName[which], , drop=FALSE]
     tmp@Data$Freq[[1L]] <- tmp@Data$Freq[[which]]
     tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[which]]
-    ## TODO, add acov information in for subset
     tmp
+}
+
+#' Compute numerical derivatives
+#'
+#' Compute numerical derivatives using forward/backword difference,
+#' central difference, or Richardson extropolation.
+#'
+#' @param par a vector of parameters
+#' @param f the objective function being evaluated
+#' @param ... additional arguments to be passed to \code{f} and the \code{numDeriv} package when the
+#'   Richardson type is used
+#' @param delta the term used to perturb the \code{f} function. Default is 1e-5
+#' @param gradient logical; compute the gradient terms? If FALSE then the Hessian is computed instead
+#' @param type type of difference to compute. Can be either \code{'forward'} for the forward difference,
+#'   \code{'central'} for the central difference, or \code{'Richardson'} for the Richardson extropolation.
+#'   Backword difference is acheived by supplying a negative \code{delta} value
+#' @export numerical_deriv
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @keywords numerical derivatives
+#'
+#' @examples
+#'
+#' \dontrun{
+#' f <- function(x) 3*x[1]^3 - 4*x[2]^2
+#' par <- c(3,8)
+#'
+#' # grad = 9 * x^2 , 8 * y
+#' c(81, -64)
+#' numerical_deriv(par, f, type = 'forward')
+#' numerical_deriv(par, f, type = 'central')
+#' numerical_deriv(par, f, type = 'Richardson')
+#'
+#' # hessian = h11 -> 18 * x, h22 -> 8, h12 -> 9 * x^2 + 8 * y
+#' matrix(c(54, 0, 0, -8), 2, 2)
+#' numerical_deriv(par, f, type = 'forward', gradient = FALSE)
+#' numerical_deriv(par, f, type = 'central', gradient = FALSE)
+#' numerical_deriv(par, f, type = 'Richardson', gradient = FALSE)
+#'
+#' }
+numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 'forward'){
+    forward_difference <- function(par, f, delta, ...){
+        dots <- list(...)
+        np <- length(par)
+        g <- numeric(np)
+        if(is.null(dots$ObJeCtIvE)) fx <- f(par, ...) else fx <- dots$ObJeCtIvE
+        for(i in 1L:np){
+            p <- par
+            p[i] <- p[i] + delta
+            g[i] <- (f(p, ...) - fx) / delta
+        }
+        g
+    }
+    forward_difference2 <- function(par, f, delta, ...){
+        dots <- list(...)
+        np <- length(par)
+        hess <- matrix(0, np, np)
+        if(is.null(dots$ObJeCtIvE)) fx <- f(par, ...) else fx <- dots$ObJeCtIvE
+        fx1 <- numeric(np)
+        for(i in 1L:np){
+            tmp <- par
+            tmp[i] <- tmp[i] + delta
+            fx1[i] <- f(tmp, ...)
+        }
+        for(i in 1L:np){
+            for(j in i:np){
+                fx1x2 <- par
+                fx1x2[i] <- fx1x2[i] + delta
+                fx1x2[j] <- fx1x2[j] + delta
+                hess[i,j] <- hess[j, i] <- (f(fx1x2, ...) - fx1[i] - fx1[j] + fx) / (delta^2)
+            }
+        }
+        hess
+    }
+    central_difference <- function(par, f, delta, ...){
+        np <- length(par)
+        g <- numeric(np)
+        for(i in 1L:np){
+            p1 <- p2 <- par
+            p1[i] <- p1[i] + delta
+            p2[i] <- p2[i] - delta
+            g[i] <- (f(p1, ...) - f(p2, ...)) / (2 * delta)
+        }
+        g
+    }
+    forward_difference2 <- function(par, f, delta, ...){
+        np <- length(par)
+        hess <- matrix(0, np, np)
+        fx <- f(par, ...)
+        fx1 <- numeric(np)
+        for(i in 1L:np){
+            tmp <- par
+            tmp[i] <- tmp[i] + delta
+            fx1[i] <- f(tmp, ...)
+        }
+        for(i in 1L:np){
+            for(j in i:np){
+                fx1x2 <- par
+                fx1x2[i] <- fx1x2[i] + delta
+                fx1x2[j] <- fx1x2[j] + delta
+                hess[i,j] <- hess[j, i] <- (f(fx1x2, ...) - fx1[i] - fx1[j] + fx) / (delta^2)
+            }
+        }
+        hess
+    }
+    central_difference2 <- function(par, f, delta, ...){
+        np <- length(par)
+        hess <- matrix(0, np, np)
+        fx <- f(par, ...)
+        for(i in 1L:np){
+            for(j in i:np){
+                if(i == j){
+                    p1 <- p2 <- par
+                    p1[i] <- p1[i] + delta; s2 <- f(p1, ...)
+                    p1[i] <- p1[i] + delta; s1 <- f(p1, ...)
+                    p2[i] <- p2[i] - delta; s3 <- f(p2, ...)
+                    p2[i] <- p2[i] - delta; s4 <- f(p2, ...)
+                    hess[i, i] <- (-s1 + 16 * s2 - 30 * fx + 16 * s3 - s4) / (12 * delta^2)
+                } else {
+                    p <- par
+                    p[i] <- p[i] + delta; p[j] <- p[j] + delta; s1 <- f(p, ...)
+                    p[j] <- p[j] - 2*delta; s2 <- f(p, ...)
+                    p[i] <- p[i] - 2*delta; s4 <- f(p, ...)
+                    p[j] <- p[j] + 2*delta; s3 <- f(p, ...)
+                    hess[i,j] <- hess[j,i] <- (s1 - s2 - s3 + s4) / (4 * delta^2)
+                }
+            }
+        }
+        hess
+    }
+
+    if(type == 'central'){
+        ret <- if(gradient) central_difference(par=par, f=f, delta=delta, ...)
+        else central_difference2(par=par, f=f, delta=delta, ...)
+    } else if(type == 'forward'){
+        ret <- if(gradient) forward_difference(par=par, f=f, delta=delta, ...)
+        else forward_difference2(par=par, f=f, delta=delta, ...)
+    } else if(type == 'Richardson'){
+        ret <- if(gradient) numDeriv::grad(f, par, ...)
+        else numDeriv::hessian(f, par, ...)
+    }
+    ret
 }
 
 computeNullModel <- function(data, itemtype, group=NULL){
@@ -1719,28 +1891,28 @@ MC_quad <- function(npts, nfact, lim)
 missingMsg <- function(string)
     stop(paste0('\'', string, '\' argument is missing.'), call.=FALSE)
 
-mirtClusterEnv <- new.env()
-mirtClusterEnv$ncores <- 1L
+.mirtClusterEnv <- new.env(parent=emptyenv())
+.mirtClusterEnv$ncores <- 1L
 
 myApply <- function(X, MARGIN, FUN, ...){
-    if(mirtClusterEnv$ncores > 1L){
-        return(t(parallel::parApply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, MARGIN=MARGIN, FUN=FUN, ...)))
+    if(.mirtClusterEnv$ncores > 1L){
+        return(t(parallel::parApply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, MARGIN=MARGIN, FUN=FUN, ...)))
     } else {
         return(t(apply(X=X, MARGIN=MARGIN, FUN=FUN, ...)))
     }
 }
 
 myLapply <- function(X, FUN, ...){
-    if(mirtClusterEnv$ncores > 1L){
-        return(parallel::parLapply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, fun=FUN, ...))
+    if(.mirtClusterEnv$ncores > 1L){
+        return(parallel::parLapply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, fun=FUN, ...))
     } else {
         return(lapply(X=X, FUN=FUN, ...))
     }
 }
 
 mySapply <- function(X, FUN, ...){
-    if(mirtClusterEnv$ncores > 1L){
-        return(t(parallel::parSapply(cl=mirtClusterEnv$MIRTCLUSTER, X=X, FUN=FUN, ...)))
+    if(.mirtClusterEnv$ncores > 1L){
+        return(t(parallel::parSapply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, FUN=FUN, ...)))
     } else {
         return(t(sapply(X=X, FUN=FUN, ...)))
     }

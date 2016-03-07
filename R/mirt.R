@@ -124,9 +124,8 @@
 #'   \item{\code{\link{itemfit}} and \code{\link{personfit}}}{
 #'     Goodness of fit statistics at the item and person levels, such as the S-X2, infit, outfit,
 #'     and more}
-#'   \item{\code{\link{boot.mirt}} and \code{\link{PLCI.mirt}}}{
-#'     Compute estimated parameter confidence intervals via the bootstrap and profiled-likelihood
-#'     methods}
+#'   \item{\code{\link{boot.mirt}}}{
+#'     Compute estimated parameter confidence intervals via the bootstrap methods}
 #   \item{\code{\link{read.mirt}}}{
 #     Translates mirt objects into objects suitable for use with the \code{plink} package}
 #'   \item{\code{\link{mirtCluster}}}{
@@ -254,7 +253,7 @@
 #'   \code{'EM'}, for the standard EM algorithm with fixed quadrature, or \code{'QMCEM'} for
 #'   quasi-Monte Carlo EM estimation. The option \code{'MHRM'} may
 #'   also be passed to use the MH-RM algorithm, as well as \code{'BL'} for the Bock and Lieberman
-#'   approach (generally not recommended for serious use).
+#'   approach (generally not recommended for longer tests).
 #'
 #'   The \code{'EM'} is generally effective with 1-3 factors, but methods such as the \code{'QMCEM'}
 #'   or \code{'MHRM'} should be used when the dimensions are 3 or more
@@ -285,10 +284,11 @@
 #' @param SE logical; estimate the standard errors by computing the parameter information matrix?
 #'    See \code{SE.type} for the type of estimates available
 #' @param SE.type type of estimation method to use for calculating the parameter information matrix
-#'   for computing standard errors and \code{\link{wald}} tests. Can be \code{'MHRM'} for stochastic
-#'   approximation, \code{'BL'} for the Bock and Lieberman approach (numerical evaluation of
-#'   observed Hessian), \code{'Fisher'} for the expected information, \code{'complete'} for
-#'   information based on the complete-data Hessian used in EM algorithm (EM only), \code{'SEM'} for
+#'   for computing standard errors and \code{\link{wald}} tests. Can be
+#'   \code{'Richardson'}, \code{'forward'}, or \code{'central'} for the numerical Richardson,
+#'    forward difference, and central difference evaluation of observed Hessian,
+#'    \code{'Fisher'} for the expected information, \code{'complete'} for information based
+#'    on the complete-data Hessian used in EM algorithm, \code{'SEM'} for
 #'   the supplemented EM (disables the \code{accelerate} option; EM only), \code{'crossprod'}
 #'   for standard error computations based on the variance of the Fisher scores, \code{'Louis'}
 #'   for Louis' (1982) computation of the observed information matrix,
@@ -297,8 +297,12 @@
 #'   Note that for \code{'SEM'} option increasing the number of iterations
 #'   (\code{NCYCLES} and \code{TOL}, see below) will help to improve the accuracy, and will be
 #'   run in parallel if a \code{\link{mirtCluster}} object has been defined.
-#'   Bootstrapped and profiled-likelihood standard errors are also possible, but must be run
-#'   with the \code{\link{boot.mirt}} and \code{\link{PLCI.mirt}} functions, respectively
+#'   When \code{method = 'BL'} then the option \code{'numerical'} is available to obtain the numerical
+#'   estimate from a call to \code{\link{optim}}.
+#'
+#'   Other options include \code{'MHRM'} and \code{'FMHRM'} for stochastic approximations
+#'   based on the Robbins-Monro filter or a fixed number of MHRM draws without
+#'   the RM filter. These are the only options supported when \code{method = 'MHRM'}
 #' @param guess fixed pseudo-guessing parameters. Can be entered as a single
 #'   value to assign a global guessing parameter or may be entered as a numeric
 #'   vector corresponding to each item
@@ -342,12 +346,6 @@
 #'   Only applicable for unidimensional models estimated with the EM algorithm.
 #'   The number of cycles, TOL, and quadpts are adjusted
 #'   accomodate for less precision during estimation (TOL = 3e-5, NCYCLES = 2000, quadpts = 199)
-#' @param nominal.highlow optional matrix indicating the highest (row 1) and lowest (row 2)
-#'   categories to be used for the nominal response model. Using this input may result in better
-#'   numerical stability. The matrix input should be a 2 by nitems numeric matrix, where each number
-#'   represents the \emph{reduced} category representation (mirt omits categories that are missing,
-#'   so if the unique values for an item are c(1,2,5,6) they are treated as being the same as
-#'   c(1,2,3,4). Viewing the starting values will help to identify the categories)
 #' @param survey.weights a optional numeric vector of survey weights to apply for each case in the
 #'   data (EM estimation only). If not specified, all cases are weighted equally (the standard IRT
 #'   approach). The sum of the \code{survey.weights} must equal the total sample size for proper
@@ -430,6 +428,8 @@
 #'       on the first call, therefore the prior will have to deal with this issue accordingly}
 #'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
+#'     \item{delta}{the deviation term used in numerical estimates when computing the ACOV matrix
+#'       with the 'forward' or 'central' numerical approaches. Default is 1e-5}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
 #'     \item{removeEmptyRows}{logical; remove response vectors that only contain \code{NA}'s?
@@ -448,6 +448,8 @@
 #'       unconditional item factor analysis (\code{mixedmirt()} requires additional values
 #'       for random effect). If null, these values are determined internally, attempting to
 #'       tune the acceptance of the draws to be between .1 and .4}
+#'     \item{MHRM_SE_draws}{number of fixed draws to use when \code{SE=TRUE} and \code{SE.type = 'FMHRM'}
+#'       and the maximum number of draws when \code{SE.type = 'MHRM'}. Default is 2000}
 #'   }
 #' @param solnp_args a list of arguments to be passed to the \code{solnp::solnp()} function for
 #'   equality constraints, inequality constraints, etc
@@ -549,7 +551,7 @@
 #' (mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with crossprod method
 #' (mod2 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM')) #standard errors with SEM method
 #' coef(mod2)
-#' (mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'BL')) #standard errors with BL method
+#' (mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'Richardson')) #with numerical Richardson method
 #' residuals(mod1)
 #' plot(mod1) #test score function
 #' plot(mod1, type = 'trace') #trace lines
@@ -639,9 +641,7 @@
 #' coef(gpcmod)
 #'
 #' #for the nominal model the lowest and highest categories are assumed to be the
-#' #  theoretically lowest and highest categories that related to the latent trait(s), however
-#' #  a custom nominal.highlow matrix can be passed to declare which item category should be
-#' #  treated as the 'highest' and 'lowest' instead
+#' #  theoretically lowest and highest categories that related to the latent trait(s)
 #' (nomod <- mirt(Science, 1, 'nominal'))
 #' coef(nomod) #ordering of ak values suggest that the items are indeed ordinal
 #' anova(gpcmod, nomod)
@@ -868,9 +868,10 @@
 #'
 #' #constraint: create function for solnp to compute constraint, and declare value in eqB
 #' eqfun <- function(p, optim_args) sum(p[1:5]) #could use browser() here, if it helps
-#' solnp_args <- list(eqfun=eqfun, eqB=0)
+#' LB <- c(rep(-15, 6), 1e-4) # more reasonable lower bound for variance term
 #'
-#' mod <- mirt(dat, model, itemtype = 'Rasch', optimizer = 'solnp', solnp_args=solnp_args)
+#' mod <- mirt(dat, model, sv=sv, itemtype = 'Rasch', optimizer = 'solnp',
+#'    solnp_args=list(eqfun=eqfun, eqB=0, LB=LB))
 #' print(mod)
 #' coef(mod)
 #' (ds <- sapply(coef(mod)[1:5], function(x) x[,'d']))
@@ -954,8 +955,8 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = TRUE, draws = 5000, survey.weights = NULL,
                  quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL, key = NULL,
-                 nominal.highlow = NULL, large = FALSE,
-                 GenRandomPars = FALSE, accelerate = 'Ramsay', empiricalhist = FALSE, verbose = TRUE,
+                 large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay',
+                 empiricalhist = FALSE, verbose = TRUE,
                  solnp_args = list(), alabama_args = list(), control = list(), technical = list(), ...)
 {
     Call <- match.call()
@@ -980,7 +981,7 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       parprior=parprior, quadpts=quadpts,
                       technical=technical, verbose=verbose, survey.weights=survey.weights,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
-                      nominal.highlow=nominal.highlow, accelerate=accelerate, draws=draws,
+                      accelerate=accelerate, draws=draws,
                       empiricalhist=empiricalhist, GenRandomPars=GenRandomPars,
                       optimizer=optimizer, solnp_args=solnp_args, alabama_args=alabama_args,
                       latent.regression=latent.regression, gpcm_mats=gpcm_mats,

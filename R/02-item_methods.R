@@ -99,6 +99,7 @@ setClass("GroupPars",
                         prior.type='integer',
                         prior_1='numeric',
                         prior_2='numeric',
+                        rr='numeric',
                         sig='matrix',
                         invsig='matrix',
                         mu='numeric',
@@ -137,23 +138,6 @@ setMethod(
         if(EM){
             grad <- rep(0, length(x@par))
             hess <- matrix(0, length(x@par), length(x@par))
-#             if(any(x@est)){
-#                 grad[x@est] <- numDeriv::grad(EML2, x@par[x@est], Theta=Theta,
-#                                               pars=pars, tabdata=tabdata, freq=freq,
-#                                               itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
-#             }
-#             npars <- length(x@est)
-#             nfact <- ncol(Theta)
-#             dEta <- matrix(0, nrow(Theta), npars)
-#             for(i in 1L:nrow(Theta))
-#                 dEta[i, ] <- Deriv(x, Theta[i, , drop=FALSE])$grad
-#             P <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
-#                                   CUSTOM.IND=CUSTOM.IND)
-#             for(i in 1:nrow(tabdata)){
-#                 L <- apply(P[,as.logical(tabdata[i, ]), drop=FALSE], 1, prod)
-#                 PL <- sum(L * prior)
-#                 grad <- grad + 1/PL * colSums(L * dEta * prior)
-#             }
             if(estHess){
                 if(any(x@est)){
                     hess[x@est,x@est] <- numDeriv::hessian(EML2, x@par[x@est], Theta=Theta,
@@ -163,7 +147,7 @@ setMethod(
             }
             return(list(grad=grad, hess=hess))
         }
-        return(.Call("dgroup", x, Theta, estHess, FALSE, FALSE))
+        return(.Call("dgroup", x, Theta, matrix(0), estHess, FALSE, FALSE, FALSE))
     }
 )
 
@@ -200,7 +184,7 @@ setMethod(
 setMethod(
     f = "DrawValues",
     signature = signature(x = 'RandomPars', Theta = 'matrix'),
-    definition = function(x, Theta, pars, fulldata, itemloc, offterm0, CUSTOM.IND){
+    definition = function(x, Theta, pars, fulldata, itemloc, offterm0, CUSTOM.IND, LR = FALSE){
         J <- length(pars) - 1L
         theta0 <- x@drawvals
         total_0 <- attr(theta0, 'log.lik_full')
@@ -216,14 +200,25 @@ setMethod(
         if(is.null(total_0)) theta1 <- theta0 #for intial draw
         log_den1 <- mirt_dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
         itemtrace1 <- matrix(0, ncol=ncol(fulldata), nrow=nrow(fulldata))
-        tmp1 <- rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
-        offterm1 <- matrix(tmp1, nrow(offterm0), ncol(offterm0))
-        itemtrace1 <- computeItemtrace(pars, Theta=Theta, offterm=offterm1,
-                                       itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+        if(LR){
+            Theta2 <- Theta - rowSums(x@gdesign * theta0[x@mtch, , drop=FALSE]) +
+                rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
+            itemtrace1 <- computeItemtrace(pars, Theta=Theta2, offterm=offterm0,
+                                           itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+        } else {
+            tmp1 <- rowSums(x@gdesign * theta1[x@mtch, , drop=FALSE])
+            offterm1 <- matrix(tmp1, nrow(offterm0), ncol(offterm0))
+            itemtrace1 <- computeItemtrace(pars, Theta=Theta, offterm=offterm1,
+                                           itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+        }
         LL <- fulldata * log(itemtrace1)
         LL2 <- matrix(0, nrow(LL), J)
-        for(i in 1L:J)
-            LL2[,i] <- rowSums(LL[,itemloc[i]:(itemloc[i+1L] - 1L)])
+        if(LR){
+            LL2 <- rowSums(LL)
+        } else {
+            for(i in 1L:J)
+                LL2[,i] <- rowSums(LL[,itemloc[i]:(itemloc[i+1L] - 1L)])
+        }
         total_1 <- tapply(LL2, x@mtch, sum) + log_den1
         if(is.null(total_0)){ #for intial draw
             attr(theta1, 'log.lik_full') <- total_1
@@ -246,7 +241,7 @@ setMethod(
         Theta <- x@drawvals
         estHess <- TRUE
         pick <- -c(1L:ncol(Theta))
-        out <- .Call("dgroup", x, Theta, estHess, TRUE, FALSE)
+        out <- .Call("dgroup", x, Theta, matrix(0L), estHess, TRUE, FALSE, FALSE)
         out$grad <- out$grad[pick]
         out$hess <- out$hess[pick, pick, drop=FALSE]
         diag(out$hess) <- -abs(diag(out$hess)) #hack for very small clusters
@@ -1015,7 +1010,7 @@ setMethod(
             }
         }
         ####
-        #FIXME - can't seem to get the last value of the gradient quite right for some reason....
+        #TODO - can't seem to get the last value of the gradient quite right for some reason....
         x2 <- x
         x2@est <- c(rep(FALSE, length(x2@est)-1L), TRUE)
         grad[x2@est] <- numDeriv::grad(EML, x@par[x2@est], obj=x2, Theta=Theta)
@@ -1951,9 +1946,11 @@ setClass('custom', contains = 'AllItemsClass',
                                          gr='function',
                                          usegr='logical',
                                          hss='function',
+                                         gen='function',
                                          usehss='logical',
                                          userdata='matrix',
-                                         useuserdata='logical'))
+                                         useuserdata='logical',
+                                         derivType='character'))
 
 setMethod(
     f = "print",
@@ -1992,6 +1989,7 @@ setMethod(
     f = "GenRandomPars",
     signature = signature(x = 'custom'),
     definition = function(x){
+        x@par <- x@gen(x)
         x
     }
 )
@@ -2015,7 +2013,7 @@ setMethod(
 
 setMethod("initialize",
           'custom',
-          function(.Object, name, par, est, lbound, ubound, P, gr, hss, userdata) {
+          function(.Object, name, par, est, lbound, ubound, P, gr, hss, gen, userdata, derivType) {
               dummyfun <- function(...) return(NULL)
               names(est) <- names(par)
               usegr <- usehss <- useuserdata <- TRUE
@@ -2023,6 +2021,7 @@ setMethod("initialize",
               .Object@par <- par
               .Object@est <- est
               .Object@P <- P
+              .Object@derivType <- derivType
               if(is.null(gr)){
                   .Object@gr <- dummyfun
                   usegr <- FALSE
@@ -2031,6 +2030,9 @@ setMethod("initialize",
                   .Object@hss <- dummyfun
                   usehss <- FALSE
               } else .Object@hss <- hss
+              if(is.null(gen)){
+                  .Object@gen <- function(object) object@par
+              } else .Object@gen <- gen
               if(is.null(userdata)){
                   .Object@userdata <- matrix(NaN)
                   useuserdata <- FALSE
@@ -2052,11 +2054,11 @@ setMethod(
         grad <- rep(0, length(x@par))
         hess <- matrix(0, length(x@par), length(x@par))
         if(x@usegr) grad <- x@gr(x, Theta)
-        else grad[x@est] <- numDeriv::grad(EML, x@par[x@est], obj=x, Theta=Theta)
+        else grad[x@est] <- numerical_deriv(x@par[x@est], EML, obj=x, Theta=Theta, type=x@derivType)
         if(estHess){
             if(x@usehss) hess <- x@hss(x, Theta)
-            else hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
-                                                         Theta=Theta)
+            else hess[x@est, x@est] <- numerical_deriv(x@par[x@est], EML, obj=x,
+                                                       Theta=Theta, type=x@derivType, gradient=FALSE)
         }
         return(list(grad = grad, hess=hess))
     }
