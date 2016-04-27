@@ -244,7 +244,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
     }
-    PrepList <- UpdatePrior(PrepList, model, groupNames=Data$groupNames, warn=opts$warn)
+    PrepList <- UpdatePrior(PrepList, model, groupNames=Data$groupNames)
     if(GenRandomPars){
         for(g in 1L:Data$ngroups)
             for(i in 1L:length(PrepList[[g]]$pars))
@@ -344,6 +344,17 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(length(constrain) > 0L)
         for(i in 1L:length(constrain))
             nconstr <- nconstr + length(constrain[[i]]) - 1L
+    if(Data$ngroups > 1L && !length(constrain)){
+        if(opts$warn && any(invariance %in% c('free_means', 'free_var')))
+            warning('Multiple-group model may not be identified without providing anchor items',
+                    call.=FALSE)
+        for(j in 1L:Data$ngroups)
+            if(!all(apply(subset(Data$data, Data$group == Data$groupNames[j]), 2L,
+                     function(x) length(unique(na.omit(x)))) == Data$K))
+                stop('Multiple Group model will not be identified without proper constraints
+                    (groups contain missing data patterns where item responses have been completely ommited)',
+                     call. = FALSE)
+    }
     if(discrete) nestpars <- nestpars + nrow(opts$technical$customTheta) - 1L
     nmissingtabdata <- sum(is.na(rowSums(Data$tabdata)))
     dfsubtr <- nestpars - nconstr
@@ -372,8 +383,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         for(i in 1L:length(pars[[1L]])){
             if(class(pars[[g]][[i]]) == 'dich'){
                 pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
-                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
+                if(!(pt[length(pt)-1L] %in% c(0L, 1L, 4L))) warning(wmsg, call.=FALSE)
+                if(!(pt[length(pt)] %in% c(0L, 1L, 4L))) warning(wmsg, call.=FALSE)
                 next
             } else if(class(pars[[g]][[i]]) == 'partcomp'){
                 pt <- pars[[g]][[i]]@prior.type
@@ -455,8 +466,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                matrix(Theta[,nfact2], nrow=nrow(Theta), ncol=ncol(sitems)))
             } else {
                 if(opts$method == 'QMCEM'){
-                    Theta <- QMC_quad(npts=opts$quadpts, nfact=nfact, lim=opts$theta_lim,
-                                      norm=TRUE)
+                    Theta <- QMC_quad(npts=opts$quadpts, nfact=nfact, lim=opts$theta_lim)
                 } else {
                     if(opts$quadpts^nfact <= opts$MAXQUAD){
                         if(is.null(opts$technical$customTheta))
@@ -483,7 +493,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          accelerate=opts$accelerate, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
                                          customPriorFun=opts$customPriorFun, Moptim=opts$Moptim, warn=opts$warn,
                                          message=opts$message, BL=opts$method == 'BL', full=opts$full,
-                                         lrPars=lrPars, SE=opts$SE && opts$SE.type == 'numerical', Etable=opts$Etable),
+                                         lrPars=lrPars, SE=opts$SE && opts$SE.type == 'numerical', Etable=opts$Etable,
+                                         NULL.MODEL=opts$NULL.MODEL),
                              Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         opts$Moptim <- ESTIMATE$Moptim
         lrPars <- ESTIMATE$lrPars
@@ -833,6 +844,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                   Theta=Theta, constrain=constrain, parprior=parprior, nest=as.integer(dfsubtr),
                   invariance=invariance, lrPars=lrPars, formulas=attr(mixed.design, 'formula'),
                   prodlist=PrepList[[1L]]$prodlist)
+    if(!is.null(opts$technical$Etable)){
+        Model$Etable <- ESTIMATE$rlist
+        Model$Etable$Theta <- Theta
+    }
     Data$covdata <- if(length(lrPars)) lrPars@df else attr(mixed.design, 'covdata')
     Data$itemdesign <- attr(mixed.design, 'itemdesign')
     ParObjects <- list(pars=cmods, lrPars=lrPars, random=ESTIMATE$random, lr.random=ESTIMATE$lr.random)

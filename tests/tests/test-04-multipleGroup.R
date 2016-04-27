@@ -85,7 +85,7 @@ test_that('one factor', {
     expect_equal(fit1$D1.SRMSR, 0.03606703, tolerance = 1e-4)
     expect_equal(fit1$TLI, 1.005683, tolerance = 1e-4)
     expect_true(mirt:::closeEnough(fit1$df - 195, -1e-4, 1e-4))
-    fit2 <- itemfit(mod_metric, digits = 20)
+    fit2 <- itemfit(mod_metric, digits = 20, Zh=TRUE)
     expect_is(fit2, 'list')
     expect_equal(as.numeric(fit2[[1]][1L,]), c(1.000000, 2.488648, 8.294027, 11.000000, 0.686700),
                  tolerance = 1e-4)
@@ -106,6 +106,10 @@ test_that('one factor', {
     dat <- simdata(a,d,2000, itemtype = rep('graded', 10), Theta=Theta)
     x <- multipleGroup(dat, 1, group=group, method='EM', verbose = FALSE)
     expect_is(x, 'MultipleGroupClass')
+    out <- empirical_ES(x, digits=Inf)
+    expect_equal(as.numeric(out[1,]), c(0.06414336,0.06414336,0.06432871,0.06432871,0.1019616,2.511286,0.1429828,3.565027,3.500883), tolerance=1e-4)
+    out2 <- empirical_ES(x, digits=Inf, DIF = FALSE)
+    expect_equal(as.numeric(out2$Value), c(-0.5487056,0.8840394,0.5908297,-0.03812574,-0.5531821,0.8879398,0.5996061,-0.1408935,-0.8724134), tolerance=1e-4)
 
     dat[1,1] <- dat[2,2] <- NA
     x2 <- multipleGroup(dat, 1, group=group, method='EM', verbose = FALSE)

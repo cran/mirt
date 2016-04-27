@@ -140,7 +140,8 @@
 #'
 #' #multiple imputation using 30 draws for EAP scores. Requires information matrix
 #' mod <- mirt(Science, 1, SE=TRUE)
-#' fscores(mod, MI = 30)
+#' fs <- fscores(mod, MI = 30)
+#' head(fs)
 #'
 #' # plausible values for future work
 #' pv <- fscores(mod, plausible.draws = 5)
@@ -157,8 +158,8 @@
 #' head(fscores(mod, custom_den = fun, method = 'MAP', full.scores = FALSE))
 #'
 #'}
-fscores <- function(object, rotate = 'oblimin', Target = NULL, full.scores = TRUE, method = "EAP",
-                    quadpts = NULL, response.pattern = NULL, plausible.draws = 0,
+fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimin', Target = NULL,
+                    response.pattern = NULL, plausible.draws = 0, quadpts = NULL,
                     returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
                     full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
                     QMC = FALSE, custom_den = NULL, custom_theta = NULL, min_expected = 1,

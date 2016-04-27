@@ -595,7 +595,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
     return(constrain)
 }
 
-UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
+UpdatePrior <- function(PrepList, model, groupNames){
     if(!is.numeric(model[[1L]])){
         if(!length(model[[1L]]$x[model[[1L]]$x[,1L] == 'PRIOR', 2L])) return(PrepList)
         groupNames <- as.character(groupNames)
@@ -634,9 +634,9 @@ UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
                     sel <- as.numeric(esplit[[i]][1L:(length(esplit[[i]])-5L)])
                     name <- esplit[[i]][length(esplit[[i]])-4L]
                     type <- esplit[[i]][length(esplit[[i]])-3L]
-                    if(!(type %in% c('norm', 'beta', 'lnorm')))
+                    if(!(type %in% c('norm', 'beta', 'lnorm', 'expbeta')))
                         stop('Prior type specified in PRIOR = ... not available', call.=FALSE)
-                    type <- switch(type, norm=1L, lnorm=2L, beta=3L, 0L)
+                    type <- switch(type, norm=1L, lnorm=2L, beta=3L, expbeta=4L, 0L)
                     val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
                     val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
                     for(j in 1L:length(sel)){
@@ -650,11 +650,8 @@ UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
                         pars[[g]][[sel[j]]]@par[which] <- switch(type,
                                                                  '1'=val1,
                                                                  '2'=exp(val1),
-                                                                 '3'=(val1-1)/(val1 + val2 - 2))
-                        if(type %in% c(2L, 3L))
-                            pars[[g]][[sel[j]]]@lbound[which] <- 0
-                        if(type == 3L)
-                            pars[[g]][[sel[j]]]@lbound[which] <- 1
+                                                                 '3'=(val1-1)/(val1 + val2 - 2),
+                                                                 '4'=qlogis((val1-1)/(val1 + val2 - 2)))
                     }
                 }
             } else {
@@ -662,9 +659,9 @@ UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
                 gname <- esplit[[i]][length(esplit[[i]])]
                 name <- esplit[[i]][length(esplit[[i]])-4L]
                 type <- esplit[[i]][length(esplit[[i]])-3L]
-                if(!(type %in% c('norm', 'beta', 'lnorm')))
+                if(!(type %in% c('norm', 'beta', 'lnorm', 'expbeta')))
                     stop('Prior type specified in PRIOR = ... not available', call.=FALSE)
-                type <- switch(type, norm=1L, lnorm=2L, beta=3L, 0L)
+                type <- switch(type, norm=1L, lnorm=2L, beta=3L, expbeta=4L, 0L)
                 val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
                 val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
                 for(j in 1L:length(sel)){
@@ -675,24 +672,11 @@ UpdatePrior <- function(PrepList, model, groupNames, warn = TRUE){
                     pars[[gname]][[sel[j]]]@prior.type[which] <- type
                     pars[[gname]][[sel[j]]]@prior_1[which] <- val1
                     pars[[gname]][[sel[j]]]@prior_2[which] <- val2
-                    if(type %in% c(2L, 3L))
-                        pars[[g]][[sel[j]]]@lbound[which] <- 0
-                    if(type == 3L)
-                        pars[[g]][[sel[j]]]@lbound[which] <- 1
                 }
             }
         }
         for(g in 1L:length(PrepList))
             PrepList[[g]]$pars <- pars[[g]]
-    } else {
-        if(warn){
-            speak <- PrepList[[1L]]$itemtype %in% c('3PL', '3PLu', '4PL', 'PC3PL', '3PLNRM', '3PLuNRM', '4PLNRM')
-            if(any(speak) && nrow(PrepList[[1L]]$fulldata) < 5000L)
-                warning(paste0('The following itemtypes are very unstable in smaller sample sizes:',
-                               unique(PrepList[[1]]$itemtype[speak]),
-                               '\nIncluding prior distributions for unstable parameters is recommended. '),
-                               call.=FALSE)
-        }
     }
     return(PrepList)
 }
@@ -714,7 +698,8 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
             lbound <- c(lbound, tmpgroup[[i]]@lbound)
             ubound <- c(ubound, tmpgroup[[i]]@ubound)
             tmp <- sapply(as.character(tmpgroup[[i]]@prior.type),
-                                 function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+                                 function(x) switch(x, '1'='norm', '2'='lnorm',
+                                                    '3'='beta', '4'='expbeta', 'none'))
             prior.type <- c(prior.type, tmp)
             prior_1 <- c(prior_1, tmpgroup[[i]]@prior_1)
             prior_2 <- c(prior_2, tmpgroup[[i]]@prior_2)
@@ -730,7 +715,8 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
             lbound <- c(lbound, random[[i]]@lbound)
             ubound <- c(ubound, random[[i]]@ubound)
             tmp <- sapply(as.character(random[[i]]@prior.type),
-                          function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+                          function(x) switch(x, '1'='norm', '2'='lnorm',
+                                             '3'='beta', '4'='expbeta', 'none'))
             prior.type <- c(prior.type, tmp)
             prior_1 <- c(prior_1, random[[i]]@prior_1)
             prior_2 <- c(prior_2, random[[i]]@prior_2)
@@ -746,7 +732,8 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
         lbound <- c(lbound, lrPars@lbound)
         ubound <- c(ubound, lrPars@ubound)
         tmp <- sapply(as.character(lrPars@prior.type),
-                      function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+                      function(x) switch(x, '1'='norm', '2'='lnorm',
+                                         '3'='beta', '4'='expbeta', 'none'))
         prior.type <- c(prior.type, tmp)
         prior_1 <- c(prior_1, lrPars@prior_1)
         prior_2 <- c(prior_2, lrPars@prior_2)
@@ -762,7 +749,8 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
             lbound <- c(lbound, lr.random[[i]]@lbound)
             ubound <- c(ubound, lr.random[[i]]@ubound)
             tmp <- sapply(as.character(lr.random[[i]]@prior.type),
-                          function(x) switch(x, '1'='norm', '2'='lnorm', '3'='beta', 'none'))
+                          function(x) switch(x, '1'='norm', '2'='lnorm',
+                                             '3'='beta', '4'='expbeta', 'none'))
             prior.type <- c(prior.type, tmp)
             prior_1 <- c(prior_1, lr.random[[i]]@prior_1)
             prior_2 <- c(prior_2, lr.random[[i]]@prior_2)
@@ -793,7 +781,7 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
     if(!all(sapply(currentDesign, class) == sapply(pars, class)))
         stop('pars input does not contain the appropriate classes, which should match pars = \'values\'',
              call.=FALSE)
-    if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm')))
+    if(!all(unique(pars$prior.type) %in% c('none', 'norm', 'beta', 'lnorm', 'expbeta')))
         stop('prior.type input in pars contains invalid prior types', call.=FALSE)
     if(!MG) PrepList <- list(PrepList)
     pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
@@ -811,7 +799,7 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
                 PrepList[[g]]$pars[[i]]@ubound[j] <- pars[ind,'ubound']
                 tmp <- as.character(pars[ind,'prior.type'])
                 PrepList[[g]]$pars[[i]]@prior.type[j] <-
-                    switch(tmp, norm=1L, lnorm=2L, beta=3L, 0L)
+                    switch(tmp, norm=1L, lnorm=2L, beta=3L, expbeta=4L, 0L)
                 PrepList[[g]]$pars[[i]]@prior_1[j] <- pars[ind,'prior_1']
                 PrepList[[g]]$pars[[i]]@prior_2[j] <- pars[ind,'prior_2']
                 ind <- ind + 1L
@@ -880,9 +868,11 @@ DerivativePriors <- function(x, grad, hess){
         if(length(val) == 1L) hess[ind, ind] <- hess[ind, ind] + h
         else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
     }
-    if(any(x@prior.type %in% 3L)){ #beta
-        ind <- x@prior.type %in% 3L
+    if(any(x@prior.type %in% c(3L, 4L))){ #beta
+        ind <- x@prior.type %in% c(3L, 4L)
         val <- x@par[ind]
+        ind <- x@prior.type == 4L
+        val[ind] <- plogis(val[ind])
         val <- ifelse(val < 1e-10, 1e-10, val)
         val <- ifelse(val > 1-1e-10, 1-1e-10, val)
         a <- x@prior_1[ind]
@@ -911,12 +901,12 @@ LL.Priors <- function(x, LL){
     if(any(x@prior.type %in% 2L)){
         ind <- x@prior.type %in% 2L
         val <- x@par[ind]
-        val <- ifelse(val > 0, val, 1e-100)
         u <- x@prior_1[ind]
         s <- x@prior_2[ind]
         for(i in 1L:length(val)){
-            tmp <- dlnorm(val[i], u[i], s[i], log=TRUE)
-            LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
+            if(val[i] > 0)
+                LL <- LL + dlnorm(val[i], u[i], s[i], log=TRUE)
+            else LL <- LL + log(1e-100)
         }
     }
     if(any(x@prior.type %in% 3L)){
@@ -925,8 +915,9 @@ LL.Priors <- function(x, LL){
         a <- x@prior_1[ind]
         b <- x@prior_2[ind]
         for(i in 1L:length(val)){
-            tmp <- dbeta(val[i], a[i], b[i], log=TRUE)
-            LL <- LL + ifelse(tmp == -Inf, log(1e-100), tmp)
+            if(val[i] > 0 && val[i] < 1)
+                LL <- LL + dbeta(val[i], a[i], b[i], log=TRUE)
+            else LL <- LL + log(1e-100)
         }
     }
     return(LL)
@@ -1090,6 +1081,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$accelerate = accelerate
     opts$delta <- ifelse(is.null(technical$delta), .001, technical$delta)
     opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
+    if(!is.null(TOL))
+        if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- FALSE
     opts$TOL <- ifelse(is.null(TOL), if(method == 'EM' || method == 'QMCEM') 1e-4 else
         if(method == 'BL') 1e-8 else 1e-3, TOL)
     if(SE.type == 'SEM' && SE){
@@ -1545,10 +1538,11 @@ lca_prior <- function(Theta, Etable){
     return(prior)
 }
 
-makeObstables <- function(dat, K){
+makeObstables <- function(dat, K, which.items){
     ret <- vector('list', ncol(dat))
     sumscore <- rowSums(dat)
     for(i in 1L:length(ret)){
+        if(!(i %in% which.items)) next
         ret[[i]] <- matrix(0, sum(K-1L)+1L, K[i])
         colnames(ret[[i]]) <- paste0(1L:K[i]-1L)
         rownames(ret[[i]]) <- paste0(1L:nrow(ret[[i]])-1L)
@@ -1566,6 +1560,7 @@ collapseCells <- function(O, E, mincell = 1){
     for(i in 1L:length(O)){
         On <- O[[i]]
         En <- E[[i]]
+        if(is.null(En)) next
         drop <- which(rowSums(is.na(En)) > 0)
         En[is.na(En)] <- 0
 
@@ -1721,14 +1716,14 @@ MGC2SC <- function(x, which){
 #' f <- function(x) 3*x[1]^3 - 4*x[2]^2
 #' par <- c(3,8)
 #'
-#' # grad = 9 * x^2 , 8 * y
-#' c(81, -64)
+#' # grad = 9 * x^2 , -8 * y
+#' (actual <- c(9 * par[1]^2, -8 * par[2]))
 #' numerical_deriv(par, f, type = 'forward')
 #' numerical_deriv(par, f, type = 'central')
 #' numerical_deriv(par, f, type = 'Richardson')
 #'
-#' # hessian = h11 -> 18 * x, h22 -> 8, h12 -> 9 * x^2 + 8 * y
-#' matrix(c(54, 0, 0, -8), 2, 2)
+#' # hessian = h11 -> 18 * x, h22 -> -8, h12 -> h21 -> 0
+#' (actual <- matrix(c(18 * par[1], 0, 0, -8), 2, 2))
 #' numerical_deriv(par, f, type = 'forward', gradient = FALSE)
 #' numerical_deriv(par, f, type = 'central', gradient = FALSE)
 #' numerical_deriv(par, f, type = 'Richardson', gradient = FALSE)
@@ -1876,13 +1871,7 @@ controlCandVar <- function(PA, cand, min = .1, max = .6){
 }
 
 QMC_quad <- function(npts, nfact, lim, leap=409, norm=FALSE){
-    if(norm){
-        U <- qnorm(sfsmisc::QUnif(npts, min=0, max=1, p=nfact, leap=leap))
-        ret <- U * (lim[2L] - lim[1L]) / (max(U) - min(U))
-    } else {
-        ret <- sfsmisc::QUnif(npts, min=lim[1L], max=lim[2L], p=nfact, leap=leap)
-    }
-    ret
+    sfsmisc::QUnif(npts, min=lim[1L], max=lim[2L], p=nfact, leap=leap)
 }
 
 MC_quad <- function(npts, nfact, lim)

@@ -327,7 +327,11 @@
 #'   To specify a prior the form is c('priortype', ...), where normal priors
 #'   are \code{parprior = list(c(parnumbers, 'norm', mean, sd))},
 #'   \code{parprior = list(c(parnumbers, 'lnorm', log_mean, log_sd))} for log-normal, and
-#'   \code{parprior = list(c(parnumbers, 'beta', alpha, beta))} for beta. Priors can also be
+#'   \code{parprior = list(c(parnumbers, 'beta', alpha, beta))} for beta, and
+#'   \code{parprior = list(c(parnumbers, 'expbeta', alpha, beta))} for the beta distribution
+#'   after applying the function \code{\link{plogis}} to the input value
+#'   (note, this is specifically for applying a beta
+#'   prior to the lower/upper-bound parameters in 3/4PL models). Priors can also be
 #'   specified using \code{\link{mirt.model}} syntax (recommended)
 #' @param pars a data.frame with the structure of how the starting values, parameter numbers,
 #'   estimation logical values, etc, are defined. The user may observe how the model defines the
@@ -341,7 +345,8 @@
 #' @param TOL convergence threshold for EM or MH-RM; defaults are .0001 and .001. If
 #'   \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}.
 #'   If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5}
-#'   will be used. To evaluate the model using only the starting values pass \code{TOL = NaN}
+#'   will be used. To evaluate the model using only the starting values pass \code{TOL = NaN}, and
+#'   to evalute the starting values without the log-likelihood pass \code{TOL = NA}
 #' @param empiricalhist logical; estimate prior distribution using an empirical histogram approach.
 #'   Only applicable for unidimensional models estimated with the EM algorithm.
 #'   The number of cycles, TOL, and quadpts are adjusted

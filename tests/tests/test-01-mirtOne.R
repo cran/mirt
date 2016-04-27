@@ -56,7 +56,7 @@ test_that('dich', {
     expect_equal(extract.mirt(modm7, 'df'), 11)
     expect_is(modm7, 'SingleGroupClass')
     cfs <- as.numeric(do.call(c, coef(modm7)))
-    expect_equal(cfs, c(5.143,8.598,0.154,0.859,5.86,3.667,0.16,0.843,10.273,11.019,0.155,0.861,1.281,0.854,0.153,0.845,4.686,9.008,0.154,0.859,0,1), tolerance = 1e-2)
+    expect_equal(cfs, c(5.231,8.739,0.154,0.858,5.584,3.505,0.16,0.843,11.193,11.951,0.155,0.862,1.285,0.854,0.153,0.845,4.697,9.029,0.154,0.859,0,1), tolerance = 1e-2)
     data[1,1] <- data[2,2] <- NA
     modm6 <- mirt(data, 1, verbose=FALSE)
     expect_equal(modm6@Fit$df, 21)
@@ -71,11 +71,11 @@ test_that('dich', {
     mod <- mirt(dat, 1, method = 'QMCEM', verbose=FALSE, optimizer='NR')
     expect_equal(extract.mirt(mod, 'logLik'), -2466.653, tolerance=1e-4)
     fs <- fscores(mod, QMC=TRUE, verbose=FALSE, full.scores=FALSE)
-    expect_equal(fs[1:3,'F1'], c(-1.9607, -1.5228, -1.5019), tolerance=1e-4)
+    expect_equal(fs[1:3,'F1'], c(-1.8971, -1.4750, -1.4547), tolerance=1e-4)
     m2 <- M2(mod, QMC=TRUE)
-    expect_equal(m2$M2, 4.615544, tolerance=1e-5)
+    expect_equal(m2$M2, 4.737918, tolerance=1e-5)
     ifit <- itemfit(mod, QMC=TRUE, digits = 20)
-    expect_equal(ifit$p.S_X2[1], .7769, tolerance = 1e-2)
+    expect_equal(ifit$p.S_X2[1], .7985, tolerance = 1e-2)
 
     fm1 <- fscores(modm1, verbose = FALSE, full.scores=FALSE)
     expect_is(fm1, 'matrix')
@@ -119,10 +119,10 @@ test_that('dich', {
     expect_is(ifit, 'data.frame')
     expect_true(mirt:::closeEnough(as.numeric(ifit$Zh) - c(1.431838, 6.354917, 5.310844, 5.804449,
                                                            0.696139), -1e-2, 1e-2))
-    expect_true(mirt:::closeEnough(as.numeric(ifit$X2) - c(15.690624, 39.877157, 23.797978, 69.411743, 9.508658), -1e-2, 1e-2))
+    expect_true(mirt:::closeEnough(as.numeric(ifit$X2) - c(91.71819, 390.07985, 145.39978, 329.48529, 129.49679), -1e-2, 1e-2))
     expect_true(mirt:::closeEnough(as.numeric(ifit$S_X2) - c(4.749440, 14.451071,  1.270381,
                                                              5.237400,  0.941125), -1e-2, 1e-2))
-    expect_true(mirt:::closeEnough(as.numeric(ifit$df) - c(5,5,5,6,5), -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(as.numeric(ifit$df) - c(8,8,8,8,8), -1e-4, 1e-4))
     expect_true(mirt:::closeEnough(as.numeric(ifit$df.S_X2) - c(2,2,2,2,2), -1e-4, 1e-4))
 
     fitm1 <- M2(modm1)
@@ -131,7 +131,7 @@ test_that('dich', {
     expect_true(mirt:::closeEnough(fitm1$df.M2 - 5, -1e-4, 1e-4))
     fitm2 <- M2(modm3)
     expect_is(fitm2, 'data.frame')
-    expect_true(mirt:::closeEnough(fitm2$M2 - 5.256348, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fitm2$M2 - 4.821999, -1e-4, 1e-4))
     expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
 
     data <- expand.table(LSAT7)

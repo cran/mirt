@@ -107,23 +107,25 @@ setMethod(
 
         if(plausible.draws > 0){
             fs <- fscores(object, rotate=rotate, Target=Target, full.scores = TRUE, method=method,
-                          quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
-                          return.acov = FALSE, QMC=QMC, custom_den = NULL, converge_info=FALSE, ...)
+                          quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE, cov=gcov,
+                          return.acov = FALSE, QMC=QMC, custom_den=custom_den, converge_info=FALSE, ...)
             if(any(is.na(fs)))
                 stop('Plausible values cannot be drawn for completely empty response patterns.
                      Please remove these from your analysis.', call.=FALSE)
             fs_acov <- fscores(object, rotate = rotate, Target=Target, full.scores = TRUE, method=method,
                           quadpts = quadpts, theta_lim=theta_lim, verbose=FALSE,
-                          plausible.draws=0, full.scores.SE=FALSE,
-                          return.acov = TRUE, QMC=QMC, custom_den = NULL, converge_info=FALSE, ...)
+                          plausible.draws=0, full.scores.SE=FALSE, cov=gcov,
+                          return.acov = TRUE, QMC=QMC, custom_den=custom_den, converge_info=FALSE, ...)
+            suppressWarnings(jit <- myLapply(1:nrow(fs), function(i, mu, sig)
+                mirt_rmvnorm(plausible.draws, mean = mu[i,], sigma = sig[[i]]),
+                mu=fs, sig=fs_acov))
+            if(any(sapply(jit, is.nan)))
+                stop('Could not draw unique plausible values. Response pattern ACOVs may
+                     not be positive definite')
             ret <- vector('list', plausible.draws)
             for(i in 1L:plausible.draws){
-                suppressWarnings(jit <- lapply(fs_acov, function(x) mirt_rmvnorm(1L, sigma = x)))
-                jit <- do.call(rbind, jit)
-                if(any(is.nan(jit)))
-                    stop('Could not draw unique plausible values. Response pattern ACOVs may
-                         not be positive definite')
-                ret[[i]] <- fs + jit
+                ret[[i]] <- matrix(NA, nrow(fs), ncol(fs))
+                for(j in 1L:nrow(fs)) ret[[i]][j,] <- jit[[j]][i,]
             }
             if(plausible.draws == 1L) return(ret[[1L]])
             else return(ret)
@@ -148,7 +150,8 @@ setMethod(
                 large <- suppressWarnings(mirt(response.pattern, nfact, technical=list(customK=object@Data$K),
                               large=TRUE))
                 newmod@Data <- list(data=response.pattern, tabdata=large$tabdata2,
-                                   tabdatalong=large$tabdata, Freq=large$Freq)
+                                   tabdatalong=large$tabdata, Freq=large$Freq,
+                                   K=extract.mirt(object, 'K'))
                 ret <- fscores(newmod, rotate=rotate, Target=Target, full.scores=TRUE,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
@@ -609,7 +612,8 @@ gradnorm.WLE <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND
 }
 
 EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, verbose, CUSTOM.IND,
-                   theta_lim, discrete, QMC, den_fun, min_expected, ...){
+                   theta_lim, discrete, QMC, den_fun, min_expected,
+                   which.items = 2:length(x@ParObjects$pars)-1, ...){
     calcL1 <- function(itemtrace, K, itemloc){
         J <- length(K)
         L0 <- L1 <- matrix(1, sum(K-1L) + 1L, ncol(itemtrace))
@@ -686,12 +690,11 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
     itemtrace <- t(itemtrace)
     tmp <- calcL1(itemtrace=itemtrace, K=K, itemloc=itemloc)
     L1 <- tmp$L1
-    maxLs <- apply(L1, 1L, max)
     Sum.Scores <- tmp$Sum.Scores
     if(S_X2){
         L1total <- L1 %*% prior
         Elist <- vector('list', J)
-        for(i in 1L:J){
+        for(i in which.items){
             KK <- K[-i]
             T <- itemtrace[c(itemloc[i]:(itemloc[i+1L]-1L)), ]
             itemtrace2 <- itemtrace[-c(itemloc[i]:(itemloc[i+1L]-1L)), ]
@@ -737,7 +740,6 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
         got <- as.numeric(names(table(sort(rowSums(dat))))) + 1L
         O <- matrix(0, nrow(E), 1)
         O[got, 1] <- Otmp
-        keep <- O != 0
         ret$observed <- O
         ret$expected <- E
         tmp <- collapseTotals(ret, min_expected)
@@ -749,7 +751,7 @@ EAPsum <- function(x, full.scores = FALSE, quadpts = NULL, S_X2 = FALSE, gp, ver
             (apply(tmp[,pick, drop=FALSE], 2L, var) + apply(tmp[,pick+x@Model$nfact, drop=FALSE], 2L,
                                                             function(x) mean(x^2)))
         names(rxx) <- paste0('rxx_Theta.', 1L:x@Model$nfact)
-        fit <- data.frame(df=df, X2=X2, p.X2 = pchisq(X2, df, lower.tail=FALSE))
+        fit <- data.frame(df=df, X2=X2, p.X2 = suppressWarnings(pchisq(X2, df, lower.tail=FALSE)))
         fit <- cbind(fit, t(as.data.frame(rxx)))
         rownames(fit) <- 'stats'
         attr(ret, 'fit') <- fit

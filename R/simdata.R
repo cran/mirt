@@ -14,9 +14,13 @@
 #'   with \code{NA}. When a vector is used the test is assumed to consist only of dichotomous items
 #'   (because only one intercept per item is provided)
 #' @param itemtype a character vector of length \code{nrow(a)} (or 1, if all the item types are
-#'   the same) specifying the type of items to simulate.
+#'   the same) specifying the type of items to simulate. Inputs can either be the same as
+#'   the inputs found in \code{\link{mirt}} or the internal clases defined by the package. If the
+#'   typical inputs that are passed to \code{\link{mirt}} are used then these will be converted into
+#'   the respective internal classes automatically.
 #'
-#'   Can be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
+#'   If the internal class of the object is specified instead, the inputs can
+#'   be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
 #'   dichotomous, graded, generalized partial credit, nominal, nested logit, and partially
 #'   compensatory models. Note that for the gpcm, nominal, and nested logit models there should
 #'   be as many parameters as desired categories, however to parametrized them for meaningful
@@ -38,9 +42,9 @@
 #' @param gpcm_mats a list of matricies specifying the scoring scheme for generalized partial
 #'   credit models (see \code{\link{mirt}} for details)
 #' @param sigma a covariance matrix of the underlying distribution. Default is
-#'   the identity matrix
+#'   the identity matrix. Used when \code{Theta} is not supplied
 #' @param mu a mean vector of the underlying distribution. Default is a vector
-#'   of zeros
+#'   of zeros. Used when \code{Theta} is not supplied
 #' @param Theta a user specified matrix of the underlying ability parameters,
 #'   where \code{nrow(Theta) == N} and \code{ncol(Theta) == ncol(a)}. When this is supplied the
 #'   \code{N} input is not required
@@ -48,8 +52,10 @@
 #'   by \code{mirt} containing the population parameters and item structure, and the
 #'   latent trait matrix \code{Theta}? Default is FALSE
 #' @param model a single group object, typically returned by functions such as \code{\link{mirt}} or
-#'   \code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the Theta
-#'   input) redundent
+#'   \code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the
+#'   \code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent
+#' @param which.items an integer vector used to indicate which items to simulate when a
+#'   \code{model} input is included. Default simulates all items
 #' @param mins an integer vector (or single value to be used for each item) indicating what
 #'   the lowest category should be. If \code{model} is supplied then this will be extracted from
 #'   \code{slot(mod, 'Data')$mins}, otherwise the default is 0
@@ -254,32 +260,38 @@
 #'
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(), returnList = FALSE,
-	model = NULL, mins = 0)
+	model = NULL, which.items = NULL, mins = 0)
 {
     fn <- function(p, ns) sample(1L:ns - 1L, 1L, prob = p)
-    if(missing(N) && is.null(Theta)) missingMsg('N or Theta')
     if(!is.null(model)){
-        nitems <- ncol(model@Data$data)
+        nitems <- extract.mirt(model, 'nitems')
+        if(is.null(which.items)) which.items <- 1L:nitems
         nfact <- model@Model$nfact
         if(is.null(sigma)) sigma <- diag(nfact)
         if(is.null(mu)) mu <- rep(0,nfact)
         if(is.null(Theta)){
+            if(missing(N)) N <- nrow(extract.mirt(model, 'data'))
             Theta <- mirt_rmvnorm(N,mu,sigma,check=TRUE)
         } else N <- nrow(Theta)
         data <- matrix(0, N, nitems)
-        colnames(data) <- paste("Item_", 1L:nitems, sep="")
-        for(i in 1L:nitems){
+        colnames(data) <- extract.mirt(model, 'itemnames')
+        for(i in which.items){
             obj <- extract.item(model, i)
             P <- ProbTrace(obj, Theta)
             data[,i] <- apply(P, 1L, fn, ns = ncol(P))
         }
-        return(t(t(data) + model@Data$mins))
+        ret <- t(t(data) + model@Data$mins)
+        return(ret[,which.items, drop=FALSE])
     }
+    if(missing(N) && is.null(Theta)) missingMsg('N or Theta')
     if(missing(a)) missingMsg('a')
     if(missing(d)) missingMsg('d')
     if(missing(itemtype)) missingMsg('itemtype')
     if(is.vector(a)) a <- matrix(a)
     if(is.vector(d)) d <- matrix(d)
+    if(any(itemtype == 'nominal') && is.null(nominal))
+        stop('nominal itemtypes require a \'nominal\' matrix input of scoring coefs (the ak values)',
+             call.=FALSE)
 	nfact <- ncol(a)
 	nitems <- nrow(a)
 	if(length(mins) == 1L) mins <- rep(mins, nitems)
@@ -294,12 +306,21 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         stopifnot(length(gpcm_mats) == nitems)
         use_gpcm_mats <- sapply(gpcm_mats, is.matrix)
     } else use_gpcm_mats <- rep(FALSE, nitems)
-    for(i in 1L:length(K)){
-        K[i] <- length(na.omit(d[i, ])) + 1L
-        if(itemtype[i] =='partcomp') K[i] <- 2L
-        if(any(itemtype[i] == c('gpcm', 'nominal', 'nestlogit'))) K[i] <- K[i] - 1L
+    if(any(itemtype %in% Valid_iteminputs())){
+        if(any(itemtype %in% c('grsm', 'grsmIRT')))
+            stop('Please rewrite rating scale models as gpcm', call.=FALSE)
+        if(any(itemtype %in% c('Rasch')))
+            stop('Rasch itemtype is ambiguous, please specifiy either gpcm or dich/2PL class', call.=FALSE)
+        itemtype <- ifelse(itemtype %in% c('2PL', '3PL', '3PLu', '4PL'), 'dich', itemtype)
+        itemtype <- ifelse(itemtype %in% c('PC2PL', 'PC3PL'), 'partcomp', itemtype)
+        itemtype <- ifelse(itemtype %in% c("2PLNRM", "3PLNRM", "3PLuNRM", "4PLNRM"), 'nestlogit', itemtype)
     }
-    K <- as.integer(K)
+	for(i in 1L:length(K)){
+	    K[i] <- length(na.omit(d[i, ])) + 1L
+	    if(itemtype[i] =='partcomp') K[i] <- 2L
+	    if(any(itemtype[i] == c('gpcm', 'nominal', 'nestlogit'))) K[i] <- K[i] - 1L
+	}
+	K <- as.integer(K)
     if(any(guess > 1 | guess < 0)) stop('guess input must be between 0 and 1', call.=FALSE)
     if(any(upper > 1 | upper < 0)) stop('upper input must be between 0 and 1', call.=FALSE)
     guess <- logit(guess)

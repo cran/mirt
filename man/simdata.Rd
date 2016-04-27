@@ -6,7 +6,7 @@
 \usage{
 simdata(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
   upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(),
-  returnList = FALSE, model = NULL, mins = 0)
+  returnList = FALSE, model = NULL, which.items = NULL, mins = 0)
 }
 \arguments{
 \item{a}{a matrix/vector of slope parameters. If slopes are to be constrained to
@@ -20,9 +20,13 @@ with \code{NA}. When a vector is used the test is assumed to consist only of dic
 \item{N}{sample size}
 
 \item{itemtype}{a character vector of length \code{nrow(a)} (or 1, if all the item types are
-  the same) specifying the type of items to simulate.
+  the same) specifying the type of items to simulate. Inputs can either be the same as
+  the inputs found in \code{\link{mirt}} or the internal clases defined by the package. If the
+  typical inputs that are passed to \code{\link{mirt}} are used then these will be converted into
+  the respective internal classes automatically.
 
-  Can be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
+  If the internal class of the object is specified instead, the inputs can
+  be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
   dichotomous, graded, generalized partial credit, nominal, nested logit, and partially
   compensatory models. Note that for the gpcm, nominal, and nested logit models there should
   be as many parameters as desired categories, however to parametrized them for meaningful
@@ -33,10 +37,10 @@ with \code{NA}. When a vector is used the test is assumed to consist only of dic
   have already been estimated to understand the itemtypes more intimately}
 
 \item{sigma}{a covariance matrix of the underlying distribution. Default is
-the identity matrix}
+the identity matrix. Used when \code{Theta} is not supplied}
 
 \item{mu}{a mean vector of the underlying distribution. Default is a vector
-of zeros}
+of zeros. Used when \code{Theta} is not supplied}
 
 \item{guess}{a vector of guessing parameters for each item; only applicable
 for dichotomous items. Must be either a scalar value that will affect all of
@@ -62,8 +66,11 @@ by \code{mirt} containing the population parameters and item structure, and the
 latent trait matrix \code{Theta}? Default is FALSE}
 
 \item{model}{a single group object, typically returned by functions such as \code{\link{mirt}} or
-\code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the Theta
-input) redundent}
+\code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the
+\code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent}
+
+\item{which.items}{an integer vector used to indicate which items to simulate when a
+\code{model} input is included. Default simulates all items}
 
 \item{mins}{an integer vector (or single value to be used for each item) indicating what
 the lowest category should be. If \code{model} is supplied then this will be extracted from

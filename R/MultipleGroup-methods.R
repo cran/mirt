@@ -63,7 +63,7 @@ setMethod(
     f = "plot",
     signature = signature(x = 'MultipleGroupClass', y = 'missing'),
     definition = function(x, y, type = 'score', npts = 50, degrees = 45,
-                          which.items = 1:ncol(x@Data$data),
+                          which.items = 1:extract.mirt(x, 'nitems'),
                           rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE,
                           theta_lim = c(-6,6),
@@ -88,14 +88,8 @@ setMethod(
         if(length(prodlist) > 0)
             ThetaFull <- prodterms(Theta,prodlist)
         infolist <- vector('list', ngroups)
-        for(g in 1:ngroups){
-            info <- 0
-            for(i in 1:J){
-                tmp <- extract.item(x, i, g)
-                info <- info + iteminfo(tmp, Theta=ThetaFull, degrees=degrees)
-            }
-            infolist[[g]] <- info
-        }
+        for(g in 1:ngroups)
+            infolist[[g]] <- testinfo(extract.group(x, g), ThetaFull, degrees = degrees)
         if(type == 'RE') infolist <- lapply(infolist, function(x) x / infolist[[1]])
         info <- do.call(c, infolist)
         Theta <- ThetaFull
@@ -194,7 +188,7 @@ setMethod(
                     names(P) <- colnames(x@Data$data)[which.items]
                     count <- 1
                     for(i in which.items){
-                        tmp <- probtrace(extract.item(x, i, group=x@Data$groupNames[g]), ThetaFull)
+                        tmp <- probtrace(extract.item(x, i, group=g), ThetaFull)
                         if(ncol(tmp) == 2L) tmp <- tmp[,2, drop=FALSE]
                         tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(ThetaFull),
                                                                      labels=paste0('cat', 1L:ncol(tmp))))
@@ -229,7 +223,7 @@ setMethod(
                 for(g in 1L:ngroups){
                     I <- matrix(NA, nrow(ThetaFull), J)
                     for(i in which.items)
-                        I[,i] <- iteminfo(extract.item(x, i, group=x@Data$groupNames[g]), ThetaFull)
+                        I[,i] <- iteminfo(extract.item(x, i, group=g), ThetaFull)
                     I <- t(na.omit(t(I)))
                     items <- rep(colnames(x@Data$data)[which.items], each=nrow(Theta))
                     plotobj <- data.frame(I = as.numeric(I), Theta=ThetaFull, item=items)

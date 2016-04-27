@@ -1,3 +1,40 @@
+# Changes in mirt 1.17
+
+- `itemfit()` function reworked so that all statistics have their own input flag (e.g., `Zh = TRUE`,
+  `infit = TRUE`, etc). Additionally, only S-X2 is computed by default and X2/G2 (and the associated
+  graphics and tables) are computed using 10 fixed bins
+
+- added `empirical.table` argument to return tables of expected/observed values for `X2` and `G2`
+
+- `group.bins` and `group.fun` argument added to `itemfit()` to control the size of the 
+  bins and the central tendancy function for `X2` and `G2` computations
+
+- `'expbeta'` option added to implement a beta prior specifically for the `g` and `u` parameters which
+  internally have been transformed to logits (performes the back transformation before computing the 
+  values)
+
+- check whether multiple-group models contain enough data to estimate parameters uniquely 
+  when no constraints are applied 
+  
+- set the starting values the same when using `parprior` list or `mirt.model()` syntax
+  (reported by Insu Paek)
+  
+- `empirical_ES()` function added for effect size estimates in DIF/DBF/DTF analyses (contributed by
+  Adam Meade)
+
+## BUG FIXES
+
+- `MDISC` and `MDIFF` values were missing the 1.702 multiplicitive constant (reported by 
+  Yi-Ling Cheng)
+
+- fix information trace-lines in multiple-group plots (reported by Conal Monaghan)
+
+- suppress standard errors in exploratory models when `rotate != 'none'` (suggested by Hao Wu)
+
+- sequential schemes in `DIF()` generated the wrong results (reported by Adam Meade)
+
+- `M2()` was not properly accounting for latent variance terms (reported by Ismail Cuhadar)
+
 # Changes in mirt 1.16
 
 - enable `lr.random` input to `mixedmirt()` for multilevel-IRT models which are not from the Rasch family

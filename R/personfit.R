@@ -28,7 +28,7 @@
 #'
 #' Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 #' polychotomous item response models and standardized indices.
-#' \emph{Journal of Mathematical and Statistical Psychology, 38}, 67-86.
+#' \emph{British Journal of Mathematical and Statistical Psychology, 38}, 67-86.
 #'
 #' Reise, S. P. (1990). A comparison of item- and person-fit methods of assessing model-data fit
 #' in IRT. \emph{Applied Psychological Measurement, 14}, 127-137.
@@ -103,8 +103,6 @@ personfit <- function(x, method = 'EAP', Theta = NULL, stats.only = TRUE, ...){
     J <- ncol(x@Data$data)
     itemloc <- x@Model$itemloc
     pars <- x@ParObjects$pars
-    prodlist <- attr(pars, 'prodlist')
-    nfact <- x@Model$nfact + length(prodlist)
     fulldata <- x@Data$fulldata[[1L]]
     for(i in 1L:ncol(Theta)){
         tmp <- Theta[,i]

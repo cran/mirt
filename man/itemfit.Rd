@@ -4,38 +4,67 @@
 \alias{itemfit}
 \title{Item fit statistics}
 \usage{
-itemfit(x, Zh = TRUE, X2 = FALSE, S_X2 = TRUE, group.size = 150,
-  mincell = 1, S_X2.tables = FALSE, empirical.plot = NULL,
-  empirical.CI = 0, method = "EAP", Theta = NULL, impute = 0,
-  digits = 4, ...)
+itemfit(x, which.items = 1:extract.mirt(x, "nitems"), S_X2 = TRUE,
+  Zh = FALSE, X2 = FALSE, G2 = FALSE, infit = FALSE, group.bins = 10,
+  group.size = NA, group.fun = mean, mincell = 1, mincell.X2 = 2,
+  S_X2.tables = FALSE, empirical.plot = NULL, empirical.CI = 0.95,
+  empirical.table = NULL, method = "EAP", Theta = NULL, impute = 0,
+  digits = 4, par.strip.text = list(cex = 0.7),
+  par.settings = list(strip.background = list(col = "#9ECAE1"), strip.border =
+  list(col = "black")), ...)
 }
 \arguments{
 \item{x}{a computed model object of class \code{SingleGroupClass},
 \code{MultipleGroupClass}, or \code{DiscreteClass}}
 
-\item{Zh}{logical; calculate Zh and associated statistics (infit/outfit)? Disable this is you are
-only interested in computing the S-X2 quickly}
-
-\item{X2}{logical; calculate the X2 statistic for unidimensional models?}
+\item{which.items}{an integer vector indicating which items to test for fit.
+Default tests all possible items}
 
 \item{S_X2}{logical; calculate the S_X2 statistic?}
 
+\item{Zh}{logical; calculate Zh?}
+
+\item{X2}{logical; calculate the X2 statistic for unidimensional models?}
+
+\item{G2}{logical; calculate the G2 statistic for unidimensional models?}
+
+\item{infit}{logical; calculate the infit/outfit values for unidimensional Rasch models? If the models
+are not from the Rasch family then this will be ignored}
+
+\item{group.bins}{the number of bins to use when \code{X2 = TRUE}. For example,
+setting \code{group.bins = 10} will will compute Yen's (1981) Q1 statistic}
+
 \item{group.size}{approximate size of each group to be used in calculating the \eqn{\chi^2}
-statistic}
+statistic. The default \code{NA}
+disables this command and instead uses the \code{group.bins} input to try and construct
+equally sized bins}
+
+\item{group.fun}{function used when \code{X2} or \code{G2} are computed. Determines the central
+tendancy measure within each partitioned group. E.g., setting \code{group.fun = median} will
+obtain the median of each respective ability estimate in each subgroup (this is what was used
+by Bock, 1972)}
 
 \item{mincell}{the minimum expected cell size to be used in the S-X2 computations. Tables will be
 collapsed across items first if polytomous, and then across scores if necessary}
 
+\item{mincell.X2}{the minimum expected cell size to be used in the X2 computations. Tables will be
+collapsed if polytomous, however if this condition can not be met then the group block will
+be ommited in the computations}
+
 \item{S_X2.tables}{logical; return the tables in a list format used to compute the S-X2 stats?}
 
-\item{empirical.plot}{a single numeric value or character of the item name  indicating which
-item to plot (via \code{itemplot}) and overlay with the empirical \eqn{\theta} groupings.
-Only applicable when \code{type = 'X2'}. The default is \code{NULL}, therefore no plots
-are drawn}
+\item{empirical.plot}{a single numeric value or character of the item name indicating which
+item to plot (via \code{itemplot}) and overlay with the empirical \eqn{\theta} groupings (see
+\code{empirical.CI}). Useful for plotting the expected bins after passing \code{X2 = TRUE} or
+\code{G2 = TRUE}}
 
 \item{empirical.CI}{a numeric value indicating the width of the empirical confidence interval
 ranging between 0 and 1 (default of 0 plots not interval). For example, a 95% confidence
-interval would be plotted if \code{empirical.CI = .95}. Only applicable to dichotomous items}
+interval would be plotted when \code{empirical.CI = .95}. Only applicable to dichotomous items}
+
+\item{empirical.table}{a single numeric value or character of the item name indicating which
+item table of expected values should be returned. Useful for plotting the expected bins after
+passing \code{X2 = TRUE} or \code{G2 = TRUE}}
 
 \item{method}{type of factor score estimation method. See \code{\link{fscores}} for more detail}
 
@@ -51,15 +80,20 @@ of the stats and their imputed standard deviations}
 
 \item{digits}{number of digits to round result to. Default is 4}
 
-\item{...}{additional arguments to be passed to \code{fscores()}}
+\item{par.strip.text}{plotting argument passed to \code{\link{lattice}}}
+
+\item{par.settings}{plotting argument passed to \code{\link{lattice}}}
+
+\item{...}{additional arguments to be passed to \code{fscores()} and \code{\link{lattice}}}
 }
 \description{
 \code{itemfit} calculates the Zh values from Drasgow, Levine and Williams (1985),
-\eqn{\chi^2} values for unidimensional models, and S-X2 statistics for unidimensional and
+\eqn{\chi^2} and \eqn{G^2} values for unidimensional models, and S-X2 statistics for unidimensional and
 multidimensional models (Kang & Chen, 2007; Orlando & Thissen, 2000).
 For Rasch, partial credit, and rating scale models infit and outfit statistics are
-also produced. Poorly fitting items should be inspected with \code{\link{itemGAM}} to diagnose
-whether the functional form of the IRT model was misspecified or could be improved.
+also produced. Poorly fitting items should be inspected with the empirical plots/tables
+for unidimensional models, otherwise \code{\link{itemGAM}} can be used to diagnose
+where the functional form of the IRT model was misspecified.
 }
 \examples{
 
@@ -84,30 +118,37 @@ raschfit <- mirt(data, 1, itemtype='Rasch')
 fit <- itemfit(x)
 fit
 
-fit <- itemfit(x, X2=TRUE)
-fit$X2
+itemfit(x, X2=TRUE)
+itemfit(x, group.bins=15, empirical.plot = 1) #empirical item plot with 15 points
+itemfit(x, group.bins=15, empirical.plot = 21)
 
-itemfit(x, empirical.plot = 1) #empirical item plot
-itemfit(x, empirical.plot = 1, empirical.CI = .99) #empirical item plot with 99\% CI's
+#empirical tables
+itemfit(x, empirical.table=1)
+itemfit(x, empirical.table=21)
 
-#method='ML' agrees better with eRm package
-itemfit(raschfit, method = 'ML') #infit and outfit stats
+#infit/outfit statistics. method='ML' agrees better with eRm package
+itemfit(raschfit, method = 'ML', infit = TRUE) #infit and outfit stats
 
 #same as above, but inputting ML estimates instead
 Theta <- fscores(raschfit, method = 'ML')
-itemfit(raschfit, Theta=Theta)
+itemfit(raschfit, Theta=Theta, infit = TRUE)
 
 #similar example to Kang and Chen 2007
 a <- matrix(c(.8,.4,.7, .8, .4, .7, 1, 1, 1, 1))
 d <- matrix(rep(c(2.0,0.0,-1,-1.5),10), ncol=4, byrow=TRUE)
-dat <- simdata(a,d,2000, itemtype = rep('graded', 10)) - 1
+dat <- simdata(a,d,2000, itemtype = rep('graded', 10))
 head(dat)
 
 mod <- mirt(dat, 1)
 itemfit(mod)
+itemfit(mod, X2 = TRUE)
+itemfit(mod, empirical.plot = 1)
+
+# collapsed tables (see mincell.X2) for X2 and G2
+itemfit(mod, empirical.table = 1)
 
 mod2 <- mirt(dat, 1, 'Rasch')
-itemfit(mod2)
+itemfit(mod2, infit = TRUE)
 
 #massive list of tables
 tables <- itemfit(mod, S_X2.tables = TRUE)
@@ -121,25 +162,37 @@ data[sample(1:prod(dim(data)), 500)] <- NA
 raschfit <- mirt(data, 1, itemtype='Rasch')
 
 mirtCluster() # run in parallel
-itemfit(raschfit, impute = 10)
+itemfit(raschfit, impute = 10, infit = TRUE)
 
 #alternative route: use only valid data, and create a model with the previous parameter estimates
 data2 <- na.omit(data)
 raschfit2 <- mirt(data2, 1, itemtype = 'Rasch', pars=mod2values(raschfit), TOL=NaN)
-itemfit(raschfit2)
-  }
+itemfit(raschfit2, infit = TRUE)
+
+# note that X2 and G2 do not require complete datasets
+itemfit(raschfit, X2=TRUE, G2 = TRUE, S_X2=FALSE)
+itemfit(raschfit, empirical.plot=1)
+itemfit(raschfit, empirical.table=1)
+
+}
 
 }
 \author{
 Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \references{
+Bock, R. D. (1972). Estimating item parameters and latent ability when responses are scored
+in two or more nominal categories. Psychometrika, 37, 29-51.
+
 Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 polychotomous item response models and standardized indices.
-\emph{Journal of Mathematical and Statistical Psychology, 38}, 67-86.
+\emph{British Journal of Mathematical and Statistical Psychology, 38}, 67-86.
 
 Kang, T. & Chen, Troy, T. (2007). An investigation of the performance of the generalized
 S-X2 item-fit index for polytomous IRT models. ACT
+
+McKinley, R., & Mills, C. (1985). A comparison of several goodness-of-fit statistics.
+Applied Psychological Measurement, 9, 49-57.
 
 Orlando, M. & Thissen, D. (2000). Likelihood-based item fit indices for dichotomous item
 response theory models. \emph{Applied Psychological Measurement, 24}, 50-64.
