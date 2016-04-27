@@ -1,6 +1,6 @@
-300997d85ab1160ca6b6ad9ef861ed9c *DESCRIPTION
+0c1d53802188facbfff2a3d015623a92 *DESCRIPTION
 a1b13150467962863f85a4e531faaa8d *NAMESPACE
-05940ec16010cf136735b8a1e627e569 *NEWS.md
+a84188fbad9e77bbe46a14a8ebd452ae *NEWS.md
 1992d84342b1c1c82e12c0152129e8b3 *R/00-classes.R
 bce8145798603a4c4024abaf1eddcc3f *R/01-itemclass.R
 352f0d5c987b2c72f95f1050dcec222e *R/02-item_methods.R
@@ -64,7 +64,7 @@ e1c7b0428af16cec91cd4252bf3a0a73 *R/randef.R
 343de87bf6bbc6abe3cfb70a1805cd10 *R/shinyItemplot.R
 2b2be7d473eec02cef6ba1618a26a91b *R/simdata.R
 8e4fcaf3235f2231322dd3adfce1d5be *R/testinfo.R
-9a8a06e1f7844d8b9c8f5e7bf777aaa0 *R/utils.R
+6ea6b1a59f91f02dad961c4885a584df *R/utils.R
 0e71e367b2fcd69cc53f0ffa7d4c2310 *R/wald.R
 94af83047703d084bc3ff8330a8679c0 *README.md
 ac919b979bf67ad59fcfafad62de1093 *build/vignette.rds

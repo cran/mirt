@@ -1,5 +1,5 @@
 Package: mirt
-Version: 1.17
+Version: 1.17.1
 Date: 2016-04-26
 Type: Package
 Title: Multidimensional Item Response Theory
@@ -36,7 +36,7 @@ URL: https://github.com/philchalmers/mirt,
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-04-27 01:55:07 UTC; phil
+Packaged: 2016-04-27 14:38:45 UTC; phil
 Author: Phil Chalmers [aut, cre, cph],
   Joshua Pritikin [ctb],
   Alexander Robitzsch [ctb],
@@ -44,4 +44,4 @@ Author: Phil Chalmers [aut, cre, cph],
   KwonHyun Kim [ctb],
   Carl F. Falk [ctb],
   Adam Meade [ctb]
-Date/Publication: 2016-04-27 13:31:02
+Date/Publication: 2016-04-27 19:00:28
