@@ -1,3 +1,29 @@
+# Changes in mirt 1.18
+
+- `mdirt()` function now includes explicit parameters for the latent class intercepts (in log-form).
+  This implies that correct standard errors can be computed using various methods (e.g., SEM, Richardson,
+  etc)
+
+- new `customGroup()` function to define hyper-parameter objects for the latent trait distributions
+  (generally assumed to be Gaussian with a mean and covariance structure)
+
+- new `boot.LR()` function to perform a parametric bootstrap likelihood-ratio test between 
+  nested models. Useful when testing nested models which contain bounded parameters (e.g.,
+  testing a 3PL versus a 2PL model)
+
+- adjust the `lagrange()` function to use the full information matrix (was previously only a 
+  quasi-lagrange approximation)
+
+- greatly improved speed in `simdata()`, consequently changes the default seed
+
+## BUG FIXES
+
+- fix crash error in `mirtmirt()` for multidimensional models with lr.random effects (reported 
+  by Diah Wihardini)
+  
+- `expbeta` prior starting values fix by seting to the mean of the prior rather than the mode 
+  (reported by Insu Paek)
+
 # Changes in mirt 1.17.1
 
 - `itemfit()` function reworked so that all statistics have their own input flag (e.g., `Zh = TRUE`,

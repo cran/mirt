@@ -4,7 +4,7 @@
 \alias{mdirt}
 \title{Multidimensional discrete item response theory}
 \usage{
-mdirt(data, model, itemtype = "lca", nruns = 1, return_max = TRUE,
+mdirt(data, model, nruns = 1, method = "EM", return_max = TRUE,
   group = NULL, GenRandomPars = FALSE, verbose = TRUE, pars = NULL,
   technical = list(), ...)
 }
@@ -14,13 +14,11 @@ numerically ordered data, with missing data coded as \code{NA}}
 
 \item{model}{number of classes to fit, or alternatively a \code{\link{mirt.model}} definition}
 
-\item{itemtype}{item types to use. Can be the \code{'lca'} model for defining ordinal
-item response models (dichotomous items are a special case), \code{'nlca'} for the
-unordered latent class model}
-
 \item{nruns}{a numeric value indicating how many times the model should be fit to the data
 when using random starting values. If greater than 1, \code{GenRandomPars} is set to true
 by default}
+
+\item{method}{estimation method. Can be 'EM' or 'BL' (see \code{\link{mirt}} for more details)}
 
 \item{return_max}{logical; when \code{nruns > 1}, return the model that has the most optimal
 maximum likelihood criteria? If FALSE, returns a list of all the estimated objects}
@@ -55,14 +53,14 @@ displays the raw coefficient values (and their standard errors, if estimated). F
 
 The latent class IRT model with two latent classes has the form
 
-\deqn{P(x = k|\theta_1, \theta_2, a1, a2) = \frac{exp(s_k (a1 \theta_1 + a2 \theta_2))}{
-  \sum_j^K exp(s_j (a1 \theta_1 + a2 \theta_2))}}
+\deqn{P(x = k|\theta_1, \theta_2, a1, a2) = \frac{exp(a1 \theta_1 + a2 \theta_2)}{
+  \sum_j^K exp(a1 \theta_1 + a2 \theta_2)}}
 
-where the \eqn{\theta} values generally take on discrete points (such as 0 or 1), and
-the \eqn{s_k}'s are the scoring values for each category. If the model is selected to be
-\code{'lca'} then the \eqn{s_k} values are fixed to \code{s_k = 0:(ncat - 1)}, whereas if
-the model is \code{'nlca'} the \eqn{s_k} are all fixed to 1. For proper identification, the
-first category slope parameters (\eqn{a1} and \eqn{a2}) are never freely estimated.
+where the \eqn{\theta} values generally take on discrete points (such as 0 or 1).
+For proper identification, the first category slope parameters
+(\eqn{a1} and \eqn{a2}) are never freely estimated. Alternatively, supplying a different
+grid of \eqn{\theta} values will allow the estimation of similar models (multidimensional
+discrete models, grade of membership, etc.). See the examples below.
 }
 \examples{
 

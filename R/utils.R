@@ -283,6 +283,7 @@ Lambdas <- function(pars, Names){
 
 #change long pars for groups into mean in sigma
 ExtractGroupPars <- function(x){
+    if(x@itemclass < 0L) return(list(gmeans=0, gcov=matrix(1)))
     nfact <- x@nfact
     gmeans <- x@par[1L:nfact]
     tmp <- x@par[-(1L:nfact)]
@@ -329,14 +330,20 @@ bfactor2mod <- function(model, J){
 }
 
 updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
-                        BFACTOR, sitems, cycles, rlist, prior, lrPars = list(), full=FALSE){
+                        dentype, sitems, cycles, rlist, prior, lrPars = list(), full=FALSE){
     Prior <- Priorbetween <- vector('list', ngroups)
-    if(list$EH){
+    if(dentype == 'EH'){
         Prior[[1L]] <- list$EHPrior[[1L]]
+    } else if(dentype == 'custom'){
+        for(g in 1L:ngroups){
+            gp <- pars[[g]][[J+1L]]
+            Prior[[g]] <- gp@den(gp, Theta)
+            Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
+        }
     } else {
         for(g in 1L:ngroups){
             gp <- ExtractGroupPars(pars[[g]][[J+1L]])
-            if(BFACTOR){
+            if(dentype == 'bfactor'){
                 sel <- 1L:(nfact-ncol(sitems) + 1L)
                 sel2 <- sel[-length(sel)]
                 Priorbetween[[g]] <- mirt_dmvnorm(Thetabetween,
@@ -356,7 +363,7 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
             }
         }
     }
-    if(list$EH){
+    if(dentype == 'EH'){
         if(cycles > 1L){
             for(g in 1L:ngroups)
                 Prior[[g]] <- rowSums(rlist[[g]][[1L]]) / sum(rlist[[g]][[1L]])
@@ -596,6 +603,12 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
     return(constrain)
 }
 
+expbeta_sv <- function(val1, val2){
+    ret <- qlogis((val1-1)/(val1 + val2-2))
+    if(!is.finite(ret)) ret <- qlogis(val1/(val1 + val2))
+    ret
+}
+
 UpdatePrior <- function(PrepList, model, groupNames){
     if(!is.numeric(model[[1L]])){
         if(!length(model[[1L]]$x[model[[1L]]$x[,1L] == 'PRIOR', 2L])) return(PrepList)
@@ -652,7 +665,7 @@ UpdatePrior <- function(PrepList, model, groupNames){
                                                                  '1'=val1,
                                                                  '2'=exp(val1),
                                                                  '3'=(val1-1)/(val1 + val2 - 2),
-                                                                 '4'=qlogis((val1-1)/(val1 + val2 - 2)))
+                                                                 '4'=expbeta_sv(val1, val2))
                     }
                 }
             } else {
@@ -921,6 +934,17 @@ LL.Priors <- function(x, LL){
             else LL <- LL + log(1e-100)
         }
     }
+    if(any(x@prior.type %in% 4L)){
+        ind <- x@prior.type %in% 4L
+        val <- plogis(x@par[ind])
+        a <- x@prior_1[ind]
+        b <- x@prior_2[ind]
+        for(i in 1L:length(val)){
+            if(val[i] > 0 && val[i] < 1)
+                LL <- LL + dbeta(val[i], a[i], b[i], log=TRUE)
+            else LL <- LL + log(1e-100)
+        }
+    }
     return(LL)
 }
 
@@ -1055,7 +1079,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     gnames <- c('MAXQUAD', 'NCYCLES', 'BURNIN', 'SEMCYCLES', 'set.seed', 'SEtol', 'symmetric_SEM',
                 'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
-                'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable')
+                'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
+                'PLCI')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1078,7 +1103,9 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$rsm.block = rsm.block
     opts$calcNull = calcNull
     opts$customPriorFun = technical$customPriorFun
-    opts$BFACTOR = BFACTOR
+    opts$dentype <- 'Gaussian'
+    if(BFACTOR) opts$dentype <- 'bfactor'
+    if(empiricalhist) opts$dentype <- 'EH'
     opts$accelerate = accelerate
     opts$delta <- ifelse(is.null(technical$delta), .001, technical$delta)
     opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
@@ -1094,6 +1121,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     if(is.null(technical$symmetric_SEM)) technical$symmetric_SEM <- TRUE
     opts$removeEmptyRows <- if(is.null(technical$removeEmptyRows)) FALSE
         else technical$removeEmptyRows
+    opts$PLCI <- ifelse(is.null(technical$PLCI), FALSE, technical$PLCI)
     opts$warn <- if(is.null(technical$warn)) TRUE else technical$warn
     opts$message <- if(is.null(technical$message)) TRUE else technical$message
     opts$technical <- technical
@@ -1111,7 +1139,6 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$MHRM_SE_draws  <- ifelse(is.null(technical$MHRM_SE_draws), 2000L, technical$MHRM_SE_draws)
     opts$internal_constraints  <- ifelse(is.null(technical$internal_constraints),
                                          TRUE, technical$internal_constraints)
-    opts$empiricalhist <- empiricalhist
     if(empiricalhist){
         if(opts$method != 'EM')
             stop('empirical histogram method only applicable when method = \'EM\' ', call.=FALSE)
@@ -1427,7 +1454,7 @@ longpars_constrain <- function(longpars, constrain){
 }
 
 BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
-               CUSTOM.IND, EH, EHPrior, Data, BFACTOR, itemloc, theta, constrain, lrPars){
+               CUSTOM.IND, EHPrior, Data, dentype, itemloc, theta, constrain, lrPars){
     longpars[est] <- p
     longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
@@ -1438,12 +1465,18 @@ BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific,
         lrPars@beta[] <- lrPars@par
         lrPars@mus <- lrPars@X %*% lrPars@beta
     }
-    if(EH){
+    if(dentype == 'EH'){
         Prior[[1L]] <- EHPrior[[1L]]
+    } else if(dentype == 'custom'){
+        for(g in 1L:ngroups){
+            gp <- pars[[g]][[J+1L]]
+            Prior[[g]] <- gp@den(gp, Theta)
+            Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
+        }
     } else {
         for(g in 1L:ngroups){
             gstructgrouppars[[g]] <- ExtractGroupPars(pars2[[g]][[J+1L]])
-            if(BFACTOR){
+            if(dentype == 'bfactor'){
                 prior[[g]] <- dnorm(theta, 0, 1)
                 prior[[g]] <- prior[[g]]/sum(prior[[g]])
                 Prior[[g]] <- apply(expand.grid(prior[[g]], prior[[g]]), 1L, prod)
@@ -1502,7 +1535,7 @@ mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean
     retval
 }
 
-mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE, ...)
+mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE, stable = TRUE, ...)
 {
     if(quad && is.matrix(mean)){
         isigma <- solve(sigma)
@@ -1522,6 +1555,8 @@ mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE, ...)
     logdet <- sum(log(eigen(sigma, symmetric=TRUE,
                             only.values=TRUE)$values))
     logretval <- -(ncol(x)*log(2*pi) + logdet + distval)/2
+    if(stable)
+        logretval <- ifelse(logretval < -690.7755, -690.7755, logretval)
     if(log) return(logretval)
     exp(logretval)
 
@@ -1821,6 +1856,10 @@ numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 
         hess
     }
 
+    if(!length(par)){
+        if(gradient) return(numeric())
+        else return(matrix(numeric()))
+    }
     if(type == 'central'){
         ret <- if(gradient) central_difference(par=par, f=f, delta=delta, ...)
         else central_difference2(par=par, f=f, delta=delta, ...)
@@ -1877,6 +1916,8 @@ QMC_quad <- function(npts, nfact, lim, leap=409, norm=FALSE){
 
 MC_quad <- function(npts, nfact, lim)
     matrix(runif(n=npts * nfact, min = lim[1L], max = lim[2]), npts, nfact)
+
+respSample <- function(P) .Call("respSample", P)
 
 missingMsg <- function(string)
     stop(paste0('\'', string, '\' argument is missing.'), call.=FALSE)

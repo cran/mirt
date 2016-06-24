@@ -1,10 +1,10 @@
 Estep <- function(pars, Data, Theta, prior, Prior, Priorbetween, specific, sitems,
-                  itemloc, CUSTOM.IND, BFACTOR, ngroups, rlist, full, Etable = TRUE){
+                  itemloc, CUSTOM.IND, dentype, ngroups, rlist, full, Etable = TRUE){
     LL <- 0
     tabdata <- if(full) Data$fulldata[[1L]] else Data$tabdatalong
     for(g in 1L:ngroups){
         freq <- if(full) 1 else Data$Freq[[g]]
-        if(BFACTOR){
+        if(dentype == 'bfactor'){
             rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=tabdata, freq=Data$Freq[[g]],
                                         Theta=Theta, prior=prior[[g]], Prior=Prior[[g]],
                                         Priorbetween=Priorbetween[[g]], specific=specific,
@@ -45,7 +45,7 @@ Estep.bfactor <- function(pars, tabdata, freq, Theta, prior, Prior, Priorbetween
 
 Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L, ANY.PRIOR,
                   UBOUND, LBOUND, constrain, DERIV, Prior, rlist, CUSTOM.IND, solnp_args,
-                  SLOW.IND, BFACTOR, nfact, Thetabetween, Moptim, Mrate, TOL, full,
+                  SLOW.IND, dentype, nfact, Thetabetween, Moptim, Mrate, TOL, full,
                   lrPars, control){
     p <- longpars[est]
     if(length(p)){
@@ -170,13 +170,19 @@ Mstep.LL_alt <- function(x0, optim_args){
 Mstep.LL.group <- function(pars, Theta, rr){
     theta <- Theta
     pick <- length(pars)
-    gp <- ExtractGroupPars(pars[[pick]])
-    chl <- try(chol(gp$gcov), silent=TRUE)
-    if(is(chl, 'try-error')) return(-1e100)
-    tmp <- outer(diag(gp$gcov), diag(gp$gcov))
-    if(any(gp$gcov[lower.tri(tmp)] >= tmp[lower.tri(tmp)])) return(-1e100)
-    tmp <- rr * mirt_dmvnorm(theta, gp$gmeans, gp$gcov, log=TRUE)
-    LL <- sum(tmp)
+    if(pars[[pick]]@itemclass < 0L){
+        gp <- pars[[pick]]
+        d <- gp@safe_den(gp, Theta)
+        LL <- sum(rr * log(d))
+    } else {
+        gp <- ExtractGroupPars(pars[[pick]])
+        chl <- try(chol(gp$gcov), silent=TRUE)
+        if(is(chl, 'try-error')) return(-1e100)
+        tmp <- outer(diag(gp$gcov), diag(gp$gcov))
+        if(any(gp$gcov[lower.tri(tmp)] >= tmp[lower.tri(tmp)])) return(-1e100)
+        tmp <- rr * mirt_dmvnorm(theta, gp$gmeans, gp$gcov, log=TRUE)
+        LL <- sum(tmp)
+    }
     if(pars[[pick]]@any.prior)
         LL <- LL.Priors(x=pars[[pick]], LL=LL)
     LL
@@ -200,11 +206,21 @@ Mstep.grad <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L, 
     longpars[est] <- p
     longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
+    if(pars[[1L]][[J + 1L]]@itemclass == -1L){
+        for(g in 1L:length(pars)){
+            gp <- pars[[g]][[J + 1L]]
+            pars[[g]][[J + 1L]]@density <- gp@safe_den(gp, gTheta[[g]])
+        }
+    }
     g <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 0L, 0L, 1L, TRUE)$grad
     if(length(SLOW.IND)){
         for(group in 1L:ngroups){
             for (i in SLOW.IND){
-                deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]])
+                deriv <- if(i == (J + 1L)){
+                    Deriv(pars[[group]][[i]], Theta=gTheta[[group]])
+                } else {
+                    DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]])
+                }
                 g[pars[[group]][[i]]@parnum] <- deriv$grad
             }
         }
@@ -243,8 +259,11 @@ Mstep.NR <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L,  A
         if(length(SLOW.IND)){
             for(group in 1L:ngroups){
                 for (i in SLOW.IND){
-                    deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]],
-                                                 estHess=TRUE)
+                    deriv <- if(i == (J + 1L)){
+                        Deriv(pars[[group]][[i]], Theta=gTheta[[group]], estHess=TRUE)
+                    } else {
+                        DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]], estHess=TRUE)
+                    }
                     tmp <- pars[[group]][[i]]@parnum
                     dd$grad[tmp] <- deriv$grad
                     dd$hess[tmp, tmp] <- deriv$hess

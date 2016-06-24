@@ -86,13 +86,13 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 names(val) <- c(paste('a', 1L:nfact, sep=''), paste('ak', 0L:(K[i]-1L), sep=''),
                                 paste('d', 0L:(K[i]-1L), sep=''))
             }
-#         } else if(itemtype[i] == 'rsm'){
-#             tmpval <- rep(0, nfact)
-#             tmpval[lambdas[i,] != 0] <- 1
-#             val <- c(tmpval, 0:(K[i]-1), 0, seq(2.5, -2.5, length.out = length(zetas[[i]])), 0)
-#             fp <- c(rep(FALSE, nfact), rep(FALSE, K[i]), FALSE, rep(TRUE, K[i]))
-#             names(val) <- c(paste('a', 1L:nfact, sep=''), paste('ak', 0L:(K[i]-1L), sep=''),
-#                             paste('d', 0L:(K[i]-1L), sep=''), 'c')
+        } else if(itemtype[i] == 'rsm'){
+            tmpval <- rep(0, nfact)
+            tmpval[lambdas[i,] != 0] <- 1
+            val <- c(tmpval, 0:(K[i]-1), 0, seq(2.5, -2.5, length.out = length(zetas[[i]])), 0)
+            fp <- c(rep(FALSE, nfact), rep(FALSE, K[i]), FALSE, rep(TRUE, K[i]))
+            names(val) <- c(paste('a', 1L:nfact, sep=''), paste('ak', 0L:(K[i]-1L), sep=''),
+                            paste('d', 0L:(K[i]-1L), sep=''), 'c')
         } else if(itemtype[i] == 'nominal'){
             val <- c(lambdas[i,], rep(.5, K[i]), rep(0, K[i]))
             fp <- c(estLambdas[i, ], rep(TRUE, K[i]*2))
@@ -116,7 +116,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             val <- c(lambdas[i,]/2, -0.5)
             fp <- c(estLambdas[i, ], TRUE)
             names(val) <- c(paste('a', 1L:nfact, sep=''), 'd')
-        } else if (itemtype[i] %in% c('lca', 'nlca')){
+        } else if (itemtype[i] == 'lca'){
             val <- rep(lambdas[i,], K[i]-1L)
             fp <- rep(TRUE, length(val))
             names(val) <- paste('a', 1L:length(val), sep='')
@@ -309,27 +309,28 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-#         if(itemtype[i] == 'rsm'){
-#             pars[[i]] <- new('rsm',
-#                              par=startvalues[[i]],
-#                              nfact=nfact,
-#                              ncat=K[i],
-#                              itemclass=6L,
-#                              nfixedeffects=nfixedeffects,
-#                              any.prior=FALSE,
-#                              prior.type=rep(0L, length(startvalues[[i]])),
-#                              fixed.design=fixed.design.list[[i]],
-#                              est=freepars[[i]],
-#                              lbound=rep(-Inf, length(startvalues[[i]])),
-#                              ubound=rep(Inf, length(startvalues[[i]])),
-#                              prior_1=rep(NaN,length(startvalues[[i]])),
-#                              prior_2=rep(NaN,length(startvalues[[i]])))
-#             pars[[i]]@par[nfact+1L] <- 0
-#             tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1L)
-#             pars[[i]]@parnum <- tmp2
-#             parnumber <- parnumber + length(freepars[[i]])
-#             next
-#         }
+        if(itemtype[i] == 'rsm'){
+            pars[[i]] <- new('rsm',
+                             par=startvalues[[i]],
+                             nfact=nfact,
+                             ncat=K[i],
+                             itemclass=6L,
+                             nfixedeffects=nfixedeffects,
+                             any.prior=FALSE,
+                             prior.type=rep(0L, length(startvalues[[i]])),
+                             fixed.design=fixed.design.list[[i]],
+                             est=freepars[[i]],
+                             mat=FALSE,
+                             lbound=rep(-Inf, length(startvalues[[i]])),
+                             ubound=rep(Inf, length(startvalues[[i]])),
+                             prior_1=rep(NaN,length(startvalues[[i]])),
+                             prior_2=rep(NaN,length(startvalues[[i]])))
+            pars[[i]]@par[nfact+1L] <- 0
+            tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1L)
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(freepars[[i]])
+            next
+        }
 
         if(itemtype[i] == 'nominal'){
             pars[[i]] <- new('nominal',
@@ -393,13 +394,12 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-        if(any(itemtype[i] %in% c('lca', 'nlca'))){
+        if(any(itemtype[i] == 'lca')){
             pars[[i]] <- new('lca', par=startvalues[[i]], est=freepars[[i]],
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
                              any.prior=FALSE,
-                             score=if(itemtype[i] == 'lca') 0:(K[i]-1) else rep(1, K[i]),
                              itemclass=10L,
                              prior.type=rep(0L, length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -466,7 +466,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                                                      'norm'=p1[w],
                                                      'lnorm'=exp(p1[w]),
                                                      'beta'=(p1[w]-1)/(p1[w] + p2[w] - 2),
-                                                     'expbeta'=qlogis((p1[w]-1)/(p1[w] + p2[w] - 2)))
+                                                     'expbeta'=expbeta_sv(p1[w], p2[w]))
 
                     }
                     pars[[i]]@prior_1[tmp] <- p1
@@ -479,23 +479,39 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     return(pars)
 }
 
-LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, parprior, Rasch = FALSE){
-    nfact <- length(gmeans)
-    fn <- paste('COV_', 1L:nfact, sep='')
-    FNCOV <- outer(fn, 1L:nfact, FUN=paste, sep='')
-    FNMEANS <- paste('MEAN_', 1L:nfact, sep='')
-    tri <- lower.tri(gcov, diag=TRUE)
-    par <- c(gmeans, gcov[tri])
-    parnum <- parnumber:(parnumber + length(par) - 1L)
-    if(Rasch) diag(estgcov) <- TRUE
-    est <- c(estgmeans,estgcov[tri])
-    names(parnum) <- names(par) <- names(est) <- c(FNMEANS,FNCOV[tri])
-    tmp <- matrix(-Inf, nfact, nfact)
-    diag(tmp) <- 1e-4
-    lbound <- c(rep(-Inf, nfact), tmp[tri])
-    Nans <- rep(NaN,length(par))
-    ret <- new('GroupPars', par=par, est=est, nfact=nfact, any.prior=FALSE,
-               parnum=parnum, lbound=lbound, ubound=rep(Inf, length(par)),
-               prior.type=rep(0L, length(par)), prior_1=Nans, prior_2=Nans, itemclass=0L)
-    return(ret)
+LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, parprior, Rasch = FALSE,
+                          customGroup = NULL){
+    if(!is.null(customGroup)){
+        par <- customGroup@par
+        parnum <- parnumber:(parnumber + length(par) - 1L)
+        customGroup@parnum <- parnum
+        return(customGroup)
+    } else {
+        nfact <- length(gmeans)
+        den <- function(obj, Theta){
+            gpars <- ExtractGroupPars(obj)
+            mu <- gpars$gmeans
+            sigma <- gpars$gcov
+            d <- mirt_dmvnorm(Theta, mean=mu, sigma=sigma)
+            d <- ifelse(d < 1e-300, 1e-300, d)
+            d
+        }
+        fn <- paste('COV_', 1L:nfact, sep='')
+        FNCOV <- outer(fn, 1L:nfact, FUN=paste, sep='')
+        FNMEANS <- paste('MEAN_', 1L:nfact, sep='')
+        tri <- lower.tri(gcov, diag=TRUE)
+        par <- c(gmeans, gcov[tri])
+        parnum <- parnumber:(parnumber + length(par) - 1L)
+        if(Rasch) diag(estgcov) <- TRUE
+        est <- c(estgmeans,estgcov[tri])
+        names(parnum) <- names(par) <- names(est) <- c(FNMEANS,FNCOV[tri])
+        tmp <- matrix(-Inf, nfact, nfact)
+        diag(tmp) <- 1e-4
+        lbound <- c(rep(-Inf, nfact), tmp[tri])
+        Nans <- rep(NaN,length(par))
+        ret <- new('GroupPars', par=par, est=est, nfact=nfact, any.prior=FALSE, den=den,
+                   safe_den=den, parnum=parnum, lbound=lbound, ubound=rep(Inf, length(par)),
+                   prior.type=rep(0L, length(par)), prior_1=Nans, prior_2=Nans, itemclass=0L)
+        return(ret)
+    }
 }

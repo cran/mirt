@@ -4,7 +4,8 @@
 \alias{PLCI.mirt}
 \title{Compute profiled-likelihood (or posterior) confidence intervals}
 \usage{
-PLCI.mirt(mod, alpha = 0.05, parnum = NULL, ...)
+PLCI.mirt(mod, alpha = 0.05, parnum = NULL, search_bound = TRUE,
+  step = 0.5, lower = TRUE, upper = TRUE, inf2val = 30, ...)
 }
 \arguments{
 \item{mod}{a converged mirt model}
@@ -14,6 +15,21 @@ PLCI.mirt(mod, alpha = 0.05, parnum = NULL, ...)
 \item{parnum}{a numeric vector indicating which parameters to estimate.
 Use \code{\link{mod2values}} to determine parameter numbers. If \code{NULL}, all possible
 parameters are used}
+
+\item{search_bound}{logical; use a fixed grid of values around the ML estimate to
+determine more suitable optimization bounds? Using this has much better behaviour
+than setting fixed upper/lower bound values and searching from more extreme ends}
+
+\item{step}{magnitude of steps used when \code{search_bound} is \code{TRUE}.
+Smaller values create more points to search a suitable bound for (up to the
+lower bound value visible with \code{\link{mod2values}})}
+
+\item{lower}{logical; search for the lower CI?}
+
+\item{upper}{logical; search for the upper CI?}
+
+\item{inf2val}{a numeric used to change parameter bounds which are infinity to a finite number.
+Decreasing this too much may not allow a suitable bound to be located. Default is 30}
 
 \item{...}{additional arguments to pass to the estimation functions}
 }

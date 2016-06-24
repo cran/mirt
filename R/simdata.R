@@ -53,7 +53,7 @@
 #'   latent trait matrix \code{Theta}? Default is FALSE
 #' @param model a single group object, typically returned by functions such as \code{\link{mirt}} or
 #'   \code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the
-#'   \code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent
+#'   \code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent (unless explicitly provided)
 #' @param which.items an integer vector used to indicate which items to simulate when a
 #'   \code{model} input is included. Default simulates all items
 #' @param mins an integer vector (or single value to be used for each item) indicating what
@@ -262,13 +262,14 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(), returnList = FALSE,
 	model = NULL, which.items = NULL, mins = 0)
 {
-    fn <- function(p, ns) sample(1L:ns - 1L, 1L, prob = p)
     if(!is.null(model)){
+        stopifnot(is(model, 'SingleGroupClass'))
         nitems <- extract.mirt(model, 'nitems')
         if(is.null(which.items)) which.items <- 1L:nitems
-        nfact <- model@Model$nfact
-        if(is.null(sigma)) sigma <- diag(nfact)
-        if(is.null(mu)) mu <- rep(0,nfact)
+        nfact <- extract.mirt(model, 'nfact')
+        cfs <- coef(model, simplify=TRUE, digits=Inf)
+        if(is.null(sigma)) sigma <- cfs$cov
+        if(is.null(mu)) mu <- cfs$means
         if(is.null(Theta)){
             if(missing(N)) N <- nrow(extract.mirt(model, 'data'))
             Theta <- mirt_rmvnorm(N,mu,sigma,check=TRUE)
@@ -278,7 +279,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         for(i in which.items){
             obj <- extract.item(model, i)
             P <- ProbTrace(obj, Theta)
-            data[,i] <- apply(P, 1L, fn, ns = ncol(P))
+            data[,i] <- respSample(P)
         }
         ret <- t(t(data) + model@Data$mins)
         return(ret[,which.items, drop=FALSE])
@@ -369,7 +370,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit')))
             obj@ncat <- K[i]
         P <- ProbTrace(obj, Theta)
-        data[,i] <- apply(P, 1L, fn, ns = ncol(P))
+        data[,i] <- respSample(P)
         itemobjects[[i]] <- obj
 	}
     data <- (t(t(data) + mins))

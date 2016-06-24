@@ -71,13 +71,13 @@ Experimental_itemtypes <- function() c('experimental', 'grsmIRT')
 
 Valid_iteminputs <- function() c('Rasch', '2PL', '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm',
                                 'nominal', 'PC2PL','PC3PL', '2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM',
-                                'ideal', 'lca', 'nlca', Experimental_itemtypes())
+                                'ideal', 'lca', 'rsm', Experimental_itemtypes())
 
 # Indicate which functions should use the R function instead of those written in C++
-Use_R_ProbTrace <- function() c('custom', 'ideal', 'lca', Experimental_itemtypes())
+Use_R_ProbTrace <- function() c('custom', 'ideal', Experimental_itemtypes())
 
 Use_R_Deriv <- function() c('custom', 'rating', 'rsm', 'partcomp', 'nestlogit',
-                            'ideal', 'lca', Experimental_itemtypes())
+                            'ideal', Experimental_itemtypes())
 
 # ----------------------------------------------------------------
 # Begin class and method definitions
@@ -100,10 +100,19 @@ setClass("GroupPars",
                         prior_1='numeric',
                         prior_2='numeric',
                         rr='numeric',
+                        density='numeric',
                         sig='matrix',
                         invsig='matrix',
                         mu='numeric',
-                        meanTheta='numeric')
+                        meanTheta='numeric',
+                        gen='function',
+                        den='function',
+                        safe_den='function',
+                        derivType='character',
+                        gr='function',
+                        usegr='logical',
+                        hss='function',
+                        usehss='logical')
 )
 
 setMethod(
@@ -135,19 +144,42 @@ setMethod(
     signature = signature(x = 'GroupPars', Theta = 'matrix'),
     definition = function(x, Theta, CUSTOM.IND, EM = FALSE, pars = NULL, itemloc = NULL,
                           tabdata = NULL, freq = NULL, estHess=FALSE, prior = NULL){
-        if(EM){
+        if(x@itemclass < 0L){
+            LLfun <- function(par, obj, Theta){
+                obj@par[obj@est] <- par
+                den <- obj@safe_den(obj, Theta)
+                LL <- sum(obj@rr * log(den))
+                LL
+            }
             grad <- rep(0, length(x@par))
             hess <- matrix(0, length(x@par), length(x@par))
-            if(estHess){
-                if(any(x@est)){
-                    hess[x@est,x@est] <- numDeriv::hessian(EML2, x@par[x@est], Theta=Theta,
-                                                           pars=pars, tabdata=tabdata, freq=freq,
-                                                           itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+            if(any(x@est)){
+                if(x@usegr) grad <- x@gr(x, Theta)
+                else grad[x@est] <- numerical_deriv(x@par[x@est], LLfun, obj=x, Theta=Theta,
+                                                    type=x@derivType)
+                if(estHess){
+                    if(x@usehss) hess <- x@hss(x, Theta)
+                    else hess[x@est, x@est] <-
+                            numerical_deriv(x@par[x@est], LLfun, obj=x, Theta=Theta,
+                                            gradient=FALSE, type=x@derivType)
                 }
             }
-            return(list(grad=grad, hess=hess))
+            return(list(grad = grad, hess=hess))
+        } else {
+            if(EM){
+                grad <- rep(0, length(x@par))
+                hess <- matrix(0, length(x@par), length(x@par))
+                if(estHess){
+                    if(any(x@est)){
+                        hess[x@est,x@est] <- numDeriv::hessian(EML2, x@par[x@est], Theta=Theta,
+                                                               pars=pars, tabdata=tabdata, freq=freq,
+                                                               itemloc=itemloc, CUSTOM.IND=CUSTOM.IND)
+                    }
+                }
+                return(list(grad=grad, hess=hess))
+            }
+            return(.Call("dgroup", x, Theta, matrix(0), estHess, FALSE, FALSE, FALSE))
         }
-        return(.Call("dgroup", x, Theta, matrix(0), estHess, FALSE, FALSE, FALSE))
     }
 )
 
@@ -875,7 +907,8 @@ setMethod(
 
 # ----------------------------------------------------------------
 
-setClass("rsm", contains = 'AllItemsClass')
+setClass("rsm", contains = 'AllItemsClass',
+         representation = representation(mat='logical'))
 
 setMethod(
     f = "print",
@@ -933,9 +966,9 @@ setMethod(
     }
 )
 
-P.rsm <- function(par, Theta, ot = 0)
+P.rsm <- function(par, Theta, ot = 0, mat = FALSE, returnNum = FALSE)
 {
-    return(.Call("gpcmTraceLinePts", par, Theta, ot, TRUE))
+    return(.Call("gpcmTraceLinePts", par, Theta, ot, TRUE, mat, returnNum))
 }
 
 setMethod(
@@ -964,56 +997,61 @@ setMethod(
         if(nrow(x@fixed.design) > 1L && ncol(x@fixed.design) > 0L)
             Theta <- cbind(x@fixed.design, Theta)
         P <- ProbTrace(x=x, Theta=Theta, useDesign = FALSE, ot=offterm)
-        oldpar <- x@par
         tmp <- .Call("dparsNominal", x, Theta, offterm, TRUE, estHess)
         num <- P.nominal(c(a, ak, dshift), ncat=length(ak), Theta=Theta, returnNum=TRUE, ot=offterm)
         grad <- tmp$grad
         hess <- tmp$hess
 
         #quick calcs for derivs
-        nfact <- length(a)
-        ncat <- length(d)
-        akind <- nfact
-        dind <- nfact + ncat*2 + 1L #go backwards
-        ak2 <- ak^2
-        P2 <- P^2
-        P3 <- P^3
-        aTheta <- as.vector(Theta %*% a)
-        aTheta2 <- aTheta^2
-        dat_num <- dat/num
-        numsum <- rowSums(num)
-        numD <- num %*% c(0, rep(1, ncol(num)-1L))
-        numak <- matrix(num %*% ak, nrow(Theta), ncol(Theta))
-        numakThetaD <- numak * Theta
-        numD2 <- num %*% c(0, rep(1, ncol(num)-1L))
-        numakThetaD2 <- numak * Theta
-        ak0 <- ak
-        ak0[1L] <- 0
-        cind <- length(grad)
-        if(estHess){
-            tmp <- 0
-            for(i in 1L:nzetas)
-                tmp <- tmp + dat[,i]*numD^2 / numsum^2 - dat[,i]*numD2/numsum
-            hess[cind, cind] <- sum(tmp)
-            for(j in 1L:nzetas){
-                tmp <- 0
-                for(i in 1L:nzetas)
-                    tmp <- tmp + dat[,i]*P[,j]*numD/numsum - dat[,i]*P[,j]
-                hess[cind, nfact+j] <- hess[nfact+j, cind] <- sum(tmp)
-            }
-            for(j in 1L:nfact){
-                tmp <- 0
-                for(i in 1L:nzetas)
-                    tmp <- tmp + dat[,i]*numD*numakThetaD[,j]/numsum^2 -
-                        dat[,i]* (num %*% ak0*Theta[,j])/numsum
-                hess[cind, j] <- hess[j, cind] <- sum(tmp)
-            }
-        }
+        # nfact <- length(a)
+        # ncat <- length(d)
+        # akind <- nfact
+        # dind <- nfact + ncat*2 + 1L #go backwards
+        # ak2 <- ak^2
+        # P2 <- P^2
+        # P3 <- P^3
+        # aTheta <- as.vector(Theta %*% a)
+        # aTheta2 <- aTheta^2
+        # dat_num <- dat/num
+        # numsum <- rowSums(num)
+        # numD <- num %*% c(0, rep(1, ncol(num)-1L))
+        # numak <- matrix(num %*% ak, nrow(Theta), ncol(Theta))
+        # numakThetaD <- numak * Theta
+        # numD2 <- num %*% c(0, rep(1, ncol(num)-1L))
+        # numakThetaD2 <- numak * Theta
+        # ak0 <- ak
+        # ak0[1L] <- 0
+        # cind <- length(grad)
+        # if(estHess){
+        #     tmp <- 0
+        #     for(i in 1L:nzetas)
+        #         tmp <- tmp + dat[,i]*numD^2 / numsum^2 - dat[,i]*numD2/numsum
+        #     hess[cind, cind] <- sum(tmp)
+        #     for(j in 1L:nzetas){
+        #         tmp <- 0
+        #         for(i in 1L:nzetas)
+        #             tmp <- tmp + dat[,i]*P[,j]*numD/numsum - dat[,i]*P[,j]
+        #         hess[cind, nfact+j] <- hess[nfact+j, cind] <- sum(tmp)
+        #     }
+        #     for(j in 1L:nfact){
+        #         tmp <- 0
+        #         for(i in 1L:nzetas)
+        #             tmp <- tmp + dat[,i]*numD*numakThetaD[,j]/numsum^2 -
+        #                 dat[,i]* (num %*% ak0*Theta[,j])/numsum
+        #         hess[cind, j] <- hess[j, cind] <- sum(tmp)
+        #     }
+        # }
         ####
         #TODO - can't seem to get the last value of the gradient quite right for some reason....
         x2 <- x
         x2@est <- c(rep(FALSE, length(x2@est)-1L), TRUE)
-        grad[x2@est] <- numDeriv::grad(EML, x@par[x2@est], obj=x2, Theta=Theta)
+        grad[x2@est] <- numerical_deriv(x@par[x2@est], EML, obj=x2, Theta=Theta,
+                                        type='central')
+        if(estHess && any(x@est)){
+            hess[x@est, x@est] <- numerical_deriv(x@par[x@est], EML, obj=x,
+                                                    Theta=Theta, type = 'Richardson',
+                                                    gradient = FALSE)
+        }
         ####
         ret <- list(grad=grad, hess=hess)
         if(x@any.prior) ret <- DerivativePriors(x=x, grad=ret$grad, hess=ret$hess)
@@ -1301,7 +1339,7 @@ setMethod(
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
         #local derivative from previous version with small mod
         #u and g in logit form
-        dpars.comp <- function(lambda,zeta,g,r,f,Thetas,D,estHess)
+        dpars.comp <- function(lambda,zeta,g,r,f,Thetas,estHess)
         {
             nfact <- length(lambda)
             pars <- c(zeta,lambda,g)
@@ -1467,7 +1505,6 @@ setMethod(
         g <- x@par[parlength - 1L]
         d <- ExtractZetas(x)
         a <- ExtractLambdas(x)
-        P <- P.comp(c(a, d, g, 999), Theta)[,2L]
         Pstar <- P.comp(c(a, d, -999, 999), Theta)[,2L]
         g <- antilogit(g)
         u <- antilogit(u)
@@ -1577,8 +1614,9 @@ setMethod(
         grad <- rep(0, length(x@par))
         hess <- matrix(0, length(x@par), length(x@par))
         dat <- x@dat
-        if(estHess)
-            hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x, Theta=Theta)
+        if(estHess && any(x@est))
+            hess[x@est, x@est] <- numerical_deriv(x@par[x@est], EML, obj=x, Theta=Theta,
+                                                  gradient = FALSE, type = 'Richardson')
         nfact <- x@nfact
         a <- x@par[1L:x@nfact]
         d <- x@par[x@nfact+1L]
@@ -1781,9 +1819,9 @@ setMethod(
                                x@dat[,2] * int * Theta[,i])
         grad[i+1L] <- -sum(2 * x@dat[,1] * int * -P / Q +
                            2 * x@dat[,2] * int)/2
-        if(estHess)
-            hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
-                                                         Theta=Theta)
+        if(estHess && any(x@est))
+            hess[x@est, x@est] <- numerical_deriv(x@par[x@est], EML, obj=x,
+                                                  Theta=Theta, gradient=FALSE, type = 'Richardson')
         return(list(grad = grad, hess=hess))
     }
 )
@@ -1884,15 +1922,15 @@ setMethod(
     }
 )
 
-P.lca <- function(par, Theta, score, returnNum = FALSE){
-    return(.Call('lcaTraceLinePts', par, Theta, score, returnNum))
+P.lca <- function(par, Theta, ncat, returnNum = FALSE){
+    return(.Call('lcaTraceLinePts', par, Theta, ncat, returnNum))
 }
 
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'lca', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        P <- P.lca(x@par, Theta=Theta, score=x@score)
+        P <- P.lca(x@par, Theta=Theta, ncat=x@ncat)
         return(P)
     }
 )
@@ -1901,8 +1939,8 @@ setMethod(
     f = "Deriv",
     signature = signature(x = 'lca', Theta = 'matrix'),
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
-        ret <- .Call('dparslca', x@par, Theta, x@score, estHess, x@dat, offterm)
-        if(estHess){
+        ret <- .Call('dparslca', x@par, Theta, FALSE, x@dat, offterm) #TODO change FALSE to estHess
+        if(estHess && any(x@est)){
             ret$hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
                                                          Theta=Theta)
         }
@@ -1926,10 +1964,9 @@ setMethod(
         P <- ProbTrace(x, Theta)
         dp <- matrix(0, nrow(Theta), length(x@par))
         ind <- 1L
-        s2 <- x@score^2
         for(j in 2L:x@ncat){
             for(i in 1:ncol(Theta)){
-                dp[,ind] <- Theta[,i] * s2[j] * (P[,j] -
+                dp[,ind] <- Theta[,i] * (P[,j] -
                         rowSums(P[,j,drop=FALSE] * P[,j,drop=FALSE]))
                 ind <- ind + 1L
             }
@@ -2279,7 +2316,7 @@ setMethod(
       grad[x@est & Nest] <- numDeriv::grad(EML, x@par[x@est & Nest], obj=x, Theta=Theta)
     }
 
-    if(estHess)
+    if(estHess && any(x@est))
       hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
                                               Theta=Theta)
     ret <- list(grad=grad, hess=hess)
@@ -2415,10 +2452,12 @@ setMethod(
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
         grad <- rep(0, length(x@par))
         hess <- matrix(0, length(x@par), length(x@par))
-        grad[x@est] <- numDeriv::grad(EML, x@par[x@est], obj=x, Theta=Theta)
-        if(estHess){
-            hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
-                                                        Theta=Theta)
+        if(any(x@est)){
+            grad[x@est] <- numDeriv::grad(EML, x@par[x@est], obj=x, Theta=Theta)
+            if(estHess){
+                hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
+                                                            Theta=Theta)
+            }
         }
         return(list(grad=grad, hess=hess)) #replace with analytical derivatives
     }
