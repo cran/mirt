@@ -1,13 +1,13 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact,
                      parprior, parnumber, estLambdas, BFACTOR = FALSE, mixed.design, customItems,
-                     key, gpcm_mats)
+                     key, gpcm_mats, spline_args, itemnames)
 {
     customItemNames <- unique(names(customItems))
     if(is.null(customItemNames)) customItemNames <- 'UsElEsSiNtErNaLNaMe'
     valid.items <- Valid_iteminputs()
     invalid.items <- is.na(match(itemtype, valid.items))
     if (any(invalid.items & !(itemtype %in% customItemNames)))
-        stop(paste("Unknown itemtype", paste(itemtype[invalid.items], collapse=" ")), call.=FALSE)
+        stop(paste("Unknown itemtype:", paste(itemtype[invalid.items], collapse=" ")), call.=FALSE)
     if(length(gpcm_mats)){
         tmp <- sapply(gpcm_mats, ncol)
         if(!all(tmp == nfact))
@@ -117,10 +117,19 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             fp <- c(estLambdas[i, ], TRUE)
             names(val) <- c(paste('a', 1L:nfact, sep=''), 'd')
         } else if (itemtype[i] == 'lca'){
-            val <- rep(lambdas[i,], K[i]-1L)
-            fp <- rep(TRUE, length(val))
-            names(val) <- paste('a', 1L:length(val), sep='')
-        }
+            if(K[i] == 2L){
+                tmp <- length(estLambdas[i, ])
+                val <- seq(-1 - log(tmp), 1 + log(tmp), length.out = tmp)
+                fp <- estLambdas[i, ]
+                names(val) <- paste('a', 1L:length(val), sep='')
+            } else {
+                tmp <- length(estLambdas[i, ])
+                val <- rep(seq(-1 - log(tmp), 1 + log(tmp), length.out = tmp), K[i]-1L)
+                fp <- rep(TRUE, length(val))
+                names(val) <- paste('a', 1L:length(val), sep='')
+            }
+            val[!fp] <- 0
+        } else if (itemtype[i] == 'spline') next
         if(all(itemtype[i] != valid.items) || itemtype[i] %in% Experimental_itemtypes()) next
         names(fp) <- names(val)
         startvalues[[i]] <- val
@@ -413,6 +422,48 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
+        if(itemtype[i] == 'spline'){
+            stype <- 'bs'
+            intercept <- TRUE
+            df <- knots <- NULL
+            degree <- 3
+            if(any(names(spline_args) == itemnames[i])){
+                sargs <- spline_args[[which(names(spline_args) == itemnames[i])]]
+                if(!is.null(sargs$fun)) stype <- sargs$fun
+                if(!is.null(sargs$intercept)) intercept <- sargs$intercept
+                if(!is.null(sargs$df)) df <- sargs$df
+                if(!is.null(sargs$knots)) knots <- sargs$knots
+                if(!is.null(sargs$degree)) degree <- sargs$degree
+            }
+            sargs <- list(stype=stype, intercept=intercept, df=df, knots=knots, degree=degree)
+            Theta_prime <- if(stype == 'bs'){
+                splines::bs(c(-2,2), df=df, knots=knots, degree=degree, intercept=intercept)
+            } else if(stype == 'ns'){
+                splines::ns(c(-2,2), df=df, knots=knots, intercept=intercept)
+            } else stop('splines function not supported', call.=FALSE)
+            p <- seq(-10, 10, length.out=ncol(Theta_prime))
+            pars[[i]] <- new('spline', par=p,
+                             est=rep(TRUE, ncol(Theta_prime)),
+                             nfact=nfact,
+                             ncat=K[i],
+                             stype=stype,
+                             Theta_prime=matrix(0),
+                             sargs=sargs,
+                             nfixedeffects=nfixedeffects,
+                             any.prior=FALSE,
+                             itemclass=11L,
+                             prior.type=rep(0L, length(p)),
+                             fixed.design=fixed.design.list[[i]],
+                             lbound=rep(-Inf, length(p)),
+                             ubound=rep(Inf, length(p)),
+                             prior_1=rep(NaN,length(p)),
+                             prior_2=rep(NaN,length(p)))
+            tmp2 <- parnumber:(parnumber + length(p) - 1L)
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(p)
+            next
+        }
+
         if(all(itemtype[i] %in% Experimental_itemtypes())){
             pars[[i]] <- new(itemtype[i], nfact=nfact, ncat=K[i])
             names(pars[[i]]@est) <- names(pars[[i]]@par)
@@ -511,7 +562,8 @@ LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, parprior,
         Nans <- rep(NaN,length(par))
         ret <- new('GroupPars', par=par, est=est, nfact=nfact, any.prior=FALSE, den=den,
                    safe_den=den, parnum=parnum, lbound=lbound, ubound=rep(Inf, length(par)),
-                   prior.type=rep(0L, length(par)), prior_1=Nans, prior_2=Nans, itemclass=0L)
+                   prior.type=rep(0L, length(par)), prior_1=Nans, prior_2=Nans, rrb=0, rrs=matrix(0),
+                   BFACTOR=FALSE, itemclass=0L)
         return(ret)
     }
 }

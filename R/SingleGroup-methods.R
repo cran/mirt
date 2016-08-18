@@ -246,7 +246,9 @@ setMethod(
     signature = 'SingleGroupClass',
     definition = function(object, CI = .95, printSE = FALSE, rotate = 'none', Target = NULL, digits = 3,
                           IRTpars = FALSE, rawug = FALSE, as.data.frame = FALSE,
-                          simplify=FALSE, unique = FALSE, verbose = TRUE, ...){
+                          simplify = FALSE, unique = FALSE, verbose = TRUE, ...){
+        dots <- list(...)
+        discrete <- ifelse(is.null(dots$discrete), FALSE, TRUE)
         if(unique) return(extract.mirt(object, 'parvec'))
         if(printSE && length(object@ParObjects$pars[[1L]]@SEpar)) rawug <- TRUE
         if(CI >= 1 || CI <= 0)
@@ -329,10 +331,14 @@ setMethod(
                 items[i, nms[[i]]] <- items.old[[i]]
             nfact <- object@Model$nfact
             means <- allPars$GroupPars[1L:nfact]
-            covs <- matrix(NA, nfact, nfact)
-            covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-c(1L:nfact)]
-            colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[1L:nfact]
-            allPars <- list(items=items, means=means, cov=covs)
+            if(discrete){
+                allPars <- list(items=items, group.intercepts=allPars$GroupPars)
+            } else {
+                covs <- matrix(NA, nfact, nfact)
+                covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-c(1L:nfact)]
+                colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[1L:nfact]
+                allPars <- list(items=items, means=means, cov=covs)
+            }
         }
         if(.hasSlot(object@Model$lrPars, 'beta')){
             allPars$lr.betas <- round(object@Model$lrPars@beta, digits)
@@ -384,7 +390,7 @@ setMethod(
             temp <- object
             object <- object2
             object2 <- temp
-        } else if(df == 0){
+        } else if(df == 0 && !any(object2@Fit$logPrior != 0 || object@Fit$logPrior != 0)){
             if((2*object2@Fit$logLik - 2*object@Fit$logLik) < 0){
                 temp <- object
                 object <- object2
@@ -427,7 +433,9 @@ setMethod(
 #' @param type type of residuals to be displayed.
 #'   Can be either \code{'LD'} or \code{'LDG2'} for a local dependence matrix based on the
 #'   X2 or G2 statistics (Chen & Thissen, 1997), \code{'Q3'} for the statistic proposed by
-#'   Yen (1984), or \code{'exp'} for the expected values for the frequencies of every response pattern
+#'   Yen (1984), or \code{'exp'} for the expected values for the frequencies of every response pattern.
+#'   For the 'LD' and 'LDG2' types, the upper diagonal elements represent the standardized
+#'   residuals in the form of signed Cramers V coefficients
 #' @param tables logical; for LD type, return the observed, expected, and standardized residual
 #'   tables for each item combination?
 #' @param digits number of significant digits to be rounded
@@ -1185,7 +1193,7 @@ mirt2traditional <- function(x){
     x@par <- par
     names(x@est) <- names(par)
     if(length(x@SEpar))
-        x@SEpar <- rep(NaN, length(par))
+        x@SEpar <- numeric()
     x
 }
 

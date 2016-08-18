@@ -30,15 +30,20 @@ test_that('dich', {
     modm3 <- mirt(data, 1, itemtype = 'Rasch', verbose=FALSE, SE=TRUE)
     expect_is(modm3, 'SingleGroupClass')
     expect_equal(extract.mirt(modm3, 'df'), 25)
-    expect_equal(extract.mirt(modm3, 'condnum'), 4.741137, tolerance = 1e-4)
+    expect_equal(extract.mirt(modm3, 'condnum'), 4.739254, tolerance = 1e-4)
     LG <- lagrange(modm3, parnum = list(1, 5))
-    expect_equal(LG$X2, c(0.46730208, 0.05686589), tolerance = 1e-4)
+    expect_equal(LG$X2, c(0.46805696, 0.05609623), tolerance = 1e-4)
     dat <- expand.table(LSAT6)
     modm3 <- mirt(dat, 1, itemtype = 'Rasch', SE = TRUE, SE.type = 'SEM', verbose=FALSE)
     expect_is(modm3, 'SingleGroupClass')
     cfs <- as.numeric(do.call(c, coef(modm3)))
-    expect_equal(cfs, c(1,NA,NA,2.73,2.455,3.005,0,NA,NA,1,NA,NA,1,NA,NA,0.999,0.827,1.17,0,NA,NA,1,NA,NA,1,NA,NA,0.24,0.096,0.384,0,NA,NA,1,NA,NA,1,NA,NA,1.306,1.12,1.493,0,NA,NA,1,NA,NA,1,NA,NA,2.099,1.873,2.326,0,NA,NA,1,NA,NA,0,NA,NA,0.57,0.339,0.802),
+    expect_equal(cfs, c(1,NA,NA,2.73,2.478,2.983,0,NA,NA,1,NA,NA,1,NA,NA,0.999,0.845,1.152,0,NA,NA,1,NA,NA,1,NA,NA,0.24,0.1,0.38,0,NA,NA,1,NA,NA,1,NA,NA,1.306,1.143,1.47,0,NA,NA,1,NA,NA,1,NA,NA,2.099,1.896,2.303,0,NA,NA,1,NA,NA,0,NA,NA,0.57,0.371,0.77),
                  tolerance = 1e-2)
+    modm3b <- mirt(dat, 'F = 1-5
+                   CONSTRAIN = (1-5, a1)', verbose=FALSE, SE=F)
+    fitm2 <- M2(modm3b)
+    expect_true(mirt:::closeEnough(fitm2$M2 - 5.292566, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
     model <- mirt.model('F = 1-5
                         CONSTRAIN = (1-5, a1)', quiet=TRUE)
     modm4 <- mirt(data, model, verbose = FALSE, SE=T, SE.type = 'crossprod')
@@ -66,6 +71,10 @@ test_that('dich', {
     modideal <- mirt(data, 1, verbose=FALSE, itemtype='ideal')
     cfs <- as.numeric(do.call(c, coef(modideal)))
     expect_equal(cfs, c(0.288, -0.568, 0.422, -0.891, 0.57, -0.564, 0.292, -1, 0.207, -0.559, 0, 1), tolerance = 1e-2)
+    modspline <- mirt(data, 1, verbose=FALSE, itemtype=c(rep('2PL', 4), 'spline'))
+    cfs <- as.numeric(do.call(c, coef(modspline)))
+    expect_equal(cfs, c(0.963,1.848,0,1,1.08,0.809,0,1,1.719,1.812,0,1,0.758,0.485,0,1,-0.91,0.359,0.8,11.81,0,1), tolerance = 1e-2)
+    expect_equal(logLik(modspline), -2657.558, tolerance = 1e-4)
 
     #QMCEM
     mod <- mirt(dat, 1, method = 'QMCEM', verbose=FALSE, optimizer='NR')
@@ -131,7 +140,7 @@ test_that('dich', {
     expect_true(mirt:::closeEnough(fitm1$df.M2 - 5, -1e-4, 1e-4))
     fitm2 <- M2(modm3)
     expect_is(fitm2, 'data.frame')
-    expect_true(mirt:::closeEnough(fitm2$M2 - 4.821999, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fitm2$M2 - 5.291593, -1e-4, 1e-4))
     expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
 
     data <- expand.table(LSAT7)

@@ -41,6 +41,10 @@
 #'   with latent regression predictors (see \code{\link{mirt}} for details), but can
 #'   also be generated when no predictor variables were modeled. If \code{plausible.draws}
 #'   is greater than 0 a list of plausible values will be returned
+#' @param plausible.type type of plausible values to obtain. Can be either \code{'normal'} (default)
+#'   to use a normal approximation based on the ACOV matrix, or \code{'MH'} to obtain Metropolis-Hastings
+#'   samples from the posterior (silently passes object to \code{\link{mirt}}, therefore arguemnts like
+#'   \code{technical} can be supplied to increase the number of burn-in draws and discarded samples)
 #' @param method type of factor score estimation method. Can be expected
 #'   a-posteriori (\code{"EAP"}), Bayes modal (\code{"MAP"}), weighted likelihood estimation
 #'   (\code{"WLE"}), maximum likelihood (\code{"ML"}), or expected a-posteriori for sum scores
@@ -159,7 +163,7 @@
 #'
 #'}
 fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimin', Target = NULL,
-                    response.pattern = NULL, plausible.draws = 0, quadpts = NULL,
+                    response.pattern = NULL, plausible.draws = 0, plausible.type = 'normal', quadpts = NULL,
                     returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
                     full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
                     QMC = FALSE, custom_den = NULL, custom_theta = NULL, min_expected = 1,
@@ -175,13 +179,34 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
         plausible.draws <- 1
         method <- 'EAP'
     }
+    if(any(extract.mirt(object, 'itemtype') == 'spline') && !(method %in% c('EAP', 'EAPsum')))
+        stop('Only EAP and EAPsum method supported when spline items are modeled', call.=FALSE)
     if(returnER) full.scores <- FALSE
+    if(is(object, 'DiscreteClass') && plausible.draws > 0L){
+        fs <- fscores(object)
+        ret <- lapply(1L:plausible.draws, function(ind, fs){
+            mat <- matrix(0L, nrow(fs), ncol(fs))
+            for(i in 1L:ncol(fs)){
+                if(all(fs[,i] > 1-1e-10)){
+                    mat[,i] <- 1L
+                } else if(all(fs[,i] < 1e-10)){
+                    mat[,i] <- 0L
+                } else {
+                    mat[,i] <- sapply(fs[,i], function(prob)
+                        sample(c(0L,1L), 1L, prob = c(1-prob, prob)))
+                }
+            }
+            mat
+        }, fs=fs)
+        return(ret)
+    }
     ret <- fscores.internal(object=object, rotate=rotate, full.scores=full.scores, method=method,
                             quadpts=quadpts, response.pattern=response.pattern, QMC=QMC,
                             verbose=verbose, returnER=returnER, gmean=mean, gcov=cov,
                             theta_lim=theta_lim, MI=MI, converge_info=converge_info,
                             full.scores.SE=full.scores.SE, return.acov=return.acov,
                             plausible.draws = plausible.draws, custom_den=custom_den,
-                            custom_theta=custom_theta, Target=Target, min_expected=min_expected, ...)
+                            custom_theta=custom_theta, Target=Target, min_expected=min_expected,
+                            plausible.type=plausible.type, ...)
     ret
 }

@@ -329,9 +329,9 @@ bfactor2mod <- function(model, J){
     return(model)
 }
 
-updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
-                        dentype, sitems, cycles, rlist, prior, lrPars = list(), full=FALSE){
-    Prior <- Priorbetween <- vector('list', ngroups)
+updatePrior <- function(pars, Theta, list, ngroups, nfact, J,
+                        dentype, sitems, cycles, rlist, lrPars = list(), full=FALSE){
+    prior <- Prior <- Priorbetween <- vector('list', ngroups)
     if(dentype == 'EH'){
         Prior[[1L]] <- list$EHPrior[[1L]]
     } else if(dentype == 'custom'){
@@ -344,13 +344,21 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
         for(g in 1L:ngroups){
             gp <- ExtractGroupPars(pars[[g]][[J+1L]])
             if(dentype == 'bfactor'){
-                sel <- 1L:(nfact-ncol(sitems) + 1L)
-                sel2 <- sel[-length(sel)]
-                Priorbetween[[g]] <- mirt_dmvnorm(Thetabetween,
-                                                      gp$gmeans[sel2], gp$gcov[sel2,sel2,drop=FALSE])
-                Priorbetween[[g]] <- Priorbetween[[g]]/sum(Priorbetween[[g]])
-                Prior[[g]] <- mirt_dmvnorm(Theta[ ,sel], gp$gmeans[sel], gp$gcov[sel,sel,drop=FALSE])
-                Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
+                theta <- pars[[g]][[J+1L]]@theta
+                Thetabetween <- pars[[g]][[J+1L]]@Thetabetween
+                p <- matrix(0, nrow(Theta), ncol(sitems))
+                pp <- matrix(0, nrow(theta), ncol(sitems))
+                for(i in 1L:ncol(sitems)){
+                    sel <- c(1L:(nfact-ncol(sitems)), i + nfact - ncol(sitems))
+                    p[,i] <- mirt_dmvnorm(Theta[ ,sel], gp$gmeans[sel], gp$gcov[sel,sel,drop=FALSE])
+                    pp[,i] <- dnorm(theta, gp$gmeans[sel[length(sel)]],
+                                    sqrt(gp$gcov[sel[length(sel)],sel[length(sel)],drop=FALSE]))
+                }
+                pb <- mirt_dmvnorm(Thetabetween, gp$gmeans[1L:ncol(Thetabetween)],
+                                   gp$gcov[1L:ncol(Thetabetween),1L:ncol(Thetabetween), drop=FALSE])
+                Priorbetween[[g]] <- pb / sum(pb)
+                Prior[[g]] <- t(t(p) / colSums(p))
+                prior[[g]] <- t(t(pp) / colSums(pp))
                 next
             }
             if(full){
@@ -379,7 +387,7 @@ updatePrior <- function(pars, Theta, Thetabetween, list, ngroups, nfact, J,
             Prior[[g]] <- Prior[[g]]/sum(Prior[[g]])
         }
     }
-    return(list(Prior=Prior, Priorbetween=Priorbetween))
+    return(list(prior=prior, Prior=Prior, Priorbetween=Priorbetween))
 }
 
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
@@ -422,16 +430,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                             as.numeric(esplit[[i]][1L:(length(esplit[[i]])-1L)]))
                         picknames <- c(is.na(sel), FALSE)
                         sel <- na.omit(sel)
-                        if(sum(picknames) > 1L){
-                            if(sum(picknames) != length(sel))
-                                stop('Number of items selected not equal to number of parameter names',
-                                     call.=FALSE)
-                            constr <- numeric(length(sel))
-                            for(j in 1L:length(sel)){
-                                whc <- esplit[[i]][which(picknames)[j]]
-                                constr[j] <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == whc]
-                            }
-                        } else {
+                        if(length(sel) == 1L){
                             for(j in 1L:length(sel)){
                                 pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) %in%
                                                                esplit[[i]][picknames]]
@@ -439,6 +438,26 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                                     stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j],
                                          call.=FALSE)
                                 constr <- c(constr, pick)
+                            }
+                        } else {
+                            if(sum(picknames) > 1L){
+                                if(sum(picknames) != length(sel))
+                                    stop('Number of items selected not equal to number of parameter names',
+                                         call.=FALSE)
+                                constr <- numeric(length(sel))
+                                for(j in 1L:length(sel)){
+                                    whc <- esplit[[i]][which(picknames)[j]]
+                                    constr[j] <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) == whc]
+                                }
+                            } else {
+                                for(j in 1L:length(sel)){
+                                    pick <- p[[sel[j]]]@parnum[names(p[[sel[j]]]@est) %in%
+                                                                   esplit[[i]][picknames]]
+                                    if(!length(pick))
+                                        stop('CONSTRAIN = ... indexed a parameter that was not relavent for item ', sel[j],
+                                             call.=FALSE)
+                                    constr <- c(constr, pick)
+                                }
                             }
                         }
                         constrain[[length(constrain) + 1L]] <- constr
@@ -1080,7 +1099,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
-                'PLCI')
+                'PLCI', 'plausible.draws')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1109,6 +1128,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$accelerate = accelerate
     opts$delta <- ifelse(is.null(technical$delta), .001, technical$delta)
     opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
+    opts$plausible.draws <- ifelse(is.null(technical$plausible.draws), 0, technical$plausible.draws)
     if(!is.null(TOL))
         if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- FALSE
     opts$TOL <- ifelse(is.null(TOL), if(method == 'EM' || method == 'QMCEM') 1e-4 else
@@ -1149,7 +1169,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     if(is.null(opts$theta_lim)) opts$theta_lim <- c(-6,6)
     if(method == 'QMCEM' && is.null(opts$quadpts)) opts$quadpts <- 5000L
     opts$MSTEPTOL <- ifelse(is.null(technical$MSTEPTOL), opts$TOL/1000, technical$MSTEPTOL)
-    if((opts$method == 'MHRM' || opts$method =='MIXED' || SE.type == 'MHRM') && !GenRandomPars)
+    if((opts$method == 'MHRM' || opts$method =='MIXED' || SE.type == 'MHRM') && !GenRandomPars &&
+       opts$plausible.draws == 0L)
         set.seed(12345L)
     if(!is.null(technical$set.seed)) set.seed(technical$set.seed)
     opts$gain <- c(0.1, 0.75)
@@ -1646,7 +1667,7 @@ collapseCells <- function(O, E, mincell = 1){
                 tmp2 <- On[j, ]
                 while(length(tmp) > 2L){
                     m <- min(tmp)
-                    whc <- which(m == tmp)
+                    whc <- max(which(m == tmp))
                     if(whc == 1L){
                         tmp[2L] <- tmp[2L] + tmp[1L]
                         tmp2[2L] <- tmp2[2L] + tmp2[1L]
@@ -1669,11 +1690,21 @@ collapseCells <- function(O, E, mincell = 1){
                 On[j, ] <- tmp2
             }
         }
-
-        #drop columns if they are very rare
-
         En[is.na(En)] <- 0
+        # collapse right columns if they are too rare
+        if(ncol(En) > 2L){
+            while(TRUE){
+                pick <- colSums(En) < mincell * ceiling(nrow(En) * .1)
+                if(!pick[length(pick)] || ncol(En) == 2L) break
+                if(pick[length(pick)]){
+                    On[ ,length(pick)-1L] <- On[ ,length(pick)-1L] + On[ ,length(pick)]
+                    En[ ,length(pick)-1L] <- En[ ,length(pick)-1L] + En[ ,length(pick)]
+                    On <- On[ ,-length(pick)]; En <- En[ ,-length(pick)]
+                }
+            }
+        }
         dropcol <- logical(ncol(En))
+        #drop all other columns if they are very rare
         for(j in ncol(En):2L){
             tmp <- sum(En[,j] > 0) / nrow(En)
             if(tmp < .05){
@@ -1874,6 +1905,8 @@ numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 
 }
 
 computeNullModel <- function(data, itemtype, group=NULL){
+    if(is.null(itemtype)) itemtype <- rep('graded', ncol(data))
+    itemtype[itemtype == 'Rasch'] <- 'gpcm'
     if(!is.null(group)){
         null.mod <- multipleGroup(data, 1L, itemtype=itemtype, group=group, verbose=FALSE,
                                   technical=list(NULL.MODEL=TRUE))
@@ -1882,6 +1915,40 @@ computeNullModel <- function(data, itemtype, group=NULL){
                          technical=list(NULL.MODEL=TRUE))
     }
     null.mod
+}
+
+loadSplineParsItem <- function(x, Theta){
+    sargs <- x@sargs
+    Theta_prime <- if(x@stype == 'bs'){
+        splines::bs(Theta, df=sargs$df, knots=sargs$knots,
+                    degree=sargs$degree, intercept=sargs$intercept)
+    } else if(x@stype == 'ns'){
+        splines::ns(Theta, df=sargs$df, knots=sargs$knots,
+                    intercept=sargs$intercept)
+    }
+    class(Theta_prime) <- 'matrix'
+    x@Theta_prime <- Theta_prime
+    x
+}
+
+loadSplinePars <- function(pars, Theta, MG = TRUE){
+    fn <- function(pars, Theta){
+        cls <- sapply(pars, class)
+        pick <- which(cls == 'spline')
+        if(length(pick)){
+            for(i in pick)
+                pars[[i]] <- loadSplineParsItem(pars[[i]], Theta)
+        }
+        return(pars)
+    }
+    if(MG){
+        for(g in 1L:length(pars)){
+            pars[[g]] <- fn(pars[[g]], Theta)
+        }
+    } else {
+        pars <- fn(pars, Theta)
+    }
+    return(pars)
 }
 
 cfi <- function(X2, X2.null, df, df.null){

@@ -6,7 +6,8 @@
 \usage{
 simdata(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
   upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(),
-  returnList = FALSE, model = NULL, which.items = NULL, mins = 0)
+  returnList = FALSE, model = NULL, which.items = NULL, mins = 0,
+  lca_cats = NULL, prob.list = NULL)
 }
 \arguments{
 \item{a}{a matrix/vector of slope parameters. If slopes are to be constrained to
@@ -15,7 +16,8 @@ zero then use \code{NA} or simply set them equal to 0}
 \item{d}{a matrix/vector of intercepts. The matrix should have as many columns as
 the item with the largest number of categories, and filled empty locations
 with \code{NA}. When a vector is used the test is assumed to consist only of dichotomous items
-(because only one intercept per item is provided)}
+(because only one intercept per item is provided). When \code{itemtype = 'lca'} intercepts will not
+be used}
 
 \item{N}{sample size}
 
@@ -26,9 +28,9 @@ with \code{NA}. When a vector is used the test is assumed to consist only of dic
   the respective internal classes automatically.
 
   If the internal class of the object is specified instead, the inputs can
-  be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit'}, or \code{'partcomp'}, for
-  dichotomous, graded, generalized partial credit, nominal, nested logit, and partially
-  compensatory models. Note that for the gpcm, nominal, and nested logit models there should
+  be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit', 'partcomp'}, or \code{'lca'}, for
+  dichotomous, graded, generalized partial credit, nominal, nested logit, partially compensatory,
+  and latent class analysis model. Note that for the gpcm, nominal, and nested logit models there should
   be as many parameters as desired categories, however to parametrized them for meaningful
   interpretation the first category intercept should
   equal 0 for these models (second column for \code{'nestlogit'}, since first column is for the
@@ -75,6 +77,13 @@ latent trait matrix \code{Theta}? Default is FALSE}
 \item{mins}{an integer vector (or single value to be used for each item) indicating what
 the lowest category should be. If \code{model} is supplied then this will be extracted from
 \code{slot(mod, 'Data')$mins}, otherwise the default is 0}
+
+\item{lca_cats}{a vector indicating how many categories each lca item should have. If not supplied
+then it is assumed that 2 categories should be generated for each item}
+
+\item{prob.list}{an optional list containing matrix/data.frames of probabilities values for
+each category to be simulated. This is useful when creating customized probability functions
+to be sampled from}
 }
 \description{
 Simulates response patterns for compensatory and noncompensatory MIRT models
@@ -276,8 +285,28 @@ head(pars)
 
 obj <- generate.mirt_object(pars, '3PL')
 dat <- simdata(N=200, model=obj)
-   }
 
+######
+# prob.list example
+
+# custom probabilty function that returns a matrix
+fun <- function(a, b, theta){
+    P <- 1 / (1 + exp(-a * (theta-b)))
+    cbind(1-P, P)
+}
+
+set.seed(1)
+theta <- matrix(rnorm(100))
+prob.list <- list()
+nitems <- 5
+a <- rlnorm(nitems, .2, .2); b <- rnorm(nitems, 0, 1/2)
+for(i in 1:nitems) prob.list[[i]] <- fun(a[i], b[i], theta)
+str(prob.list)
+
+dat <- simdata(prob.list=prob.list)
+head(dat)
+
+}
 }
 \author{
 Phil Chalmers \email{rphilip.chalmers@gmail.com}

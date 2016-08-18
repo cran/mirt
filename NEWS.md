@@ -1,3 +1,43 @@
+# Changes in mirt 1.19
+
+- a penalized version of the BFGS algorithm is now used instead of the L-BFGS-B when upper and lower
+  bounds are included (provides more robust estimates)
+
+- the variances of the orthogonal factors in `bfactor()` can now be freely
+  estimated. This allows modeling of designs such as the testlet response model (example included in
+  the documentation)
+
+- new `spline` itemtype to model B-spline response functions for dichotomous models. Useful for 
+  diagnostic purposes after detecting item-misfit. Additional arguments can be passed to the 
+  `spline_args` list input to control the behaviour of the splines for each item. Currently limited
+  to unidimensional models only
+
+- `fscores()` gains a `plausible.type` argument to select between normal approximation PVs or 
+  Metropolis-Hastings samples (suggested by Yang Liu)
+
+- `mdirt()` has been modified to support DINA, DINO, located latent class, 
+   and other diagnostic classification models. Additionally, the `customTheta` input required to build 
+   customized latent class patterns has been changed from the previously cumbsersome  
+   `mdirt(..., technical = list(customTheta = Theta))` to simply `mdirt(..., customTheta = Theta)`
+
+- `simdata()` gains a `prob.list` input to supply a list of matrices with probability values to be sampled
+  from (useful when specialized response functions outside the package are required)
+
+- `simdata()` supports 'lca' itemtypes for latent class model generation
+
+- improved M2 accuracy when latent trait variances are estimated
+
+- corrected behaviour of `M2()` when linear constraints are applied (M2 test was previously too conservative
+  when constraints were used). This affects single as well as multiple-group models (reported by Rudolf Debelak)
+  
+- add plausible values for latent class and related models estimated from `mdirt()`
+
+## BUG FIXES
+
+- `multipleGroup()` throws proper error when vertical scaling is not identified correctly due to NAs
+
+- S-X2 itemfit statistic fix when very rare expected categories appear (reported by Seongho Bae)
+
 # Changes in mirt 1.18
 
 - `mdirt()` function now includes explicit parameters for the latent class intercepts (in log-form).
@@ -21,7 +61,7 @@
 - fix crash error in `mirtmirt()` for multidimensional models with lr.random effects (reported 
   by Diah Wihardini)
   
-- `expbeta` prior starting values fix by seting to the mean of the prior rather than the mode 
+- `expbeta` prior starting values fix by setting to the mean of the prior rather than the mode 
   (reported by Insu Paek)
 
 # Changes in mirt 1.17.1

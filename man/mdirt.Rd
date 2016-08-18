@@ -4,15 +4,22 @@
 \alias{mdirt}
 \title{Multidimensional discrete item response theory}
 \usage{
-mdirt(data, model, nruns = 1, method = "EM", return_max = TRUE,
-  group = NULL, GenRandomPars = FALSE, verbose = TRUE, pars = NULL,
-  technical = list(), ...)
+mdirt(data, model, customTheta = NULL, nruns = 1, method = "EM",
+  return_max = TRUE, group = NULL, GenRandomPars = FALSE,
+  verbose = TRUE, pars = NULL, technical = list(), ...)
 }
 \arguments{
 \item{data}{a \code{matrix} or \code{data.frame} that consists of
 numerically ordered data, with missing data coded as \code{NA}}
 
 \item{model}{number of classes to fit, or alternatively a \code{\link{mirt.model}} definition}
+
+\item{customTheta}{input passed to \code{techincal = list(customTheta = ...)}, but is included directly
+in this function for convienience. This input is most interesting for discrete latent models
+because it allows for customized patterns of latent class effects.
+The default builds the pattern \code{customTheta = diag(model)},
+which is the typical pattern for the traditional
+latent class analysis (whereby classes are completely distinct)}
 
 \item{nruns}{a numeric value indicating how many times the model should be fit to the data
 when using random starting values. If greater than 1, \code{GenRandomPars} is set to true
@@ -31,22 +38,25 @@ maximum likelihood criteria? If FALSE, returns a list of all the estimated objec
 
 \item{pars}{used for modifying starting values; see \code{\link{mirt}} for details}
 
-\item{technical}{technical input list, most interesting for discrete latent models
-by building a \code{customTheta} input. The default builds the integration grid for the
-latent class model with \code{customTheta = diag(nclasses)}; see \code{\link{mirt}} for
-further details}
+\item{technical}{list of lower-level inputs. See \code{\link{mirt}} for details}
 
 \item{...}{additional arguments to be passed to the estimation engine. See \code{\link{mirt}}
 for more details and examples}
 }
 \description{
 \code{mdirt} fits a variety of item response models with discrete latent variables.
+These include, but are not limited to, latent class analysis, multidimensional latent
+class models, multidimensional discrete latent class models, DINA/DINO models,
+grade of measurement models, and so on.
+}
+\details{
 Posterior classification accuracy for each response pattern may be obtained
 via the \code{\link{fscores}} function. The \code{summary()} function will display
 the category probability values given the class membership, which can also
 be displayed graphically with \code{plot()}, while \code{coef()}
 displays the raw coefficient values (and their standard errors, if estimated). Finally,
-\code{anova()} is used to compare nested models.
+\code{anova()} is used to compare nested models, while
+\code{\link{M2}} and \code{\link{itemfit}} may be used for model fitting purposes.
 }
 \section{'lca' model definition}{
 
@@ -78,7 +88,7 @@ anova(mod2, mod3)
 M2(mod2)
 itemfit(mod2)
 
-#generate classification plots
+# generate classification plots
 plot(mod2)
 plot(mod2, facet_items = FALSE)
 plot(mod2, profile = TRUE)
@@ -103,6 +113,12 @@ table(class_max)
 class_prob <- apply(fs, 1, function(x) sample(1:2, 1, prob=x))
 table(class_prob)
 
+# plausible value imputations for stocastic classification in both classes
+pvs <- fscores(mod2, plausible.draws=10)
+tabs <- lapply(pvs, function(x) apply(x, 2, table))
+tabs[[1]]
+
+
 # fit with random starting points (run in parallel to save time)
 mirtCluster()
 mod <- mdirt(dat, 2, nruns=10)
@@ -112,11 +128,11 @@ mod <- mdirt(dat, 2, nruns=10)
 
 # define a custom Theta grid for including a 'fuzzy' class membership
 (Theta <- matrix(c(1, 0, .5, .5, 0, 1), nrow=3 , ncol=2, byrow=TRUE))
-(mod_gom <- mdirt(dat, 2, technical = list(customTheta = Theta)))
+(mod_gom <- mdirt(dat, 2, customTheta = Theta))
 summary(mod_gom)
 
 #-----------------
-# Multidimensional discrete model
+# Multidimensional discrete latent class model
 
 dat <- key2binary(SAT12,
      key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
@@ -124,8 +140,116 @@ dat <- key2binary(SAT12,
 # define Theta grid for three latent classes
 (Theta <- matrix(c(0,0,0, 1,0,0, 0,1,0, 0,0,1, 1,1,0, 1,0,1, 0,1,1, 1,1,1),
    ncol=3, byrow=TRUE))
-(mod_discrete <- mdirt(dat, 3, technical = list(customTheta = Theta)))
+(mod_discrete <- mdirt(dat, 3, customTheta = Theta))
 summary(mod_discrete)
+
+# Located latent class model
+model <- mirt.model('C1 = 1-32
+                     C2 = 1-32
+                     C3 = 1-32
+                     CONSTRAIN = (1-32, a1), (1-32, a2), (1-32, a3)')
+(mod_located <- mdirt(dat, model, customTheta = diag(3)))
+summary(mod_located)
+
+#-----------------
+### DINA model example
+# generate some suitable data for a two dimensional DINA application
+#     (first columns are intercepts)
+set.seed(1)
+Theta <- expand.table(matrix(c(1,0,0,0, 200,
+                               1,1,0,0, 200,
+                               1,0,1,0, 100,
+                               1,1,1,1, 500), 4, 5, byrow=TRUE))
+a <- matrix(c(rnorm(15, -1.5, .5), rlnorm(5, .2, .3), numeric(15), rlnorm(5, .2, .3),
+              numeric(15), rlnorm(5, .2, .3)), 15, 4)
+
+guess <- plogis(a[11:15,1]) # population guess
+slip <- 1 - plogis(rowSums(a[11:15,])) # population slip
+
+dat <- simdata(a, Theta=Theta, itemtype = 'lca')
+
+# first column is the intercept, 2nd and 3rd are attributes
+theta <- matrix(c(1,0,0,
+                  1,1,0,
+                  1,0,1,
+                  1,1,1), 4, 3, byrow=TRUE)
+theta <- cbind(theta, theta[,2] * theta[,3]) #DINA interaction of main attributes
+model <- mirt.model('Intercept = 1-15
+                     A1 = 1-5
+                     A2 = 6-10
+                     A1A2 = 11-15')
+
+mod <- mdirt(dat, model, customTheta = theta)
+coef(mod)
+summary(mod)
+M2(mod) # fits well
+
+cfs <- coef(mod, simplify=TRUE)$items[11:15,]
+cbind(guess, estguess = plogis(cfs[,1]))
+cbind(slip, estslip = 1 - plogis(rowSums(cfs)))
+
+
+### DINO model example
+theta <- matrix(c(1,0,0,
+                  1,1,0,
+                  1,0,1,
+                  1,1,1), 4, 3, byrow=TRUE)
+# define theta matrix with negative interaction term
+theta <- cbind(theta, -theta[,2] * theta[,3])
+
+model <- mirt.model('Intercept = 1-15
+                     A1 = 1-5, 11-15
+                     A2 = 6-15
+                     Yoshi = 11-15
+                     CONSTRAIN = (11,a2,a3,a4), (12,a2,a3,a4), (13,a2,a3,a4),
+                                 (14,a2,a3,a4), (15,a2,a3,a4)')
+
+mod <- mdirt(dat, model, customTheta = theta)
+coef(mod, simplify=TRUE)
+summary(mod)
+M2(mod) #doesn't fit as well, because not the generating model
+
+
+#------------------
+#multidimensional latent class model
+
+dat <- key2binary(SAT12,
+     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+
+# 5 latent classes within 2 different sets of items
+model <- mirt.model('C1 = 1-16
+                     C2 = 1-16
+                     C3 = 1-16
+                     C4 = 1-16
+                     C5 = 1-16
+                     C6 = 17-32
+                     C7 = 17-32
+                     C8 = 17-32
+                     C9 = 17-32
+                     C10 = 17-32
+                     CONSTRAIN = (1-16, a1), (1-16, a2), (1-16, a3), (1-16, a4), (1-16, a5),
+                       (17-32, a6), (17-32, a7), (17-32, a8), (17-32, a9), (17-32, a10)')
+
+theta <- diag(10)
+mod <- mdirt(dat, model, customTheta = theta)
+coef(mod, simplify=TRUE)
+summary(mod)
+
+#------------------
+# multiple group with constrained group probabilities
+ dat <- key2binary(SAT12,
+   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+group <- rep(c('G1', 'G2'), each = nrow(SAT12)/2)
+Theta <- diag(2)
+
+# the latent class parameters are technically located in the (nitems + 1) location
+model <- mirt.model('A1 = 1-32
+                     A2 = 1-32
+                     CONSTRAINB = (33, c1)')
+mod <- mdirt(dat, model, group = group, customTheta = Theta)
+coef(mod, simplify=TRUE)
+summary(mod)
+
 
 }
 }
