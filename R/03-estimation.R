@@ -197,7 +197,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                          grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
                          mixed.design=mixed.design, customItems=customItems,
                          customGroup=customGroup, spline_args=spline_args,
-                         fulldata=opts$PrepList[[1L]]$fulldata, key=key,
+                         fulldata=opts$PrepList[[1L]]$fulldata, key=key, opts=opts,
                          gpcm_mats=gpcm_mats, internal_constraints=opts$internal_constraints)
             if(!is.null(dots$Return_PrepList)) return(PrepListFull)
         }
@@ -455,7 +455,6 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 stop('Information matrix method for latent regression estimates not supported',
                      call.=FALSE)
             opts$full <- TRUE
-            opts$Moptim <- ifelse(opts$Moptim == 'BFGS', 'L-BFGS-B', opts$Moptim)
         } else opts$full <- FALSE
         temp <- matrix(0L,nrow=nitems,ncol=nspec)
         sitems <- matrix(0L, nrow=sum(PrepList[[1L]]$K), ncol=nspec)
@@ -908,6 +907,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Internals <- list(collectLL=ESTIMATE$collectLL, Prior=ESTIMATE$Prior, Pl=Pl,
                       shortpars=as.numeric(ESTIMATE$shortpars), key=key,
                       bfactor=list(), CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND)
+    if(opts$storeEtable)
+        Internals$Etable <- ESTIMATE$Etable
     if(discrete){
         Fit$F <- Fit$h2 <- NULL
         mod <- new('DiscreteClass',

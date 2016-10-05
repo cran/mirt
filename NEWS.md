@@ -1,3 +1,31 @@
+# Changes in mirt 1.20.1
+
+- `df` adjustment for the `S_X2` item-fit statistic for models where the latent trait
+  hyper-parameters have been estimated
+
+- `itemfit()` and `personfit()` properly detect dichotomous Rasch models which 
+  have been defined with the constrained slopes approach
+
+- argument `'fit_stats'` now used in `itemfit()` to replace longer list of logicals 
+  (e.g., `itemfit(mod, S_X2 = FALSE, X2 = TRUE, infit = FALSE, ...)`). Now fit stats
+  are explicitly requested through a character vector input. Default still uses the 
+  S_X2 statistic
+
+- when using `'lnorm'` prior lower bound automatically set to 0, and with `'beta'` prior
+  the lower and upper bounds are set to [0,1]
+
+- `mdirt()` now uses `optimizer = 'nlminb'` by default
+
+- revert using default 'penalized version of the BFGS algorithm' instead of L-BFGS-B 
+  when box-constraints are used (introduced in version 1.19)
+
+- Neale & Miller 1997 approximation added to `PLCI()` (default still computes exact PL CIs)
+
+- `type = 'score'` supported for multiple group models in `itemplot()`
+
+- added `poly2dich` function to quickly change polytomous response data to a comparable matrix of 
+  dichotomous response data
+
 # Changes in mirt 1.19
 
 - a penalized version of the BFGS algorithm is now used instead of the L-BFGS-B when upper and lower
@@ -17,7 +45,7 @@
 
 - `mdirt()` has been modified to support DINA, DINO, located latent class, 
    and other diagnostic classification models. Additionally, the `customTheta` input required to build 
-   customized latent class patterns has been changed from the previously cumbsersome  
+   customized latent class patterns has been changed from the previously cumbersome  
    `mdirt(..., technical = list(customTheta = Theta))` to simply `mdirt(..., customTheta = Theta)`
 
 - `simdata()` gains a `prob.list` input to supply a list of matrices with probability values to be sampled

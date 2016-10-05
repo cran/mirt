@@ -94,7 +94,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
        for(i in 1L:length(constrain))
            est[constrain[[i]][-1L]] <- FALSE
     names(longpars) <- names(est)
-    Moptim <- list$Moptim
+    if(list$Moptim != 'BFGS') {
+        Moptim <- list$Moptim
+    } else {
+        Moptim <- if(all(c(LBOUND[est], UBOUND[est]) %in% c(-Inf, Inf))) 'BFGS' else 'L-BFGS-B'
+    }
     if(Moptim == 'NR' && sum(est) > 300L && list$message)
         message('NR optimizer should not be used for models with a large number of parameters.
                 Use the optimizer = \'BFGS\' or \'nlminb\' instead.')
@@ -141,6 +145,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     Estep.time <- Mstep.time <- 0
     collectLL <- rep(NA, NCYCLES)
     hess <- matrix(0)
+    Elist <- list()
+    startMrate <- ifelse(Moptim == 'L-BFGS-B', 5L, 1L)
     if(list$BL){
         start <- proc.time()[3L]
         lower <- LBOUND[est]; upper <- UBOUND[est]
@@ -209,7 +215,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                      estimating with different starting values by passing GenRandomPars = TRUE',
                      call.=FALSE)
             if(!list$SEM){
-                if(cycles > 1L){
+                if(cycles > startMrate){
                     tmp <- collectLL[cycles-1L] - collectLL[cycles]
                     if(tmp < 0)
                         Mrate <- exp(tmp)
@@ -311,11 +317,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 warning('M-step optimizer converged immediately. Solution is either at the ML or
                      starting values are causing issues and should be adjusted. ', call.=FALSE)
         }
-        if(Moptim == 'L-BFGS-B' && cycles <= 5L && !all(!est) && !list$NULL.MODEL){
-            if(list$warn && !(is.nan(TOL) || is.na(TOL)))
-                warning('L-BFGS-B optimizer converged in less than 5 iterations; may indicate a
-                        problem in the M-step. Check with the more stable nlminb optimizer',
-                        call.=FALSE)
+        if(Moptim == 'L-BFGS-B' && cycles <= 10L && !all(!est) && !list$NULL.MODEL){
+            if(list$warn && !(is.nan(TOL) || is.na(TOL)) && all( abs(preMstep.longpars - longpars) < 1e-30 ))
+                warning(paste0("L-BFGS-B optimizer did not change any values across successive EM cycles;",
+                               " likely indicates a problem in the M-step. \nCheck with the more stable ",
+                               "optimizer = \'nlminb\', or supply better starting values"), call.=FALSE)
         }
         if(cycles > 1L && list$warn && !ANY.PRIOR){
             diff <- c(-Inf, na.omit(collectLL)) - c(na.omit(collectLL), Inf)
@@ -388,7 +394,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     LBOUND=LBOUND, UBOUND=UBOUND, EMhistory=na.omit(EMhistory), random=list(),
                     time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     collectLL=collectLL, shortpars=longpars[estpars & !redun_constr],
-                    lrPars=lrPars, logPrior=LP, fail_invert_info=FALSE)
+                    lrPars=lrPars, logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist)
     } else {
         ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological, Moptim=Moptim,
@@ -396,7 +402,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     Prior=Prior, time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     prior=prior, Priorbetween=Priorbetween, sitems=sitems, collectLL=collectLL,
                     shortpars=longpars[estpars & !redun_constr], lrPars=lrPars,
-                    logPrior=LP, fail_invert_info=FALSE)
+                    logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist)
     }
     for(g in 1L:ngroups)
         for(i in 1L:J)

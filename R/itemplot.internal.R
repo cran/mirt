@@ -48,6 +48,10 @@ setMethod(
                 Pinfo[[g]]$info <- Pinfo[[g]]$info / Pinfo[[1L]]$info
         }
         dat <- Pinfo[[1]]
+        mins <- extract.mirt(object, 'mins')[item]
+        score <- vector('list', g)
+        for(g in 1L:length(gnames))
+            score[[g]] <- colSums(t(Pinfo[[g]][,1L:K]) * (0L:(K-1L) + mins))
         for(g in 2L:length(gnames))
             dat <- rbind(dat, Pinfo[[g]])
         if(K == 2){
@@ -78,6 +82,13 @@ setMethod(
                 return(xyplot(P  ~ Theta | cat, dat2, groups=dat2$group, type = 'l',
                             auto.key = auto.key, main = main, ylim = c(-0.1,1.1),
                             ylab = expression(P(theta)), xlab = expression(theta), ...))
+            } else if(type == 'score'){
+                if(is.null(main))
+                    main <- paste("Expected score for item", item)
+                dat$score <- do.call(c, score)
+                return(xyplot(score ~ Theta, dat, groups=dat$group, type = 'l',
+                              auto.key = auto.key, main = main,
+                              ylab = expression(S(theta)), xlab = expression(theta), ...))
             } else if(type == 'RE'){
                 if(is.null(main))
                     main <- paste('Relative efficiency for item', item)
@@ -92,7 +103,7 @@ setMethod(
             Names <- colnames(dat)
             Names[c(length(Names) - 2,length(Names) - 1)] <- c('Theta1', 'Theta2')
             Names2 <- colnames(dat2)
-            Names2[2:3] <- c('Theta2', 'Theta1')
+            Names2[2:3] <- c('Theta1', 'Theta2')
             colnames(dat) <- Names
             colnames(dat2) <- Names2
             if(type == 'info'){
@@ -112,6 +123,15 @@ setMethod(
                                           ylab=expression(theta[2]), zlim = c(-0.1,1.1),
                                           scales = list(arrows = FALSE), screen=rot,
                                           auto.key = auto.key, ...))
+            } else if(type == 'score'){
+                if(is.null(main))
+                    main <- paste("Expected score for item", item)
+                dat$score <- do.call(c, score)
+                return(wireframe(score ~ Theta1 + Theta2, data = dat, group=dat$group, main=main,
+                                 zlab=expression(S(theta)), xlab=expression(theta[1]),
+                                 ylab=expression(theta[2]),
+                                 scales = list(arrows = FALSE), screen=rot,
+                                 auto.key = auto.key, ...))
             } else if(type == 'RE'){
                 if(is.null(main))
                     main <- paste("Relative efficiency for item", item)
@@ -277,7 +297,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
                                   panel.xyplot(x, y, type='l', lty=1,...)
                               },
                               main = main, ylim=c(min(plt$CEscorelower), max(plt$CEscoreupper)),
-                              ylab = expression(E(theta)), xlab = expression(theta), ...))
+                              ylab = expression(S(theta)), xlab = expression(theta), ...))
             } else {
                 return(xyplot(score ~ Theta, plt, type = 'l',
                                 auto.key = auto.key, main = main,
