@@ -672,24 +672,26 @@ UpdatePrior <- function(PrepList, model, groupNames){
                     type <- switch(type, norm=1L, lnorm=2L, beta=3L, expbeta=4L, 0L)
                     val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
                     val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
-                    for(j in 1L:length(sel)){
-                        which <- names(pars[[g]][[j]]@est) == name
-                        if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j,
-                                             call.=FALSE)
-                        pars[[g]][[sel[j]]]@any.prior <- TRUE
-                        pars[[g]][[sel[j]]]@prior.type[which] <- type
-                        pars[[g]][[sel[j]]]@prior_1[which] <- val1
-                        pars[[g]][[sel[j]]]@prior_2[which] <- val2
-                        pars[[g]][[sel[j]]]@par[which] <- switch(type,
-                                                                 '1'=val1,
-                                                                 '2'=exp(val1),
-                                                                 '3'=(val1-1)/(val1 + val2 - 2),
-                                                                 '4'=expbeta_sv(val1, val2))
-                        if(type == '2')
-                            pars[[g]][[sel[j]]]@lbound[which] <- 0
-                        if(type == '3'){
-                            pars[[g]][[sel[j]]]@lbound[which] <- 0
-                            pars[[g]][[sel[j]]]@ubound[which] <- 1
+                    if(length(sel)){
+                        for(j in 1L:length(sel)){
+                            which <- names(pars[[g]][[sel[j]]]@est) == name
+                            if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j,
+                                                 call.=FALSE)
+                            pars[[g]][[sel[j]]]@any.prior <- TRUE
+                            pars[[g]][[sel[j]]]@prior.type[which] <- type
+                            pars[[g]][[sel[j]]]@prior_1[which] <- val1
+                            pars[[g]][[sel[j]]]@prior_2[which] <- val2
+                            pars[[g]][[sel[j]]]@par[which] <- switch(type,
+                                                                     '1'=val1,
+                                                                     '2'=exp(val1),
+                                                                     '3'=(val1-1)/(val1 + val2 - 2),
+                                                                     '4'=expbeta_sv(val1, val2))
+                            if(type == '2')
+                                pars[[g]][[sel[j]]]@lbound[which] <- 0
+                            if(type == '3'){
+                                pars[[g]][[sel[j]]]@lbound[which] <- 0
+                                pars[[g]][[sel[j]]]@ubound[which] <- 1
+                            }
                         }
                     }
                 }
@@ -703,14 +705,16 @@ UpdatePrior <- function(PrepList, model, groupNames){
                 type <- switch(type, norm=1L, lnorm=2L, beta=3L, expbeta=4L, 0L)
                 val1 <- as.numeric(esplit[[i]][length(esplit[[i]])-2L])
                 val2 <- as.numeric(esplit[[i]][length(esplit[[i]])-1L])
-                for(j in 1L:length(sel)){
-                    which <- names(pars[[gname]][[j]]@est) == name
-                    if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j,
-                                         call.=FALSE)
-                    pars[[gname]][[sel[j]]]@any.prior <- TRUE
-                    pars[[gname]][[sel[j]]]@prior.type[which] <- type
-                    pars[[gname]][[sel[j]]]@prior_1[which] <- val1
-                    pars[[gname]][[sel[j]]]@prior_2[which] <- val2
+                if(length(sel)){
+                    for(j in 1L:length(sel)){
+                        which <- names(pars[[gname]][[sel[j]]]@est) == name
+                        if(!any(which)) stop('Parameter \'', name, '\' does not exist for item ', j,
+                                             call.=FALSE)
+                        pars[[gname]][[sel[j]]]@any.prior <- TRUE
+                        pars[[gname]][[sel[j]]]@prior.type[which] <- type
+                        pars[[gname]][[sel[j]]]@prior_1[which] <- val1
+                        pars[[gname]][[sel[j]]]@prior_2[which] <- val2
+                    }
                 }
             }
         }
@@ -1105,7 +1109,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
-                'PLCI', 'plausible.draws', 'storeEtable')
+                'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1114,6 +1118,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         stop('SE.type not supported for MHRM method', call.=FALSE)
     if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM')))
         stop('method argument not supported', call.=FALSE)
+    if(!(method %in% c('EM', 'QMCEM'))) accelerate <- 'none'
     opts$method = method
     if(draws < 1) stop('draws must be greater than 0', call.=FALSE)
     opts$draws = draws
@@ -1166,6 +1171,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$MHRM_SE_draws  <- ifelse(is.null(technical$MHRM_SE_draws), 2000L, technical$MHRM_SE_draws)
     opts$internal_constraints  <- ifelse(is.null(technical$internal_constraints),
                                          TRUE, technical$internal_constraints)
+    opts$keep_vcov_PD  <- ifelse(is.null(technical$keep_vcov_PD), TRUE, technical$keep_vcov_PD)
     if(empiricalhist){
         if(opts$method != 'EM')
             stop('empirical histogram method only applicable when method = \'EM\' ', call.=FALSE)
@@ -1451,6 +1457,16 @@ smooth.cor <- function(x){
         negvalues <- eig$values <= .Machine$double.eps
     }
     x
+}
+
+smooth.cov <- function(cov){
+    ev <- eigen(cov)
+    v <- ev$values
+    off <- sum(v) * .01
+    v[v < 0] <- off
+    v <- sum(ev$values) * v/sum(v)
+    v <- ifelse(v < 1e-4, 1e-4, v)
+    return(ev$vectors %*% diag(v) %*% t(ev$vectors))
 }
 
 RMSEA.CI <- function(X2, df, N, ci.lower=.05, ci.upper=.95) {

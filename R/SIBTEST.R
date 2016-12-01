@@ -6,14 +6,15 @@
 #' correction based on the KR-20/coefficient alpha reliability index to correct the observed
 #' differences when the latent trait distributions are not equal.
 #' Function supports the standard SIBTEST for dichotomous and poltomous data (compensatory) and
-#' also supports crossed DIF testing (i.e., non-compensatory) for dichotomous data.
+#' also supports crossed DIF testing (i.e., non-compensatory).
 #'
 #' @param dat integer dataset to be tested containing dichotomous or polytomous responses
 #' @param group a vector indicating group membership
 #' @param match_set an integer vector indicating which items to use as the items which are matched
 #'   (i.e., contain no DIF). These are analogous to 'achor' items in the likelihood method to locate
 #'   DIF. If missing, all items other than the items found in the focal_set will be used
-#' @param focal_name name of the focal group. E.g., 'focal'
+#' @param focal_name name of the focal group; e.g., 'focal'. If not specified then one will be
+#'   selected automatically
 #' @param focal_set an integer vector indicating which items to inspect with SIBTEST. Including only
 #'   one value will perform a DIF test, while including more than one will perform a simultaneous
 #'   bundle test (DBF); including all non-matched items will perform DTF.
@@ -25,12 +26,12 @@
 #'   reference groups conditioned on the matched set
 #' @param pk_focal logical; using the group weights from the focal group instead of the total
 #'   sample? Default is FALSE as per Shealy and Stout's recommendation
-#' @param cross logical; perform the crossing test for DIF? Can only be used when the data
-#'   consist of dichotomous responses. Default is \code{FALSE}
+#' @param cross logical; perform the crossing test for non-compensatory bias? Default is \code{FALSE}
 #' @param permute number of permutations to perform when \code{cross = TRUE}. Default is 1000
 #' @param correction logical; apply the composite correction for the difference between focal
 #'   composite scores using the true-score regression technique? Default is \code{TRUE},
 #'   reflecting Shealy and Stout's method
+#' @param details logical; return a data.frame containing the details required to compute SIBTEST?
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords SIBTEST, crossed-SIBTEST
@@ -120,9 +121,9 @@
 #' SIBTEST(dat, group, focal_set = 30, match_set = 1:15, cross=TRUE)
 #'
 #' }
-SIBTEST <- function(dat, group, focal_set, match_set, focal_name = 'focal',
+SIBTEST <- function(dat, group, focal_set, match_set, focal_name,
                     guess_correction = 0, Jmin = 2, cross = FALSE, permute = 1000,
-                    pk_focal = FALSE, correction = TRUE){
+                    pk_focal = FALSE, correction = TRUE, details = FALSE){
 
     CA <- function(dat, guess_correction = rep(0, ncol(dat))){
         n <- ncol(dat)
@@ -145,21 +146,26 @@ SIBTEST <- function(dat, group, focal_set, match_set, focal_name = 'focal',
         mod <- lm(diff ~ k, weights = weight)
         cfs <- coef(mod)
         ks <- -cfs[1L]/cfs[2L]
-        scores > signif(ks, 1L)
+        ret <- scores > signif(ks, 1L)
+        pick <- which(ret)
+        if(length(pick)){
+            ret[min(pick)] <- NA
+        } else {
+            ret[length(ret)] <- NA
+        }
+        ret
     }
 
     if(any(is.na(dat)))
         stop('SIBTEST does not support datasets with missing values.')
+    if(missing(focal_name))
+        focal_name <- unique(group)[2L]
     stopifnot(focal_name %in% group)
     group <- ifelse(group == focal_name, 'focal', 'reference')
     stopifnot(!(missing(focal_set) && missing(match_set)))
     index <- 1L:ncol(dat)
     if(missing(match_set)) match_set <- index[-focal_set]
     else if(missing(focal_set)) focal_set <- index[-match_set]
-    if(cross && length(focal_set) > 1L)
-        stop('Crossing SIBTEST only supported for DIF testing')
-    if(cross && !all(dat[,c(match_set, focal_set)] %in% c(0,1)))
-        stop('All items must be dichotomous for crossing test')
     if(length(guess_correction) > 1L){
         stopifnot(length(guess_correction) == ncol(dat))
     } else guess_correction <- rep(guess_correction, ncol(dat))
@@ -243,32 +249,47 @@ SIBTEST <- function(dat, group, focal_set, match_set, focal_name = 'focal',
     # compute stats
     beta_uni <- 0
     for(kk in 1L:length(tab_scores)){
-        if(!II[kk]) next
+        if(!II[kk] || is.na(crossvec[kk])) next
         if(!crossvec[kk]) beta_uni <- beta_uni + pkstar[kk] * (ystar_ref_vec[kk] - ystar_focal_vec[kk])
         else beta_uni <- beta_uni + pkstar[kk] * (ystar_focal_vec[kk] - ystar_ref_vec[kk])
     }
-    z <- beta_uni / sigma_uni
     if(cross){
-        beta_vec <- numeric(permute)
+        sigma_uni <- sqrt(sum((pkstar^2 * (sigma_focal/tab_focal + sigma_ref/tab_ref))[!is.na(crossvec)],
+                              na.rm = TRUE))
+        B <- abs(beta_uni/sigma_uni)
+        B_vec <- numeric(permute)
         for(p in 1L:permute){
             diff <- sample(c(-1,1), length(ystar_ref_vec), replace = TRUE) *
                 (ystar_ref_vec - ystar_focal_vec)
             crossvec <- find_intersection(diff, pmax(tab_ref, tab_focal),
-                                           use = pmax(tab_ref, tab_focal)/N > .01, scores=scores)
+                                          use = pmax(tab_ref, tab_focal)/N > .01, scores=scores)
+            sigma_uni <- sqrt(sum((pkstar^2 * (sigma_focal/tab_focal + sigma_ref/tab_ref))[!is.na(crossvec)],
+                                  na.rm = TRUE))
+            beta <- 0
             for(kk in 1L:length(tab_scores)){
-                if(!II[kk]) next
-                if(!crossvec[kk]) beta_vec[p] <- beta_vec[p] + pkstar[kk] * (diff[kk])
-                else beta_vec[p] <- beta_vec[p] + pkstar[kk] * (diff[kk])
+                if(!II[kk] || is.na(crossvec[kk])) next
+                if(!crossvec[kk]) beta <- beta + pkstar[kk] * (diff[kk])
+                else beta <- beta + pkstar[kk] * (diff[kk])
             }
+            B_vec[p] <- beta/sigma_uni
         }
-        z <- NA
-        p <- min(mean(abs(beta_vec) >= abs(beta_uni)) * 2, 1)
+        z <- B * sign(beta_uni)
+        p <- mean(abs(B_vec) >= B)
     } else {
+        z <- beta_uni / sigma_uni
         p <- (1 - pnorm(abs(z))) * 2
     }
-    ret <- data.frame(n_matched_set=length(match_set), n_focal_set = length(focal_set),
-                      B = beta_uni, z, p = p)
+    ret <- data.frame(focal_group=focal_name, n_matched_set=length(match_set),
+                      n_focal_set = length(focal_set),
+                      beta = beta_uni, z, p = p)
     name <- ifelse(cross, 'Crossed_SIBTEST', 'SIBTEST')
     rownames(ret) <- name
+    if(details){
+        ret <- data.frame(pkstar=unname(as.numeric(pkstar)),
+                          sigma_focal=sigma_focal, sigma_ref=sigma_ref,
+                          Y_focal=Ybar_focal, Y_ref=Ybar_ref,
+                          Ystar_focal=ystar_focal_vec, Ystar_ref=ystar_ref_vec,
+                          row.names = names(pkstar))
+    }
     ret
 }

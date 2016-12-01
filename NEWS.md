@@ -1,3 +1,36 @@
+# Changes in mirt 1.21
+
+- add information about the number of freely estimated parameters to `print()` generic
+
+- in `plot()`, `auto.key` is only disabled when `facet_items = FALSE` for dichotomous items. Also, adjusted 
+  ordering of `plot(mod, type = 'itemscore')` to reflect actual item ordering in the data
+
+- Stretched the theoretical bounds of the y-axis for score-based functions in `plot()` and `itemplot()`
+  (e.g., 3PL models will now always stretch to S(theta) = 0)
+
+- `plot(mod, type = 'score')` not supports the `which.items` input to make expected score plots for 
+  bundles of items
+
+- penalized term added to EM algorithm estimation subroutines to help keep the covariance matrix
+  of the latent trait parameters positive definite in the M-step (helps convergence 
+  properties of the optimizers, especially 'L-BFGS-B'). To turn this penalized 
+  term off use `technical = list(keep_vcov_PD = FALSE)`
+
+- added `type = 'itemscore'` to `plot()` generic to plot faceted version of the item
+  scoring functions. Particularly useful when investigating DIF with `multipleGroup()`
+  
+- better support for `splines` itemtype in mutliple-group models
+  
+## Bug fixes
+
+- fix problem with 'EAPsum' in `fscores()` when `response.pattern` input 
+  supplied (reported by Eva de Schipper)
+  
+- `plot(mod, type = 'rxx')` now uses the latent variance in the computations (reported by 
+  Amin Mousavi)
+  
+- fix syntax input when customized IRT models are supplied
+
 # Changes in mirt 1.20.1
 
 - `df` adjustment for the `S_X2` item-fit statistic for models where the latent trait

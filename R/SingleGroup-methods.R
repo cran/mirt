@@ -35,8 +35,9 @@ setMethod(
                 x@OptimInfo$iter, ' ', method, " iterations.\n", sep="")
         cat('mirt version:', as.character(utils::packageVersion('mirt')), '\n')
         cat('M-step optimizer:', x@Options$Moptim, '\n')
-        if(method == 'EM' || method == 'BL'){
-            cat('EM acceleration:', x@Options$accelerate)
+        if(method == 'EM' || method == 'QMCEM' || method == 'BL'){
+            if(method == 'EM' || method == 'QMCEM')
+                cat('EM acceleration:', x@Options$accelerate)
             cat('\nNumber of rectangular quadrature:', x@Options$quadpts)
             cat('\n')
         }
@@ -51,10 +52,12 @@ setMethod(
             if(x@Fit$logPrior != 0){
                 cat("\nLog-posterior = ", x@Fit$logLik + x@Fit$logPrior, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
+                cat('Estimated parameters:', length(extract.mirt(x, 'parvec')), '\n')
                 cat("DIC = ", x@Fit$DIC, "\n", sep='')
             } else {
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
+                cat('Estimated parameters:', length(extract.mirt(x, 'parvec')), '\n')
                 cat("AIC = ", x@Fit$AIC, "; AICc = ", x@Fit$AICc, "\n", sep='')
                 cat("BIC = ", x@Fit$BIC, "; SABIC = ", x@Fit$SABIC, "\n", sep='')
             }
@@ -658,8 +661,8 @@ setMethod(
 #' @param type type of plot to view; can be \code{'info'} to show the test
 #'   information function, \code{'rxx'} for the reliability function,
 #'   \code{'infocontour'} for the test information contours,
-#'   \code{'SE'} for the test standard error function, \code{'trace'} and \code{'infotrace'}
-#'   for all item probability information or trace lines (only available when all items are dichotomous),
+#'   \code{'SE'} for the test standard error function, \code{'trace'}, \code{'infotrace'}, and \code{'itemscore'}
+#'   for all item probability, information, and scoring or trace lines,
 #'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} and
 #'   \code{'scorecontour'} for the expected total score surface and contour plots.
 #'   If \code{empiricalhist = TRUE} was used in estimation then the type \code{'empiricalhist'}
@@ -753,7 +756,7 @@ setMethod(
                           auto.key = list(space = 'right'), profile = FALSE, ...)
     {
         dots <- list(...)
-        if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score',
+        if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score', 'itemscore',
                        'infocontour', 'infotrace', 'scorecontour', 'empiricalhist')))
             stop('type supplied is not supported')
         if (any(degrees > 90 | degrees < 0))
@@ -766,17 +769,16 @@ setMethod(
         if(nfact == 3) theta <- seq(theta_lim[1L],theta_lim[2L], length.out=20)
         ThetaFull <- Theta <- thetaComb(theta, nfact)
         prodlist <- attr(x@ParObjects$pars, 'prodlist')
-        if(all(x@Data$K[which.items] == 2L)) auto.key <- FALSE
+        if(all(x@Data$K[which.items] == 2L) && facet_items) auto.key <- FALSE
         if(length(prodlist) > 0)
             ThetaFull <- prodterms(Theta,prodlist)
         if(length(degrees) > ncol(ThetaFull)) type <- 'infoangle'
         if(length(degrees) == 1L) degrees <- rep(degrees, ncol(ThetaFull))
         info <- numeric(nrow(ThetaFull))
-        if(type %in% c('info', 'infocontour', 'rxx', 'SE', 'infoSE', 'infotrace')){
-            for(i in 1:J)
-                info <- info + iteminfo(x=x@ParObjects$pars[[i]], Theta=ThetaFull, degrees=degrees)
-        }
-        adj <- x@Data$mins
+        if(type %in% c('info', 'infocontour', 'rxx', 'SE', 'infoSE', 'infotrace'))
+            info <- testinfo(x, ThetaFull, degrees = degrees, which.items=which.items)
+        mins <- x@Data$mins
+        maxs <- extract.mirt(x, 'K') + mins - 1
         rotate <- if(is.null(dots$rotate)) 'none' else dots$rotate
         if (x@Options$exploratory){
             if(!is.null(dots$rotate)){
@@ -790,9 +792,11 @@ setMethod(
                                       CUSTOM.IND=x@Internals$CUSTOM.IND)
         score <- c()
         for(i in 1:J)
-            score <- c(score, 0:(x@Data$K[i]-1) + adj[i])
+            score <- c(score, (0:(x@Data$K[i]-1) + mins[i]) * (i %in% which.items))
         score <- matrix(score, nrow(itemtrace), ncol(itemtrace), byrow = TRUE)
         plt <- data.frame(cbind(info,score=rowSums(score*itemtrace),Theta=Theta))
+        bundle <- length(which.items) != J
+        gp <- ExtractGroupPars(x@ParObjects$pars[[J+1]])
         if(MI > 0L && nfact == 1L){
             tmpx <- x
             if(!x@Options$SE)
@@ -804,7 +808,7 @@ setMethod(
                 as.numeric(strsplit(x, split=split)[[1L]][-1L])
             }, split='\\.')
             imputenums <- do.call(c, tmp)
-            CIscore <- CIinfo <- rxx <- CIrxx <- matrix(0, MI, length(plt$score))
+            CIscore <- CIinfo <- CIrxx <- matrix(0, MI, length(plt$score))
             for(i in 1L:MI){
                 while(TRUE){
                     tmp <- try(imputePars(pars=x@ParObjects$pars, pre.ev=pre.ev,
@@ -813,14 +817,19 @@ setMethod(
                     if(!is(tmp, 'try-error')) break
                 }
                 tmpx@ParObjects$pars <- tmp
+                gp2 <- ExtractGroupPars(tmp[[J+1]])
                 itemtrace <- computeItemtrace(tmpx@ParObjects$pars, ThetaFull, x@Model$itemloc,
                                               CUSTOM.IND=x@Internals$CUSTOM.IND)
                 tmpscore <- rowSums(score * itemtrace)
                 CIscore[i, ] <- tmpscore
                 CIinfo[i, ] <- testinfo(tmpx, ThetaFull)
-                CIrxx[i, ] <- CIinfo[i, ] / (CIinfo[i, ] + 1)
+                CIrxx[i, ] <- CIinfo[i, ] / (CIinfo[i, ] + 1/gp2$gcov[1L,1L])
             }
         }
+        mins <- mins[which.items]
+        maxs <- maxs[which.items]
+        ybump <- (max(maxs) - min(mins))/15
+        ybump_full <- (sum(maxs) - sum(mins))/15
         if(nfact == 3){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2", "Theta3")
             plt$SE <- 1 / sqrt(plt$info)
@@ -839,8 +848,9 @@ setMethod(
                     if(x@Options$exploratory) main <- paste0(main, ' (rotate = \'', rotate, '\')')
                 }
                 return(contourplot(score ~ Theta1 * Theta2 | Theta3, data = plt,
+                                   ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                    main = main, xlab = expression(theta[1]),
-                                   ylab = expression(theta[2]),
+                                   ylab = expression(theta[2]), ylim=c(sum(mins)-.1, sum(maxs)+.1),
                                    par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'info'){
                 if(is.null(main)){
@@ -862,13 +872,15 @@ setMethod(
                                    par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'score'){
                 if(is.null(main)){
-                    main <- "Expected Total Score"
+                    main <- if(bundle) "Expected Bundle Score" else "Expected Total Score"
                     if(x@Options$exploratory) main <- paste0(main, ' (rotate = \'', rotate, '\')')
                 }
                 return(wireframe(score ~ Theta1 + Theta2 | Theta3, data = plt, main = main,
+                                 ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                  zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
                                  scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape,
-                                 par.strip.text=par.strip.text, par.settings=par.settings, ...))
+                                 par.strip.text=par.strip.text, par.settings=par.settings,
+                                 ylim=c(sum(mins)-.1, sum(maxs)+.1), ...))
             } else if(type == 'SE'){
                 if(is.null(main)){
                     main <- "Test Standard Errors"
@@ -899,6 +911,7 @@ setMethod(
                     if(x@Options$exploratory) main <- paste0(main, ' (rotate = \'', rotate, '\')')
                 }
                 return(contourplot(score ~ Theta1 * Theta2, data = plt,
+                                   ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                    main = main, xlab = expression(theta[1]),
                                    ylab = expression(theta[2]),
                                    par.strip.text=par.strip.text, par.settings=par.settings, ...))
@@ -922,10 +935,11 @@ setMethod(
                                    par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'score'){
                 if(is.null(main)){
-                    main <- "Expected Total Score"
+                    main <- if(bundle) "Expected Bundle Score" else "Expected Total Score"
                     if(x@Options$exploratory) main <- paste0(main, ' (rotate = \'', rotate, '\')')
                 }
                 return(wireframe(score ~ Theta1 + Theta2, data = plt, main = main,
+                                 ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                  zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
                                  scales = list(arrows = FALSE), screen = rot, colorkey = colorkey, drape = drape,
                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
@@ -952,7 +966,7 @@ setMethod(
         } else {
             colnames(plt) <- c("info", "score", "Theta")
             plt$SE <- 1 / sqrt(plt$info)
-            plt$rxx <- plt$info / (plt$info + 1)
+            plt$rxx <- plt$info / (plt$info + 1/gp$gcov[1L,1L])
             if(MI > 0){
                 bs_range <- function(x, CI){
                     ss <- sort(x)
@@ -1076,6 +1090,31 @@ setMethod(
                                   auto.key = auto.key, type = 'l', main = main,
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 }
+            } else if(type == 'itemscore'){
+                if(is.null(main))
+                    main <- 'Expected item scoring function'
+                S <- vector('list', length(which.items))
+                names(S) <- colnames(x@Data$data)[which.items]
+                ind <- 1L
+                for(i in which.items){
+                    S[[ind]] <- expected.item(extract.item(x, i), ThetaFull, mins[i])
+                    ind <- ind + 1L
+                }
+                Sstack <- do.call(c, S)
+                names <- rep(names(S), each = nrow(ThetaFull))
+                plotobj <- data.frame(S=Sstack, item=names, Theta=Theta)
+                plotobj$item <- factor(plotobj$item, levels = colnames(x@Data$data)[which.items])
+                if(facet_items){
+                    return(xyplot(S ~ Theta|item, plotobj, ylim=c(min(mins)-ybump, max(maxs)+ybump),
+                                  xlab = expression(theta), ylab = expression(S(theta)),
+                                  auto.key = auto.key, type = 'l', main = main,
+                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
+                } else {
+                    return(xyplot(S ~ Theta, plotobj, groups=plotobj$item, ylim=c(min(mins)-.1, max(maxs)+.1),
+                                  xlab = expression(theta), ylab = expression(S(theta)),
+                                  auto.key = auto.key, type = 'l', main = main,
+                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
+                }
             } else if(type == 'infotrace'){
                 if(is.null(main))
                     main <- 'Item information trace lines'
@@ -1099,9 +1138,10 @@ setMethod(
                 }
             } else if(type == 'score'){
                 if(is.null(main))
-                    main <- 'Expected Total Score'
+                    main <- if(bundle) "Expected Bundle Score" else "Expected Total Score"
                 if(MI > 0){
                     return(xyplot(score ~ Theta, data=plt,
+                                  ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                   upper=plt$CIscoreupper, lower=plt$CIscorelower,
                                   panel = function(x, y, lower, upper, ...){
                                       panel.polygon(c(x, rev(x)), c(upper, rev(lower)),
@@ -1112,7 +1152,7 @@ setMethod(
                                   ylab = expression(T(theta)), xlab = expression(theta),
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 } else {
-                    return(xyplot(score ~ Theta, plt,
+                    return(xyplot(score ~ Theta, plt, ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                   xlab = expression(theta), ylab = expression(T(theta)),
                                   type = 'l', main = main,
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))

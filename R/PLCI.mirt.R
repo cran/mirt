@@ -17,7 +17,8 @@
 #'   than setting fixed upper/lower bound values and searching from more extreme ends
 #' @param step magnitude of steps used when \code{search_bound} is \code{TRUE}.
 #'   Smaller values create more points to search a suitable bound for (up to the
-#'   lower bound value visible with \code{\link{mod2values}})
+#'   lower bound value visible with \code{\link{mod2values}}). When upper/lower bounds are detected
+#'   this value will be adjusted accordingly
 #' @param lower logical; search for the lower CI?
 #' @param upper logical; search for the upper CI?
 #' @param NealeMiller logical; use the Neale and Miller 1997 approximation? Default is \code{FALSE}
@@ -44,6 +45,13 @@
 #' result <- PLCI.mirt(mod)
 #' result
 #'
+#' # model with constraints
+#' mod <- mirt(dat, 'F = 1-5
+#'                   CONSTRAIN = (1-5, a1)')
+#'
+#' result <- PLCI.mirt(mod)
+#' result
+#'
 #' mod2 <- mirt(Science, 1)
 #' result2 <- PLCI.mirt(mod2)
 #' result2
@@ -51,18 +59,18 @@
 #' #only estimate CI's slopes
 #' sv <- mod2values(mod2)
 #' parnum <- sv$parnum[sv$name == 'a1']
-#' result3 <- PLCI.mirt(mod2, parnum=parnum)
+#' result3 <- PLCI.mirt(mod2, parnum)
 #' result3
 #'
 #' }
-PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
+PLCI.mirt <- function(mod, parnum = NULL, alpha = .05,
                       search_bound = TRUE, step = .5,
                       lower = TRUE, upper = TRUE, inf2val = 30,
                       NealeMiller = FALSE, ...){
 
     #silently accepts print_debug = TRUE for printing the minimization criteria
 
-    compute.LL <- function(dat, model, sv, large, parprior, PrepList, itemtype,
+    compute.LL <- function(dat, model, sv, large, parprior, PrepList, itemtype, constrain,
                            technical, ...){
         if(missing(technical))
             technical <- list(message=FALSE, warn=FALSE, parallel=FALSE, PLCI=TRUE)
@@ -72,21 +80,23 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
         }
         tmpmod <- mirt::mirt(dat, model, itemtype=itemtype, pars = sv, verbose = FALSE,
                              parprior=parprior, PrepList=PrepList, large=large, calcNull=FALSE,
-                             technical=technical, ...)
+                             technical=technical, constrain=constrain, ...)
         # coef(tmpmod, simplify=TRUE)
         ret <- list(LL=tmpmod@Fit$logLik + tmpmod@Fit$logPrior, vals=mod2values(tmpmod))
         ret
     }
 
-    f.min <- function(value, dat, model, which, sv, get.LL, large, parprior, parnames, asigns,
+    f.min <- function(value, dat, model, which, sv, get.LL, large, parprior, asigns,
                       PrepList, itemtype, constrain, print_debug = FALSE, ...){
         sv$est[which] <- FALSE
         sv$value[which] <- value
+        drop_contraint <- logical(length(constrain))
         if(length(constrain)){
-            for(i in 1L:length(constrain)){
+            for(i in length(constrain):1L){
                 if(which %in% constrain[[i]]){
                     sv$est[constrain[[i]]] <- FALSE
                     sv$value[constrain[[i]]] <- value
+                    constrain[[i]] <- NULL
                 }
             }
         }
@@ -109,7 +119,7 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
         }
         got.LL <- try(compute.LL(dat=dat, model=model, itemtype=itemtype,
                                  sv=sv, large=large, parprior=parprior,
-                                 PrepList=PrepList, ...), silent=TRUE)
+                                 PrepList=PrepList, constrain=constrain, ...), silent=TRUE)
         sv2 <- got.LL$vals
         got.LL <- got.LL$LL
         as <- matrix(sv2$value[sv2$name %in% paste0('a', 1L:30L)], ncol(dat))
@@ -126,27 +136,26 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
         f.min(value=value, ...)^2 + value
     }
 
-    LLpar <- function(parnum, parnums, parnames, lbound, ubound, dat, model, large, constrain,
-                      sv, get.LL, parprior, asigns, PrepList, pars, itemtype, inf2val,
+    LLpar <- function(X, parnums, dat, model, large, constrain, direction,
+                      sv, get.LL, parprior, asigns, PrepList, inf2val, itemtype,
                       maxLL, estlower, estupper, search_bound, step, NealeMiller, ...){
+        parnum <- parnums[X]
         TOL <- .001
-        lower <- ifelse(lbound[parnum] == -Inf, -inf2val, lbound[parnum])
-        upper <- ifelse(ubound[parnum] == Inf, inf2val, ubound[parnum])
-        mid <- pars[parnum]
-        if(parnames[parnum] %in% c('g', 'u')){
-            lower <- 0
-            upper <- 1
-        } else if(parnames[parnum] %in% paste0('COV_', 1:30, 1:30)){
-            lower <- 1e-4
-        }
-        if(estlower && mid > lower){
+        lower <- ifelse(sv$lbound[parnum] == -Inf, -inf2val, sv$lbound[parnum])
+        upper <- ifelse(sv$ubound[parnum] == Inf, inf2val, sv$ubound[parnum])
+        mid <- sv$value[parnum]
+        if(closeEnough(lower, -1e-2, 1e-2) && closeEnough(upper, 1 + -1e-2, 1 + 1e-2))
+            step <- step/10
+        if(closeEnough(lower, -1e-2, 1e-2) && upper > 10L) step <- step/3
+        conv <- TRUE
+        if(direction[X] == 'lower'){
             possible_bound <- TRUE
             if(search_bound){
-                grid <- mid - cumsum(rep(step, floor(abs(lower/step))))
+                grid <- mid - cumsum(rep(step, floor(abs(upper/step))))
                 for(g in grid){
                     Xval <- f.min(g, dat=dat, model=model, constrain=constrain,
-                                   large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                   parprior=parprior, parnames=parnames, asigns=asigns,
+                                   large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                   parprior=parprior, asigns=asigns,
                                    PrepList=PrepList, itemtype=itemtype, ...)
                     if(abs(Xval) > abs(get.LL - maxLL)){
                         lower <- g
@@ -162,33 +171,32 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
             }
             if(possible_bound){
                 if(NealeMiller){
-                    opt.lower <- try(optimize(f.min2, c(lower, mid), upperBound=FALSE, dat=dat, model=model,
-                                           large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                           parprior=parprior, parnames=parnames, asigns=asigns,
+                    opt <- try(optimize(f.min2, c(lower, mid), upperBound=FALSE, dat=dat, model=model,
+                                           large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                           parprior=parprior, asigns=asigns,
                                            PrepList=PrepList, itemtype=itemtype, constrain=constrain,
                                            ..., f.upper=maxLL-get.LL, tol = TOL),
                                      silent = TRUE)
-                    if(!is(opt.lower, 'try-error'))
-                        opt.lower <- list(root=opt.lower$minimum, f.root=TOL/10)
+                    if(!is(opt, 'try-error'))
+                        opt <- list(root=opt$minimum, f.root=TOL/10)
                 } else {
-                    opt.lower <- try(uniroot(f.min, c(lower, mid), dat=dat, model=model,
-                                             large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                             parprior=parprior, parnames=parnames, asigns=asigns,
+                    opt <- try(uniroot(f.min, c(lower, mid), dat=dat, model=model,
+                                             large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                             parprior=parprior, asigns=asigns,
                                              PrepList=PrepList, itemtype=itemtype, constrain=constrain,
                                              ..., f.upper=maxLL-get.LL, tol = TOL/10),
                                      silent = TRUE)
                 }
-            } else opt.lower <- try(uniroot(), TRUE)
-            if(is(opt.lower, 'try-error')) opt.lower <- list(root = lower, f.root=1e10)
-        } else opt.lower <- list(root = lower, f.root=1e10)
-        if(estupper && mid < upper){
+            } else opt <- try(uniroot(), TRUE)
+            if(is(opt, 'try-error')) opt <- list(root = lower, f.root=1e10)
+        } else if(direction[X] == 'upper'){
             possible_bound <- TRUE
             if(search_bound){
                 grid <- mid + cumsum(rep(step, floor(abs(upper/step))))
                 for(g in grid){
                     Xval <- f.min(g, dat=dat, model=model, constrain=constrain,
-                                   large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                   parprior=parprior, parnames=parnames, asigns=asigns,
+                                   large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                   parprior=parprior, asigns=asigns,
                                    PrepList=PrepList, itemtype=itemtype, ...)
                     if(abs(Xval) > abs(get.LL - maxLL)){
                         upper <- g
@@ -204,32 +212,27 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
             }
             if(possible_bound){
                 if(NealeMiller){
-                    opt.upper <- try(optimize(f.min2, c(mid, upper), upperBound=TRUE, dat=dat, model=model,
-                                              large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                              parprior=parprior, parnames=parnames, asigns=asigns,
+                    opt <- try(optimize(f.min2, c(mid, upper), upperBound=TRUE, dat=dat, model=model,
+                                              large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                              parprior=parprior, asigns=asigns,
                                               PrepList=PrepList, itemtype=itemtype, constrain=constrain,
                                               ..., f.upper=maxLL-get.LL, tol = TOL),
                                      silent = TRUE)
-                    if(!is(opt.upper, 'try-error'))
-                        opt.upper <- list(root=opt.upper$minimum, f.root=TOL/10)
+                    if(!is(opt, 'try-error'))
+                        opt <- list(root=opt$minimum, f.root=TOL/10)
                 } else {
-                    opt.upper <- try(uniroot(f.min, c(mid, upper), dat=dat, model=model,
-                                             large=large, which=parnums[parnum], sv=sv, get.LL=get.LL,
-                                             parprior=parprior, parnames=parnames, asigns=asigns,
+                    opt <- try(uniroot(f.min, c(mid, upper), dat=dat, model=model,
+                                             large=large, which=parnum, sv=sv, get.LL=get.LL,
+                                             parprior=parprior, asigns=asigns,
                                              PrepList=PrepList, itemtype=itemtype, constrain=constrain,
                                              ..., f.lower=maxLL-get.LL, tol = TOL/10),
                                      silent = TRUE)
                 }
-            } else opt.upper <- try(uniroot(), TRUE)
-            if(is(opt.upper, 'try-error')) opt.upper <- list(root = upper, f.root=1e10)
-        } else opt.upper <- list(root = upper, f.root=1e10)
-        conv_upper <- conv_lower <- TRUE
-        if(abs(opt.lower$f.root) > TOL)
-            conv_lower <- FALSE
-        if(abs(opt.upper$f.root) > TOL)
-            conv_upper <- FALSE
-        c(lower=opt.lower$root, upper=opt.upper$root,
-          conv_lower=conv_lower, conv_upper=conv_upper)
+            } else opt <- try(uniroot(), TRUE)
+            if(is(opt, 'try-error')) opt <- list(root = upper, f.root=1e10)
+        } else opt <- list(root = upper, f.root=1e10)
+        if(abs(opt$f.root) > TOL) conv <- FALSE
+        c(CI=opt$root, conv=conv)
     }
 
     stopifnot(extract.mirt(mod, 'converged'))
@@ -244,7 +247,6 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
     if(length(parprior) == 0L) parprior <- NULL
     sv <- mod2values(mod)
     itemtype <- extract.mirt(mod, 'itemtype')
-    constrain <- extract.mirt(mod, 'constrain')
     PrepList <- mirt(mod@Data$data, mod@Model$model, itemtype=itemtype,
                      Return_PrepList=TRUE, ...)
     large <- mirt(mod@Data$data, mod@Model$model, large = TRUE)
@@ -252,36 +254,50 @@ PLCI.mirt <- function(mod, alpha = .05, parnum = NULL,
     asigns <- sign(as)
     if(!is.null(parnum)){
         tmp <- sv$parnum %in% parnum
-        pars <- sv$value[tmp]
-        LL.upper.crit <- LL.lower.crit <- pars
         parnums <- sv$parnum[tmp]
-        itemtypes <- sv$class[tmp]
-        parnames <- sv$name[tmp]
-        lbound <- sv$lbound[tmp]
-        ubound <- sv$ubound[tmp]
     } else {
-        pars <- sv$value
-        pars <- LL.upper.crit <- LL.lower.crit <- pars[sv$est]
         parnums <- sv$parnum[sv$est]
-        itemtypes <- sv$class[sv$est]
-        parnames <- sv$name[sv$est]
-        lbound <- sv$lbound[sv$est]
-        ubound <- sv$ubound[sv$est]
     }
     LL <- mod@Fit$logLik
     get.LL <- LL - qchisq(1-alpha, 1)/2
-    result <- mySapply(X=1L:length(parnums), FUN=LLpar, pars=pars, parnums=parnums, asigns=asigns,
-                       parnames=parnames, lbound=lbound, ubound=ubound, dat=dat, constrain=constrain,
+    constraints <- extract.mirt(mod, 'constrain')
+    if(length(constraints)){
+        for(i in 1L:length(constraints)){
+            match <- which(parnums %in% constraints[[i]])
+            if(length(match) > 1L){
+                match <- match[-1L]
+                parnums <- parnums[-match]
+            }
+        }
+    }
+    direction <- rep(c('lower', 'upper'), length.out = length(parnums)*2)
+    if(!lower) direction <- direction[-seq(1L, length(direction), by=2)]
+    if(!upper) direction <- direction[-seq(2L, length(direction), by=2)]
+    parnumsold <- parnums
+    if(lower && upper)
+        parnums <- rep(parnums, each = 2)
+    X <- 1L:length(parnums)
+    result <- mySapply(X=X, FUN=LLpar, parnums=parnums, asigns=asigns,
+                       dat=dat, constrain=constraints, itemtype=itemtype,
                        model=model, large=large, sv=sv, get.LL=get.LL, parprior=parprior,
-                       PrepList=PrepList, itemtype=itemtype, inf2val=inf2val, maxLL=LL,
-                       estlower=lower, estupper=upper, search_bound=search_bound,
+                       PrepList=PrepList, inf2val=inf2val, maxLL=LL,
+                       direction=direction, search_bound=search_bound,
                        step=step, NealeMiller=NealeMiller, ...)
+    lowerCIs <- lowerconv <- upperCIs <- upperconv <- NA
+    if(lower){
+        lowerCIs <- result[direction == 'lower', 'CI']
+        lowerconv <- as.logical(result[direction == 'lower', 'conv'])
+    }
+    if(upper){
+        upperCIs <- result[direction == 'upper', 'CI']
+        upperconv <- as.logical(result[direction == 'upper', 'conv'])
+    }
+    result <- data.frame(lower=lowerCIs, upper=upperCIs, lower_conv=lowerconv,
+                         upper_conv=upperconv)
     colnames(result) <- c(paste0('lower_', alpha/2*100), paste0('upper_', (1-alpha/2)*100),
                                  'lower_conv', 'upper_conv')
-    ret <- data.frame(Item=sv$item[parnums], class=itemtypes, parnam=sv$name[parnums],
-                      parnum=parnums, value=pars, result, row.names=NULL)
-    ret$lower_conv <- as.logical(ret$lower_conv)
-    ret$upper_conv <- as.logical(ret$upper_conv)
+    ret <- data.frame(Item=sv$item[parnumsold], class=sv$class[parnumsold], parnam=sv$name[parnumsold],
+                      parnum=parnumsold, value=sv$value[parnumsold], result, row.names=NULL)
     if(!lower) ret <- ret[,!grepl('lower', colnames(ret)), drop=FALSE]
     if(!upper) ret <- ret[,!grepl('upper', colnames(ret)), drop=FALSE]
     ret
