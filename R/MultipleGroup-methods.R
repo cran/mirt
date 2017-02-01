@@ -37,12 +37,12 @@ setMethod(
 setMethod(
     f = "summary",
     signature = signature(object = 'MultipleGroupClass'),
-    definition = function(object, digits = 3, rotate = 'oblimin', verbose = TRUE, ...) {
+    definition = function(object, rotate = 'oblimin', verbose = TRUE, ...) {
         ngroups <- object@Data$ngroups
         ret <- list()
         for(g in 1:ngroups){
             if(verbose) cat('\n----------\nGROUP:', as.character(object@Data$groupNames[g]), '\n')
-            ret[[g]] <- summary(object@ParObjects$pars[[g]], digits=digits, verbose=verbose,
+            ret[[g]] <- summary(object@ParObjects$pars[[g]], verbose=verbose,
                                 rotate = rotate, ...)
         }
         invisible(ret)
@@ -151,6 +151,7 @@ setMethod(
                                  scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE,
                                  auto.key = auto.key, par.strip.text=par.strip.text, par.settings=par.settings,
                                  ...))
+            else stop('type not supported for two-dimensional models', call.=FALSE)
         } else {
             colnames(plt) <- c("info", "score", "Theta", "group")
             plt$SE <- 1 / sqrt(plt$info)

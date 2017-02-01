@@ -990,17 +990,16 @@ ItemInfo <- function(x, Theta, cosangle, total.info = TRUE){
     return(info)
 }
 
-ItemInfo2 <- function(x, Theta, total.info = TRUE, MD = FALSE){
-    P <- ProbTrace(x, Theta)
-    dx <- DerivTheta(x, Theta)
+ItemInfo2 <- function(x, Theta, total.info = TRUE, MD = FALSE, DERIV = NULL, P = NULL){
+    if(is.null(P)) P <- ProbTrace(x, Theta)
+    dx <- if(is.null(DERIV)) DerivTheta(x, Theta) else DERIV(x, Theta)
     if(MD){
         info <- matrix(0, length(Theta), length(Theta))
         for(i in 1L:x@ncat)
             info <- info + outer(as.numeric(dx$grad[[i]]), as.numeric(dx$grad[[i]])) / P[ ,i]
     } else {
-        info <- matrix(0, nrow(Theta), ncol(P))
-        for(i in 1L:x@ncat)
-            info[,i] <- (dx$grad[[i]])^2 / P[ ,i]
+        grad <- do.call(cbind, dx$grad)
+        info <- grad^2 / P
         if(total.info) info <- rowSums(info)
     }
     return(info)
@@ -1100,20 +1099,20 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                      SEtol = .001, grsm.block = NULL, D = 1, TOL = NULL,
                      rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
                      technical = list(),
-                     SE.type = 'crossprod', large = NULL, accelerate = 'Ramsay', empiricalhist = FALSE,
+                     SE.type = 'Oakes', large = NULL, accelerate = 'Ramsay', empiricalhist = FALSE,
                      optimizer = NULL, solnp_args = list(), alabama_args = list(), ...)
 {
     opts <- list()
     tnames <- names(technical)
-    gnames <- c('MAXQUAD', 'NCYCLES', 'BURNIN', 'SEMCYCLES', 'set.seed', 'SEtol', 'symmetric_SEM',
+    gnames <- c('MAXQUAD', 'NCYCLES', 'BURNIN', 'SEMCYCLES', 'set.seed', 'SEtol', 'symmetric',
                 'gain', 'warn', 'message', 'customK', 'customPriorFun', 'customTheta', 'MHcand',
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
-                'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD')
+                'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
-    if((method == 'MHRM' || method == 'MIXED') && SE.type == 'crossprod') SE.type <- 'MHRM'
+    if((method == 'MHRM' || method == 'MIXED') && SE.type == 'Oakes') SE.type <- 'MHRM'
     if((method == 'MHRM' || method == 'MIXED') && !(SE.type %in% c('MHRM', 'FMHRM', 'none')))
         stop('SE.type not supported for MHRM method', call.=FALSE)
     if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM')))
@@ -1137,7 +1136,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     if(BFACTOR) opts$dentype <- 'bfactor'
     if(empiricalhist) opts$dentype <- 'EH'
     opts$accelerate = accelerate
-    opts$delta <- ifelse(is.null(technical$delta), .001, technical$delta)
+    opts$Norder <- ifelse(is.null(technical$Norder), 2L, technical$Norder)
+    opts$delta <- ifelse(is.null(technical$delta), 1e-5, technical$delta)
     opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
     opts$plausible.draws <- ifelse(is.null(technical$plausible.draws), 0, technical$plausible.draws)
     opts$storeEtable <- ifelse(is.null(technical$storeEtable), FALSE, technical$storeEtable)
@@ -1150,7 +1150,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         if(is.null(TOL)) opts$TOL <- 1e-5
         if(is.null(technical$NCYCLES)) technical$NCYCLES <- 1000L
     }
-    if(is.null(technical$symmetric_SEM)) technical$symmetric_SEM <- TRUE
+    if(is.null(technical$symmetric)) technical$symmetric <- TRUE
     opts$removeEmptyRows <- if(is.null(technical$removeEmptyRows)) FALSE
         else technical$removeEmptyRows
     opts$PLCI <- ifelse(is.null(technical$PLCI), FALSE, technical$PLCI)
@@ -1972,6 +1972,15 @@ loadSplinePars <- function(pars, Theta, MG = TRUE){
         pars <- fn(pars, Theta)
     }
     return(pars)
+}
+
+get_deriv_coefs <- function(order, deriv = 1L){
+    if(deriv == 1L){
+        ret <- switch(as.character(order),
+                      "1" = c(-1, 1),
+                      "2" = c(-1/2, 1/2))
+    }
+    ret
 }
 
 cfi <- function(X2, X2.null, df, df.null){

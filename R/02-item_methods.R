@@ -1,4 +1,20 @@
 # ----------------------------------------------------------------
+# valid itemtype inputs
+
+# flag to indicate an experimental item type (requires an S4 initializer in the definitions below)
+Experimental_itemtypes <- function() c('experimental', 'grsmIRT')
+
+Valid_iteminputs <- function() c('Rasch', '2PL', '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm', 'gpcmIRT',
+                                 'rsm', 'nominal', 'PC2PL','PC3PL', '2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM',
+                                 'ideal', 'lca', 'spline', Experimental_itemtypes())
+
+# Indicate which functions should use the R function instead of those written in C++
+Use_R_ProbTrace <- function() c('custom', 'ideal', 'spline', Experimental_itemtypes())
+
+Use_R_Deriv <- function() c('custom', 'rating', 'partcomp', 'nestlogit',
+                            'ideal', 'spline', Experimental_itemtypes())
+
+# ----------------------------------------------------------------
 # helper functions
 
 EML <- function(par, obj, Theta){
@@ -48,36 +64,75 @@ numDeriv_DerivTheta <- function(item, Theta){
 
 numDeriv_dP <- function(item, Theta){
     P <- function(par, Theta, item, cat){
-        item@par <- par
+        item@par[item@est] <- par
         sum(ProbTrace(item, Theta)[cat:item@ncat])
     }
-    par <- item@par
+    par <- item@par[item@est]
     ret <- matrix(0, nrow(Theta), length(item@par))
     for(i in 1L:nrow(Theta)){
         tmp <- numeric(length(par))
         for(j in 1L:item@ncat)
             tmp <- tmp + numDeriv::grad(P, x=par, Theta=Theta[i, , drop=FALSE],
                               item=item, cat=j)
-        ret[i, ] <- tmp
+        ret[i, item@est] <- tmp
     }
     ret
 }
 
 # ----------------------------------------------------------------
-# valid itemtype inputs
+# global S3 methods
 
-# flag to indicate an experimental item type (requires an S4 initializer in the definitions below)
-Experimental_itemtypes <- function() c('experimental', 'grsmIRT')
 
-Valid_iteminputs <- function() c('Rasch', '2PL', '3PL', '3PLu', '4PL', 'graded', 'grsm', 'gpcm',
-                                'nominal', 'PC2PL','PC3PL', '2PLNRM', '3PLNRM', '3PLuNRM', '4PLNRM',
-                                'ideal', 'lca', 'spline', Experimental_itemtypes())
+#' Print generic for customized data.frame console output
+#'
+#' Privides a nicer output for most printed \code{data.frame} objects defined by functions in \code{mirt}.
+#'
+#' @method print mirt_df
+#' @param x object of class \code{'mirt_df'}
+#' @param digits number of digits to round
+#' @param ... additional arguments passed to \code{print(...)}
+#' @export
+print.mirt_df <- function(x, digits = 3, ...){
+    cls <- class(x)[2L]
+    class(x) <- cls
+    clsss <- sapply(x, class)
+    for(i in 1:length(clsss))
+        if(clsss[i] == 'numeric')
+            x[,i] <- round(x[,i], digits=digits)
+    print(x, ...)
+}
 
-# Indicate which functions should use the R function instead of those written in C++
-Use_R_ProbTrace <- function() c('custom', 'ideal', 'spline', Experimental_itemtypes())
+#' Print generic for customized matrix console output
+#'
+#' Privides a nicer output for most printed \code{matrix} objects defined by functions in \code{mirt}.
+#'
+#' @method print mirt_matrix
+#' @param x object of class \code{'mirt_matrix'}
+#' @param digits number of digits to round
+#' @param ... additional arguments passed to \code{print(...)}
+#' @export
+print.mirt_matrix <- function(x, digits = 3, ...){
+    cls <- class(x)[2L]
+    class(x) <- cls
+    x <- round(x, digits=digits)
+    print(x, ...)
+}
 
-Use_R_Deriv <- function() c('custom', 'rating', 'rsm', 'partcomp', 'nestlogit',
-                            'ideal', 'spline', Experimental_itemtypes())
+#' Print generic for customized list console output
+#'
+#' Privides a nicer output for most printed \code{list} objects defined by functions in \code{mirt}.
+#'
+#' @method print mirt_list
+#' @param x object of class \code{'mirt_list'}
+#' @param digits number of digits to round
+#' @param ... additional arguments passed to \code{print(...)}
+#' @export
+print.mirt_list <- function(x, digits = 3, ...){
+    cls <- class(x)[2L]
+    class(x) <- cls
+    x <- lapply(x, function(x, digits) round(x, digits=digits), digits=digits)
+    print(x, ...)
+}
 
 # ----------------------------------------------------------------
 # Begin class and method definitions
@@ -2480,6 +2535,114 @@ setMethod("initialize",
           }
 )
 
+
+# ----------------------------------------------------------------
+
+setClass("gpcmIRT", contains = 'AllItemsClass',
+         representation = representation())
+
+setMethod(
+    f = "print",
+    signature = signature(x = 'gpcmIRT'),
+    definition = function(x, ...){
+        cat('Item object of class:', class(x))
+    }
+)
+
+setMethod(
+    f = "show",
+    signature = signature(object = 'gpcmIRT'),
+    definition = function(object){
+        print(object)
+    }
+)
+
+#extract the slopes (should be a vector of length nfact)
+setMethod(
+    f = "ExtractLambdas",
+    signature = signature(x = 'gpcmIRT'),
+    definition = function(x){
+        x@par[1L]
+    }
+)
+
+#extract the intercepts
+setMethod(
+    f = "ExtractZetas",
+    signature = signature(x = 'gpcmIRT'),
+    definition = function(x){
+        x@par[-c(1, length(x@par))]
+    }
+)
+
+# generating random starting values (only called when, e.g., mirt(..., GenRandomPars = TRUE))
+setMethod(
+    f = "GenRandomPars",
+    signature = signature(x = 'gpcmIRT'),
+    definition = function(x){
+        par <- c(rlnorm(1,0,1),
+                 sort(rnorm(x@ncat-1, 0, 1), decreasing=FALSE), 0)
+        x@par[x@est] <- par[x@est]
+        x
+    }
+)
+
+# how to set the null model to compute statistics like CFI and TLI (usually just fixing slopes to 0)
+setMethod(
+    f = "set_null_model",
+    signature = signature(x = 'gpcmIRT'),
+    definition = function(x){
+        x@par[1L] <- 0
+        x@est[1L] <- FALSE
+        x
+    }
+)
+
+# probability trace line function. Must return a matrix with a trace line for each category
+setMethod(
+    f = "ProbTrace",
+    signature = signature(x = 'gpcmIRT', Theta = 'matrix'),
+    definition = function(x, Theta){
+        .Call('gpcmIRTTraceLinePts', x@par, Theta, FALSE, numeric(0))
+    }
+)
+
+setMethod(
+    f = "Deriv",
+    signature = signature(x = 'gpcmIRT', Theta = 'matrix'),
+    definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
+        if(nrow(x@fixed.design) > 1L && ncol(x@fixed.design) > 0L)
+            Theta <- cbind(x@fixed.design, Theta)
+        ret <- .Call("dparsgpcmIRT", x@par, Theta, offterm, x@dat,
+                     length(x@par) - ncol(Theta), estHess)
+        hess <- matrix(0, length(x@par), length(x@par))
+        if(estHess && any(x@est))
+            hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
+                                                    Theta=Theta)
+        ret <- list(grad=ret$grad, hess=hess)
+        if(x@any.prior) ret <- DerivativePriors(x=x, grad=ret$grad, hess=ret$hess)
+        return(ret)
+    }
+)
+
+
+# derivative of the model wft to the Theta values (done numerically here)
+setMethod(
+    f = "DerivTheta",
+    signature = signature(x = 'gpcmIRT', Theta = 'matrix'),
+    definition = function(x, Theta){
+        numDeriv_DerivTheta(x, Theta) #replace with analytical derivatives
+    }
+)
+
+# derivative of the probability trace line function wrt Theta (done numerically here)
+setMethod(
+    f = "dP",
+    signature = signature(x = 'gpcmIRT', Theta = 'matrix'),
+    definition = function(x, Theta){
+        numDeriv_dP(x, Theta) #replace with analytical derivatives
+    }
+)
 
 # ----------------------------------------------------------------
 

@@ -141,7 +141,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         gTheta[[g]] <- Theta
     }
     preMstep.longpars2 <- preMstep.longpars <- longpars
-    accel <- 0; Mrate <- ifelse(list$SEM, 1, .4)
+    is_SEM <- list$SE.type == 'SEM'
+    accel <- 0; Mrate <- ifelse(is_SEM, 1, .4)
     Estep.time <- Mstep.time <- 0
     collectLL <- rep(NA, NCYCLES)
     hess <- matrix(0)
@@ -214,7 +215,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 stop('Optimization error: Could not compute observed log-likelihood. Try
                      estimating with different starting values by passing GenRandomPars = TRUE',
                      call.=FALSE)
-            if(!list$SEM){
+            if(!is_SEM){
                 if(cycles > startMrate){
                     tmp <- collectLL[cycles-1L] - collectLL[cycles]
                     if(tmp < 0)
@@ -229,7 +230,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 if(dentype == 'bfactor'){
                     pars[[g]][[J+1L]]@rrb <- rlist[[g]]$r2
                     pars[[g]][[J+1L]]@rrs <- rlist[[g]]$r3
-                } else pars[[g]][[J+1L]]@rr <- rowSums(rlist[[g]]$r1)
+                } else pars[[g]][[J+1L]]@rr <- rowSums(rlist[[g]]$r1) / J
             }
             Estep.time <- Estep.time + proc.time()[3L] - start
             start <- proc.time()[3L]
@@ -326,7 +327,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 message('EM cycles terminated after ', cycles, ' iterations.')
             converge <- FALSE
         } else if(cycles == 1L && !all(!est)){
-            if(list$warn && !(is.nan(TOL) || is.na(TOL)))
+            if(list$warn && !(is.nan(TOL) || is.na(TOL)) && !list$NULL.MODEL)
                 warning('M-step optimizer converged immediately. Solution is either at the ML or
                      starting values are causing issues and should be adjusted. ', call.=FALSE)
         }
@@ -368,18 +369,18 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
     }
     LP <- unname(LP)
-    if(list$SEM){
+    start.time.SE <- proc.time()[3L]
+    if(list$SE.type %in% c('SEM', 'Oakes', 'complete') && list$SE){
         h <- matrix(0, nfullpars, nfullpars)
         ind1 <- 1L
         for(group in 1L:ngroups){
             for (i in 1L:J){
                 deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, estHess=TRUE)
-                ind2 <- ind1 + length(deriv$grad) - 1L
+                ind2 <- ind1 + length(pars[[group]][[i]]@par) - 1L
                 h[ind1:ind2, ind1:ind2] <- pars[[group]][[i]]@hessian <- deriv$hess
                 ind1 <- ind2 + 1L
             }
-            i <- i + 1L
-            deriv <- Deriv(x=pars[[group]][[i]], CUSTOM.IND=CUSTOM.IND,
+            deriv <- Deriv(x=pars[[group]][[i+1L]], CUSTOM.IND=CUSTOM.IND,
                            Theta=Theta, EM = TRUE,
                            pars=pars[[group]], tabdata=Data$tabdatalong,
                            freq=Data$Freq[[group]], prior=Prior[[group]],
@@ -400,6 +401,55 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
         hess <- updateHess(h=h, L=L)
         hess <- hess[estpars & !redun_constr, estpars & !redun_constr]
+        if(list$SE.type == 'Oakes' && length(lrPars) && list$SE){
+            warning('Oakes method not supported for models with latent regression effects', call.=FALSE)
+        } else if(list$SE.type == 'Oakes' && list$SE){
+            complete_info <- hess
+            shortpars <- longpars[estpars & !redun_constr]
+            tmp <- updatePrior(pars=pars, Theta=Theta,
+                               list=list, ngroups=ngroups, nfact=nfact,
+                               J=J, dentype=dentype, sitems=sitems, cycles=cycles,
+                               rlist=rlist, full=full, lrPars=lrPars)
+            prior <- tmp$prior; Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
+            if(list$Norder >= 2){
+                missing_info <- mySapply(1L:length(shortpars), SE.Oakes,
+                                       pars=pars, L=L, constrain=constrain, delta=list$delta,
+                                       est=est, shortpars=shortpars, longpars=longpars,
+                                       Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                       dentype=dentype, sitems=sitems, nfact=nfact,
+                                       rlist=rlist, full=full, Data=Data,
+                                       specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
+                                       prior=prior, Priorbetween=Priorbetween, Prior=Prior,
+                                       PrepList=PrepList, ANY.PRIOR=ANY.PRIOR, DERIV=DERIV,
+                                       SLOW.IND=list$SLOW.IND, Norder=list$Norder)
+            } else {
+                zero_g <- SE.Oakes(0L, pars=pars, L=L, constrain=constrain, delta=0,
+                                   est=est, shortpars=shortpars, longpars=longpars,
+                                   Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                   dentype=dentype, sitems=sitems, nfact=nfact,
+                                   rlist=rlist, full=full, Data=Data,
+                                   specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
+                                   prior=prior, Priorbetween=Priorbetween, Prior=Prior,
+                                   PrepList=PrepList, ANY.PRIOR=ANY.PRIOR, DERIV=DERIV,
+                                   SLOW.IND=list$SLOW.IND, Norder=1L)
+                missing_info <- mySapply(1L:length(shortpars), SE.Oakes,
+                                       pars=pars, L=L, constrain=constrain, delta=list$delta,
+                                       est=est, shortpars=shortpars, longpars=longpars,
+                                       Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                       dentype=dentype, sitems=sitems, nfact=nfact,
+                                       rlist=rlist, full=full, Data=Data,
+                                       specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
+                                       prior=prior, Priorbetween=Priorbetween, Prior=Prior,
+                                       PrepList=PrepList, ANY.PRIOR=ANY.PRIOR, DERIV=DERIV,
+                                       SLOW.IND=list$SLOW.IND, zero_g=zero_g, Norder=1L)
+            }
+            if(list$symmetric) missing_info <- (missing_info + t(missing_info))/2
+            pars <- reloadPars(longpars=longpars, pars=pars,
+                               ngroups=ngroups, J=J)
+            is.latent <- grepl('MEAN_', names(shortpars)) | grepl('COV_', names(shortpars))
+            missing_info[is.latent, is.latent] <- 0
+            hess <- complete_info + missing_info
+        }
         ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological, Moptim=Moptim,
                     estindex_unique=estindex_unique, correction=correction, hess=hess, Prior=Prior,
@@ -407,7 +457,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     LBOUND=LBOUND, UBOUND=UBOUND, EMhistory=na.omit(EMhistory), random=list(),
                     time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     collectLL=collectLL, shortpars=longpars[estpars & !redun_constr],
-                    lrPars=lrPars, logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist)
+                    lrPars=lrPars, logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist,
+                    start.time.SE=start.time.SE)
     } else {
         ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological, Moptim=Moptim,

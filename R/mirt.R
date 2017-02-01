@@ -157,32 +157,32 @@
 #'     the predicted category.
 #'     \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta, \phi)}
 #'   }
-#'   \item{grsm}{
-#'     A more constrained version of the graded model where graded spacing is equal accross item
+#'   \item{grsm and grsmIRT}{
+#'     A more constrained version of the graded model where graded spacing is equal across item
 #'     blocks and only adjusted by a single 'difficulty' parameter (c) while the latent variance
 #'     of \eqn{\theta} is freely estimated. Again,
 #'     \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta, \phi)}
 #'     but now
 #'     \deqn{P = \frac{1}{1 + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d_k + c))}}
-#'   }
-#'   \item{grsmIRT}{
-#'     Similar to the \code{grsm} item type, but using the IRT parameterization instead (see
+#'
+#'     The grsmIRT model is similar to the \code{grsm} item type, but uses the IRT parameterization instead (see
 #'     Muraki, 1990 for this exact form). This is restricted to unidimensional models only, whereas
-#'     \code{grsm} may be used for unidimensional or multidimensional models and is more consistant
+#'     \code{grsm} may be used for unidimensional or multidimensional models and is more consistent
 #'     with the form of other IRT models in \code{mirt}
 #'   }
-#'   \item{gpcm/nominal}{For the gpcm the \eqn{d} values are treated as fixed and orderd values
+#'   \item{gpcm/nominal}{For the gpcm the \eqn{d} values are treated as fixed and ordered values
 #'     from 0:(k-1) (in the nominal model \eqn{d_0} is also set to 0). Additionally, for
 #'     identification in the nominal model \eqn{ak_0 = 0}, \eqn{ak_{(k-1)} = (k - 1)}.
 #'     \deqn{P(x = k | \theta, \psi) =
 #'     \frac{exp(ak_{k-1} * (a_1 * \theta_1 + a_2 * \theta_2) + d_{k-1})}
 #'     {\sum_1^k exp(ak_{k-1} * (a_1 * \theta_1 + a_2 * \theta_2) + d_{k-1})}}
 #'
-#'     For partial credit model (when \code{itemtype = 'Rasch'}; unidimensional only) the above
+#'     For the partial credit model (when \code{itemtype = 'Rasch'}; unidimensional only) the above
 #'     model is further constrained so that \eqn{ak = (0,1,\ldots, k-1)}, \eqn{a_1 = 1}, and the
-#'     latent variance of \eqn{\theta_1} is freely estimated. However, more specific scoring
-#'     function may be included by passing a suitable list or matricies to the \code{gpcm_mats}
-#'     input argument.
+#'     latent variance of \eqn{\theta_1} is freely estimated. Alternatively, the partial credit model
+#'     can be obtained by containing all the slope parameters in the gpcms to be equal.
+#'     More specific scoring function may be included by passing a suitable list or matrices
+#'     to the \code{gpcm_mats} input argument.
 #'
 #'     In the nominal model this parametrization helps to identify the empirical ordering of the
 #'     categories by inspecting the \eqn{ak} values. Larger values indicate that the item category
@@ -199,14 +199,33 @@
 #'     between 0 and the number of categories - 1 either by theoretical means or by re-estimating
 #'     the model with better values following convergence.
 #'   }
-#    \item{rsm}{
-#      A more constrained version of the partial credit model where the spacing is equal
-#      across item blocks and only adjusted by a single 'difficulty' parameter (c). Note that this
-#      is analogous to the relationship between the graded model and the grsm (with an additional
-#      constraint regarding the fixed discrimination parameters; the discrimination constraint can,
-#      however, be relaxed by adjusting the starting values specifications manually and applying
-#      additional equality constraints).
-#    }
+#'    \item{gpcmIRT and rsm}{
+#'      The gpcmIRT model is the classical generalized partial credit model for unidimensional response
+#'      data. It will obtain the same fit as the \code{gpcm} presented above, however the parameterization
+#'      allows for the Rasch/generalized rating scale model as a special case.
+#'
+#'      E.g., for a 4 category response model,
+#'
+#'      \deqn{P(x = 0 | \theta, \psi) = exp(1) / G}
+#'      \deqn{P(x = 1 | \theta, \psi) = exp(1 + a(\theta - b1) + c) / G}
+#'      \deqn{P(x = 2 | \theta, \psi) = exp(1 + a(2\theta - b1 - b2) + 2c) / G}
+#'      \deqn{P(x = 3 | \theta, \psi) = exp(1 + a(3\theta - b1 - b2 - b3) + 3c) / G}
+#'      where
+#'      \deqn{G = exp(1) + exp(1 + a(\theta - b1) + c) + exp(1 + a(2\theta - b1 - b2) + 2c) +
+#'        a(3\theta - b1 - b2 - b3) + 3c)}
+#'      Here \eqn{a} is the slope parameter, the \eqn{b} parameters are the threshold
+#'      values for each adjacent category, and \eqn{c} is the so-called difficulty parameter when
+#'      a rating scale model is fitted (otherwise, \eqn{c = 0} and it drops out of the computations).
+#'
+#'      The gpcmIRT can be constrained to the partial credit IRT model by either constraining all the
+#'      slopes to be equal, or setting the slopes to 1 and freeing the latent variance parameter.
+#'
+#'      Finally, the rsm is a more constrained version of the (generalized) partial
+#'      credit model where the spacing is equal
+#'      across item blocks and only adjusted by a single 'difficulty' parameter (c). Note that this
+#'      is analogous to the relationship between the graded model and the grsm (with an additional
+#'      constraint regarding the fixed discrimination parameters).
+#'    }
 #'   \item{ideal}{
 #'     The ideal point model has the form, with the upper bound constraint on \eqn{d} set to 0:
 #'     \deqn{P(x = 1 | \theta, \psi) = exp(-0.5 * (a_1 * \theta_1 + a_2 * \theta_2 + d)^2)}
@@ -214,6 +233,9 @@
 #'   \item{partcomp}{Partially compensatory models consist of the product of 2PL probability curves.
 #'     \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-(a_1 * \theta_1 + d_1))} *
 #'     \frac{1}{1 + exp(-(a_2 * \theta_2 + d_2))})}
+#'
+#'     Note that constraining the slopes to be equal across items will reduce the model to
+#'     Embretson's (a.k.a. Whitely's) multicomponent model (1980).
 #'   }
 #'   \item{2-4PLNRM}{Nested logistic curves for modeling distractor items. Requires a scoring key.
 #'     The model is broken into two components for the probability of endorsement. For successful
@@ -246,17 +268,36 @@
 #'   For exploratory IRT models, a single numeric value indicating the number
 #'   of factors to extract is also supported
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
-#'   which will be repeated globally. The NULL default assumes that the items follow a graded or
-#'   2PL structure, however they may be changed to the following: 'Rasch', '2PL', '3PL', '3PLu',
-#'   '4PL', 'graded', 'grsm', 'grsmIRT', 'gpcm', 'nominal', 'ideal', 'PC2PL', 'PC3PL', '2PLNRM', '3PLNRM',
-#'   '3PLuNRM', '4PLNRM', and 'spline', for the Rasch/partial credit, 2 parameter logistic,
-#'   3 parameter logistic (lower or upper asymptote estimated), 4 parameter logistic, graded response
-#'   model, rating scale graded response model (in slope-intercept and classical form),
-#'   generalized partial credit model (with optional scoring matricies from \code{gpcm_mats}),
-#'   nominal model, ideal-point model, 2-3PL partially compensatory model, 2-4 parameter nested
-#'   logistic models, and spline response models with the \code{\link{bs}} (default) and \code{\link{ns}} functions,
-#'   respectively. User defined item classes can also be defined using the
-#'   \code{\link{createItem}} function
+#'   which will be recycled for each item. The \code{NULL} default assumes that the items follow a graded or
+#'   2PL structure, however they may be changed to the following:
+#'   \itemize{
+#'     \item \code{'Rasch'} - Rasch/partial credit model by constraining slopes to 1 and freely estimating
+#'       the variance parameters (alternatively, can be specified by applying equality constraints to the
+#'       slope parameters in \code{'gpcm'})
+#'     \item \code{'2PL'}, \code{'3PL'}, \code{'3PLu'}, and \code{'4PL'} - 2-4 parameter logistic model,
+#'       where \code{3PL} estimates the lower asymptote only while \code{3PLu} estimates the upper asymptote only
+#'     \item \code{'graded'} - graded response model
+#'     \item \code{'grsm'} and \code{'grsmIRT'} - graded ratings scale model in the
+#'       slope-intercept and classical IRT parameterization.
+#'       \code{'grsmIRT'} is restricted to unidimensional models
+#'     \item \code{'gpcm'} and \code{'gpcmIRT'} - generalized partial credit model in the slope-intercept
+#'       and classical parameterization. \code{'gpcmIRT'} is restricted to unidimensional models. Note that
+#'       optional scoring matrices for \code{'gpcm'} are available with the \code{gpcm_mats} input
+#'     \item \code{'rsm'} - Rasch rating scale model using the \code{'gpcmIRT'} structure
+#'       (unidimensional only)
+#'     \item \code{'nominal'} - nominal response model
+#'     \item \code{'ideal'} - dichotomous ideal point model
+#'     \item \code{'PC2PL'} and \code{'PC3PL'} - 2-3 parameter partially compensatory model.
+#'       Note that constraining the slopes to be equal across items will reduce the model to
+#'       Embretson's (a.k.a. Whitely's) multicomponent model (1980).
+#'     \item \code{'2PLNRM'}, \code{'3PLNRM'}, \code{'3PLuNRM'}, and \code{'4PLNRM'} - 2-4 parameter nested
+#'       logistic model, where \code{3PLNRM} estimates the lower asymptote only while \code{3PLuNRM} estimates
+#'       the upper asymptote only
+#'     \item \code{'spline'} - spline response model with the \code{\link{bs}} (default)
+#'       or the \code{\link{ns}} function
+#'  }
+#'
+#'  Additionally, user defined item classes can also be defined using the \code{\link{createItem}} function
 #' @param method a character object specifying the estimation algorithm to be used. The default is
 #'   \code{'EM'}, for the standard EM algorithm with fixed quadrature, or \code{'QMCEM'} for
 #'   quasi-Monte Carlo EM estimation. The option \code{'MHRM'} may
@@ -266,14 +307,14 @@
 #'   The \code{'EM'} is generally effective with 1-3 factors, but methods such as the \code{'QMCEM'}
 #'   or \code{'MHRM'} should be used when the dimensions are 3 or more
 #' @param optimizer a character indicating which numerical optimizer to use. By default, the EM
-#'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds, and
+#'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds box-constraints and
 #'   \code{'L-BFGS-B'} when there are. Another good option which supports bound constraints is
-#'   the \code{'nlminb'}, which is more stable than the BFGS family of optimizers (though slightly slower).
+#'   the \code{'nlminb'}, which may be more stable than the BFGS family of optimizers (though slightly slower).
 #'
 #'   Other options include the Newton-Raphson (\code{'NR'}),
 #'   which often will be more efficient than the \code{'BFGS'} but not as stable for more complex
 #'   IRT models (such as the nominal or nested logit models) and does not support
-#'   upper and lower bound constraints. As well, the \code{'Nelder-Mead'}, \code{'SANN'}, and \code{'L-BFGS-B'}
+#'   upper and lower bound constraints. As well, the \code{'Nelder-Mead'} and \code{'SANN'}
 #'   estimators are also available, but their routine use generally is not required or recommended.
 #'   The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed.
 #'
@@ -289,30 +330,42 @@
 #'   when defining constraints (though use of \code{browser()} here may be helpful). Note:
 #'   for the \code{'alabama'} optimizer, the starting values
 #'   should be adjusted such that all constraints are met prior to the first maximization-step.
-#'   The \code{'solnp'} optimizer is less sensative to this initial conditoin restriction, but it may also
+#'   The \code{'solnp'} optimizer is less sensitive to this initial condition restriction, but it may also
 #'   if the model is unstable early in the EM cycles
 #' @param SE logical; estimate the standard errors by computing the parameter information matrix?
 #'    See \code{SE.type} for the type of estimates available
 #' @param SE.type type of estimation method to use for calculating the parameter information matrix
-#'   for computing standard errors and \code{\link{wald}} tests. Can be
-#'   \code{'Richardson'}, \code{'forward'}, or \code{'central'} for the numerical Richardson,
-#'    forward difference, and central difference evaluation of observed Hessian,
-#'    \code{'Fisher'} for the expected information, \code{'complete'} for information based
-#'    on the complete-data Hessian used in EM algorithm, \code{'SEM'} for
-#'   the supplemented EM (disables the \code{accelerate} option; EM only), \code{'crossprod'}
-#'   for standard error computations based on the variance of the Fisher scores, \code{'Louis'}
-#'   for Louis' (1982) computation of the observed information matrix,
-#'   and \code{'sandwich'} for the sandwich covariance estimate.
+#'   for computing standard errors and \code{\link{wald}} tests. Can be:
 #'
-#'   Note that for \code{'SEM'} option increasing the number of iterations
-#'   (\code{NCYCLES} and \code{TOL}, see below) will help to improve the accuracy, and will be
-#'   run in parallel if a \code{\link{mirtCluster}} object has been defined.
-#'   When \code{method = 'BL'} then the option \code{'numerical'} is available to obtain the numerical
-#'   estimate from a call to \code{\link{optim}}.
+#'   \itemize{
+#'     \item \code{'Richardson'}, \code{'forward'}, or \code{'central'} for the numerical Richardson,
+#'       forward difference, and central difference evaluation of observed Hessian matrix
+#'     \item \code{'crossprod'} and \code{'Louis'} for standard error computations based on the variance of the
+#'       Fisher scores as well as Louis' (1982) exact computation of the observed information matrix
+#'     \item \code{'sandwich'} for the sandwich covariance estimate based on the
+#'       \code{'crossprod'} and \code{'Louis'} estimates
+#'     \item \code{'Oakes'} for Oakes' (1999) method using a central difference approximation
+#'     \item \code{'SEM'} for the supplemented EM (disables the \code{accelerate} option automatically; EM only)
+#'     \item \code{'Fisher'} for the expected information, \code{'complete'} for information based
+#'       on the complete-data Hessian used in EM algorithm
+#'     \item \code{'MHRM'} and \code{'FMHRM'} for stochastic approximations of observed information matrix
+#'       based on the Robbins-Monro filter or a fixed number of MHRM draws without the RM filter.
+#'       These are the only options supported when \code{method = 'MHRM'}
+#'     \item \code{'numerical'} to obtain the numerical estimate from a call to \code{\link{optim}}
+#'       when \code{method = 'BL'}
+#'  }
 #'
-#'   Other options include \code{'MHRM'} and \code{'FMHRM'} for stochastic approximations
-#'   based on the Robbins-Monro filter or a fixed number of MHRM draws without
-#'   the RM filter. These are the only options supported when \code{method = 'MHRM'}
+#'   Note that both the \code{'SEM'} method becomes very sensitive if the ML solution has
+#'   has not been reached with sufficient precision, and may be further sensitive
+#'   if the history of the EM cycles is not stable/sufficient for convergence of the respective estimates.
+#'   Increasing the number of iterations (increasing \code{NCYCLES} and decreasing
+#'   \code{TOL}, see below) will help to improve the accuracy, and can be
+#'   run in parallel if a \code{\link{mirtCluster}} object has been defined (this will be
+#'   used for Oakes' method as well). Additionally,
+#'   inspecting the symmetry of the ACOV matrix for convergence issues by passing
+#'   \code{technical = list(symmetric = FALSE)} can be helpful to determine if a sufficent
+#'   solution has been reached
+#'
 #' @param guess fixed pseudo-guessing parameters. Can be entered as a single
 #'   value to assign a global guessing parameter or may be entered as a numeric
 #'   vector corresponding to each item
@@ -356,11 +409,11 @@
 #'   \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}.
 #'   If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5}
 #'   will be used. To evaluate the model using only the starting values pass \code{TOL = NaN}, and
-#'   to evalute the starting values without the log-likelihood pass \code{TOL = NA}
+#'   to evaluate the starting values without the log-likelihood pass \code{TOL = NA}
 #' @param empiricalhist logical; estimate prior distribution using an empirical histogram approach.
 #'   Only applicable for unidimensional models estimated with the EM algorithm.
 #'   The number of cycles, TOL, and quadpts are adjusted
-#'   accomodate for less precision during estimation (TOL = 3e-5, NCYCLES = 2000, quadpts = 199)
+#'   accommodate for less precision during estimation (TOL = 3e-5, NCYCLES = 2000, quadpts = 199)
 #' @param survey.weights a optional numeric vector of survey weights to apply for each case in the
 #'   data (EM estimation only). If not specified, all cases are weighted equally (the standard IRT
 #'   approach). The sum of the \code{survey.weights} must equal the total sample size for proper
@@ -380,7 +433,7 @@
 #'   be estimated in the test data). For example, to specify two blocks of 3 with a 2PL item for
 #'   the last item: \code{grsm.block = c(rep(1,3), rep(2,3), NA)}. If NULL the all items are assumed
 #'   to be within the same group and therefore have the same number of item categories
-# @param rsm.block same as \code{grsm.block}, but for \code{'rsm'} blocks
+#' @param rsm.block same as \code{grsm.block}, but for \code{'rsm'} blocks
 #' @param covdata a data.frame of data used for latent regression models
 #' @param formula an R formula (or list of formulas) indicating how the latent traits
 #'   can be regressed using external covariates in \code{covdata}. If a named list
@@ -430,7 +483,7 @@
 #'     \item{set.seed}{seed number used during estimation. Default is 12345}
 #'     \item{SEtol}{standard error tolerance criteria for the S-EM and MHRM computation of the
 #'       information matrix. Default is 1e-3}
-#'     \item{symmetric_SEM}{logical; force S-EM information matrix to be symmetric? Default is TRUE
+#'     \item{symmetric}{logical; force S-EM/Oakes information matrix to be symmetric? Default is TRUE
 #'       so that computation of standard errors are more stable. Setting this to FALSE can help
 #'       to detect solutions that have not reached the ML estimate}
 #'     \item{SEM_window}{ratio of values used to define the S-EM window based on the
@@ -455,7 +508,8 @@
 #'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
 #'     \item{delta}{the deviation term used in numerical estimates when computing the ACOV matrix
-#'       with the 'forward' or 'central' numerical approaches. Default is 1e-5}
+#'       with the 'forward' or 'central' numerical approaches, as well as Oakes' method with the
+#'       Richarson extropolation. Default is 1e-5}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
 #'     \item{removeEmptyRows}{logical; remove response vectors that only contain \code{NA}'s?
@@ -562,6 +616,9 @@
 #' Varadhan, R. & Roland, C. (2008). Simple and Globally Convergent Methods for Accelerating
 #' the Convergence of Any EM Algorithm. \emph{Scandinavian Journal of Statistics, 35}, 335-353.
 #'
+#' Whitely, S. E. (1980). Multicomponent latent trait models for ability tests.
+#' \emph{Psychometrika, 45}(4), 470-494.
+#'
 #' Wood, R., Wilson, D. T., Gibbons, R. D., Schilling, S. G., Muraki, E., &
 #' Bock, R. D. (2003). \emph{TESTFACT 4 for Windows: Test Scoring, Item Statistics,
 #' and Full-information Item Factor Analysis} [Computer software]. Lincolnwood,
@@ -577,7 +634,7 @@
 #'
 #' (mod1 <- mirt(data, 1))
 #' coef(mod1)
-#' (mod2 <- mirt(data, 1, SE = TRUE)) #standard errors with crossprod method
+#' (mod2 <- mirt(data, 1, SE = TRUE)) #standard errors via the Oakes method
 #' (mod2 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM')) #standard errors with SEM method
 #' coef(mod2)
 #' (mod3 <- mirt(data, 1, SE = TRUE, SE.type = 'Richardson')) #with numerical Richardson method
@@ -952,7 +1009,7 @@
 #' averageMI(par, SEpar)
 #'
 #' ############
-#' # Example using Guass-Hermite quadrature with custom input functions
+#' # Example using Gauss-Hermite quadrature with custom input functions
 #'
 #' library(fastGHQuad)
 #' data(SAT12)
@@ -982,10 +1039,11 @@
 #'
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
-                 covdata = NULL, formula = NULL, SE.type = 'crossprod', method = 'EM',
+                 covdata = NULL, formula = NULL, SE.type = 'Oakes', method = 'EM',
                  optimizer = 'BFGS', pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = TRUE, draws = 5000, survey.weights = NULL,
-                 quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL, key = NULL,
+                 quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL,
+                 rsm.block = NULL, key = NULL,
                  large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay',
                  empiricalhist = FALSE, verbose = TRUE,
                  solnp_args = list(), alabama_args = list(), spline_args = list(),
@@ -1015,7 +1073,7 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       parprior=parprior, quadpts=quadpts,
                       technical=technical, verbose=verbose, survey.weights=survey.weights,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
-                      accelerate=accelerate, draws=draws,
+                      accelerate=accelerate, draws=draws, rsm.block=rsm.block,
                       empiricalhist=empiricalhist, GenRandomPars=GenRandomPars,
                       optimizer=optimizer, solnp_args=solnp_args, alabama_args=alabama_args,
                       latent.regression=latent.regression, gpcm_mats=gpcm_mats,

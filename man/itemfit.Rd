@@ -6,9 +6,10 @@
 \usage{
 itemfit(x, fit_stats = "S_X2", which.items = 1:extract.mirt(x, "nitems"),
   group.bins = 10, group.size = NA, group.fun = mean, mincell = 1,
-  mincell.X2 = 2, S_X2.tables = FALSE, empirical.plot = NULL,
-  empirical.CI = 0.95, empirical.table = NULL, method = "EAP",
-  Theta = NULL, impute = 0, digits = 4, par.strip.text = list(cex =
+  mincell.X2 = 2, S_X2.tables = FALSE, pv_draws = 30, boot = 1000,
+  boot_dfapprox = 200, ETrange = c(-2, 2), ETpoints = 11,
+  empirical.plot = NULL, empirical.CI = 0.95, empirical.table = NULL,
+  method = "EAP", Theta = NULL, impute = 0, par.strip.text = list(cex =
   0.7), par.settings = list(strip.background = list(col = "#9ECAE1"),
   strip.border = list(col = "black")), ...)
 }
@@ -30,6 +31,15 @@ itemfit(x, fit_stats = "S_X2", which.items = 1:extract.mirt(x, "nitems"),
     modifying the \code{group.size} input to the desired number of bins
   \item \code{'G2'} : McKinley & Mills (1985) G2 statistic (similar method to Q1,
     but with the likelihood-ratio test).
+  \item \code{'PV_Q1'} : Chalmers and Ng's (forthcoming) plausible-value variant
+    of the Q1 statistic.
+  \item \code{'PV_Q1*'} : Chalmers and Ng's (forthcoming) plausible-value variant
+    of the Q1 statistic that uses parametric boostrapping to obtain a suitable empirical
+    distribution.
+  \item \code{'X2*'} : Stone's (2000) fit statistics that require parametric
+    bootstrapping
+  \item \code{'X2*_df'} : Stone's (2000) fit statistics that require parametric
+    bootstrapping to obtain scaled versions of the X2* and degrees of freedom
   \item \code{'infit'} : (Unidimensional Rasch model only) compute the
     infit and outfit statistics. Ignored if models are not from the Rasch family
 }}
@@ -60,6 +70,17 @@ be ommited in the computations}
 
 \item{S_X2.tables}{logical; return the tables in a list format used to compute the S-X2 stats?}
 
+\item{pv_draws}{number of plausible-value draws to obtain for PV_Q1 and PV_Q1*}
+
+\item{boot}{number of parametric bootstrap samples to create for PV_Q1* and X2*}
+
+\item{boot_dfapprox}{number of parametric bootstrap samples to create for the X2*_df statistic
+to approximate the scaling factor for X2* as well as the scaled degrees of freedom estimates}
+
+\item{ETrange}{rangone of integration nodes for Stone's X2* statistic}
+
+\item{ETpoints}{number of integration nodes to use for Stone's X2* statistic}
+
 \item{empirical.plot}{a single numeric value or character of the item name indicating which
 item to plot (via \code{itemplot}) and overlay with the empirical \eqn{\theta} groupings (see
 \code{empirical.CI}). Useful for plotting the expected bins based on the \code{'X2'} or
@@ -84,8 +105,6 @@ with missing data via imputation}
 \code{\link{imputeMissing}}) when there are missing data present.
 Will return a data.frame object with the mean estimates
 of the stats and their imputed standard deviations}
-
-\item{digits}{number of digits to round result to. Default is 4}
 
 \item{par.strip.text}{plotting argument passed to \code{\link{lattice}}}
 
@@ -128,6 +147,14 @@ itemfit(x, 'X2') # just X2
 itemfit(x, c('S_X2', 'X2')) #both S_X2 and X2
 itemfit(x, group.bins=15, empirical.plot = 1) #empirical item plot with 15 points
 itemfit(x, group.bins=15, empirical.plot = 21)
+
+# PV and X2* statistics (parametric bootstrap stats not run to save time)
+itemfit(x, 'PV_Q1')
+
+# mirtCluster() # improve speed of bootstrap samples by running in parallel
+# itemfit(x, 'PV_Q1*')
+# itemfit(x, 'X2*') # Stone's 1993 statistic
+# itemfit(x, 'X2*_df') # Stone's 2000 scaled statistic with df estimate
 
 #empirical tables
 itemfit(x, empirical.table=1)
@@ -185,7 +212,7 @@ data2 <- na.omit(data)
 raschfit2 <- mirt(data2, 1, itemtype = 'Rasch', pars=mod2values(raschfit), TOL=NaN)
 itemfit(raschfit2, 'infit')
 
-# note that X2 and G2 do not require complete datasets
+# note that X2, G2, PV-Q1, and X2* do not require complete datasets
 itemfit(raschfit, c('X2', 'G2'))
 itemfit(raschfit, empirical.plot=1)
 itemfit(raschfit, empirical.table=1)
@@ -199,6 +226,9 @@ Phil Chalmers \email{rphilip.chalmers@gmail.com}
 \references{
 Bock, R. D. (1972). Estimating item parameters and latent ability when responses are scored
 in two or more nominal categories. Psychometrika, 37, 29-51.
+
+Chalmers, R. P. & Ng, V. (forthcoming). Plausible-Value Imputation Statistics for Detecting
+Item Misfit. \emph{Applied Psychological Measurement}.
 
 Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 polychotomous item response models and standardized indices.
@@ -215,6 +245,9 @@ response theory models. \emph{Applied Psychological Measurement, 24}, 50-64.
 
 Reise, S. P. (1990). A comparison of item- and person-fit methods of assessing model-data fit
 in IRT. \emph{Applied Psychological Measurement, 14}, 127-137.
+
+Stone, C. A. (2000). Monte Carlo Based Null Distribution for an Alternative Goodness-of-Fit
+Test Statistics in IRT Models. \emph{Journal of Educational Measurement, 37}, 58-75.
 
 Wright B. D. & Masters, G. N. (1982). \emph{Rating scale analysis}. MESA Press.
 

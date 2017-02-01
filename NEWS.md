@@ -1,3 +1,31 @@
+# Changes in mirt 1.22
+
+- `SE.type = 'Oakes'` set as the new default when computing standard errors via the ACOV matrix when
+  using the EM algorithm
+
+- new `SE.type = 'Oakes'` to compute Oakes' 1999 form of the observed information matrix using 
+  central difference approximation. Applicable for all IRT models (including customized IRT types)
+
+- added support for `gpcmIRT` and `rsm` itemtypes for traditional generalized partial credit model and 
+  Rasch rating scale model (which may be modified for a generalized rating scale model by freeing the 
+  slope parameters)
+
+- `SE.type = 'Fisher'` now supports the inclusion of latent distribution hyper-parameters. 
+  Officially, all SE-types now provide proper hyper-parameter influence in the information matrices
+
+- wrapped various output objects as `mirt_df`, `mirt_matrix`, and `mirt_list` class to 
+  avoid the need for passing a `digits` argument for rounding output in the console. 
+  Now, returned objects are never rounded, which makes writing Monte Carlo
+  simulation code safer in that rounded results will not appear in the results
+
+- added Stone's (2000) fit statistics and forthcoming PV-Q1 fit statistics to `itemfit()`
+
+## Bug fixes
+
+- patched underflow bug in `fscores()` when EAP estimates were used in extremely long (1000+ item) 
+  tests. Error now reported when this happens. Using MAP estimates in these extreme situations
+  is essentially equivalent and now recommended
+
 # Changes in mirt 1.21
 
 - add information about the number of freely estimated parameters to `print()` generic
@@ -19,7 +47,7 @@
 - added `type = 'itemscore'` to `plot()` generic to plot faceted version of the item
   scoring functions. Particularly useful when investigating DIF with `multipleGroup()`
   
-- better support for `splines` itemtype in mutliple-group models
+- better support for `splines` itemtype in multiple-group models
   
 ## Bug fixes
 

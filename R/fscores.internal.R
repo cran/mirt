@@ -5,7 +5,7 @@ setMethod(
                           quadpts = NULL, response.pattern = NULL, theta_lim, MI,
 	                      returnER = FALSE, verbose = TRUE, gmean, gcov,
 	                      plausible.draws, full.scores.SE, return.acov = FALSE,
-                          QMC, custom_den = NULL, custom_theta = NULL, digits=4,
+                          QMC, custom_den = NULL, custom_theta = NULL,
 	                      min_expected, converge_info, plausible.type, ...)
 	{
         den_fun <- mirt_dmvnorm
@@ -61,12 +61,12 @@ setMethod(
 	        return(c(est, SEest, estimate$code))
 	    }
 	    WLE <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                    hessian, data, return.acov = FALSE, ...){
+	                    hessian, data, DERIV, return.acov = FALSE, ...){
 	        if(any(is.na(scores[ID, ])))
 	            return(c(scores[ID, ], rep(NA, ncol(scores))))
 	        estimate <- try(nlm(WLE.mirt, scores[ID, ], pars=pars, patdata=tabdata[ID, ],
 	                            itemloc=itemloc, gp=gp, prodlist=prodlist, data=data[ID, ],
-	                            hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
+	                            hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, DERIV=DERIV, ...))
 	        if(is(estimate, 'try-error'))
 	            return(rep(NA, ncol(scores)*2 + 1L))
 	        if(hessian){
@@ -76,13 +76,24 @@ setMethod(
 	        } else SEest <- rep(NA, ncol(scores))
 	        return(c(estimate$estimate, SEest, estimate$code))
 	    }
-	    EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores, return.acov = FALSE){
+	    EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores, return.acov = FALSE,
+	                    return_zeros = FALSE){
 	        if(any(is.na(scores[ID, ])))
 	            return(c(scores[ID, ], rep(NA, ncol(scores))))
             nfact <- ncol(ThetaShort)
 	        L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
             expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
             maxL <- max(expLW)
+            if(maxL == 0){
+                if(return_zeros){
+                    if(return.acov) return(matrix(NA, nfact, nfact))
+                    return(numeric(nfact*2L + 1L))
+                }
+                warning(paste0('Unable to compute normalization constant for EAP estimates; ',
+                               'consider using MAP estimates instead. Returning NaNs'),
+                         call.=FALSE)
+                return(c(rep(NaN, nfact*2), 0))
+            }
 	        thetas <- colSums(ThetaShort * expLW / (sum(expLW/maxL)*maxL))
             if(hessian){
     	        thetadif <- t((t(ThetaShort) - thetas))
@@ -221,7 +232,7 @@ setMethod(
         itemloc <- object@Model$itemloc
         gp <- ExtractGroupPars(object@ParObjects$pars[[length(itemloc)]])
         if(object@Options$exploratory){
-            so <- summary(object, rotate=rotate, Target=Target, verbose = FALSE, digits = Inf)
+            so <- summary(object, rotate=rotate, Target=Target, verbose = FALSE)
             a <- rotateLambdas(so)
             for(i in 1L:J)
                 pars[[i]]@par[1L:nfact] <- a[i, ]
@@ -311,7 +322,7 @@ setMethod(
                 } else {
             	    tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=EAP, log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, scores=scores,
-                                   hessian=estHess && method == 'EAP')
+                                   hessian=estHess && method == 'EAP', return_zeros=method != 'EAP')
                 }
                 scores <- tmp[ ,1L:nfact, drop = FALSE]
                 SEscores <- tmp[ , 1L:nfact + nfact, drop = FALSE]
@@ -337,8 +348,12 @@ setMethod(
                                CUSTOM.IND=CUSTOM.IND, return.acov=return.acov, hessian=estHess,
                                ...)
     		} else if(method == 'WLE'){
+    		    DERIV <- vector('list', extract.mirt(object, 'nitems'))
+    		    cls <- sapply(object@ParObjects$pars, class)
+    		    for(i in 1L:(length(cls)-1L))
+    		        DERIV[[i]] <- selectMethod(DerivTheta, c(cls[i], 'matrix'))
                 tmp <- myApply(X=matrix(1L:nrow(scores)), MARGIN=1L, FUN=WLE, scores=scores, pars=pars,
-                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist,
+                               tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, DERIV=DERIV,
                                CUSTOM.IND=CUSTOM.IND, hessian=estHess, data=object@Data$tabdata, ...)
             } else {
                 stop('method not defined', call.=FALSE)
@@ -359,12 +374,11 @@ setMethod(
     		}
         }
         if(impute){
-            tmp <- averageMI(list_scores, list_SEscores, as.data.frame=FALSE,
-                             digits = 200)
+            tmp <- averageMI(list_scores, list_SEscores, as.data.frame=FALSE)
             scores <- tmp[[1L]]
             SEscores <- tmp[[2L]]
         }
-        if(any(is.na(scores)))
+        if(any(is.na(scores) & !is.nan(scores)))
             warning('NAs returned for response patterns with no data. Consider removing',
                     call.=FALSE)
 		if (full.scores){
@@ -424,13 +438,13 @@ setMethod(
                 cat("\nMethod: ", method)
 			    if(object@Options$exploratory) cat("\nRotate: ", rotate)
                 cat("\n\nEmpirical Reliability:\n\n")
-                print(round(reliability, digits))
+                print(round(reliability, 4))
 			}
 			colnames(SEscores) <- paste('SE_', colnames(scores), sep='')
             ret <- cbind(object@Data$tabdata[keep, ,drop=FALSE],scores,SEscores)
             if(converge_info) ret <- cbind(ret, converged=converge_info_vec)
             if(nrow(ret) > 1L) ret <- ret[do.call(order, as.data.frame(ret[,1L:J])), ]
-			return(round(ret, digits))
+			return(ret)
 		}
 	}
 )
@@ -563,7 +577,7 @@ MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID
     L
 }
 
-WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID, data)
+WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID, data, DERIV)
 {
     Theta <- matrix(Theta, nrow=1L)
     ThetaShort <- Theta
@@ -576,14 +590,17 @@ WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID
         infos <- numeric(length(data))
         for(i in 1L:length(infos)){
             if(!is.na(data[i]))
-                infos[i] <- ItemInfo2(x=pars[[i]], Theta=Theta, total.info=TRUE)
+                infos[i] <- ItemInfo2(x=pars[[i]], Theta=Theta, total.info=TRUE, DERIV=DERIV[[i]],
+                                      P=itemtrace[,itemloc[i]:(itemloc[i+1L]-1L),drop=FALSE])
         }
         infos <- sum(infos)
     } else {
         infos <- matrix(0, ncol(Theta), ncol(Theta))
         for(i in 1L:length(data)){
             if(!is.na(data[i]))
-                infos <- infos + ItemInfo2(x=pars[[i]], Theta=Theta, total.info=TRUE, MD=TRUE)
+                infos <- infos + ItemInfo2(x=pars[[i]], Theta=Theta, total.info=TRUE,
+                                           MD=TRUE, DERIV=DERIV[[i]],
+                                           P=itemtrace[,itemloc[i]:(itemloc[i+1L]-1L),drop=FALSE])
         }
         infos <- det(infos)
         if(closeEnough(infos, -1e-20, 1e-20))
@@ -594,7 +611,6 @@ WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID
 
 gradnorm.WLE <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND){
     Theta <- matrix(Theta, nrow=1L)
-    ThetaShort <- Theta
     if(length(prodlist) > 0L)
         Theta <- prodterms(Theta,prodlist)
     nfact <- ncol(Theta)
@@ -731,9 +747,17 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
     }
     thetas <- SEthetas <- matrix(0, nrow(L1), x@Model$nfact)
     for(i in 1L:nrow(thetas)){
-        thetas[i,] <- colSums(ThetaShort * L1[i, ] * prior / sum(L1[i,] * prior))
-        SEthetas[i,] <- sqrt(colSums((t(t(ThetaShort) - thetas[i,]))^2 * L1[i, ] * prior /
-                                         sum(L1[i,] * prior)))
+        expLW <- L1[i,] * prior
+        maxL <- max(expLW)
+        if(maxL == 0){
+            warning('Unable to compute normalization constant for EAPsum estimates. Returning NaNs',
+                     call.=FALSE)
+            thetas[i, ] <- SEthetas[i, ] <- NaN
+        } else {
+            thetas[i, ] <- colSums(ThetaShort * expLW / (sum(expLW/maxL)*maxL))
+            SEthetas[i, ] <- sqrt(colSums((t(t(ThetaShort) - thetas[i,]))^2 * expLW /
+                                              (sum(expLW/maxL)*maxL)))
+        }
     }
     ret <- data.frame(Sum.Scores=Sum.Scores + sum(x@Data$min), Theta=thetas, SE.Theta=SEthetas)
     rownames(ret) <- ret$Sum.Scores
