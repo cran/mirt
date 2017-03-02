@@ -289,7 +289,7 @@ void P_nested(vector<double> &P, const vector<double> &par,
 {
     NumericVector dummy(1);
 	const int par_size = par.size();
-    vector<double> dpar(nfact+3), npar(par_size - nfact - 3, 1.0);
+    vector<double> dpar(nfact+3), npar(par_size - (nfact + 3) + nfact, 1.0);
     for(int i = 0; i < nfact+3; ++i)
         dpar[i] = par[i];
     for(int i = nfact+3; i < par_size; ++i)

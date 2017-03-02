@@ -35,7 +35,7 @@ rightmost columns.
 set.seed(1234)
 a <- matrix(rlnorm(20),ncol=1)
 d <- matrix(rnorm(20),ncol=1)
-items <- rep('dich', 20)
+items <- rep('2PL', 20)
 data <- simdata(a,d, 2000, items)
 
 x <- mirt(data, 1)
@@ -65,9 +65,6 @@ head(pf)
   }
 
 }
-\author{
-Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \references{
 Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 polychotomous item response models and standardized indices.
@@ -81,6 +78,8 @@ Wright B. D. & Masters, G. N. (1982). \emph{Rating scale analysis}. MESA Press.
 \seealso{
 \code{\link{itemfit}}
 }
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}
 \keyword{fit}
 \keyword{person}
-

@@ -133,7 +133,7 @@
 #' a <- matrix(rlnorm(20, meanlog=0, sdlog = .1),ncol=1)
 #' d <- matrix(rnorm(20),ncol=1)
 #' Theta <- matrix(rnorm(2000))
-#' items <- rep('dich', 20)
+#' items <- rep('2PL', 20)
 #' ps <- P(Theta)
 #' baditem <- numeric(2000)
 #' for(i in 1:2000)
@@ -256,6 +256,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         Q1_m <- rowMeans(Q1)
         df.X2_m <- rowMeans(df.X2)
         p.Q1 <- pchisq(Q1_m, df.X2_m, lower.tail = FALSE)
+        p.Q1 <- ifelse(df.X2_m == 0, NaN, p.Q1)
         ret <- data.frame(PV_Q1=Q1_m, df.PV_Q1=df.X2_m, p.PV_Q1=p.Q1)
         ret
     }
@@ -268,7 +269,8 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                 if(count == 20)
                     stop('20 consecutive parametric bootstraps failed for PV_Q1*', call.=FALSE)
                 dat <- simdata(model=mod, N=N)
-                mod2 <- mirt(dat, model, verbose=FALSE, pars=sv, technical=list(warn=FALSE))
+                mod2 <- mirt(dat, model, itemtype=extract.mirt(mod, 'itemtype'),
+                             verbose=FALSE, pars=sv, technical=list(warn=FALSE))
                 if(!extract.mirt(mod2, 'converged')) next
                 tmp <- PV_itemfit(mod2, which.items=which.items, draws=draws, ...)
                 ret <- tmp$p.PV_Q1

@@ -130,7 +130,7 @@ set.seed(1234)
 a <- matrix(rlnorm(20, meanlog=0, sdlog = .1),ncol=1)
 d <- matrix(rnorm(20),ncol=1)
 Theta <- matrix(rnorm(2000))
-items <- rep('dich', 20)
+items <- rep('2PL', 20)
 ps <- P(Theta)
 baditem <- numeric(2000)
 for(i in 1:2000)
@@ -220,9 +220,6 @@ itemfit(raschfit, empirical.table=1)
 }
 
 }
-\author{
-Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \references{
 Bock, R. D. (1972). Estimating item parameters and latent ability when responses are scored
 in two or more nominal categories. Psychometrika, 37, 29-51.
@@ -257,6 +254,8 @@ Yen, W. M. (1981). Using simulation results to choose a latent trait model.
 \seealso{
 \code{\link{personfit}}, \code{\link{itemGAM}}
 }
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}
 \keyword{fit}
 \keyword{item}
-

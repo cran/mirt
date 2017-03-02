@@ -53,6 +53,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         stopifnot(is(GenRandomPars, 'logical'))
         stopifnot(is(large, 'logical') || is(large, 'list'))
         opts <- makeopts(GenRandomPars=GenRandomPars, ...)
+        if(opts$Moptim == 'NR'){
+            if(is.null(control$tol)) control$tol <- opts$TOL/1000
+            if(is.null(control$maxit)) control$maxit <- 50L
+        }
         if(discrete) opts$dentype <- 'custom'
         if(discrete && is.null(customGroup)){
             den <- function(obj, Theta){
@@ -93,7 +97,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             opts$calcNull <- FALSE
         opts$times <- list(start.time=start.time)
         # on exit, reset the seed to override internal
-        if(opts$method == 'MHRM' || opts$method == 'MIXED' && opts$plausible.draws == 0L)
+        if(opts$method == 'MHRM' || opts$method == 'MIXED' || opts$method == 'SEM' &&
+           opts$plausible.draws == 0L)
             on.exit(set.seed((as.numeric(Sys.time()) - floor(as.numeric(Sys.time()))) * 1e8))
         #change itemtypes if NULL.MODEL
         if(opts$NULL.MODEL){
@@ -172,6 +177,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         Data$N <- nrow(Data$data)
         Data$mins <- suppressWarnings(apply(data, 2L, min, na.rm=TRUE))
         Data$mins[!is.finite(Data$mins)] <- 0L
+        if(!is.null(key)) key <- key - (Data$mins - 1L)
         if(is.character(model)){
             tmp <- any(sapply(colnames(data), grepl, x=model))
             model <- mirt.model(model, itemnames = if(tmp) colnames(data) else NULL)
@@ -422,7 +428,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     SLOW.IND <- which(sapply(pars[[1L]], class) %in% Use_R_Deriv())
     if(pars[[1]][[length(pars[[1L]])]]@itemclass == -999L)
         SLOW.IND <- c(SLOW.IND, length(pars[[1L]]))
-    if(opts$dentype != 'Gaussian' && opts$method %in% c('MHRM', 'MIXED'))
+    if(opts$dentype != 'Gaussian' && opts$method %in% c('MHRM', 'MIXED', 'SEM'))
         stop('Non-Gaussian densities not currently supported with MHRM algorithm')
     #warnings
     wmsg <- 'Lower and upper bound parameters (g and u) should use \'norm\' (i.e., logit) prior'
@@ -547,8 +553,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             logLik <- logLik + sum(rg*log(Pl))
         }
         Pl <- list(Pl)
-    } else if(opts$method == 'MHRM'){ #MHRM estimation
+    } else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM estimation
         Theta <- matrix(0, Data$N, nitems)
+        if(opts$method == 'SEM') opts$NCYCLES <- NA
         ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
                                list = list(NCYCLES=opts$NCYCLES, BURNIN=opts$BURNIN,
                                            SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
@@ -561,8 +568,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                            startlongpars=startlongpars,
                                            cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                            message=opts$message, expl=PrepList[[1L]]$exploratory,
-                                           plausible.draws=opts$plausible.draws),
-                               DERIV=DERIV)
+                                           plausible.draws=opts$plausible.draws,
+                                           MSTEPTOL=opts$MSTEPTOL, Moptim=opts$Moptim,
+                                           keep_vcov_PD=opts$keep_vcov_PD),
+                               DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         if(opts$plausible.draws != 0) return(ESTIMATE)
         if(opts$SE){
             if(opts$verbose)
@@ -578,8 +587,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                                CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
                                                startlongpars=ESTIMATE$longpars, plausible.draws=0L,
                                                cand.t.var=opts$technical$MHcand, warn=opts$warn,
-                                               message=opts$message, expl=PrepList[[1L]]$exploratory),
-                                   DERIV=DERIV)
+                                               message=opts$message, expl=PrepList[[1L]]$exploratory,
+                                               MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
+                                               keep_vcov_PD=opts$keep_vcov_PD),
+                                   DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
             ESTIMATE$pars <- tmp$pars
             ESTIMATE$info <- tmp$info
             ESTIMATE$fail_invert_info <- tmp$fail_invert_info
@@ -606,8 +617,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                            startlongpars=startlongpars, SE=FALSE,
                                            cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                            message=opts$message, expl=FALSE, plausible.draws=0L,
-                                           RANDSTART=opts$technical$RANDSTART),
-                               DERIV=DERIV)
+                                           RANDSTART=opts$technical$RANDSTART,
+                                           MSTEPTOL=opts$MSTEPTOL, Moptim=opts$Moptim,
+                                           keep_vcov_PD=opts$keep_vcov_PD),
+                               DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         if(opts$SE){
             if(opts$verbose)
                 cat('\nCalculating information matrix...\n')
@@ -625,8 +638,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                           startlongpars=ESTIMATE$longpars, plausible.draws=0L,
                                           cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                           message=opts$message, expl=FALSE,
-                                          RANDSTART=1L),
-                              DERIV=DERIV)
+                                          RANDSTART=1L,
+                                          MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
+                                          keep_vcov_PD=opts$keep_vcov_PD),
+                              DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
             ESTIMATE$pars <- tmp$pars
             ESTIMATE$random <- tmp$random
             ESTIMATE$lrPars <- tmp$lrPars
@@ -643,7 +658,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     opts$times$start.time.SE <- proc.time()[3L]
     if(!opts$NULL.MODEL && opts$SE){
         tmp <- ESTIMATE
-        if(opts$verbose && !(opts$method == 'MHRM' || opts$method == 'MIXED'))
+        if(opts$verbose && !(opts$method == 'MHRM' || opts$method == 'MIXED' || opts$method == 'SEM'))
             cat('\n\nCalculating information matrix...\n')
         if(opts$SE.type %in% c('complete', 'Oakes') && opts$method == 'EM'){
             opts$times$start.time.SE <- ESTIMATE$start.time.SE
@@ -718,7 +733,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         } else if(opts$SE.type == 'numerical' && opts$method == 'BL'){
             ESTIMATE <- loadESTIMATEinfo(info=-ESTIMATE$hess, ESTIMATE=ESTIMATE, constrain=constrain,
                                          warn=opts$warn)
-        } else if(opts$SE.type %in% c('Richardson', 'forward', 'central') && opts$method != 'MIXED'){
+        } else if(opts$SE.type %in% c('Richardson', 'forward', 'central') &&
+                  !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
             ESTIMATE <- SE.Numerical(pars=ESTIMATE$pars, Theta=Theta, theta=theta, PrepList=PrepList, Data=Data,
                               dentype=opts$dentype, itemloc=PrepList[[1L]]$itemloc, ESTIMATE=ESTIMATE,
                               constrain=constrain, Ls=Ls, specific=oldmodel, sitems=sitems,
@@ -736,9 +752,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                                nfact=nfact, constrain=constrain, verbose=FALSE, expl=FALSE,
                                                CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, message=opts$message,
                                                startlongpars=startlongpars, SE=opts$SE, warn=opts$warn,
-                                               plausible.draws=0L),
-                                   DERIV=DERIV)
-        } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich')) && opts$method != 'MIXED'){
+                                               plausible.draws=0L, MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
+                                               keep_vcov_PD=opts$keep_vcov_PD),
+                                   DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
+        } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich')) &&
+                  !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
             if(logPrior != 0 && opts$warn)
                 warning('Information matrix with the crossprod, Louis, and sandwich method
                         do not account for prior parameter distribution information')
@@ -746,7 +764,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                   constrain=constrain, Ls=Ls, N=nrow(data), type=opts$SE.type,
                                   CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn,
                                   message=opts$message, complete=ESTIMATE$hess)
-        } else if(opts$SE.type == 'Fisher' && opts$method != 'MIXED'){
+        } else if(opts$SE.type == 'Fisher' && !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
             if(logPrior != 0 && opts$warn)
                 warning('Information matrix with the Fisher method does not
                         account for prior parameter distribution information')
@@ -792,7 +810,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     #missing stats for MHRM
-    if(opts$method =='MHRM' || opts$method == 'MIXED'){
+    if(opts$method =='MHRM' || opts$method == 'MIXED' || opts$method == 'SEM'){
         if(opts$verbose) cat("\nCalculating log-likelihood...\n")
         flush.console()
         logLik <- G2 <- SElogLik <- 0
@@ -848,7 +866,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         opts$calcNull <- FALSE
     }
     if(!opts$NULL.MODEL && opts$method != 'MIXED' && opts$calcNull && nmissingtabdata == 0L){
-        null.mod <- try(unclass(computeNullModel(data=data, itemtype=itemtype,
+        null.mod <- try(unclass(computeNullModel(data=data, itemtype=itemtype, key=key,
                                                  group=if(length(pars) > 1L) group else NULL)))
         if(is(null.mod, 'try-error')){
             if(opts$warn)
@@ -910,9 +928,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     }
     Internals <- list(collectLL=ESTIMATE$collectLL, Prior=ESTIMATE$Prior, Pl=Pl,
                       shortpars=as.numeric(ESTIMATE$shortpars), key=key,
-                      bfactor=list(), CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND)
+                      bfactor=list(), CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
+                      survey.weights=survey.weights)
     if(opts$storeEtable)
         Internals$Etable <- ESTIMATE$Etable
+    if(opts$method == 'SEM') Options$TOL <- NA
     if(discrete){
         Fit$F <- Fit$h2 <- NULL
         mod <- new('DiscreteClass',

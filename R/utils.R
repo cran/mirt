@@ -34,16 +34,13 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
         unif <- runif(N)
         sigma <- if(ncol(theta0) == 1L) matrix(cand.t.var) else diag(rep(cand.t.var,ncol(theta0)))
         total_0 <- attr(theta0, 'log.lik_full')
-        theta1 <- theta0 + mirt_rmvnorm(N, sigma = sigma)
-        if(is.null(total_0)) theta1 <- theta0 #for intial draw
-        log_den1 <- mirt_dmvnorm(theta1,prior.mu,prior.t.var,log=TRUE)
+        theta1prod <- theta1 <- theta0 + mirt_rmvnorm(N, sigma = sigma)
+        if(is.null(total_0)) theta1prod <- theta1 <- theta0 #for intial draw
         if(length(prodlist) > 0L)
-            theta1 <- prodterms(theta1,prodlist)
-        itemtrace1 <- computeItemtrace(pars=pars, Theta=theta1, itemloc=itemloc,
-                                       offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
-        total_1 <- rowSums(fulldata * log(itemtrace1)) + log_den1
-        theta1 <- theta1[ ,1L:(pars[[1L]]@nfact - pars[[1L]]@nfixedeffects -
-                                   length(prodlist)), drop=FALSE]
+            theta1prod <- prodterms(theta1, prodlist)
+        total_1 <- complete.LL(theta=theta1prod, pars=pars, nfact=ncol(theta1), prior.mu=prior.mu,
+                               prior.t.var=prior.t.var, OffTerm=OffTerm,
+                               CUSTOM.IND=CUSTOM.IND, itemloc=itemloc, fulldata=fulldata)
         if(is.null(total_0)){ #for intial draw
             attr(theta1, 'log.lik_full') <- total_1
             return(theta1)
@@ -61,6 +58,14 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
         stop('MH sampler failed. Model is likely unstable or may need better starting values',
              .call=FALSE)
     return(theta1)
+}
+
+complete.LL <- function(theta, pars, nfact, prior.mu, prior.t.var,
+                        OffTerm, CUSTOM.IND, itemloc, fulldata){
+    log_den <- mirt_dmvnorm(theta[,1L:nfact, drop=FALSE], prior.mu, prior.t.var, log=TRUE)
+    itemtrace <- computeItemtrace(pars=pars, Theta=theta, itemloc=itemloc,
+                                   offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
+    rowSums(fulldata * log(itemtrace)) + log_den
 }
 
 imputePars <- function(pars, imputenums, constrain, pre.ev){
@@ -1112,11 +1117,14 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
-    if((method == 'MHRM' || method == 'MIXED') && SE.type == 'Oakes') SE.type <- 'MHRM'
-    if((method == 'MHRM' || method == 'MIXED') && !(SE.type %in% c('MHRM', 'FMHRM', 'none')))
-        stop('SE.type not supported for MHRM method', call.=FALSE)
-    if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM')))
+    if((method %in% c('MHRM', 'MIXED', 'SEM')) && SE.type == 'Oakes') SE.type <- 'MHRM'
+    if((method %in% c('MHRM', 'MIXED', 'SEM')) && !(SE.type %in% c('MHRM', 'FMHRM', 'none')))
+        stop('SE.type not supported for stochastic method', call.=FALSE)
+    if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM', 'SEM')))
         stop('method argument not supported', call.=FALSE)
+    if(!(SE.type %in% c('Richardson', 'forward', 'central', 'crossprod', 'Louis', 'sandwich',
+                        'Oakes', 'complete', 'SEM', 'Fisher', 'MHRM', 'FMHRM', 'numerical')))
+        stop('SE.type argument not supported', call.=FALSE)
     if(!(method %in% c('EM', 'QMCEM'))) accelerate <- 'none'
     opts$method = method
     if(draws < 1) stop('draws must be greater than 0', call.=FALSE)
@@ -1181,7 +1189,6 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     }
     if(is.null(opts$theta_lim)) opts$theta_lim <- c(-6,6)
     if(method == 'QMCEM' && is.null(opts$quadpts)) opts$quadpts <- 5000L
-    opts$MSTEPTOL <- ifelse(is.null(technical$MSTEPTOL), opts$TOL/1000, technical$MSTEPTOL)
     if((opts$method == 'MHRM' || opts$method =='MIXED' || SE.type == 'MHRM') && !GenRandomPars &&
        opts$plausible.draws == 0L)
         set.seed(12345L)
@@ -1196,10 +1203,12 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$returnPrepList <- FALSE
     opts$PrepList <- NULL
     if(is.null(optimizer)){
-        opts$Moptim <- if(method %in% c('EM','BL','QMCEM')) 'BFGS' else 'NR'
+        opts$Moptim <- if(method %in% c('EM','BL','QMCEM')) 'BFGS' else 'NR1'
     } else {
         opts$Moptim <- optimizer
     }
+    if(method == 'MIXED' && opts$Moptim != 'NR1')
+        stop('optimizer currently cannot be changed for mixedmirt()', call.=FALSE)
     if(opts$Moptim == 'solnp'){
         if(is.null(solnp_args$control)) solnp_args$control <- list()
         if(is.null(solnp_args$control$trace)) solnp_args$control$trace <- 0
@@ -1927,14 +1936,14 @@ numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 
     ret
 }
 
-computeNullModel <- function(data, itemtype, group=NULL){
+computeNullModel <- function(data, itemtype, key, group=NULL){
     if(is.null(itemtype)) itemtype <- rep('graded', ncol(data))
     itemtype[itemtype == 'Rasch'] <- 'gpcm'
     if(!is.null(group)){
         null.mod <- multipleGroup(data, 1L, itemtype=itemtype, group=group, verbose=FALSE,
-                                  technical=list(NULL.MODEL=TRUE))
+                                  key=key, technical=list(NULL.MODEL=TRUE))
     } else {
-        null.mod <- mirt(data, 1L, itemtype=itemtype, verbose=FALSE,
+        null.mod <- mirt(data, 1L, itemtype=itemtype, verbose=FALSE, key=key,
                          technical=list(NULL.MODEL=TRUE))
     }
     null.mod
@@ -1972,6 +1981,18 @@ loadSplinePars <- function(pars, Theta, MG = TRUE){
         pars <- fn(pars, Theta)
     }
     return(pars)
+}
+
+# borrowed and modified from emdbook package, March 1 2017
+mixX2 <- function (p, df = 1, mix = 0.5, lower.tail = TRUE)
+{
+    df <- rep(df, length.out = length(p))
+    mix <- rep(mix, length.out = length(p))
+    c1 <- ifelse(df == 1, if (lower.tail)  1
+                 else 0, pchisq(p, df - 1, lower.tail = lower.tail))
+    c2 <- pchisq(p, df, lower.tail = lower.tail)
+    r <- mix * c1 + (1 - mix) * c2
+    r
 }
 
 get_deriv_coefs <- function(order, deriv = 1L){

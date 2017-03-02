@@ -1,5 +1,5 @@
 MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(),
-                       lrPars = list(), lr.random = list(), DERIV)
+                       lrPars = list(), lr.random = list(), DERIV, solnp_args, control)
 {
     if(is.null(random)) random <- list()
     itemtype <- sapply(pars[[1]], class)
@@ -10,6 +10,11 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
     verbose <- list$verbose
     nfact <- list$nfact
     NCYCLES <- list$NCYCLES
+    no_stage_3 <- FALSE
+    if(is.na(NCYCLES)){
+        NCYCLES <- 1L
+        no_stage_3 <- TRUE
+    }
     BURNIN <- list$BURNIN
     MHDRAWS <- list$MHDRAWS
     stopifnot(BURNIN >= RANDSTART)
@@ -50,6 +55,8 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             estpars <- c(estpars, lr.random[[i]]@est)
         }
     }
+    if(all(!estpars) && list$SE)
+        stop('Computing ACOV matrix is meaningless when no parameters are estimated', call.=FALSE)
     index <- 1L:nfullpars
     N <- nrow(gtheta0[[1L]])
     #Burn in
@@ -102,7 +109,8 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
         })
         return(ret)
     }
-    SEM.stores <- SEM.stores2 <- list()
+    SEM.stores <- matrix(0, SEMCYCLES, nfullpars)
+    SEM.stores2 <- vector('list', SEMCYCLES)
     conv <- 0L
     k <- 1L
     gamma <- .25
@@ -161,6 +169,11 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             UBOUND <- c(UBOUND, lr.random[[i]]@ubound)
         }
     }
+    control$fnscale <- -1
+    if(is.null(control$maxit)) control$maxit <- 15
+    if(list$Moptim == 'BFGS')
+        if(any(is.finite(LBOUND[estindex_unique]) | is.finite(UBOUND[estindex_unique])))
+            list$Moptim <- 'L-BFGS-B'
     for(g in 1L:ngroups)
         for(i in 1L:J)
             pars[[g]][[i]]@dat <- Data$fulldata[[g]][, c(itemloc[i]:(itemloc[i+1L] - 1L))]
@@ -174,358 +187,82 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             gamma <- (gain[1L] / (cycles - SEMCYCLES - BURNIN - 1L))^(gain[2L])
         if(cycles == (BURNIN + SEMCYCLES + 1L)){
             stagecycle <- 3L
-            longpars <- SEM.stores[[1L]]
-            Tau <- SEM.stores2[[1L]]
-            for(i in 2L:SEMCYCLES){
-                longpars <- longpars + SEM.stores[[i]]
-                Tau <- Tau + SEM.stores2[[i]]
+            longpars <- colMeans(SEM.stores)
+            if(!no_stage_3){
+                Tau <- SEM.stores2[[1L]]
+                for(i in 2L:SEMCYCLES)
+                    Tau <- Tau + SEM.stores2[[i]]
+                Tau <- Tau/SEMCYCLES
             }
-            longpars <- longpars/SEMCYCLES
-            Tau <- Tau/SEMCYCLES
             k <- KDRAWS
             gamma <- 0
         }
         #Reload pars list
         if(list$SE) longpars <- list$startlongpars
-        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-        if(has_graded){
-            for(g in 1L:length(pars)){
-                pars[[g]][1L:J] <- lapply(pars[[g]][1L:J], function(x){
-                    if(class(x) == 'graded'){
-                        ds <- x@par[-(1L:x@nfact)]
-                        x@par[-(1L:x@nfact)] <- sort(ds, decreasing = TRUE)
-                        names(x@par) <- names(x@est)
-                    }
-                    return(x)
-                })
-            }
+        tmp <- MHRM.reloadPars(longpars=longpars, pars=pars, gstructgrouppars=gstructgrouppars,
+                               ngroups=ngroups, J=J, has_graded=has_graded, cycles=cycles,
+                               LRPARS=LRPARS, LR.RAND=LR.RAND, RANDSTART=RANDSTART,
+                               RAND=RAND, lrPars=lrPars, lr.random=lr.random, random=random)
+        pars <- with(tmp, pars)
+        gstructgrouppars <- with(tmp, gstructgrouppars)
+        lr.random <- with(tmp, lr.random)
+        random <- with(tmp, random)
+        lrPars <- with(tmp, lrPars)
+        if(cycles == (BURNIN + SEMCYCLES + 1L) && no_stage_3){
+            cycles <- cycles + SEMCYCLES - 1L
+            break
         }
-        for(g in 1L:ngroups)
-            gstructgrouppars[[g]] <- ExtractGroupPars(pars[[g]][[J+1L]])
-        if(LRPARS){
-            lrPars@par <- lrPars@beta[] <- longpars[lrPars@parnum]
-            lrPars@mus <- lrPars@X %*% lrPars@beta
-            gstructgrouppars[[1L]]$gmeans <- lrPars@mus
-        }
-        if(LR.RAND && cycles > RANDSTART){
-            for(j in 1L:length(lr.random))
-                gstructgrouppars[[1L]]$gmeans <- gstructgrouppars[[1L]]$gmeans +
-                    lr.random[[j]]@drawvals[lr.random[[j]]@mtch]
-        }
-        if(RAND && cycles > RANDSTART) random <- reloadRandom(random=random, longpars=longpars)
-        if(LR.RAND && cycles > RANDSTART) lr.random <- reloadRandom(random=lr.random, longpars=longpars)
-
         start <- proc.time()[3L]
-        if((RAND || LR.RAND) && cycles == RANDSTART){
-            gtheta0[[1L]] <- matrix(0, nrow(gtheta0[[1L]]), ncol(gtheta0[[1L]]))
-            if(RAND){
-                OffTerm <- OffTerm(random, J=J, N=N)
-                if(!is.null(list$cand.t.var))
-                    for(j in 1L:length(random)) random[[j]]@cand.t.var <- list$cand.t.var[j + 1L]
-                for(j in 1L:length(random)){
-                    tmp <- .1
-                    for(i in 1L:31L){
-                        random[[j]]@drawvals <- DrawValues(random[[j]], itemloc=itemloc,
-                                                           Theta=gtheta0[[1L]],
-                                                           pars=pars[[1L]], fulldata=Data$fulldata[[1L]],
-                                                           offterm0=OffTerm, CUSTOM.IND=CUSTOM.IND)
-                        OffTerm <- OffTerm(random, J=J, N=N)
-                        if(is.null(list$cand.t.var)){
-                            if(i > 5L){
-                                if(attr(random[[j]]@drawvals,"Proportion Accepted") > .4)
-                                    random[[j]]@cand.t.var <- random[[j]]@cand.t.var + 2*tmp
-                                if(attr(random[[j]]@drawvals,"Proportion Accepted") < .2)
-                                    random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 2*tmp
-                                if(attr(random[[j]]@drawvals,"Proportion Accepted") < .05)
-                                    random[[j]]@cand.t.var <- random[[j]]@cand.t.var - 5*tmp
-                                if (random[[j]]@cand.t.var < 0){
-                                    random[[j]]@cand.t.var <- tmp
-                                    tmp <- tmp / 10
-                                }
-                            }
-                        }
-                    }
-                    #better start values
-                    tmp <- nrow(random[[j]]@drawvals)
-                    tmp <- cov(random[[j]]@drawvals) * (tmp / (tmp-1L))
-                    random[[j]]@par[random[[j]]@est] <- tmp[lower.tri(tmp, TRUE)][random[[j]]@est]
-                }
-            }
-            if(LR.RAND){
-                if(!is.null(list$cand.t.var)){
-                    for(j in 1L:length(lr.random)) lr.random[[j]]@cand.t.var <-
-                            list$cand.t.var[j + length(random) + 1L]
-                }
-                for(j in 1L:length(lr.random)){
-                    tmp <- .1
-                    for(i in 1L:31L){
-                        lr.random[[j]]@drawvals <- DrawValues(lr.random[[j]], itemloc=itemloc,
-                                                           Theta=gtheta0[[1L]], LR=TRUE,
-                                                           pars=pars[[1L]], fulldata=Data$fulldata[[1L]],
-                                                           offterm0=OffTerm, CUSTOM.IND=CUSTOM.IND)
-                        if(is.null(list$cand.t.var)){
-                            if(i > 5L){
-                                if(attr(lr.random[[j]]@drawvals,"Proportion Accepted") > .4)
-                                    lr.random[[j]]@cand.t.var <- lr.random[[j]]@cand.t.var + 2*tmp
-                                if(attr(lr.random[[j]]@drawvals,"Proportion Accepted") < .2)
-                                    lr.random[[j]]@cand.t.var <- lr.random[[j]]@cand.t.var - 2*tmp
-                                if(attr(lr.random[[j]]@drawvals,"Proportion Accepted") < .05)
-                                    lr.random[[j]]@cand.t.var <- lr.random[[j]]@cand.t.var - 5*tmp
-                                if (lr.random[[j]]@cand.t.var < 0){
-                                    lr.random[[j]]@cand.t.var <- tmp
-                                    tmp <- tmp / 10
-                                }
-                            }
-                        }
-                    }
-                    #better start values
-                    tmp <- nrow(lr.random[[j]]@drawvals)
-                    tmp <- cov(lr.random[[j]]@drawvals) * (tmp / (tmp-1L))
-                    lr.random[[j]]@par[lr.random[[j]]@est] <-
-                        tmp[lower.tri(tmp, TRUE)][lr.random[[j]]@est]
-                    for(j in 1L:length(lr.random))
-                        gstructgrouppars[[1L]]$gmeans <- gstructgrouppars[[1L]]$gmeans +
-                            lr.random[[j]]@drawvals[lr.random[[j]]@mtch]
-                    tmp <- c(numeric(nfact),
-                             as.vector(gstructgrouppars[[1L]]$gcov[lower.tri(gstructgrouppars[[1L]]$gcov, TRUE)]))
-                    pars[[1L]][[J+1L]]@par[pars[[1L]][[J+1L]]@est] <- tmp[pars[[1L]][[J+1L]]@est]
-                }
-            }
-            cand.t.var <- if(is.null(list$cand.t.var)) .5 else list$cand.t.var[1L]
-            tmp <- .1
-            for(i in 1L:31L){
-                gtheta0[[1L]] <- draw.thetas(theta0=gtheta0[[1L]], pars=pars[[1L]], fulldata=Data$fulldata[[1L]],
-                                             itemloc=itemloc, cand.t.var=cand.t.var, CUSTOM.IND=CUSTOM.IND,
-                                             prior.t.var=gstructgrouppars[[1L]]$gcov, OffTerm=OffTerm,
-                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist)
-                if(is.null(list$cand.t.var)){
-                    if(i > 5L){
-                        if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
-                            cand.t.var <- cand.t.var + tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") < .2 && nfact < 4L)
-                            cand.t.var <- cand.t.var - tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") < .1)
-                            cand.t.var <- cand.t.var - 2*tmp
-                        if (cand.t.var < 0){
-                            cand.t.var <- tmp
-                            tmp <- tmp / 2
-                        }
-                    }
-                }
-            }
-            tmp <- nrow(gtheta0[[1L]])
-            tmp <- cov(gtheta0[[1L]]) * (tmp / (tmp-1L))
-            tmp2 <- c(rep(0, ncol(tmp)), tmp[lower.tri(tmp, TRUE)])
-            pars[[1L]][[length(pars[[1L]])]]@par[pars[[1L]][[length(pars[[1L]])]]@est] <-
-                tmp2[pars[[1L]][[length(pars[[1L]])]]@est]
-            cand.t.var <- if(is.null(list$cand.t.var)) .5 else list$cand.t.var[1L]
-            tmp <- .1
-            for(i in 1L:31L){
-                gtheta0[[1L]] <- draw.thetas(theta0=gtheta0[[1L]], pars=pars[[1L]], fulldata=Data$fulldata[[1L]],
-                                             itemloc=itemloc, cand.t.var=cand.t.var, CUSTOM.IND=CUSTOM.IND,
-                                             prior.t.var=gstructgrouppars[[1L]]$gcov, OffTerm=OffTerm,
-                                             prior.mu=gstructgrouppars[[1L]]$gmeans, prodlist=prodlist)
-                if(is.null(list$cand.t.var)){
-                    if(i > 5L){
-                        if(attr(gtheta0[[g]],"Proportion Accepted") > .35) cand.t.var <- cand.t.var + 2*tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") > .25 && nfact > 3L)
-                            cand.t.var <- cand.t.var + tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") < .2 && nfact < 4L)
-                            cand.t.var <- cand.t.var - tmp
-                        else if(attr(gtheta0[[g]],"Proportion Accepted") < .1)
-                            cand.t.var <- cand.t.var - 2*tmp
-                        if (cand.t.var < 0){
-                            cand.t.var <- tmp
-                            tmp <- tmp / 2
-                        }
-                    }
-                }
-            }
-            tmp <- nrow(gtheta0[[1L]])
-            tmp <- cov(gtheta0[[1L]]) * (tmp / (tmp-1L))
-            tmp2 <- c(rep(0, ncol(tmp)), tmp[lower.tri(tmp, TRUE)])
-            pars[[1L]][[length(pars[[1L]])]]@par[pars[[1L]][[length(pars[[1L]])]]@est] <-
-                tmp2[pars[[1L]][[length(pars[[1L]])]]@est]
-        }
-
-        #Step 1. Generate m_k datasets of theta
-        LL <- 0
-        for(g in 1L:ngroups){
-            for(i in 1L:MHDRAWS)
-                gtheta0[[g]] <- draw.thetas(theta0=gtheta0[[g]], pars=pars[[g]], fulldata=Data$fulldata[[g]],
-                                      itemloc=itemloc, cand.t.var=cand.t.var, CUSTOM.IND=CUSTOM.IND,
-                                      prior.t.var=gstructgrouppars[[g]]$gcov, OffTerm=OffTerm,
-                                      prior.mu=gstructgrouppars[[g]]$gmeans, prodlist=prodlist)
-            LL <- LL + attr(gtheta0[[g]], "log.lik")
-        }
-        if(RAND && cycles > RANDSTART){
-            for(j in 1L:length(random)){
-                for(i in 1L:MHDRAWS){
-                    random[[j]]@drawvals <- DrawValues(random[[j]], Theta=gtheta0[[1L]], itemloc=itemloc,
-                                                       pars=pars[[1L]], fulldata=Data$fulldata[[1L]],
-                                                       offterm0=OffTerm, CUSTOM.IND=CUSTOM.IND)
-                    OffTerm <- OffTerm(random, J=J, N=N)
-                }
-            }
-        }
-        if(LR.RAND && cycles > RANDSTART){
-            for(j in 1L:length(lr.random)){
-                for(i in 1L:MHDRAWS){
-                    lr.random[[j]]@drawvals <- DrawValues(lr.random[[j]], Theta=gtheta0[[1L]],
-                                                          itemloc=itemloc, pars=pars[[1L]],
-                                                          fulldata=Data$fulldata[[1L]],
-                                                          offterm0=OffTerm, CUSTOM.IND=CUSTOM.IND, LR=TRUE)
-                }
-            }
-        }
-        #adjust cand.t.var
-        PA <- sapply(gtheta0, function(x) attr(x, "Proportion Accepted"))
-        NS <- sapply(gtheta0, function(x) nrow(x))
-        if(is.null(list$cand.t.var)){
-            cand.t.var <- controlCandVar(sum(PA * NS / sum(NS)), cand.t.var)
-            if(RAND && cycles > (RANDSTART + 1L)){
-                for(j in 1L:length(random)){
-                    random[[j]]@cand.t.var <- controlCandVar(
-                                   attr(random[[j]]@drawvals, "Proportion Accepted"),
-                                   random[[j]]@cand.t.var, min = .01, max = .5)
-                }
-            }
-            if(LR.RAND && cycles > (RANDSTART + 1L)){
-                for(j in 1L:length(lr.random)){
-                    lr.random[[j]]@cand.t.var <- controlCandVar(
-                        attr(lr.random[[j]]@drawvals, "Proportion Accepted"),
-                        lr.random[[j]]@cand.t.var, min = .01, max = .5)
-                }
-            }
-        }
-        Draws.time <- Draws.time + proc.time()[3L] - start
-
-        #Step 2. Find average of simulated data gradients and hessian
-        start <- proc.time()[3L]
+        tmp <- MHRM.draws(pars=pars, lrPars=lrPars, lr.random=lr.random, random=random,
+                          gstructgrouppars=gstructgrouppars, RAND=RAND, LR.RAND=LR.RAND,
+                          RANDSTART=RANDSTART, gtheta0=gtheta0, OffTerm=OffTerm, J=J, N=N, cycles=cycles,
+                          itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, Data=Data, nfact=nfact,
+                          prodlist=prodlist, ngroups=ngroups, MHDRAWS=MHDRAWS, BURNIN=BURNIN,
+                          SEMCYCLES=SEMCYCLES, cand.t.var=cand.t.var, list=list, verbose=verbose)
+        lr.random <- with(tmp, lr.random)
+        random <- with(tmp, random)
+        gtheta0 <- with(tmp, gtheta0)
+        OffTerm <- with(tmp, OffTerm)
+        printmsg <- with(tmp, printmsg)
+        cand.t.var <- with(tmp, cand.t.var)
         gthetatmp <- gtheta0
         if(length(prodlist))
             gthetatmp <- lapply(gtheta0, function(x, prodlist) prodterms(x, prodlist),
-                              prodlist=prodlist)
-        tmp <- .Call('computeDPars', pars, gthetatmp, OffTerm, length(longpars), TRUE,
-                     USE.FIXED, 0L, FALSE)
-        g <- tmp$grad; h <- tmp$hess
-        if(length(list$SLOW.IND)){
-            for(group in 1L:ngroups){
-                for (i in list$SLOW.IND){
-                    deriv <- DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gthetatmp[[group]],
-                                                 estHess=TRUE)
-                    g[pars[[group]][[i]]@parnum] <- deriv$grad
-                    h[pars[[group]][[i]]@parnum, pars[[group]][[i]]@parnum] <- deriv$hess
-                }
-            }
-        }
-        for(group in 1L:ngroups){
-            tmptheta <- gtheta0[[group]]
-            if(is(gstructgrouppars[[1L]]$gmeans, 'matrix'))
-                tmptheta <- tmptheta - gstructgrouppars[[1L]]$gmeans
-            i <- J + 1L
-            deriv <- Deriv(x=pars[[group]][[i]], Theta=tmptheta, CUSTOM.IND=CUSTOM.IND, estHess=TRUE)
-            g[pars[[group]][[i]]@parnum] <- deriv$grad
-            h[pars[[group]][[i]]@parnum, pars[[group]][[i]]@parnum] <- deriv$hess
-        }
-        if(RAND){
-            if(cycles <= RANDSTART){
-                for(i in 1L:length(random)){
-                    g[random[[i]]@parnum] <- 0
-                    h[random[[i]]@parnum, random[[i]]@parnum] <- -diag(length(random[[i]]@parnum))
-                }
-            } else {
-                for(i in 1L:length(random)){
-                    deriv <- RandomDeriv(x=random[[i]])
-                    g[random[[i]]@parnum] <- deriv$grad
-                    h[random[[i]]@parnum, random[[i]]@parnum] <- deriv$hess
-                }
-            }
-        }
-        if(LRPARS){
-            deriv <- Deriv(lrPars, cov=gstructgrouppars[[1L]]$gcov, theta=gtheta0[[1L]])
-            g[lrPars@parnum] <- deriv$grad
-            for(i in 0L:(ncol(deriv$grad)-1L))
-                h[lrPars@parnum[1L:nrow(deriv$grad) + nrow(deriv$grad)*i],
-                  lrPars@parnum[1L:nrow(deriv$grad) + nrow(deriv$grad)*i]] <- deriv$hess
+                                prodlist=prodlist)
+        if(all(!estpars)) break
 
-        }
-        if(LR.RAND){
-            if(cycles <= RANDSTART){
-                for(i in 1L:length(lr.random)){
-                    g[lr.random[[i]]@parnum] <- 0
-                    h[lr.random[[i]]@parnum, lr.random[[i]]@parnum] <- -diag(length(lr.random[[i]]@parnum))
-                }
-            } else {
-                for(i in 1L:length(lr.random)){
-                    deriv <- RandomDeriv(x=lr.random[[i]])
-                    g[lr.random[[i]]@parnum] <- deriv$grad
-                    h[lr.random[[i]]@parnum, lr.random[[i]]@parnum] <- deriv$hess
-                }
-            }
-        }
-        if(length(constrain)){
-            grad <- as.numeric(updateGrad(g, L))
-            ave.h <- updateHess(-h, L)
-        } else {
-            grad <- g
-            ave.h <- -h
-        }
-        grad <- grad[estpars & !redun_constr]
-        ave.h <- ave.h[estpars & !redun_constr, estpars & !redun_constr]
-        if(any(is.na(grad))){
-            stop('Model did not converge (unacceptable gradient caused by extreme parameter values)',
-                 call.=FALSE)
-        }
-        if(is.na(attr(gtheta0[[1L]],"log.lik")))
-            stop('Estimation halted. Model did not converge.', call.=FALSE)
-        if(verbose){
-            AR <- do.call(c, lapply(gtheta0, function(x) attr(x, "Proportion Accepted")))
-            CTV <- cand.t.var
-            if(RAND && cycles > RANDSTART){
-                AR <- c(AR, do.call(c, lapply(random,
-                                        function(x) attr(x@drawvals, "Proportion Accepted"))))
-                CTV <- c(CTV, do.call(c, lapply(random,
-                                                function(x) x@cand.t.var)))
-            }
-            if(LR.RAND && cycles > RANDSTART){
-                AR <- c(AR, do.call(c, lapply(lr.random,
-                                              function(x) attr(x@drawvals, "Proportion Accepted"))))
-                CTV <- c(CTV, do.call(c, lapply(lr.random,
-                                                function(x) x@cand.t.var)))
-            }
-            AR <- paste0(sapply(AR, function(x) sprintf('%.2f', x)), collapse='; ')
-            CTV <- paste0(sapply(CTV, function(x) sprintf('%.2f', x)), collapse='; ')
-            if(cycles <= BURNIN)
-                printmsg <- sprintf("\rStage 1 = %i, LL = %.1f, AR(%s) = [%s]",
-                                    cycles, LL, CTV, AR)
-            if(cycles > BURNIN && cycles <= BURNIN + SEMCYCLES)
-                printmsg <- sprintf("\rStage 2 = %i, LL = %.1f, AR(%s) = [%s]",
-                                    cycles-BURNIN, LL, CTV, AR)
-            if(cycles > BURNIN + SEMCYCLES)
-                printmsg <- sprintf("\rStage 3 = %i, LL = %.1f, AR(%s) = [%s]",
-                                    cycles-BURNIN-SEMCYCLES, LL, CTV, AR)
-        }
+        #Step 2. Find average of simulated data gradients and hessian
+        Draws.time <- Draws.time + proc.time()[3L] - start
+        start <- proc.time()[3L]
+        longpars0 <- longpars
+        tmp <- MHRM.Mstep(pars=pars, gtheta=gthetatmp, lrPars=lrPars, OffTerm=OffTerm, longpars=longpars,
+                          USE.FIXED=USE.FIXED, list=list, ngroups=ngroups, LR.RAND=LR.RAND,
+                          DERIV=DERIV, gstructgrouppars=gstructgrouppars, nfact=nfact,
+                          CUSTOM.IND=CUSTOM.IND, RAND=RAND, cycles=cycles, lr.random=lr.random,
+                          RANDSTART=RANDSTART, random=random, J=J, LRPARS=LRPARS, L=L, has_graded=has_graded,
+                          constrain=constrain, estpars=estpars, redun_constr=redun_constr,
+                          estindex_unique=estindex_unique,LBOUND=LBOUND, UBOUND=UBOUND,
+                          gfulldata=Data$fulldata, itemloc=itemloc, control=control)
+        grad <- tmp$grad
+        ave.h <- tmp$hess
+        correction <- tmp$correction
         if(stagecycle < 3L){
-            correction <- try(solve(ave.h, grad), TRUE)
-            if(is(correction, 'try-error')){
-                ave.h.inv <- MPinv(ave.h)
-                correction <- as.vector(grad %*% ave.h.inv)
-            }
             correction[correction > 1] <- 1
             correction[correction < -1] <- -1
             longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
-            longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
-            longpars[longpars > UBOUND] <- UBOUND[longpars > UBOUND]
+            if(any(longpars < LBOUND))
+                longpars[longpars < LBOUND] <- (longpars0[longpars < LBOUND] + LBOUND[longpars < LBOUND])/2
+            if(any(longpars > UBOUND))
+                longpars[longpars > UBOUND] <- (longpars0[longpars > UBOUND] + UBOUND[longpars > UBOUND])/2
             if(length(constrain))
                 for(i in 1L:length(constrain))
-                    longpars[index %in% constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
+                    longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
             if(verbose)
                 cat(printmsg, sprintf(", Max-Change = %.4f", max(abs(gamma*correction))), sep='')
             if(stagecycle == 2L){
-                SEM.stores[[cycles - BURNIN]] <- longpars
-                SEM.stores2[[cycles - BURNIN]] <- ave.h
+                SEM.stores[cycles - BURNIN, ] <- longpars
+                if(!no_stage_3)
+                    SEM.stores2[[cycles - BURNIN]] <- ave.h
             }
             Mstep.time <- Mstep.time + proc.time()[3L] - start
             next
@@ -533,19 +270,21 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
 
         #Step 3. Update R-M step
         Tau <- Tau + gamma*(ave.h - Tau)
-        correction <- try(solve(Tau, grad), TRUE)
-        if(is(correction, 'try-error')){
-            Tau.inv <- MPinv(Tau)
-            correction <- as.vector(grad %*% Tau.inv)
+        if(list$Moptim == 'NR1'){
+            correction <- try(solve(Tau, grad), TRUE)
+            if(is(correction, 'try-error')){
+                Tau.inv <- MPinv(Tau)
+                correction <- as.vector(grad %*% Tau.inv)
+            }
+            longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
+            if(any(longpars < LBOUND))
+                longpars[longpars < LBOUND] <- (longpars0[longpars < LBOUND] + LBOUND[longpars < LBOUND])/2
+            if(any(longpars > UBOUND))
+                longpars[longpars > UBOUND] <- (longpars0[longpars > UBOUND] + UBOUND[longpars > UBOUND])/2
+            if(length(constrain))
+                for(i in 1L:length(constrain))
+                    longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
         }
-        correction[gamma*correction > .25] <- .25/gamma
-        correction[gamma*correction < -.25] <- -.25/gamma
-        longpars[estindex_unique] <- longpars[estindex_unique] + gamma*correction
-        longpars[longpars < LBOUND] <- LBOUND[longpars < LBOUND]
-        longpars[longpars > UBOUND] <- UBOUND[longpars > UBOUND]
-        if(length(constrain))
-            for(i in 1L:length(constrain))
-                longpars[index %in% constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
         if(verbose)
             cat(printmsg, sprintf(", gam = %.4f, Max-Change = %.4f",
                                   gamma, max(abs(gamma*correction))), sep='')
@@ -559,13 +298,14 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             if(list$SE.type == 'MHRM'){
                 phi <- grad
                 Phi <- ave.h
-            } else Phi <- 0
+            } else phi <- Phi <- 0
         }
         if(list$SE.type != 'none' && list$SE){
             if(list$SE.type == 'MHRM'){
                 phi <- phi + gamma*(grad - phi)
                 Phi <- Phi + gamma*(ave.h - outer(grad,grad) - Phi)
             } else if(list$SE.type == 'FMHRM'){
+                phi <- phi + 1/NCYCLES * grad
                 Phi <- Phi + 1/NCYCLES * (ave.h - outer(grad,grad))
             }
         }
@@ -573,20 +313,24 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
     } ###END BIG LOOP
     if(verbose) cat('\r\n')
     #Reload final pars list
-    if(cycles == NCYCLES + BURNIN + SEMCYCLES && !list$SE){
+    if(cycles == NCYCLES + BURNIN + SEMCYCLES && !list$SE && !no_stage_3){
         if(list$message)
             message('MHRM terminated after ', NCYCLES, ' iterations.')
         converge <- FALSE
     }
     if(list$SE) longpars <- list$startlongpars
-    for(g in 1L:ngroups){
-        for(i in 1L:(J+1L))
-            pars[[g]][[i]]@par <- longpars[pars[[g]][[i]]@parnum]
-    }
+    tmp <- MHRM.reloadPars(longpars=longpars, pars=pars, gstructgrouppars=gstructgrouppars,
+                           ngroups=ngroups, J=J, has_graded=has_graded, cycles=cycles,
+                           LRPARS=LRPARS, LR.RAND=LR.RAND, RANDSTART=RANDSTART,
+                           RAND=RAND, lrPars=lrPars, lr.random=lr.random, random=random)
+    pars <- with(tmp, pars)
+    gstructgrouppars <- with(tmp, gstructgrouppars)
+    lr.random <- with(tmp, lr.random)
+    random <- with(tmp, random)
+    lrPars <- with(tmp, lrPars)
     fail_invert_info <- TRUE
     if(list$SE){
-        if(list$SE.type == 'MHRM') info <- Phi + outer(phi,phi)
-        else if(list$SE.type == 'FMHRM') info <- Phi
+        info <- Phi + outer(phi,phi)
         acov <- try(solve(info), TRUE)
         if(is(acov, 'try-error')){
             if(list$warn)
@@ -602,7 +346,7 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             SE[estindex_unique] <- SEtmp
             if(length(constrain) > 0L)
                 for(i in 1L:length(constrain))
-                    SE[index %in% constrain[[i]][-1L]] <- SE[constrain[[i]][1L]]
+                    SE[constrain[[i]][-1L]] <- SE[constrain[[i]][1L]]
             for(g in 1L:ngroups){
                 for(i in 1L:(J+1L))
                     pars[[g]][[i]]@SEpar <- SE[pars[[g]][[i]]@parnum]
@@ -620,9 +364,14 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             }
         }
     }
-    names(correction) <- names(estpars)[estindex_unique]
-    if(list$SE) info <- nameInfoMatrix(info=info, correction=correction, L=L, npars=ncol(L))
-    else info <- matrix(0, 1, 1)
+    if(any(estpars)){
+        names(correction) <- names(estpars)[estindex_unique]
+        if(list$SE) info <- nameInfoMatrix(info=info, correction=correction, L=L, npars=ncol(L))
+        else info <- matrix(0, 1L, 1L)
+    } else {
+        info <- matrix(0, 1L, 1L)
+        cycles <- BURNIN + SEMCYCLES
+    }
     ret <- list(pars=pars, cycles = cycles - BURNIN - SEMCYCLES, info=if(list$expl) matrix(0) else info,
                 correction=correction, longpars=longpars, converge=converge, SElogLik=0, cand.t.var=cand.t.var, L=L,
                 random=random, lrPars=lrPars, lr.random=lr.random,

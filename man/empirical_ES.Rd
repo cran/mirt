@@ -95,6 +95,7 @@ focal group).}
 test scores.}
 }
 }
+
 \examples{
 \dontrun{
 
@@ -102,7 +103,7 @@ test scores.}
 set.seed(12345)
 a <- matrix(abs(rnorm(15,1,.3)), ncol=1)
 d <- matrix(rnorm(15,0,.7),ncol=1)
-itemtype <- rep('dich', nrow(a))
+itemtype <- rep('2PL', nrow(a))
 N <- 1000
 dataset1 <- simdata(a, d, N, itemtype)
 dataset2 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
@@ -145,11 +146,10 @@ empirical_ES(mod, plot=TRUE, DIF=FALSE)
 
 }
 }
-\author{
-Adam Meade and Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \references{
 Meade, A. W. (2010).  A taxonomy of effect size measures for the differential functioning
   of items and scales. \emph{Journal of Applied Psychology, 95}, 728-743.
 }
-
+\author{
+Adam Meade and Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}

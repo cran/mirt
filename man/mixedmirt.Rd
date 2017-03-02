@@ -139,7 +139,7 @@ Theta <- matrix(sort(rnorm(N)))
 pseudoIQ <- Theta * 5 + 100  + rnorm(N, 0 , 5)
 pseudoIQ <- (pseudoIQ - mean(pseudoIQ))/10  #rescale variable for numerical stability
 group <- factor(rep(c('G1','G2','G3'), each = N/3))
-data <- simdata(a,d,N, itemtype = rep('dich',10), Theta=Theta)
+data <- simdata(a,d,N, itemtype = rep('2PL',10), Theta=Theta)
 covdata <- data.frame(group, pseudoIQ)
 #use parallel computing
 mirtCluster()
@@ -279,7 +279,7 @@ a <- matrix(1, 10)
 d <- matrix(rnorm(10))
 Theta <- matrix(c(rnorm(n, 0), rnorm(n, 1), rnorm(n, 2)))
 covdata <- data.frame(group=rep(c('g1','g2','g3'), each=n))
-dat <- simdata(a, d, N=n*3, Theta=Theta, itemtype = 'dich')
+dat <- simdata(a, d, N=n*3, Theta=Theta, itemtype = '2PL')
 
 #had we known the latent abilities, we could have computed the regression coefs
 summary(lm(Theta ~ covdata$group))
@@ -329,7 +329,7 @@ for (i in 1:cluster)
 
 group = factor(rep(paste0('G',1:cluster), each = N/cluster))
 covdata <- data.frame(group)
-dat <- simdata(a,d,N, itemtype = rep('dich',10), Theta=matrix(Theta))
+dat <- simdata(a,d,N, itemtype = rep('2PL',10), Theta=matrix(Theta))
 
 # null model
 mod1 <- mixedmirt(dat, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group)
@@ -359,9 +359,6 @@ head(cbind(randef(mod3)$group, random_intercept))
 
 }
 }
-\author{
-Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \references{
 Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-RM Algorithm.
 \emph{Journal of Educational Measurement, 52}, 200-222.
@@ -369,4 +366,6 @@ Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-
 \seealso{
 \code{\link{mirt}}, \code{\link{randef}}, \code{\link{fixef}}, \code{\link{boot.mirt}}
 }
-
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}

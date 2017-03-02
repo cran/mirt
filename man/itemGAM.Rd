@@ -61,7 +61,7 @@ J <- 30
 a <- matrix(1, J)
 d <- matrix(rnorm(J))
 Theta <- matrix(rnorm(N, 0, 1.5))
-dat <- simdata(a, d, N, itemtype = 'dich', Theta=Theta)
+dat <- simdata(a, d, N, itemtype = '2PL', Theta=Theta)
 
 # make a bad item
 ps <- exp(Theta^2 + Theta) / (1 + exp(Theta^2 + Theta))
@@ -149,13 +149,12 @@ plot(IG4[[3L]], main = 'Category 3')
 
 }
 }
-\author{
-Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \seealso{
 \code{\link{itemfit}}
+}
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \keyword{fit,}
 \keyword{item}
 \keyword{traceline}
-

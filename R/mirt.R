@@ -3,9 +3,10 @@
 #'
 #' \code{mirt} fits an unconditional maximum likelihood factor analysis model
 #' to any mixture of dichotomous and polytomous data under the item response theory paradigm
-#' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm or with
+#' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm, with
 #' an EM algorithm approach outlined by Bock and Aiken (1981) using rectangular or
-#' quasi-Monte Carlo integration grids.
+#' quasi-Monte Carlo integration grids, or with the stochastic EM (i.e., the first two stages
+#' of the MH-RM algorithm).
 #' Models containing 'explanatory' person or item level predictors
 #' can only be included by using the \code{\link{mixedmirt}} function, though latent
 #' regression models can be fit using the \code{formula} input below. Tests that form a
@@ -273,50 +274,60 @@
 #'   \itemize{
 #'     \item \code{'Rasch'} - Rasch/partial credit model by constraining slopes to 1 and freely estimating
 #'       the variance parameters (alternatively, can be specified by applying equality constraints to the
-#'       slope parameters in \code{'gpcm'})
+#'       slope parameters in \code{'gpcm'}; Rasch, 1960)
 #'     \item \code{'2PL'}, \code{'3PL'}, \code{'3PLu'}, and \code{'4PL'} - 2-4 parameter logistic model,
 #'       where \code{3PL} estimates the lower asymptote only while \code{3PLu} estimates the upper asymptote only
-#'     \item \code{'graded'} - graded response model
+#'       (Lord and Novick, 1968; Lord, 1980)
+#'     \item \code{'graded'} - graded response model (Samejima, 1969)
 #'     \item \code{'grsm'} and \code{'grsmIRT'} - graded ratings scale model in the
 #'       slope-intercept and classical IRT parameterization.
-#'       \code{'grsmIRT'} is restricted to unidimensional models
+#'       \code{'grsmIRT'} is restricted to unidimensional models (Muraki, 1992)
 #'     \item \code{'gpcm'} and \code{'gpcmIRT'} - generalized partial credit model in the slope-intercept
 #'       and classical parameterization. \code{'gpcmIRT'} is restricted to unidimensional models. Note that
-#'       optional scoring matrices for \code{'gpcm'} are available with the \code{gpcm_mats} input
+#'       optional scoring matrices for \code{'gpcm'} are available with the \code{gpcm_mats} input (Muraki, 1992)
 #'     \item \code{'rsm'} - Rasch rating scale model using the \code{'gpcmIRT'} structure
-#'       (unidimensional only)
-#'     \item \code{'nominal'} - nominal response model
-#'     \item \code{'ideal'} - dichotomous ideal point model
+#'       (unidimensional only; Andrich, 1978)
+#'     \item \code{'nominal'} - nominal response model (Bock, 1972)
+#'     \item \code{'ideal'} - dichotomous ideal point model (Maydeu-Olivares, 2006)
 #'     \item \code{'PC2PL'} and \code{'PC3PL'} - 2-3 parameter partially compensatory model.
 #'       Note that constraining the slopes to be equal across items will reduce the model to
 #'       Embretson's (a.k.a. Whitely's) multicomponent model (1980).
 #'     \item \code{'2PLNRM'}, \code{'3PLNRM'}, \code{'3PLuNRM'}, and \code{'4PLNRM'} - 2-4 parameter nested
 #'       logistic model, where \code{3PLNRM} estimates the lower asymptote only while \code{3PLuNRM} estimates
-#'       the upper asymptote only
+#'       the upper asymptote only (Suh and Bolt, 2010)
 #'     \item \code{'spline'} - spline response model with the \code{\link{bs}} (default)
-#'       or the \code{\link{ns}} function
+#'       or the \code{\link{ns}} function (Winsberg, Thissen, and Wainer, 1984)
 #'  }
 #'
 #'  Additionally, user defined item classes can also be defined using the \code{\link{createItem}} function
 #' @param method a character object specifying the estimation algorithm to be used. The default is
 #'   \code{'EM'}, for the standard EM algorithm with fixed quadrature, or \code{'QMCEM'} for
 #'   quasi-Monte Carlo EM estimation. The option \code{'MHRM'} may
-#'   also be passed to use the MH-RM algorithm, as well as \code{'BL'} for the Bock and Lieberman
+#'   also be passed to use the MH-RM algorithm, \code{'SEM'} for the Stochastic EM algorithm (first
+#'   two stages of the MH-RM stage using an optimizer other than a single Newton-Raphson iteration),
+#'   and \code{'BL'} for the Bock and Lieberman
 #'   approach (generally not recommended for longer tests).
 #'
-#'   The \code{'EM'} is generally effective with 1-3 factors, but methods such as the \code{'QMCEM'}
-#'   or \code{'MHRM'} should be used when the dimensions are 3 or more
+#'   The \code{'EM'} is generally effective with 1-3 factors, but methods such as the \code{'QMCEM'},
+#'   \code{'SEM'}, or \code{'MHRM'} should be used when the dimensions are 3 or more. Note that
+#'   when the optimizer is stochastic the associated \code{SE.type} is automatically changed to
+#'   \code{SE.type = 'MHRM'} by default to avoid the use of quadrature
 #' @param optimizer a character indicating which numerical optimizer to use. By default, the EM
 #'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds box-constraints and
 #'   \code{'L-BFGS-B'} when there are. Another good option which supports bound constraints is
 #'   the \code{'nlminb'}, which may be more stable than the BFGS family of optimizers (though slightly slower).
 #'
 #'   Other options include the Newton-Raphson (\code{'NR'}),
-#'   which often will be more efficient than the \code{'BFGS'} but not as stable for more complex
-#'   IRT models (such as the nominal or nested logit models) and does not support
-#'   upper and lower bound constraints. As well, the \code{'Nelder-Mead'} and \code{'SANN'}
+#'   which can be more efficient than the \code{'BFGS'} but not as stable for more complex
+#'   IRT models (such as the nominal or nested logit models)
+#'   and the related \code{'NR1'} which is also the Newton-Raphson
+#'   but consists of only 1 update that has been coupled with RM Hessian (only
+#'   applicable when the MH-RM algorithm is used). The MH-RM algorithm uses the \code{'NR1'} by default,
+#'   and though currently the \code{'BFGS'}, \code{'L-BFGS-B'}, and \code{'NR'}
+#'   are also supported with this method (with
+#'   few iterations by default) to emulate stochastic EM updates.
+#'   As well, the \code{'Nelder-Mead'} and \code{'SANN'}
 #'   estimators are also available, but their routine use generally is not required or recommended.
-#'   The MH-RM algorithm uses the \code{'NR'} by default, and currently cannot be changed.
 #'
 #'   Additionally, estimation subroutines from the \code{Rsolnp} and \code{alabama}
 #'   packages are available by passing the arguments \code{'solnp'} and \code{'alabama'},
@@ -363,7 +374,7 @@
 #'   run in parallel if a \code{\link{mirtCluster}} object has been defined (this will be
 #'   used for Oakes' method as well). Additionally,
 #'   inspecting the symmetry of the ACOV matrix for convergence issues by passing
-#'   \code{technical = list(symmetric = FALSE)} can be helpful to determine if a sufficent
+#'   \code{technical = list(symmetric = FALSE)} can be helpful to determine if a sufficient
 #'   solution has been reached
 #'
 #' @param guess fixed pseudo-guessing parameters. Can be entered as a single
@@ -509,7 +520,7 @@
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
 #'     \item{delta}{the deviation term used in numerical estimates when computing the ACOV matrix
 #'       with the 'forward' or 'central' numerical approaches, as well as Oakes' method with the
-#'       Richarson extropolation. Default is 1e-5}
+#'       Richarson extrapolation. Default is 1e-5}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
 #'     \item{removeEmptyRows}{logical; remove response vectors that only contain \code{NA}'s?
@@ -539,7 +550,10 @@
 #' @param alabama_args a list of arguments to be passed to the \code{alabama::constrOptim.nl()}
 #'   function for equality constraints, inequality constraints, etc
 #' @param control a list passed to the respective optimizers (i.e., \code{optim()}, \code{nlminb()},
-#'   etc)
+#'   etc). Additional arguments have been included for the \code{'NR'} optimizer: \code{'tol'}
+#'   for the convergence tolerance in the M-step (default is \code{TOL/1000}), while the default
+#'   number of iterations for the Newton-Raphson optimizer is 50 (modified with the \code{'maxit'}
+#'   control input)
 #' @param ... additional arguments to be passed
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @seealso  \code{\link{bfactor}},  \code{\link{multipleGroup}},  \code{\link{mixedmirt}},
@@ -856,7 +870,7 @@
 #'
 #' sigma <- diag(2)
 #' sigma[1,2] <- sigma[2,1] <- .4
-#' items <- c(rep('dich',4), rep('graded',3), 'dich')
+#' items <- c(rep('2PL',4), rep('graded',3), '2PL')
 #' dataset <- simdata(a,d,2000,items,sigma)
 #'
 #' #analyses
@@ -923,9 +937,9 @@
 #' ThetaNormal <- matrix(rnorm(2000))
 #' ThetaBimodal <- scale(matrix(c(rnorm(1000, -2), rnorm(1000,2)))) #bimodal
 #' ThetaSkew <- scale(matrix(rchisq(2000, 3))) #positive skew
-#' datNormal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaNormal)
-#' datBimodal <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaBimodal)
-#' datSkew <- simdata(a, d, 2000, itemtype = 'dich', Theta=ThetaSkew)
+#' datNormal <- simdata(a, d, 2000, itemtype = '2PL', Theta=ThetaNormal)
+#' datBimodal <- simdata(a, d, 2000, itemtype = '2PL', Theta=ThetaBimodal)
+#' datSkew <- simdata(a, d, 2000, itemtype = '2PL', Theta=ThetaSkew)
 #'
 #' normal <- mirt(datNormal, 1, empiricalhist = TRUE)
 #' plot(normal, type = 'empiricalhist')
@@ -982,7 +996,7 @@
 #'
 #' #items and response data
 #' a <- matrix(1, 20); d <- matrix(rnorm(20))
-#' dat <- simdata(a, d, 1000, itemtype = 'dich', Theta=Theta)
+#' dat <- simdata(a, d, 1000, itemtype = '2PL', Theta=Theta)
 #'
 #' #unconditional Rasch model
 #' mod0 <- mirt(dat, 1, 'Rasch')
@@ -1040,7 +1054,7 @@
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  covdata = NULL, formula = NULL, SE.type = 'Oakes', method = 'EM',
-                 optimizer = 'BFGS', pars = NULL, constrain = NULL, parprior = NULL,
+                 optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = TRUE, draws = 5000, survey.weights = NULL,
                  quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL,
                  rsm.block = NULL, key = NULL,

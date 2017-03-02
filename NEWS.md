@@ -1,3 +1,24 @@
+# Changes in mirt 1.23
+
+- `anova()` LRT comparison gains a `bounded` logical to indicate whether a bounded parameter is being compared, 
+  as well as a `mix` argument to indicate the mixture of chi-squared distributions 
+
+- MH-RM estimation `optimizer` argument can now be modified to `BFGS`, `L-BFGS-B`, and `NR` 
+  instead of the default `NR1`
+
+- a distinction between the `NR` optimizer in the EM and MH-RM applications is included, where the MH-RM now
+  defaults to `NR1` to indicate a single Newton-Raphson update that uses an RM filtered Hessian term
+
+- `method = 'SEM'` added to perform the stochastic EM algorithm (first two stages of the MH-RM algorithm setup).  
+  Alternatively, setting `technical = list(NCYCLES = NA)` when using the MH-RM algorithm now returns 
+  the stochastic EM results
+
+- added `multidim_matrix` option to `iteminfo()` to expose computation of information matrices
+
+- bounded parameter spaces handled better when using the NR optimizer
+
+- various bug fixes and performance improvements
+
 # Changes in mirt 1.22
 
 - `SE.type = 'Oakes'` set as the new default when computing standard errors via the ACOV matrix when

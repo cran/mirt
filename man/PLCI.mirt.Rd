@@ -71,16 +71,18 @@ result3
 
 }
 }
-\author{
-Phil Chalmers \email{rphilip.chalmers@gmail.com}
-}
 \references{
+Chalmers, R. P., Pek, J., & Liu, Y. (in press). Profile-likelihood Confidence
+Intervals in Item Response Theory Models. \emph{Multivariate Behavioral Research}.
+
 Neale, M. C. & Miller, M. B. (1997). The use of likelihood-based confidence intervals in genetic
-models. Behavior Genetircs, 27, 113-120
+models. \emph{Behavior Genetics, 27}, 113-120.
 }
 \seealso{
 \code{\link{boot.mirt}}
 }
+\author{
+Phil Chalmers \email{rphilip.chalmers@gmail.com}
+}
 \keyword{likelihood}
 \keyword{profiled}
-

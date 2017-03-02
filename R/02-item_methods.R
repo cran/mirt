@@ -331,9 +331,8 @@ setMethod(
 setMethod(
     f = "RandomDeriv",
     signature = signature(x = 'RandomPars'),
-    definition = function(x){
+    definition = function(x, estHess = TRUE){
         Theta <- x@drawvals
-        estHess <- TRUE
         pick <- -c(1L:ncol(Theta))
         out <- .Call("dgroup", x, Theta, matrix(0L), estHess, TRUE, FALSE, FALSE)
         out$grad <- out$grad[pick]
@@ -380,7 +379,7 @@ setMethod(
 setMethod(
     f = "Deriv",
     signature = signature(x = 'lrPars'),
-    definition = function(x, cov, theta){
+    definition = function(x, cov, theta, estHess = TRUE){
         inv_sigma <- solve(cov)
         tmp <- t(inv_sigma %*% t(theta - x@mus) %*% x@X)
         tmp2 <- -det(inv_sigma) * x@tXX
@@ -1710,10 +1709,10 @@ setMethod(
         grad[nfact+3L] <- sum( (cdat * u_1u * Pstar / Pd - rowSums(idat * u_1u * Pstar / Qd) ))
         for(j in 1L:nd){
             grad[nfact+3L+j] <- sum((
-                (idat[,j] * Qd * rowSums(Theta) * (Pn[,j] - Pn[,j]^2) * den) / (Qd * num[,j]) -
+                (idat[,j] * Qd * rowSums(Theta) * (Pn[,j] - Pn[,j]^2)) / (Qd * Pn[,j]) -
                     rowSums(idat[,-j, drop=FALSE]) * rowSums(Theta) * Pn[,j]))
             grad[nfact+3L+nd+j] <- sum((
-                (idat[,j] * Qd * (Pn[,j] - Pn[,j]^2) * den) / (Qd * num[,j]) -
+                (idat[,j] * Qd * (Pn[,j] - Pn[,j]^2)) / (Qd * Pn[,j]) -
                     rowSums(idat[,-j, drop=FALSE]) * Pn[,j]))
         }
         ret <- list(grad=grad, hess=hess)
@@ -2614,7 +2613,7 @@ setMethod(
         if(nrow(x@fixed.design) > 1L && ncol(x@fixed.design) > 0L)
             Theta <- cbind(x@fixed.design, Theta)
         ret <- .Call("dparsgpcmIRT", x@par, Theta, offterm, x@dat,
-                     length(x@par) - ncol(Theta), estHess)
+                     length(x@par) - ncol(Theta), FALSE)
         hess <- matrix(0, length(x@par), length(x@par))
         if(estHess && any(x@est))
             hess[x@est, x@est] <- numDeriv::hessian(EML, x@par[x@est], obj=x,
