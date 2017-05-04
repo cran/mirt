@@ -1,7 +1,6 @@
 #' Compute multidimensional discrimination index
 #'
 #' Returns a vector containing the MDISC values for each item in the model input object (Reckase, 2009).
-#' Note that the logistic slope parameters are divided by 1.702 to match the normal ogive metric.
 #'
 #' @aliases MDISC
 #' @param x an object of class 'SingleGroupClass'
@@ -25,9 +24,9 @@ MDISC <- function(x){
     if(missing(x)) missingMsg('x')
     stopifnot(class(x) == 'SingleGroupClass')
     ret <- numeric(extract.mirt(x, 'nitems'))
-    for(i in 1L:length(ret)){
+    for(i in seq_len(length(ret))){
         item <- extract.item(x, i)
-        as <- ExtractLambdas(item)/1.702
+        as <- ExtractLambdas(item)
         ret[i] <- sqrt(as %*% as)
     }
     names(ret) <- extract.mirt(x, 'itemnames')

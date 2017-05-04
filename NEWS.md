@@ -1,3 +1,32 @@
+# Changes in mirt 1.24
+
+- MDIFF and MDISC no longer in normal ogive metric (1.702 scaling value removed)
+
+- added `QMC` option to `residuals()` for `LD` and `LDG2` methods. Also globally set the number of QMC points to 
+  5000 throughout the package for consistency
+
+- `info_if_converged` and `logLik_if_converged` added to `technical` list to indicate whether the information matrix
+  and stochastic log-likelihood should be computed only when the model converges. Default is now `TRUE` for both
+
+- added `'MCEM'` method for Monte Carlo EM. An associated `MCEM_draws` function added to the `technical` list
+  as well to control the number of draws throughout the EM cycles
+
+- support for information matrix computations for QMCEM method added (e.g., Oakes, crossprod, Louis)
+
+- globally improve numerical efficiency of QMC methods, including the QMCEM estimator
+
+- include missing data values in `itemfit()` for parametric bootstrap methods to replicate missing
+  data pattern
+
+- ensure that nest-logit models have at least 3 categories (reported by Seongho Bae)
+
+- convergence set to FALSE if any `g > u` is found in the 4PL model
+
+- in verbose console output the log-posterior is printed when priors are included in the EM (previously was only the 
+  marginal likelihood)
+  
+- various bug fixes to SIBTEST, particularly for very small sample sizes
+
 # Changes in mirt 1.23
 
 - `anova()` LRT comparison gains a `bounded` logical to indicate whether a bounded parameter is being compared, 

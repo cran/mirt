@@ -19,8 +19,10 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     nfullpars <- 0L
     estpars <- c()
     prodlist <- PrepList[[1L]]$prodlist
-    for(g in 1L:ngroups){
-        for(i in 1L:(J+1L)){
+    MC <- list$method %in% c('QMCEM', 'MCEM')
+    QMC <- list$method == 'QMCEM'
+    for(g in seq_len(ngroups)){
+        for(i in seq_len(J+1L)){
             nfullpars <- nfullpars + length(pars[[g]][[i]]@par)
             estpars <- c(estpars, pars[[g]][[i]]@est)
         }
@@ -30,20 +32,20 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
     }
     listpars <- vector('list', ngroups)
-    for(g in 1L:ngroups){
+    for(g in seq_len(ngroups)){
         listpars[[g]] <- list()
-        for(i in 1L:(J + 1L)){
+        for(i in seq_len(J + 1L)){
             listpars[[g]][[i]] <- pars[[g]][[i]]@par
         }
         if(length(lrPars))
             listpars[[g]][[i+1L]] <- lrPars@par
     }
-    index <- 1L:nfullpars
+    index <- seq_len(nfullpars)
     longpars <- rep(NA,nfullpars)
     latent_longpars <- logical(nfullpars)
     ind1 <- 1L
-    for(g in 1L:ngroups){
-        for(i in 1L:(J+1L)){
+    for(g in seq_len(ngroups)){
+        for(i in seq_len(J+1L)){
             ind2 <- ind1 + length(pars[[g]][[i]]@par) - 1L
             longpars[ind1:ind2] <- pars[[g]][[i]]@par
             if(i == (J+1L)) latent_longpars[ind1:ind2] <- TRUE
@@ -71,10 +73,10 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     tmp[tmp == 0L] <- 1L
     check <- as.numeric(L %*% longpars) / tmp
     longpars[estpars] <- check[estpars]
-    LL <- 0
+    LL <- LP <- 0
     LBOUND <- UBOUND <- c()
-    for(g in 1L:ngroups){
-        for(i in 1L:(J+1L)){
+    for(g in seq_len(ngroups)){
+        for(i in seq_len(J+1L)){
             LBOUND <- c(LBOUND, pars[[g]][[i]]@lbound)
             UBOUND <- c(UBOUND, pars[[g]][[i]]@ubound)
         }
@@ -84,15 +86,14 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
     }
     est <- c()
-    for(g in 1L:ngroups){
-       for(j in 1L:(J+1L))
+    for(g in seq_len(ngroups)){
+       for(j in seq_len(J+1L))
            est <- c(est, pars[[g]][[j]]@est)
        if(length(lrPars))
            est <- c(est, rep(FALSE, length(lrPars@est)))
     }
-    if(length(constrain))
-       for(i in 1L:length(constrain))
-           est[constrain[[i]][-1L]] <- FALSE
+    for(i in seq_len(length(constrain)))
+        est[constrain[[i]][-1L]] <- FALSE
     if(all(!est) && list$SE)
         stop('Computing ACOV matrix is meaningless when no parameters are estimated', call.=FALSE)
     names(longpars) <- names(est)
@@ -107,11 +108,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     EMhistory <- matrix(NA, NCYCLES+1L, length(longpars))
     EMhistory[1L,] <- longpars
     ANY.PRIOR <- rep(FALSE, ngroups)
-    if(length(prodlist) > 0L)
+    if(length(prodlist))
         Theta <- prodterms(Theta, prodlist)
     if(dentype == 'bfactor'){
         Thetabetween <- thetaComb(theta=theta, nfact=nfact-ncol(sitems))
-        for(g in 1L:ngroups){
+        for(g in seq_len(ngroups)){
             pars[[g]][[J+1L]]@BFACTOR <- TRUE
             pars[[g]][[J+1L]]@theta <- theta
             pars[[g]][[J+1L]]@Thetabetween <- Thetabetween
@@ -119,26 +120,26 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         np <- ncol(Thetabetween)
         ns <- ncol(Theta) - np
         gp <- ExtractGroupPars(pars[[1L]][[J+1L]])
-        gp$gmeans <- 1L:length(gp$gmeans) - 1L
+        gp$gmeans <- seq_len(length(gp$gmeans)) - 1L
         ind <- length(gp$gmeans)
-        for(i in 1L:length(gp$gmeans)){
+        for(i in seq_len(length(gp$gmeans))){
             for(j in i:length(gp$gmeans)){
                 gp$gcov[j,i] <- ind
                 ind <- ind + 1L
             }
         }
-        tmp <- gp$gcov[1L:np, 1L:np]
+        tmp <- gp$gcov[seq_len(np), seq_len(np)]
         tmp <- tmp[lower.tri(tmp, TRUE)]
         tmpmat <- matrix(0, ns, 2L)
-        for(i in 1L:ns)
+        for(i in seq_len(ns))
             tmpmat[i, ] <- c(gp$gmean[np + i], gp$gcov[np+i, np+i])
-        for(g in 1L:ngroups){
-            pars[[g]][[J+1L]]@bindex <- as.integer(c(gp$gmeans[1L:np], tmp))
+        for(g in seq_len(ngroups)){
+            pars[[g]][[J+1L]]@bindex <- as.integer(c(gp$gmeans[seq_len(np)], tmp))
             pars[[g]][[J+1L]]@sindex = tmpmat
         }
     }
     gTheta <- vector('list', ngroups)
-    for(g in 1L:ngroups){
+    for(g in seq_len(ngroups)){
         ANY.PRIOR[g] <- any(sapply(pars[[g]], function(x) x@any.prior))
         gTheta[[g]] <- Theta
     }
@@ -150,7 +151,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     hess <- matrix(0)
     Elist <- list()
     startMrate <- ifelse(Moptim == 'L-BFGS-B', 5L, 1L)
-    if(list$BL){
+    if(list$method == 'BL'){
         start <- proc.time()[3L]
         lower <- LBOUND[est]; upper <- UBOUND[est]
         Moptim <- ifelse(any(is.finite(lower) | is.finite(upper)), 'L-BFGS-B', 'BFGS')
@@ -172,13 +173,13 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
         converge <- opt$convergence == 0
         if(list$SE) hess <- opt$hessian
-        tmp <- updatePrior(pars=pars, Theta=Theta,
+        tmp <- updatePrior(pars=pars, gTheta=gTheta, MC=MC,
                            list=list, ngroups=ngroups, nfact=nfact,
                            J=J, dentype=dentype, sitems=sitems, cycles=cycles, rlist=rlist)
         prior <- tmp$prior; Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
-        LL <- 0
+        LL <- LP <- 0
         pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-        for(g in 1L:ngroups){
+        for(g in seq_len(ngroups)){
             if(dentype == 'bfactor'){
                 rlist[[g]] <- Estep.bfactor(pars=pars[[g]], tabdata=Data$tabdatalong, freq=Data$Freq[[g]],
                                             Theta=Theta, prior=prior[[g]],
@@ -191,27 +192,53 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             }
             LL <- LL + sum(Data$Freq[[g]]*log(rlist[[g]]$expected))
         }
+        if(any(ANY.PRIOR)){
+            if(length(lrPars)){
+                if(lrPars@any.prior)
+                    LP <- LL.Priors(x=lrPars, LL=LP)
+            }
+            for(g in seq_len(length(pars))){
+                for(i in seq_len(length(pars[[1L]])))
+                    if(pars[[g]][[i]]@any.prior)
+                        LP <- LL.Priors(x=pars[[g]][[i]], LL=LP)
+            }
+        }
         Estep.time <- Estep.time + proc.time()[3L] - start
     } else {
         #EM
-        for (cycles in 1L:NCYCLES){
+        for (cycles in seq_len(NCYCLES)){
             #priors
             start <- proc.time()[3L]
             if(length(lrPars)) lrPars@mus <- lrPars@X %*% lrPars@beta
-            tmp <- updatePrior(pars=pars, Theta=Theta,
+            if(MC)
+                gTheta <- updateTheta(npts=if(QMC) list$quadpts else list$MCEM_draws(cycles),
+                                      nfact=nfact, pars=pars, QMC=QMC)
+            tmp <- updatePrior(pars=pars, gTheta=gTheta,
                                list=list, ngroups=ngroups, nfact=nfact,
                                J=J, dentype=dentype, sitems=sitems, cycles=cycles,
-                               rlist=rlist, full=full, lrPars=lrPars)
+                               rlist=rlist, full=full, lrPars=lrPars, MC=MC)
             prior <- tmp$prior; Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
             if(is.na(TOL) && !is.nan(TOL)){
-                for(g in 1L:ngroups) rlist[[g]]$expected <- 1
+                for(g in seq_len(ngroups)) rlist[[g]]$expected <- 1
                 break
             }
-            Elist <- Estep(pars=pars, Data=Data, Theta=Theta, prior=prior, Prior=Prior,
+            Elist <- Estep(pars=pars, Data=Data, gTheta=gTheta, prior=prior, Prior=Prior,
                            Priorbetween=Priorbetween, specific=specific, sitems=sitems,
                            ngroups=ngroups, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
                            dentype=dentype, rlist=rlist, full=full, Etable=list$Etable)
             rlist <- Elist$rlist; LL <- Elist$LL
+            if(any(ANY.PRIOR)){
+                LP <- 0
+                if(length(lrPars)){
+                    if(lrPars@any.prior)
+                        LP <- LL.Priors(x=lrPars, LL=LP)
+                }
+                for(g in seq_len(length(pars))){
+                    for(i in seq_len(length(pars[[1L]])))
+                        if(pars[[g]][[i]]@any.prior)
+                            LP <- LL.Priors(x=pars[[g]][[i]], LL=LP)
+                }
+            }
             collectLL[cycles] <- LL
             if(is.nan(LL))
                 stop('Optimization error: Could not compute observed log-likelihood. Try
@@ -225,8 +252,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     Mrate <- ifelse(is.finite(Mrate), Mrate, 1e-6)
                 }
             }
-            for(g in 1L:ngroups){
-                for(i in 1L:J)
+            for(g in seq_len(ngroups)){
+                for(i in seq_len(J))
                     pars[[g]][[i]]@dat <- rlist[[g]]$r1[, c(itemloc[i]:(itemloc[i+1L] - 1L)),
                                                         drop=FALSE]
                 if(dentype == 'bfactor'){
@@ -251,7 +278,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             EMhistory[cycles+1L,] <- longpars
             if(verbose)
                 cat(sprintf('\rIteration: %d, Log-Lik: %.3f, Max-Change: %.5f',
-                            cycles, LL, max(abs(preMstep.longpars - longpars))))
+                            cycles, LL + LP, max(abs(preMstep.longpars - longpars))))
             if(all(abs(preMstep.longpars - longpars) < TOL)){
                 pars <- reloadPars(longpars=longpars, pars=pars,
                                    ngroups=ngroups, J=J)
@@ -267,7 +294,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                         dX2 <- preMstep.longpars - preMstep.longpars2
                         dX <- longpars - preMstep.longpars
                         d2X2 <- dX - dX2
-                        ratio <- sqrt((dX %*% dX) / (d2X2 %*% d2X2))
+                        ratio <- as.vector(sqrt((dX %*% dX) / (d2X2 %*% d2X2)))
                         accel <- 1 - ratio
                         if(accel < -5) accel <- -5
                         tmp <- (1 - accel) * longpars + accel * preMstep.longpars
@@ -276,7 +303,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 } else if(list$accelerate == 'squarem'){
                     r <- preMstep.longpars - preMstep.longpars2
                     v <- (longpars - preMstep.longpars) - r
-                    ratio <- sqrt((r %*% r) / (v %*% v))
+                    ratio <- as.vector(sqrt((r %*% r) / (v %*% v)))
                     accel <- -ratio
                     if(accel > -1){
                         accel <- -1
@@ -286,7 +313,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                             tmp <- preMstep.longpars2 - 2 * accel * r  + accel^2 * v
                             longpars[!latent_longpars] <- tmp[!latent_longpars]
                             pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-                            Elist <- Estep(pars=pars, Data=Data, Theta=Theta, prior=prior, Prior=Prior,
+                            Elist <- Estep(pars=pars, Data=Data, gTheta=gTheta, prior=prior, Prior=Prior,
                                            Priorbetween=Priorbetween, specific=specific, sitems=sitems,
                                            ngroups=ngroups, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
                                            dentype=dentype, rlist=rlist, full=full)
@@ -305,7 +332,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 } else stop('acceleration option not defined', call.=FALSE)
             }
             pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-            for(g in 1L:ngroups){
+            for(g in seq_len(ngroups)){
                 if(any(pars[[g]][[J+1L]]@est) && nfact > 1L){
                     gp <- ExtractGroupPars(pars[[g]][[J+1L]])
                     chl <- try(chol(gp$gcov), silent=TRUE)
@@ -339,7 +366,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                                " likely indicates a problem in the M-step. \nCheck with the more stable ",
                                "optimizer = \'nlminb\', or supply better starting values"), call.=FALSE)
         }
-        if(cycles > 1L && list$warn && !ANY.PRIOR){
+        if(cycles > 1L && list$warn && !ANY.PRIOR && list$method != 'MCEM'){
             diff <- c(-Inf, na.omit(collectLL)) - c(na.omit(collectLL), Inf)
             if(any(diff[length(diff):ceiling(length(diff)*.9)] > .001))
                 warning('Log-likelihood was decreasing near the ML solution. EM method may be unstable',
@@ -358,25 +385,13 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     correction <- numeric(length(estpars[estpars & !redun_constr]))
     names(correction) <- names(estpars[estpars & !redun_constr])
     collectLL <- as.numeric(na.omit(collectLL))
-    LP <- 0
-    if(any(ANY.PRIOR)){
-        if(length(lrPars)){
-            if(lrPars@any.prior)
-                LP <- LL.Priors(x=lrPars, LL=LP)
-        }
-        for(g in 1L:length(pars)){
-            for(i in 1L:length(pars[[1L]]))
-                if(pars[[g]][[i]]@any.prior)
-                    LP <- LL.Priors(x=pars[[g]][[i]], LL=LP)
-        }
-    }
     LP <- unname(LP)
     start.time.SE <- proc.time()[3L]
     if(list$SE.type %in% c('SEM', 'Oakes', 'complete') && list$SE){
         h <- matrix(0, nfullpars, nfullpars)
         ind1 <- 1L
-        for(group in 1L:ngroups){
-            for (i in 1L:J){
+        for(group in seq_len(ngroups)){
+            for (i in seq_len(J)){
                 deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, estHess=TRUE)
                 ind2 <- ind1 + length(pars[[group]][[i]]@par) - 1L
                 h[ind1:ind2, ind1:ind2] <- pars[[group]][[i]]@hessian <- deriv$hess
@@ -408,16 +423,16 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         } else if(list$SE.type == 'Oakes' && list$SE){
             complete_info <- hess
             shortpars <- longpars[estpars & !redun_constr]
-            tmp <- updatePrior(pars=pars, Theta=Theta,
+            tmp <- updatePrior(pars=pars, gTheta=gTheta,
                                list=list, ngroups=ngroups, nfact=nfact,
                                J=J, dentype=dentype, sitems=sitems, cycles=cycles,
-                               rlist=rlist, full=full, lrPars=lrPars)
+                               rlist=rlist, full=full, lrPars=lrPars, MC=MC)
             prior <- tmp$prior; Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
             if(list$Norder >= 2){
-                missing_info <- mySapply(1L:length(shortpars), SE.Oakes,
+                missing_info <- mySapply(seq_len(length(shortpars)), SE.Oakes,
                                        pars=pars, L=L, constrain=constrain, delta=list$delta,
                                        est=est, shortpars=shortpars, longpars=longpars,
-                                       Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                       gTheta=gTheta, list=list, ngroups=ngroups, J=J,
                                        dentype=dentype, sitems=sitems, nfact=nfact,
                                        rlist=rlist, full=full, Data=Data,
                                        specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
@@ -427,17 +442,17 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             } else {
                 zero_g <- SE.Oakes(0L, pars=pars, L=L, constrain=constrain, delta=0,
                                    est=est, shortpars=shortpars, longpars=longpars,
-                                   Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                   gTheta=gTheta, list=list, ngroups=ngroups, J=J,
                                    dentype=dentype, sitems=sitems, nfact=nfact,
                                    rlist=rlist, full=full, Data=Data,
                                    specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
                                    prior=prior, Priorbetween=Priorbetween, Prior=Prior,
                                    PrepList=PrepList, ANY.PRIOR=ANY.PRIOR, DERIV=DERIV,
                                    SLOW.IND=list$SLOW.IND, Norder=1L)
-                missing_info <- mySapply(1L:length(shortpars), SE.Oakes,
+                missing_info <- mySapply(seq_len(length(shortpars)), SE.Oakes,
                                        pars=pars, L=L, constrain=constrain, delta=list$delta,
                                        est=est, shortpars=shortpars, longpars=longpars,
-                                       Theta=Theta, list=list, ngroups=ngroups, J=J,
+                                       gTheta=gTheta, list=list, ngroups=ngroups, J=J,
                                        dentype=dentype, sitems=sitems, nfact=nfact,
                                        rlist=rlist, full=full, Data=Data,
                                        specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
@@ -470,8 +485,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     shortpars=longpars[estpars & !redun_constr], lrPars=lrPars,
                     logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist)
     }
-    for(g in 1L:ngroups)
-        for(i in 1L:J)
+    for(g in seq_len(ngroups))
+        for(i in seq_len(J))
             ret$pars[[g]][[i]]@dat <- matrix(0)
     ret
 }

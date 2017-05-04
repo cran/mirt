@@ -73,7 +73,7 @@
 #'   standard errors associated with each respondent? Default is \code{FALSE}
 #' @param verbose logical; print verbose output messages?
 #' @param QMC logical; use quasi-Monte Carlo integration? If \code{quadpts} is omitted the
-#'   default number of nodes is 15000
+#'   default number of nodes is 5000
 #' @param custom_den a function used to define the integration density (if required). The NULL default
 #'   assumes that the multivariate normal distribution with the 'GroupPars' hyper-parameters are
 #'   used. At the minimum must be of the form:
@@ -170,7 +170,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                     converge_info = FALSE, ...)
 {
     if(!is(object, 'DiscreteClass')){
-        if(QMC && is.null(quadpts)) quadpts <- 15000
+        if(QMC && is.null(quadpts)) quadpts <- 5000
         if(is.null(quadpts))
             quadpts <- switch(as.character(object@Model$nfact),
                               '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
@@ -184,9 +184,9 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
     if(returnER) full.scores <- FALSE
     if(is(object, 'DiscreteClass') && plausible.draws > 0L){
         fs <- fscores(object)
-        ret <- lapply(1L:plausible.draws, function(ind, fs){
+        ret <- lapply(seq_len(plausible.draws), function(ind, fs){
             mat <- matrix(0L, nrow(fs), ncol(fs))
-            for(i in 1L:ncol(fs)){
+            for(i in seq_len(ncol(fs))){
                 if(all(fs[,i] > 1-1e-10)){
                     mat[,i] <- 1L
                 } else if(all(fs[,i] < 1e-10)){
