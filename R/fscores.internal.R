@@ -6,23 +6,23 @@ setMethod(
 	                      returnER = FALSE, verbose = TRUE, gmean, gcov,
 	                      plausible.draws, full.scores.SE, return.acov = FALSE,
                           QMC, custom_den = NULL, custom_theta = NULL,
-	                      min_expected, converge_info, plausible.type, ...)
+	                      min_expected, converge_info, plausible.type, start, ...)
 	{
         den_fun <- mirt_dmvnorm
         if(!is.null(custom_den)) den_fun <- custom_den
 
 	    #local functions for apply
 	    MAP <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                    hessian, mirtCAT = FALSE, return.acov = FALSE, den_fun, ...){
+	                    hessian, mirtCAT = FALSE, return.acov = FALSE, den_fun, max_theta, ...){
 	        if(any(is.na(scores[ID, ])))
 	            return(c(scores[ID, ], rep(NA, ncol(scores))))
             if(mirtCAT){
                 estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
-                                    itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian,
+                                    itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
                                     CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=1, stepmax=1e-20, ...))
             } else {
     	        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
-    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, hessian=hessian,
+    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
                                     CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
             }
 	        if(is(estimate, 'try-error'))
@@ -35,11 +35,11 @@ setMethod(
 	        return(c(estimate$estimate, SEest, estimate$code))
 	    }
 	    ML <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                   hessian, return.acov = FALSE, den_fun, ...){
+	                   hessian, return.acov = FALSE, den_fun, max_theta, ...){
             if(any(scores[ID, ] %in% c(-Inf, Inf, NA)))
                 return(c(scores[ID, ], rep(NA, ncol(scores) + 1L)))
             estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars,patdata=tabdata[ID, ], den_fun=NULL,
-    	                        itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE,
+    	                        itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE, max_theta=max_theta,
                                 hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
 	        if(is(estimate, 'try-error'))
 	            return(rep(NA, ncol(scores)*2 + 1L))
@@ -61,11 +61,11 @@ setMethod(
 	        return(c(est, SEest, estimate$code))
 	    }
 	    WLE <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                    hessian, data, DERIV, return.acov = FALSE, ...){
+	                    hessian, data, DERIV, return.acov = FALSE, max_theta, ...){
 	        if(any(is.na(scores[ID, ])))
 	            return(c(scores[ID, ], rep(NA, ncol(scores))))
 	        estimate <- try(nlm(WLE.mirt, scores[ID, ], pars=pars, patdata=tabdata[ID, ],
-	                            itemloc=itemloc, gp=gp, prodlist=prodlist, data=data[ID, ],
+	                            itemloc=itemloc, gp=gp, prodlist=prodlist, data=data[ID, ], max_theta=max_theta,
 	                            hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, DERIV=DERIV, ...))
 	        if(is(estimate, 'try-error'))
 	            return(rep(NA, ncol(scores)*2 + 1L))
@@ -185,7 +185,8 @@ setMethod(
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
                                MI=MI, mean=gmean, cov=gcov, custom_den=custom_den, QMC=QMC,
-                               custom_theta=custom_theta, converge_info=converge_info, ...)
+                               custom_theta=custom_theta, converge_info=converge_info,
+                               start=start, ...)
                 if(return.acov) return(ret)
                 ret <- cbind(response.pattern, ret)
             } else {
@@ -204,7 +205,8 @@ setMethod(
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
                                MI=MI, mean=gmean, cov=gcov, custom_den=custom_den, QMC=QMC,
-                               custom_theta=custom_theta, converge_info=converge_info, ...)
+                               custom_theta=custom_theta, converge_info=converge_info,
+                               start=start, ...)
                 if(return.acov) return(ret)
                 ret <- cbind(response.pattern, ret)
             }
@@ -329,6 +331,10 @@ setMethod(
                 }
                 scores <- tmp[ ,seq_len(nfact), drop = FALSE]
                 SEscores <- tmp[ , seq_len(nfact) + nfact, drop = FALSE]
+            }
+            if(!is.null(start) && method != "EAP"){ #replace scores with start
+                if(all(dim(scores) == dim(start)))
+                    scores <- start
             }
     		if(method == "EAP"){
                 #do nothing
@@ -562,8 +568,9 @@ setMethod(
 
 # MAP scoring for mirt
 MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID,
-                     ML=FALSE, den_fun, ...)
+                     ML=FALSE, den_fun, max_theta, ...)
 {
+    if(any(abs(Theta) > max_theta)) return(1e10)
     Theta <- matrix(Theta, nrow=1L)
     ThetaShort <- Theta
     if(length(prodlist) > 0L)
@@ -580,8 +587,10 @@ MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID
     L
 }
 
-WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID, data, DERIV)
+WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID, data, DERIV,
+                     max_theta)
 {
+    if(any(abs(Theta) > max_theta)) return(1e10)
     Theta <- matrix(Theta, nrow=1L)
     ThetaShort <- Theta
     if(length(prodlist) > 0L)

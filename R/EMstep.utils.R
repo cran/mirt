@@ -86,7 +86,7 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                                 J=J, gTheta=gTheta, PrepList=PrepList, L=L,  ANY.PRIOR=ANY.PRIOR,
                                 constrain=constrain, LBOUND=LBOUND, UBOUND=UBOUND, SLOW.IND=SLOW.IND,
                                 itemloc=itemloc, DERIV=DERIV, rlist=rlist, control=control), TRUE)
-        } else if(Moptim %in% c('solnp', 'alabama')){
+        } else if(Moptim %in% c('solnp', 'nloptr')){
             optim_args <- list(CUSTOM.IND=CUSTOM.IND, est=est, longpars=longpars, pars=pars,
                                ngroups=ngroups, J=J, gTheta=gTheta, PrepList=PrepList, L=L,
                                ANY.PRIOR=ANY.PRIOR, constrain=constrain, LBOUND=LBOUND,
@@ -97,21 +97,26 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                     opt <- try(Rsolnp::solnp(p, Mstep.LL_alt, eqfun = solnp_args$eqfun, eqB = solnp_args$eqB,
                                      ineqfun = solnp_args$ineqfun, ineqLB = solnp_args$ineqLB,
                                      ineqUB = solnp_args$ineqUB, LB = solnp_args$LB, UB = solnp_args$UB,
-                                     control = control, optim_args=optim_args), silent=TRUE)
+                                     control = solnp_args$control, optim_args=optim_args), silent=TRUE)
                     if(!is(opt, 'try-error')) opt$par <- opt$pars
                 } else {
                     stop('Rsolnp package is not available. Please install.', call.=FALSE)
                 }
             } else {
-                if(requireNamespace("alabama", quietly = TRUE)){
-                    opt <- try(alabama::constrOptim.nl(p, Mstep.LL_alt, Mstep.grad_alt,
-                                              hin = solnp_args$hin, hin.jac = solnp_args$hin.jac,
-                                              heq = solnp_args$heq, heq.jac = solnp_args$heq.jac,
-                                              control.outer = solnp_args$control.outer,
-                                              control.optim = solnp_args$control.optim, optim_args=optim_args),
+                if(requireNamespace("nloptr", quietly = TRUE)){
+                    opt <- try(nloptr::nloptr(p, Mstep.LL_alt, Mstep.grad_alt,
+                                              lb=solnp_args$lb,
+                                              ub=solnp_args$ub,
+                                              eval_g_ineq=solnp_args$eval_g_ineq,
+                                              eval_jac_g_ineq=solnp_args$eval_jac_g_ineq,
+                                              eval_g_eq=solnp_args$eval_g_eq,
+                                              eval_jac_g_eq=solnp_args$eval_jac_g_eq,
+                                              opts=solnp_args$opts,
+                                              optim_args=optim_args),
                                silent=TRUE)
+                    if(!is(opt, 'try-error')) opt$par <- opt$solution
                 } else {
-                    stop('alabama package is not available. Please install.', call.=FALSE)
+                    stop('nloptr package is not available. Please install.', call.=FALSE)
                 }
             }
         } else if(Moptim == 'nlminb'){
@@ -133,8 +138,9 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
         res <- Mstep.LR(Theta=gTheta[[1L]], CUSTOM.IND=CUSTOM.IND, pars=pars[[1L]], lrPars=lrPars,
                         itemloc=itemloc, fulldata=PrepList[[1L]]$fulldata, prior=Prior[[1L]])
         longpars[lrPars@parnum] <- res$beta
-        longpars[pars[[1L]][[J+1L]]@parnum[pars[[1L]][[J+1L]]@est]] <-
-            res$siglong[pars[[1L]][[J+1L]]@est]
+        if(dentype != 'discrete')
+            longpars[pars[[1L]][[J+1L]]@parnum[pars[[1L]][[J+1L]]@est]] <-
+                res$siglong[pars[[1L]][[J+1L]]@est]
     }
     longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     return(longpars)
@@ -318,7 +324,8 @@ BL.grad <- function(x, ...){
     numerical_deriv(x, BL.LL, ...)
 }
 
-Mstep.LR <- function(Theta, CUSTOM.IND, pars, itemloc, fulldata, prior, lrPars, retscores=FALSE){
+Mstep.LR <- function(Theta, CUSTOM.IND, pars, itemloc, fulldata, prior,
+                     lrPars, retscores=FALSE){
     itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                   CUSTOM.IND=CUSTOM.IND)
     mu <- lrPars@mus

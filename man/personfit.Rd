@@ -32,7 +32,7 @@ rightmost columns.
 \dontrun{
 
 #make some data
-set.seed(1234)
+set.seed(1)
 a <- matrix(rlnorm(20),ncol=1)
 d <- matrix(rnorm(20),ncol=1)
 items <- rep('2PL', 20)
@@ -66,6 +66,10 @@ head(pf)
 
 }
 \references{
+Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+\doi{10.18637/jss.v048.i06}
+
 Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 polychotomous item response models and standardized indices.
 \emph{British Journal of Mathematical and Statistical Psychology, 38}, 67-86.

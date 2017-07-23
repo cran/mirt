@@ -330,20 +330,16 @@
 #'   As well, the \code{'Nelder-Mead'} and \code{'SANN'}
 #'   estimators are also available, but their routine use generally is not required or recommended.
 #'
-#'   Additionally, estimation subroutines from the \code{Rsolnp} and \code{alabama}
-#'   packages are available by passing the arguments \code{'solnp'} and \code{'alabama'},
+#'   Additionally, estimation subroutines from the \code{Rsolnp} and \code{nloptr}
+#'   packages are available by passing the arguments \code{'solnp'} and \code{'nloptr'},
 #'   respectively. This should be used in conjunction with the \code{solnp_args} and
-#'   \code{alabama_args} specified below. If equality constraints were specified in the
+#'   \code{nloptr_args} specified below. If equality constraints were specified in the
 #'   model definition only the parameter with the lowest \code{parnum}
 #'   in the \code{pars = 'values'} data.frame is used in the estimation vector passed
 #'   to the objective function, and group hyper-parameters are omitted.
 #'   Equality an inequality functions should be of the form \code{function(p, optim_args)},
 #'   where \code{optim_args} is a list of internally parameters that largely can be ignored
-#'   when defining constraints (though use of \code{browser()} here may be helpful). Note:
-#'   for the \code{'alabama'} optimizer, the starting values
-#'   should be adjusted such that all constraints are met prior to the first maximization-step.
-#'   The \code{'solnp'} optimizer is less sensitive to this initial condition restriction, but it may also
-#'   if the model is unstable early in the EM cycles
+#'   when defining constraints (though use of \code{browser()} here may be helpful)
 #' @param SE logical; estimate the standard errors by computing the parameter information matrix?
 #'    See \code{SE.type} for the type of estimates available
 #' @param SE.type type of estimation method to use for calculating the parameter information matrix
@@ -353,8 +349,11 @@
 #'     \item \code{'Richardson'}, \code{'forward'}, or \code{'central'} for the numerical Richardson,
 #'       forward difference, and central difference evaluation of observed Hessian matrix
 #'     \item \code{'crossprod'} and \code{'Louis'} for standard error computations based on the variance of the
-#'       Fisher scores as well as Louis' (1982) exact computation of the observed information matrix
+#'       Fisher scores as well as Louis' (1982) exact computation of the observed information matrix.
+#'       Note that Louis' estimates can take a long time to obtain for large sample sizes and long tests
 #'     \item \code{'sandwich'} for the sandwich covariance estimate based on the
+#'       \code{'crossprod'} and \code{'Oakes'} estimates
+#'     \item \code{'sandwich.Louis'} for the sandwich covariance estimate based on the
 #'       \code{'crossprod'} and \code{'Louis'} estimates
 #'     \item \code{'Oakes'} for Oakes' (1999) method using a central difference approximation
 #'     \item \code{'SEM'} for the supplemented EM (disables the \code{accelerate} option automatically; EM only)
@@ -456,8 +455,7 @@
 #'   types, and must be the same length as the number of items used. Items that are not nested logit
 #'   will ignore this vector, so use \code{NA} in item locations that are not applicable
 #' @param calcNull logical; calculate the Null model for additional fit statistics (e.g., TLI)?
-#'   Only applicable if the data contains no NA's and the data is not overly sparse, otherwise
-#'   it is ignored
+#'   Only applicable if the data contains no NA's and the data is not overly sparse
 #' @param large either a \code{logical}, indicating whether the internal collapsed data should
 #'   be returned, or a \code{list} of internally computed data tables. If \code{TRUE} is passed,
 #'   a list containing  the organized tables is returned. This list object can then be passed back
@@ -556,7 +554,7 @@
 #'   }
 #' @param solnp_args a list of arguments to be passed to the \code{solnp::solnp()} function for
 #'   equality constraints, inequality constraints, etc
-#' @param alabama_args a list of arguments to be passed to the \code{alabama::constrOptim.nl()}
+#' @param nloptr_args a list of arguments to be passed to the \code{nloptr::nloptr()}
 #'   function for equality constraints, inequality constraints, etc
 #' @param control a list passed to the respective optimizers (i.e., \code{optim()}, \code{nlminb()},
 #'   etc). Additional arguments have been included for the \code{'NR'} optimizer: \code{'tol'}
@@ -596,9 +594,14 @@
 #'
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#'
+#' Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-RM Algorithm.
+#' \emph{Journal of Educational Measurement, 52}, 200-222. \doi{10.1111/jedm.12072}
 #'
 #' Chalmers, R., P. & Flora, D. (2014). Maximum-likelihood Estimation of Noncompensatory IRT
 #' Models with the MH-RM Algorithm. \emph{Applied Psychological Measurement, 38}, 339-358.
+#' \doi{10.1177/0146621614520958}
 #'
 #' Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 #' response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
@@ -963,7 +966,7 @@
 #' histogram(ThetaSkew, breaks=30)
 #'
 #' #####
-#' # non-linear parameter constraints with Rsolnp package (alabama supported as well):
+#' # non-linear parameter constraints with Rsolnp package (nloptr supported as well):
 #' # Find Rasch model subject to the constraint that the intercepts sum to 0
 #'
 #' dat <- expand.table(LSAT6)
@@ -1064,32 +1067,17 @@
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  covdata = NULL, formula = NULL, SE.type = 'Oakes', method = 'EM',
                  optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
-                 calcNull = TRUE, draws = 5000, survey.weights = NULL,
+                 calcNull = FALSE, draws = 5000, survey.weights = NULL,
                  quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL,
                  rsm.block = NULL, key = NULL,
                  large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay',
                  empiricalhist = FALSE, verbose = TRUE,
-                 solnp_args = list(), alabama_args = list(), spline_args = list(),
+                 solnp_args = list(), nloptr_args = list(), spline_args = list(),
                  control = list(), technical = list(), ...)
 {
     Call <- match.call()
-    if(!is.null(covdata) && !is.null(formula)){
-        if(empiricalhist)
-            stop('Empirical histogram method not supported with covariates', call.=FALSE)
-        if(!is.data.frame(covdata))
-            stop('covdata must be a data.frame object', call.=FALSE)
-        if(nrow(covdata) != nrow(data))
-            stop('number of rows in covdata do not match number of rows in data', call.=FALSE)
-        if(!(method %in% c('EM', 'QMCEM')))
-            stop('method must be from the EM estimation family', call.=FALSE)
-        tmp <- apply(covdata, 1, function(x) sum(is.na(x)) > 0)
-        if(any(tmp)){
-            message('removing rows with NAs in covdata')
-            covdata <- covdata[-tmp, ]
-            data <- data[-tmp, ]
-        }
-        latent.regression <- list(df=covdata, formula=formula, EM=TRUE)
-    } else latent.regression <- NULL
+    latent.regression <- latentRegression_obj(data=data, covdata=covdata, formula=formula,
+                                              empiricalhist=empiricalhist, method=method)
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)),
                       itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
                       pars=pars, method=method, constrain=constrain, SE=SE, TOL=TOL,
@@ -1098,7 +1086,7 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
                       accelerate=accelerate, draws=draws, rsm.block=rsm.block,
                       empiricalhist=empiricalhist, GenRandomPars=GenRandomPars,
-                      optimizer=optimizer, solnp_args=solnp_args, alabama_args=alabama_args,
+                      optimizer=optimizer, solnp_args=solnp_args, nloptr_args=nloptr_args,
                       latent.regression=latent.regression, gpcm_mats=gpcm_mats,
                       control=control, spline_args=spline_args, ...)
     if(is(mod, 'SingleGroupClass'))

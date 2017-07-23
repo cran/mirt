@@ -23,7 +23,8 @@
 #' then the returned results will be with respect to the posterior classification for each
 #' individual. The method inputs for \code{'DiscreteClass'} objects may only be \code{'EAP'},
 #' for posterior classification of each response pattern, or \code{'EAPsum'} for posterior
-#' classification based on the raw sum-score.
+#' classification based on the raw sum-score. For more information on these algorithms refer to
+#' the \code{mirtCAT} package and the associated JSS paper (Chalmers, 2016).
 #'
 #'
 #' @aliases fscores
@@ -57,6 +58,8 @@
 #'   \code{quadpts <- switch(as.character(nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)}
 #' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension. If
 #'   omitted, a range will be generated automatically based on the number of dimensions
+#' @param max_theta the maximum/minimum value any given factor score estimate will achieve using
+#'   any modal estimator method (e.g., MAP, WLE, ML)
 #' @param mean a vector for custom latent variable means. If NULL, the default for 'group' values
 #'   from the computed mirt object will be used
 #' @param cov a custom matrix of the latent variable covariance matrix. If NULL, the default for
@@ -69,6 +72,10 @@
 #'   estimates as a numeric values?
 #' @param return.acov logical; return a list containing covariance matrices instead of factors
 #'   scores? \code{impute = TRUE} not supported with this option
+#' @param start a matrix of starting values to use for iterative estimation methods. Default
+#'   will start at a vector of 0's for each response pattern, or will start at the EAP
+#'   estimates (unidimensional models only). Must be in the form that matches
+#'   \code{full.scores = FALSE} (mostly used in the \code{mirtCAT} package)
 #' @param full.scores.SE logical; when \code{full.scores == TRUE}, also return the
 #'   standard errors associated with each respondent? Default is \code{FALSE}
 #' @param verbose logical; print verbose output messages?
@@ -100,6 +107,13 @@
 #' @seealso \code{\link{averageMI}}
 #' @export fscores
 #' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#'
+#' Chalmers, R. P. (2016). Generating Adaptive and Non-Adaptive Test Interfaces for
+#' Multidimensional Item Response Theory Applications. \emph{Journal of Statistical Software, 71}(5),
+#' 1-39. \doi{10.18637/jss.v071.i05}
 #'
 #' Embretson, S. E. & Reise, S. P. (2000). Item Response Theory for Psychologists. Erlbaum.
 #'
@@ -167,7 +181,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                     returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
                     full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
                     QMC = FALSE, custom_den = NULL, custom_theta = NULL, min_expected = 1,
-                    converge_info = FALSE, ...)
+                    converge_info = FALSE, max_theta = 20, start = NULL, ...)
 {
     if(!is(object, 'DiscreteClass')){
         if(QMC && is.null(quadpts)) quadpts <- 5000
@@ -207,6 +221,6 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                             full.scores.SE=full.scores.SE, return.acov=return.acov,
                             plausible.draws = plausible.draws, custom_den=custom_den,
                             custom_theta=custom_theta, Target=Target, min_expected=min_expected,
-                            plausible.type=plausible.type, ...)
+                            plausible.type=plausible.type, max_theta=max_theta, start=start, ...)
     ret
 }

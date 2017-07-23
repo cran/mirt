@@ -67,6 +67,15 @@
 #' @param ... additional arguments to be passed to \code{\link{multipleGroup}} and \code{plot}
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#'
+#' Chalmers, R. P., Counsell, A., and Flora, D. B. (2016). It might not
+#'   make a big DIF: Improved Differential Test Functioning statistics that account for
+#'   sampling variability. \emph{Educational and Psychological Measurement, 76}, 114-140.
+#'   \doi{10.1177/0013164415584576}
 #' @keywords DIF
 #' @seealso \code{\link{multipleGroup}}
 #, \code{\link{DTF}}
@@ -92,7 +101,9 @@
 #' # define a parallel cluster (optional) to help speed up internal functions
 #' mirtCluster()
 #'
-#' #  Information matrix with Oakes' identity (not controlling for latent group differences)
+#' # Information matrix with Oakes' identity (not controlling for latent group differences)
+#' # NOTE: Without properly equating the groups the following example code is not testing for DIF,
+#'      # but instead reflects a compbination of DIF + latent-trait distribution effects
 #' model <- multipleGroup(dat, 1, group, SE = TRUE)
 #'
 #' #test whether adding slopes and intercepts constraints results in DIF. Plot items showing DIF
@@ -112,7 +123,8 @@
 #' (a1s <- DIF(model, 'a1', items2test = 1:3))
 #' (ds <- DIF(model, 'd', items2test = 1:3))
 #'
-#' #### using items 4 to 15 as anchors
+#' ####
+#' # using items 4 to 15 as anchors to test for DIF after adjusting for latent-trait differences
 #' itemnames <- colnames(dat)
 #' model_anchor <- multipleGroup(dat, model = 1, group = group,
 #'   invariance = c(itemnames[4:15], 'free_means', 'free_var'))

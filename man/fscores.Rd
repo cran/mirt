@@ -10,7 +10,7 @@ fscores(object, method = "EAP", full.scores = TRUE, rotate = "oblimin",
   return.acov = FALSE, mean = NULL, cov = NULL, verbose = TRUE,
   full.scores.SE = FALSE, theta_lim = c(-6, 6), MI = 0, QMC = FALSE,
   custom_den = NULL, custom_theta = NULL, min_expected = 1,
-  converge_info = FALSE, ...)
+  converge_info = FALSE, max_theta = 20, start = NULL, ...)
 }
 \arguments{
 \item{object}{a computed model object of class \code{SingleGroupClass},
@@ -101,6 +101,14 @@ response pattern indicating whether a maximum value was found (not relavent non-
 such as EAP and EAPsum). Value is a reflection of the \code{code} element from \code{\link{nlm}}
 (e.g., 1 indicates convergence)}
 
+\item{max_theta}{the maximum/minimum value any given factor score estimate will achieve using
+any modal estimator method (e.g., MAP, WLE, ML)}
+
+\item{start}{a matrix of starting values to use for iterative estimation methods. Default
+will start at a vector of 0's for each response pattern, or will start at the EAP
+estimates (unidimensional models only). Must be in the form that matches
+\code{full.scores = FALSE} (mostly used in the \code{mirtCAT} package)}
+
 \item{...}{additional arguments to be passed to \code{nlm}}
 }
 \description{
@@ -128,7 +136,8 @@ If the input object is a discrete latent class object estimated from \code{\link
 then the returned results will be with respect to the posterior classification for each
 individual. The method inputs for \code{'DiscreteClass'} objects may only be \code{'EAP'},
 for posterior classification of each response pattern, or \code{'EAPsum'} for posterior
-classification based on the raw sum-score.
+classification based on the raw sum-score. For more information on these algorithms refer to
+the \code{mirtCAT} package and the associated JSS paper (Chalmers, 2016).
 }
 \examples{
 
@@ -184,6 +193,14 @@ head(fscores(mod, custom_den = fun, method = 'MAP', full.scores = FALSE))
 }
 }
 \references{
+Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+\doi{10.18637/jss.v048.i06}
+
+Chalmers, R. P. (2016). Generating Adaptive and Non-Adaptive Test Interfaces for
+Multidimensional Item Response Theory Applications. \emph{Journal of Statistical Software, 71}(5),
+1-39. \doi{10.18637/jss.v071.i05}
+
 Embretson, S. E. & Reise, S. P. (2000). Item Response Theory for Psychologists. Erlbaum.
 
 Thissen, D., Pommerich, M., Billeaud, K., & Williams, V. S. L. (1995).

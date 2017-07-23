@@ -33,10 +33,14 @@
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #'
 #' Chalmers, R. P., Counsell, A., and Flora, D. B. (2016). It might not
 #'   make a big DIF: Improved Differential Test Functioning statistics that account for
 #'   sampling variability. \emph{Educational and Psychological Measurement, 76}, 114-140.
+#'   \doi{10.1177/0013164415584576}  
 #'
 #' @seealso \code{\link{multipleGroup}}, \code{\link{DIF}}
 #' @keywords DTF
@@ -254,10 +258,9 @@ DTF <- function(mod, draws = NULL, CI = .95, npts = 1000, theta_lim=c(-6,6), The
             main <- switch(type, score='Expected Total Score')
             ylab <- switch(type, score=expression(T(theta)))
             return(xyplot(TS ~ Theta, data=df, groups=group, auto.key=auto.key,
-                   upper=df$upper, lower=df$lower, col=c('red', 'blue'),
-                   fill=c('red', 'blue'), alpha=0.2, ylim = lim,
-                   panel = function(x, y, alpha, ...){
-                       panel.superpose(x, y, panel.groups = panel.bands, type='l', alpha=alpha, ...)
+                   upper=df$upper, lower=df$lower, ylim = lim,
+                   panel = function(x, y, ...){
+                       panel.superpose(x, y, panel.groups = panel.bands, type='l',  ...)
                        panel.xyplot(x, y, type='l', lty=1,...)
                    },
                    xlab = expression(theta), ylab = ylab,

@@ -360,6 +360,17 @@ updatePrior <- function(pars, gTheta, list, ngroups, nfact, J,
             Prior[[g]] <- gp@den(gp, gTheta[[g]])
             Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
         }
+    } else if(dentype == 'discrete'){
+        for(g in seq_len(ngroups)){
+            gp <- pars[[g]][[J+1L]]
+            if(full){
+                Prior[[g]] <- gp@den(gp, gTheta[[g]], mus=lrPars@mus)
+                Prior[[g]] <- Prior[[g]]/rowSums(Prior[[g]])
+            } else {
+                Prior[[g]] <- gp@den(gp, gTheta[[g]])
+                Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
+            }
+        }
     } else {
         for(g in seq_len(ngroups)){
             gp <- ExtractGroupPars(pars[[g]][[J+1L]])
@@ -408,8 +419,15 @@ updatePrior <- function(pars, gTheta, list, ngroups, nfact, J,
         }
     }
     if(MC){
-        for(g in seq_len(ngroups))
-            Prior[[g]] <- rep(1 / length(Prior[[g]]), length(Prior[[g]]))
+        if(full){
+            for(g in seq_len(ngroups))
+                Prior[[g]] <- matrix(rep(1 / length(gTheta[[g]])),
+                                         nrow(lrPars@mus), nrow(gTheta[[g]]))
+
+        } else {
+            for(g in seq_len(ngroups))
+                Prior[[g]] <- matrix(rep(1 / length(Prior[[g]]), length(Prior[[g]])))
+        }
     }
     return(list(prior=prior, Prior=Prior, Priorbetween=Priorbetween))
 }
@@ -1107,10 +1125,10 @@ updateHess <- function(h, L) L %*% h %*% L
 makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NULL,
                      SE = FALSE, verbose = TRUE, GenRandomPars,
                      SEtol = .001, grsm.block = NULL, D = 1, TOL = NULL,
-                     rsm.block = NULL, calcNull = TRUE, BFACTOR = FALSE,
+                     rsm.block = NULL, calcNull = FALSE, BFACTOR = FALSE,
                      technical = list(),
                      SE.type = 'Oakes', large = NULL, accelerate = 'Ramsay', empiricalhist = FALSE,
-                     optimizer = NULL, solnp_args = list(), alabama_args = list(), ...)
+                     optimizer = NULL, solnp_args = list(), nloptr_args = list(), ...)
 {
     opts <- list()
     tnames <- names(technical)
@@ -1123,12 +1141,16 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
     if((method %in% c('MHRM', 'MIXED', 'SEM')) && SE.type == 'Oakes') SE.type <- 'MHRM'
+    if(method == 'MCEM' && SE && SE.type != 'complete')
+        stop('SE.type not currently supported for MCEM method', call.=FALSE)
+    if(method == 'QMCEM' && SE && SE.type == 'Fisher')
+        stop('Fisher SE.type not supported for QMCEM method', call.=FALSE)
     if((method %in% c('MHRM', 'MIXED', 'SEM')) && !(SE.type %in% c('MHRM', 'FMHRM', 'none')))
         stop('SE.type not supported for stochastic method', call.=FALSE)
     if(!(method %in% c('MHRM', 'MIXED', 'BL', 'EM', 'QMCEM', 'SEM', 'MCEM')))
         stop('method argument not supported', call.=FALSE)
     if(!(SE.type %in% c('Richardson', 'forward', 'central', 'crossprod', 'Louis', 'sandwich',
-                        'Oakes', 'complete', 'SEM', 'Fisher', 'MHRM', 'FMHRM', 'numerical')))
+                        'sandwich.Louis', 'Oakes', 'complete', 'SEM', 'Fisher', 'MHRM', 'FMHRM', 'numerical')))
         stop('SE.type argument not supported', call.=FALSE)
     if(!(method %in% c('EM', 'QMCEM', 'MCEM'))) accelerate <- 'none'
     opts$method = method
@@ -1223,17 +1245,14 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
             stop('solnp only supported for optimization with EM estimation engine',
                                 call.=FALSE)
         opts$solnp_args <- solnp_args
-    } else if(opts$Moptim == 'alabama'){
+    } else if(opts$Moptim == 'nloptr'){
         if(!method %in% c('EM', 'QMCEM', 'MCEM'))
-            stop('alabama only supported for optimization with EM estimation engine',
+            stop('nloptr only supported for optimization with EM estimation engine',
                                 call.=FALSE)
-        if(is.null(alabama_args$control.outer)) alabama_args$control.outer <- list()
-        if(is.null(alabama_args$control.optim)) alabama_args$control.optim <- list()
-        if(is.null(alabama_args$control.outer$trace)) alabama_args$control.outer$trace <- FALSE
-        opts$solnp_args <- alabama_args
+        opts$solnp_args <- nloptr_args
     }
-    if(SE && opts$Moptim %in% c('solnp', 'alabama')) #TODO
-        stop('SE computations currently not supported for solnp or alabama optimizers', call. = FALSE)
+    if(SE && opts$Moptim %in% c('solnp', 'nloptr')) #TODO
+        stop('SE computations currently not supported for solnp or nloptr optimizers', call. = FALSE)
     if(!is.null(large)){
         if(is.logical(large))
             if(large) opts$returnPrepList <- TRUE
@@ -1394,8 +1413,7 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
         X <- model.matrix(formula, df)
     }
     tXX <- t(X) %*% X
-    if(ncol(X) > 1L) inv_tXX <- try(solve(tXX), silent = TRUE)
-    else inv_tXX <- matrix(0)
+    inv_tXX <- try(solve(tXX), silent = TRUE)
     if(!is.nan(TOL)){
         if(is(inv_tXX, 'try-error'))
             stop('Latent regression design matrix contains multicollinear terms.', call. = FALSE)
@@ -1543,6 +1561,17 @@ BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific,
             gp <- pars[[g]][[J+1L]]
             Prior[[g]] <- gp@den(gp, Theta)
             Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
+        }
+    } else if(dentype == 'discrete'){
+        for(g in seq_len(ngroups)){
+            gp <- pars[[g]][[J+1L]]
+            if(full){
+                Prior[[g]] <- gp@den(gp, Theta, mus=lrPars@mus)
+                Prior[[g]] <- Prior[[g]]/rowSums(Prior[[g]])
+            } else {
+                Prior[[g]] <- gp@den(gp, Theta)
+                Prior[[g]] <- Prior[[g]] / sum(Prior[[g]])
+            }
         }
     } else {
         for(g in seq_len(ngroups)){
@@ -1797,6 +1826,7 @@ collapseCells <- function(O, E, mincell = 1){
 
 MGC2SC <- function(x, which){
     tmp <- x@ParObjects$pars[[which]]
+    tmp@Model$lrPars <- x@ParObjects$lrPars
     ind <- 1L
     for(i in seq_len(x@Data$nitems)){
         tmp@ParObjects$pars[[i]]@parnum[] <- seq(ind, ind + length(tmp@ParObjects$pars[[i]]@parnum) - 1L)
@@ -1891,26 +1921,6 @@ numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 
         }
         g
     }
-    forward_difference2 <- function(par, f, delta, ...){
-        np <- length(par)
-        hess <- matrix(0, np, np)
-        fx <- f(par, ...)
-        fx1 <- numeric(np)
-        for(i in seq_len(np)){
-            tmp <- par
-            tmp[i] <- tmp[i] + delta
-            fx1[i] <- f(tmp, ...)
-        }
-        for(i in seq_len(np)){
-            for(j in i:np){
-                fx1x2 <- par
-                fx1x2[i] <- fx1x2[i] + delta
-                fx1x2[j] <- fx1x2[j] + delta
-                hess[i,j] <- hess[j, i] <- (f(fx1x2, ...) - fx1[i] - fx1[j] + fx) / (delta^2)
-            }
-        }
-        hess
-    }
     central_difference2 <- function(par, f, delta, ...){
         np <- length(par)
         hess <- matrix(0, np, np)
@@ -1942,7 +1952,7 @@ numerical_deriv <- function(par, f, ...,  delta = 1e-5, gradient = TRUE, type = 
         else return(matrix(numeric()))
     }
     if(type == 'central'){
-        ret <- if(gradient) central_difference(par=par, f=f, delta=delta, ...)
+        ret <- if(gradient) central_difference(par=par, f=f, delta=delta/2, ...)
         else central_difference2(par=par, f=f, delta=delta, ...)
     } else if(type == 'forward'){
         ret <- if(gradient) forward_difference(par=par, f=f, delta=delta, ...)
@@ -1999,6 +2009,26 @@ loadSplinePars <- function(pars, Theta, MG = TRUE){
         pars <- fn(pars, Theta)
     }
     return(pars)
+}
+latentRegression_obj <- function(data, covdata, formula, empiricalhist, method){
+    if(!is.null(covdata) && !is.null(formula)){
+        if(empiricalhist)
+            stop('Empirical histogram method not supported with covariates', call.=FALSE)
+        if(!is.data.frame(covdata))
+            stop('covdata must be a data.frame object', call.=FALSE)
+        if(nrow(covdata) != nrow(data))
+            stop('number of rows in covdata do not match number of rows in data', call.=FALSE)
+        if(!(method %in% c('EM', 'QMCEM')))
+            stop('method must be from the EM estimation family', call.=FALSE)
+        tmp <- apply(covdata, 1, function(x) sum(is.na(x)) > 0)
+        if(any(tmp)){
+            message('removing rows with NAs in covdata')
+            covdata <- covdata[-tmp, ]
+            data <- data[-tmp, ]
+        }
+        latent.regression <- list(df=covdata, formula=formula, EM=TRUE)
+    } else latent.regression <- NULL
+    latent.regression
 }
 
 # borrowed and modified from emdbook package, March 1 2017

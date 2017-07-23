@@ -46,6 +46,10 @@
 #'   for details and examples
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @seealso \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}, \code{\link{DTF}}
 #' @keywords models
 #' @export multipleGroup
@@ -272,6 +276,8 @@ multipleGroup <- function(data, model, group, invariance = '', method = 'EM', ro
 {
     Call <- match.call()
     dots <- list(...)
+    if(!is.null(dots$formula))
+        stop('latent regression models not supported for multiple group yet', call.=FALSE) #TODO
     constrain <- dots$constrain
     invariance.check <- invariance %in% c('free_means', 'free_var')
     if(missing(model)) missingMsg('model')

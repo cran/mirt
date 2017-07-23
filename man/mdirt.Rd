@@ -5,9 +5,9 @@
 \title{Multidimensional discrete item response theory}
 \usage{
 mdirt(data, model, customTheta = NULL, nruns = 1, method = "EM",
-  optimizer = "nlminb", return_max = TRUE, group = NULL,
-  GenRandomPars = FALSE, verbose = TRUE, pars = NULL,
-  technical = list(), ...)
+  covdata = NULL, formula = NULL, optimizer = "nlminb",
+  return_max = TRUE, group = NULL, GenRandomPars = FALSE,
+  verbose = TRUE, pars = NULL, technical = list(), ...)
 }
 \arguments{
 \item{data}{a \code{matrix} or \code{data.frame} that consists of
@@ -30,6 +30,14 @@ when using random starting values. If greater than 1, \code{GenRandomPars} is se
 by default}
 
 \item{method}{estimation method. Can be 'EM' or 'BL' (see \code{\link{mirt}} for more details)}
+
+\item{covdata}{a data.frame of data used for latent regression models}
+
+\item{formula}{an R formula (or list of formulas) indicating how the latent traits
+can be regressed using external covariates in \code{covdata}. If a named list
+of formulas is supplied (where the names correspond to the latent trait names in \code{model})
+then specific regression effects can be estimated for each factor. Supplying a single formula
+will estimate the regression parameters for all latent traits by default}
 
 \item{optimizer}{optimizer used for the M-step, set to \code{'nlminb'} by default.
 See \code{\link{mirt}} for more details}
@@ -260,6 +268,11 @@ summary(mod)
 
 
 }
+}
+\references{
+Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+\doi{10.18637/jss.v048.i06}
 }
 \seealso{
 \code{\link{fscores}}, \code{\link{mirt.model}}, \code{\link{M2}},

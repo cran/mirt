@@ -387,18 +387,18 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     collectLL <- as.numeric(na.omit(collectLL))
     LP <- unname(LP)
     start.time.SE <- proc.time()[3L]
-    if(list$SE.type %in% c('SEM', 'Oakes', 'complete') && list$SE){
+    if(list$SE.type %in% c('SEM', 'Oakes', 'complete', 'sandwich') && list$SE){
         h <- matrix(0, nfullpars, nfullpars)
         ind1 <- 1L
         for(group in seq_len(ngroups)){
             for (i in seq_len(J)){
-                deriv <- Deriv(x=pars[[group]][[i]], Theta=Theta, estHess=TRUE)
+                deriv <- Deriv(x=pars[[group]][[i]], Theta=gTheta[[group]], estHess=TRUE)
                 ind2 <- ind1 + length(pars[[group]][[i]]@par) - 1L
                 h[ind1:ind2, ind1:ind2] <- pars[[group]][[i]]@hessian <- deriv$hess
                 ind1 <- ind2 + 1L
             }
             deriv <- Deriv(x=pars[[group]][[i+1L]], CUSTOM.IND=CUSTOM.IND,
-                           Theta=Theta, EM = TRUE,
+                           Theta=gTheta[[group]], EM = TRUE,
                            pars=pars[[group]], tabdata=Data$tabdatalong,
                            freq=Data$Freq[[group]], prior=Prior[[group]],
                            itemloc=itemloc, estHess=TRUE)
@@ -407,7 +407,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             ind1 <- ind2 + 1L
             if(length(lrPars)){
                 gp <- ExtractGroupPars(pars[[group]][[J+1L]])
-                tmp <- Mstep.LR(Theta=Theta, CUSTOM.IND=CUSTOM.IND, pars=pars[[group]],
+                tmp <- Mstep.LR(Theta=gTheta[[group]], CUSTOM.IND=CUSTOM.IND, pars=pars[[group]],
                                 itemloc=itemloc, fulldata=Data$fulldata[[1L]], prior=Prior[[group]],
                                 lrPars=lrPars, retscores=TRUE)
                 deriv <- Deriv(lrPars, cov=gp$gcov, theta=tmp)
@@ -418,9 +418,9 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
         hess <- updateHess(h=h, L=L)
         hess <- hess[estpars & !redun_constr, estpars & !redun_constr]
-        if(list$SE.type == 'Oakes' && length(lrPars) && list$SE){
+        if(list$SE.type %in% c('Oakes', 'sandwich') && length(lrPars) && list$SE){
             warning('Oakes method not supported for models with latent regression effects', call.=FALSE)
-        } else if(list$SE.type == 'Oakes' && list$SE){
+        } else if(list$SE.type %in% c('Oakes', 'sandwich') && list$SE){
             complete_info <- hess
             shortpars <- longpars[estpars & !redun_constr]
             tmp <- updatePrior(pars=pars, gTheta=gTheta,
@@ -475,7 +475,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     collectLL=collectLL, shortpars=longpars[estpars & !redun_constr],
                     lrPars=lrPars, logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist,
-                    start.time.SE=start.time.SE)
+                    start.time.SE=start.time.SE, Theta=gTheta[[1L]], sitems=sitems)
     } else {
         ret <- list(pars=pars, cycles = cycles, info=matrix(0), longpars=longpars, converge=converge,
                     logLik=LL, rlist=rlist, SElogLik=0, L=L, infological=infological, Moptim=Moptim,
@@ -483,7 +483,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     Prior=Prior, time=c(Estep=as.numeric(Estep.time), Mstep=as.numeric(Mstep.time)),
                     prior=prior, Priorbetween=Priorbetween, sitems=sitems, collectLL=collectLL,
                     shortpars=longpars[estpars & !redun_constr], lrPars=lrPars,
-                    logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist)
+                    logPrior=LP, fail_invert_info=FALSE, Etable=Elist$rlist, Theta=gTheta[[1L]])
     }
     for(g in seq_len(ngroups))
         for(i in seq_len(J))

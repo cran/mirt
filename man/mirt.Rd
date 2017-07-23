@@ -8,11 +8,11 @@ Theory)}
 mirt(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
   covdata = NULL, formula = NULL, SE.type = "Oakes", method = "EM",
   optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
-  calcNull = TRUE, draws = 5000, survey.weights = NULL, quadpts = NULL,
+  calcNull = FALSE, draws = 5000, survey.weights = NULL, quadpts = NULL,
   TOL = NULL, gpcm_mats = list(), grsm.block = NULL, rsm.block = NULL,
   key = NULL, large = FALSE, GenRandomPars = FALSE,
   accelerate = "Ramsay", empiricalhist = FALSE, verbose = TRUE,
-  solnp_args = list(), alabama_args = list(), spline_args = list(),
+  solnp_args = list(), nloptr_args = list(), spline_args = list(),
   control = list(), technical = list(), ...)
 }
 \arguments{
@@ -84,8 +84,11 @@ will estimate the regression parameters for all latent traits by default}
     \item \code{'Richardson'}, \code{'forward'}, or \code{'central'} for the numerical Richardson,
       forward difference, and central difference evaluation of observed Hessian matrix
     \item \code{'crossprod'} and \code{'Louis'} for standard error computations based on the variance of the
-      Fisher scores as well as Louis' (1982) exact computation of the observed information matrix
+      Fisher scores as well as Louis' (1982) exact computation of the observed information matrix.
+      Note that Louis' estimates can take a long time to obtain for large sample sizes and long tests
     \item \code{'sandwich'} for the sandwich covariance estimate based on the
+      \code{'crossprod'} and \code{'Oakes'} estimates
+    \item \code{'sandwich.Louis'} for the sandwich covariance estimate based on the
       \code{'crossprod'} and \code{'Louis'} estimates
     \item \code{'Oakes'} for Oakes' (1999) method using a central difference approximation
     \item \code{'SEM'} for the supplemented EM (disables the \code{accelerate} option automatically; EM only)
@@ -140,20 +143,16 @@ will estimate the regression parameters for all latent traits by default}
   As well, the \code{'Nelder-Mead'} and \code{'SANN'}
   estimators are also available, but their routine use generally is not required or recommended.
 
-  Additionally, estimation subroutines from the \code{Rsolnp} and \code{alabama}
-  packages are available by passing the arguments \code{'solnp'} and \code{'alabama'},
+  Additionally, estimation subroutines from the \code{Rsolnp} and \code{nloptr}
+  packages are available by passing the arguments \code{'solnp'} and \code{'nloptr'},
   respectively. This should be used in conjunction with the \code{solnp_args} and
-  \code{alabama_args} specified below. If equality constraints were specified in the
+  \code{nloptr_args} specified below. If equality constraints were specified in the
   model definition only the parameter with the lowest \code{parnum}
   in the \code{pars = 'values'} data.frame is used in the estimation vector passed
   to the objective function, and group hyper-parameters are omitted.
   Equality an inequality functions should be of the form \code{function(p, optim_args)},
   where \code{optim_args} is a list of internally parameters that largely can be ignored
-  when defining constraints (though use of \code{browser()} here may be helpful). Note:
-  for the \code{'alabama'} optimizer, the starting values
-  should be adjusted such that all constraints are met prior to the first maximization-step.
-  The \code{'solnp'} optimizer is less sensitive to this initial condition restriction, but it may also
-  if the model is unstable early in the EM cycles}
+  when defining constraints (though use of \code{browser()} here may be helpful)}
 
 \item{pars}{a data.frame with the structure of how the starting values, parameter numbers,
 estimation logical values, etc, are defined. The user may observe how the model defines the
@@ -183,8 +182,7 @@ prior to the lower/upper-bound parameters in 3/4PL models). Priors can also be
 specified using \code{\link{mirt.model}} syntax (recommended)}
 
 \item{calcNull}{logical; calculate the Null model for additional fit statistics (e.g., TLI)?
-Only applicable if the data contains no NA's and the data is not overly sparse, otherwise
-it is ignored}
+Only applicable if the data contains no NA's and the data is not overly sparse}
 
 \item{draws}{the number of Monte Carlo draws to estimate the log-likelihood for the MH-RM
 algorithm. Default is 5000}
@@ -260,7 +258,7 @@ after each iteration cycle? Default is TRUE}
 \item{solnp_args}{a list of arguments to be passed to the \code{solnp::solnp()} function for
 equality constraints, inequality constraints, etc}
 
-\item{alabama_args}{a list of arguments to be passed to the \code{alabama::constrOptim.nl()}
+\item{nloptr_args}{a list of arguments to be passed to the \code{nloptr::nloptr()}
 function for equality constraints, inequality constraints, etc}
 
 \item{spline_args}{a named list of lists containing information to be passed to the \code{\link{bs}} (default)
@@ -939,7 +937,7 @@ plot(skew, type = 'empiricalhist')
 histogram(ThetaSkew, breaks=30)
 
 #####
-# non-linear parameter constraints with Rsolnp package (alabama supported as well):
+# non-linear parameter constraints with Rsolnp package (nloptr supported as well):
 # Find Rasch model subject to the constraint that the intercepts sum to 0
 
 dat <- expand.table(LSAT6)
@@ -1062,9 +1060,14 @@ Statistics, 35}, 307-335.
 
 Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+\doi{10.18637/jss.v048.i06}
+
+Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-RM Algorithm.
+\emph{Journal of Educational Measurement, 52}, 200-222. \doi{10.1111/jedm.12072}
 
 Chalmers, R., P. & Flora, D. (2014). Maximum-likelihood Estimation of Noncompensatory IRT
 Models with the MH-RM Algorithm. \emph{Applied Psychological Measurement, 38}, 339-358.
+\doi{10.1177/0146621614520958}
 
 Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.

@@ -31,9 +31,9 @@ itemfit(x, fit_stats = "S_X2", which.items = 1:extract.mirt(x, "nitems"),
     modifying the \code{group.size} input to the desired number of bins
   \item \code{'G2'} : McKinley & Mills (1985) G2 statistic (similar method to Q1,
     but with the likelihood-ratio test).
-  \item \code{'PV_Q1'} : Chalmers and Ng's (forthcoming) plausible-value variant
+  \item \code{'PV_Q1'} : Chalmers and Ng's (2017) plausible-value variant
     of the Q1 statistic.
-  \item \code{'PV_Q1*'} : Chalmers and Ng's (forthcoming) plausible-value variant
+  \item \code{'PV_Q1*'} : Chalmers and Ng's (2017) plausible-value variant
     of the Q1 statistic that uses parametric boostrapping to obtain a suitable empirical
     distribution.
   \item \code{'X2*'} : Stone's (2000) fit statistics that require parametric
@@ -225,10 +225,15 @@ itemfit(raschfit, empirical.table=1)
 }
 \references{
 Bock, R. D. (1972). Estimating item parameters and latent ability when responses are scored
-in two or more nominal categories. Psychometrika, 37, 29-51.
+in two or more nominal categories. \emph{Psychometrika, 37}, 29-51.
 
-Chalmers, R. P. & Ng, V. (forthcoming). Plausible-Value Imputation Statistics for Detecting
-Item Misfit. \emph{Applied Psychological Measurement}.
+Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+\doi{10.18637/jss.v048.i06}
+
+Chalmers, R. P. & Ng, V. (2017). Plausible-Value Imputation Statistics for Detecting
+Item Misfit. \emph{Applied Psychological Measurement, 41}, 372-387.
+\doi{10.1177/0146621617692079}
 
 Drasgow, F., Levine, M. V., & Williams, E. A. (1985). Appropriateness measurement with
 polychotomous item response models and standardized indices.

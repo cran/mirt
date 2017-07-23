@@ -34,6 +34,13 @@ test_that('discrete', {
     W <- wald(mod, L = matrix(c(1,numeric(9), 0), nrow=1))
     expect_equal(W$W, 26.37915, tolerance=1e-4)
 
+    # covdata
+    set.seed(2)
+    covdata <- data.frame(X = rowSums(dat))
+    modb <- mdirt(dat, 2, covdata=covdata, formula = ~X,
+                  verbose=FALSE, GenRandomPars = TRUE)
+    expect_equal(logLik(modb), -2390.676, tolerance = 1e-4)
+
     #----------
     # polytomous LCA
     mod2 <- mdirt(Science, 2, verbose=FALSE)

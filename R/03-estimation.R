@@ -57,13 +57,21 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             if(is.null(control$tol)) control$tol <- opts$TOL/1000
             if(is.null(control$maxit)) control$maxit <- 50L
         }
-        if(discrete) opts$dentype <- 'custom'
+        if(discrete) opts$dentype <- 'discrete'
         if(discrete && is.null(customGroup)){
-            den <- function(obj, Theta){
+            den <- function(obj, Theta, mus = 0){
                 if(length(Theta) == 1) return(1)
                 par <- obj@par
-                d <- c(exp(par), 1)
-                d / sum(d)
+                if(length(mus) > 1L){
+                    ret <- t(apply(mus, 1L, function(x)
+                        c(exp(par + x[-ncol(mus)]), 1)))
+                    ret <- ret / rowSums(ret)
+                } else {
+                    d <- c(exp(par), 1)
+                    ret <- d / sum(d)
+                }
+                ret
+
             }
             par <- if(is.null(opts$technical$customTheta)){
                 tmpnfact <- model
@@ -151,7 +159,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
         if(any(rowSums(is.na(data)) == ncol(data))){
             if(!opts$removeEmptyRows)
-                stop('data contains completely empty response patterns.',
+                stop('data contains completely empty response patterns. ',
                      'Please remove manually or pass removeEmptyRows=TRUE to the technical list',
                      call.=FALSE)
             else {
@@ -159,7 +167,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 data <- subset(data, pick)
                 group <- subset(group, pick)
                 if(!is.null(latent.regression) || !is.null(mixed.design))
-                    stop('removeEmptyRows input not supported for latent regression/mixed effect models.',
+                    stop('removeEmptyRows input not supported for latent regression/mixed effect models. ',
                          'Please remove the require rows manually for each object.', call.=FALSE)
             }
         }
@@ -236,6 +244,13 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                     TOL=opts$TOL)
             lrPars@parnum <- parnumber:(parnumber - 1L + length(lrPars@par))
             parnumber <- max(lrPars@parnum) + 1L
+            if(opts$dentype == 'discrete'){
+                tmp <- matrix(1L:length(lrPars@beta), nrow(lrPars@beta), ncol(lrPars@beta))
+                tmp2 <- tmp[1, ]
+                lrPars@est[tmp2[-length(tmp2)]] <- TRUE
+                lrPars@est[tmp[,ncol(tmp)]] <- FALSE
+                PrepList$all$pars[[ncol(data) + 1L]]@est <- FALSE
+            }
         } else lrPars <- list()
         if(length(latent.regression$lr.random) > 0L){
             for(i in seq_len(length(latent.regression$lr.random))){
@@ -752,7 +767,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          warn=opts$warn)
         } else if(opts$SE.type %in% c('Richardson', 'forward', 'central') &&
                   !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
-            ESTIMATE <- SE.Numerical(pars=ESTIMATE$pars, Theta=Theta, theta=theta, PrepList=PrepList, Data=Data,
+            ESTIMATE <- SE.Numerical(pars=ESTIMATE$pars, Theta=ESTIMATE$Theta, theta=theta, PrepList=PrepList, Data=Data,
                               dentype=opts$dentype, itemloc=PrepList[[1L]]$itemloc, ESTIMATE=ESTIMATE,
                               constrain=constrain, Ls=Ls, specific=oldmodel, sitems=sitems,
                               CUSTOM.IND=CUSTOM.IND, EHPrior=ESTIMATE$Prior, warn=opts$warn, type=opts$SE.type,
@@ -772,7 +787,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                                plausible.draws=0L, MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
                                                keep_vcov_PD=opts$keep_vcov_PD),
                                    DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
-        } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich')) &&
+        } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich.Louis', 'sandwich')) &&
                   !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
             if(logPrior != 0 && opts$warn)
                 warning('Information matrix with the crossprod, Louis, and sandwich method
@@ -827,8 +842,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     #missing stats for MHRM
-    Pl <- vector('list', Data$ngroups)
     if(opts$method %in% c('MHRM', 'MIXED', 'SEM')){
+        Pl <- vector('list', Data$ngroups)
         logPrior <- logLik <- SElogLik <- G2 <- 0
         if(opts$draws > 0L){
             if(opts$verbose) cat("\nCalculating log-likelihood...\n")
@@ -856,11 +871,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     }
 
     ####post estimation stats
-    if(opts$Moptim %in% c('solnp', 'alabama')){
+    if(opts$Moptim %in% c('solnp', 'nloptr')){
         if(!is.null(opts$solnp_args$eqfun))
             df <- df + length(opts$solnp_args$eqfun(ESTIMATE$shortpars, list()))
-        if(!is.null(opts$solnp_args$heq))
-            df <- df + length(opts$solnp_args$heq(ESTIMATE$shortpars, list()))
+        if(!is.null(opts$solnp_args$eval_g_eq))
+            df <- df + length(opts$solnp_args$eval_g_eq(ESTIMATE$shortpars, list()))
     }
     r <- rr
     N <- sum(r)
@@ -879,10 +894,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     RMSEA.G2 <- rmsea(X2=G2, df=df, N=N)
     null.mod <- unclass(new('SingleGroupClass'))
     TLI.G2 <- CFI.G2 <- NaN
-    if(length(r) * 3L < prod(Data$K)){
-        G2 <- NaN; p.G2 <- NaN
-        opts$calcNull <- FALSE
-    }
+    if(opts$calcNull && length(r) * 3L < prod(Data$K) && opts$warn)
+        warning(c('Full table of responses is very sparse. ',
+                'Goodness-of-fit statistics may be very innacurate'), call.=FALSE)
     if(!opts$NULL.MODEL && opts$method != 'MIXED' && opts$calcNull && nmissingtabdata == 0L){
         null.mod <- try(unclass(computeNullModel(data=data, itemtype=itemtype, key=key,
                                                  group=if(length(pars) > 1L) group else NULL)))

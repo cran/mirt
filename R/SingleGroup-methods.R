@@ -8,6 +8,10 @@
 #' @name print-method
 #' @aliases print,SingleGroupClass-method
 #'   print,MultipleGroupClass-method print,MixedClass-method print,DiscreteClass-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @docType methods
 #' @rdname print-method
 #' @examples
@@ -20,6 +24,10 @@ setMethod(
     f = "print",
     signature = signature(x = 'SingleGroupClass'),
     definition = function(x){
+        if(!length(x@time)){
+            cat('An object of class \"SingleGroupClass\"\n')
+            return(invisible(NULL))
+        }
         cat("\nCall:\n", paste(deparse(x@Call), sep = "\n", collapse = "\n"),
             "\n\n", sep = "")
         cat("Full-information item factor analysis with ", x@Model$nfact, " factor(s).\n", sep="")
@@ -87,6 +95,10 @@ setMethod(
 #'   show,MultipleGroupClass-method show,MixedClass-method show,DiscreteClass-method
 #' @docType methods
 #' @rdname show-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @examples
 #'
 #' \dontrun{
@@ -133,7 +145,12 @@ setMethod(
 #' @aliases summary,SingleGroupClass-method
 #'   summary,MultipleGroupClass-method summary,MixedClass-method summary,DiscreteClass-method
 #' @docType methods
+#' @export
 #' @rdname summary-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @seealso \code{\link{coef-method}}
 #' @examples
 #'
@@ -230,6 +247,11 @@ setMethod(
 #'   coef,MultipleGroupClass-method coef,MixedClass-method coef,DiscreteClass-method
 #' @docType methods
 #' @rdname coef-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#' @export
 #' @seealso \code{\link{summary-method}}
 #' @examples
 #'
@@ -365,7 +387,6 @@ setMethod(
                     names(allPars$lr.betas) <- c('betas', SEnames)
                 }
             }
-
         }
         if(!as.data.frame)
             class(allPars) <- c('mirt_list', 'list')
@@ -387,6 +408,10 @@ setMethod(
 #' @param verbose logical; print additional information to console?
 #'
 #' @name anova-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @aliases anova,SingleGroupClass-method
 #'   anova,MultipleGroupClass-method anova,MixedClass-method anova,DiscreteClass-method
 #' @docType methods
@@ -492,6 +517,9 @@ setMethod(
 #' @docType methods
 #' @rdname residuals-method
 #' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #'
 #' Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 #' response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
@@ -692,14 +720,22 @@ setMethod(
 #' @param x an object of class \code{SingleGroupClass},
 #'   \code{MultipleGroupClass}, or \code{DiscreteClass}
 #' @param y an arbitrary missing argument required for \code{R CMD check}
-#' @param type type of plot to view; can be \code{'info'} to show the test
-#'   information function, \code{'rxx'} for the reliability function,
-#'   \code{'infocontour'} for the test information contours,
-#'   \code{'SE'} for the test standard error function, \code{'trace'}, \code{'infotrace'}, and \code{'itemscore'}
-#'   for all item probability, information, and scoring or trace lines,
-#'   \code{'infoSE'} for a combined test information and standard error plot, and \code{'score'} and
-#'   \code{'scorecontour'} for the expected total score surface and contour plots.
-#'   If \code{empiricalhist = TRUE} was used in estimation then the type \code{'empiricalhist'}
+#' @param type type of plot to view. Can be
+#'   \describe{
+#'     \item{\code{'info'}}{test information function}
+#'     \item{\code{'rxx'}}{for the reliability function}
+#'     \item{\code{'infocontour'}}{for the test information contours}
+#'     \item{\code{'SE'}}{for the test standard error function}
+#'     \item{\code{'infotrace'}}{item information traceline plots}
+#'     \item{\code{'infoSE'}}{a combined test information and standard error plot}
+#'     \item{\code{'trace'}}{item probability traceline plots}
+#'     \item{\code{'itemscore'}}{item scoring traceline plots}
+#'     \item{\code{'score'}}{expected total score surface}
+#'     \item{\code{'scorecontour'}}{expected total score contour plot}
+#'   }
+#'
+#'   Note that if \code{empiricalhist = TRUE} was used in estimation then
+#'   the type \code{'empiricalhist'}
 #'   also will be available to generate the empirical histogram plot
 #' @param degrees numeric value ranging from 0 to 90 used in \code{plot} to compute angle
 #'   for information-based plots with respect to the first dimension.
@@ -734,6 +770,10 @@ setMethod(
 #' @param ... additional arguments to be passed to lattice
 #'
 #' @name plot-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @aliases plot,SingleGroupClass-method
 #'   plot,MultipleGroupClass-method plot,SingleGroupClass,missing-method
 #'   plot,DiscreteClass,missing-method
@@ -811,6 +851,11 @@ setMethod(
         info <- numeric(nrow(ThetaFull))
         if(type %in% c('info', 'infocontour', 'rxx', 'SE', 'infoSE', 'infotrace'))
             info <- testinfo(x, ThetaFull, degrees = degrees, which.items=which.items)
+        if(type == 'infoangle'){
+            for(i in seq_len(length(degrees)))
+                info <- info + testinfo(x, ThetaFull, degrees = rep(degrees[i], ncol(ThetaFull)),
+                                        which.items=which.items)
+        }
         mins <- x@Data$mins
         maxs <- extract.mirt(x, 'K') + mins - 1
         rotate <- if(is.null(dots$rotate)) 'none' else dots$rotate
@@ -982,7 +1027,7 @@ setMethod(
                     main <- 'Information across different angles'
                     if(x@Options$exploratory) main <- paste0(main, ' (rotate = \'', rotate, '\')')
                 }
-                graphics::symbols(plt[,2], plt[,3], circles = sqrt(plt[,1]/pi), inches = .35, fg='white', bg='blue',
+                graphics::symbols(plt$Theta1, plt$Theta2, circles = sqrt(plt$info/pi), inches = .35, fg='white', bg='blue',
                         xlab = expression(theta[1]), ylab = expression(theta[2]),
                         main = main)
             } else if(type == 'SE'){
@@ -1317,6 +1362,11 @@ traditional2mirt <- function(x, cls, ncat, digits = 3){
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
 #'
 #' @name vcov-method
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#' @export
 #' @aliases vcov,SingleGroupClass-method
 #'   vcov,MultipleGroupClass-method vcov,MixedClass-method vcov,DiscreteClass-method
 #' @docType methods
@@ -1347,6 +1397,10 @@ setMethod(
 #' @aliases logLik,SingleGroupClass-method
 #'   logLik,MultipleGroupClass-method logLik,MixedClass-method logLik,DiscreteClass-method
 #' @docType methods
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
 #' @rdname logLik-method
 #' @examples
 #'
