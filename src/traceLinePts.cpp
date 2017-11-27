@@ -125,18 +125,19 @@ void P_gpcmIRT(vector<double> &P, const vector<double> &par,
         double den = 0.0;
         for(int j = 0; j < ncat; ++j){
             z[j] = z[j] - maxz;
-            if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
             num[j] = exp(z[j]);
             den += num[j];
         }
         for(int j = 0; j < ncat; ++j)
             Pk(i, j) = num[j] / den;
     }
-    
+
     int which = 0;
     for(int i = 0; i < Pk.ncol(); ++i){
         for(int j = 0; j < Pk.nrow(); ++j){
             P[which] = Pk(j,i);
+            if(P[which] < 1e-50) P[which] = 1e-50;
+            else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
             ++which;
         }
     }
@@ -175,7 +176,6 @@ void P_nominal(vector<double> &P, const vector<double> &par,
             double maxz = *std::max_element(z.begin(), z.end());
             for(int j = 0; j < ncat; ++j){
                 z[j] = z[j] - maxz;
-                if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
                 Num(i,j) = exp(z[j]);
                 Den[i] += Num(i,j);
             }
@@ -187,7 +187,6 @@ void P_nominal(vector<double> &P, const vector<double> &par,
             double maxz = *std::max_element(z.begin(), z.end());
             for(int j = 0; j < ncat; ++j){
                 z[j] = z[j] - maxz;
-                if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
                 Num(i,j) = exp(z[j]);
                 Den[i] += Num(i,j);
             }
@@ -205,6 +204,8 @@ void P_nominal(vector<double> &P, const vector<double> &par,
         for(int j = 0; j < ncat; ++j){
             for(int i = 0; i < N; ++i){
                 P[which] = Num(i,j) / Den[i];
+                if(P[which] < 1e-50) P[which] = 1e-50;
+                else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
                 ++which;
             }
         }
@@ -244,7 +245,6 @@ void P_nominal2(vector<double> &P, const vector<double> &par,
             double maxz = *std::max_element(z.begin(), z.end());
             for(int j = 0; j < ncat; ++j){
                 z[j] = z[j] - maxz;
-                if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
                 Num(i,j) = exp(z[j]);
                 Den[i] += Num(i,j);
             }
@@ -259,7 +259,6 @@ void P_nominal2(vector<double> &P, const vector<double> &par,
             double maxz = *std::max_element(z.begin(), z.end());
             for(int j = 0; j < ncat; ++j){
                 z[j] = z[j] - maxz;
-                if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
                 Num(i,j) = exp(z[j]);
                 Den[i] += Num(i,j);
             }
@@ -277,6 +276,8 @@ void P_nominal2(vector<double> &P, const vector<double> &par,
         for(int j = 0; j < ncat; ++j){
             for(int i = 0; i < N; ++i){
                 P[which] = Num(i,j) / Den[i];
+                if(P[which] < 1e-50) P[which] = 1e-50;
+                else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
                 ++which;
             }
         }
@@ -311,6 +312,8 @@ void P_nested(vector<double> &P, const vector<double> &par,
         } else {
             for(int j = 0; j < N; ++j){
                 P[which] = PD(j,0) * PN(j,k);
+                if(P[which] < 1e-50) P[which] = 1e-50;
+                else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
                 ++which;
             }
         }
@@ -360,7 +363,6 @@ void P_lca(vector<double> &P, const vector<double> &par,
         double maxz = *std::max_element(z.begin(), z.end());
         for(int j = 0; j < ncat; ++j){
             z[j] = z[j] - maxz;
-            if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
             Num(i,j) = exp(z[j]);
             Den[i] += Num(i,j);
         }
@@ -377,12 +379,194 @@ void P_lca(vector<double> &P, const vector<double> &par,
         for(int j = 0; j < ncat; ++j){
             for(int i = 0; i < N; ++i){
                 P[which] = Num(i,j) / Den[i];
+                if(P[which] < 1e-50) P[which] = 1e-50;
+                else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
                 ++which;
             }
         }
     }
 }
 
+void P_ideal(vector<double> &P, const vector<double> &par, const NumericMatrix &Theta,
+    const NumericVector &ot, const int &N, const int &nfact)
+{
+    const int len = par.size();
+    for (int i = 0; i < N; ++i){
+        double z = par[len-1];
+        for (int j = 0; j < nfact; ++j)
+            z += par[j] * Theta(i,j);
+        double eta = -0.5 * (z*z);
+        if(eta < -20.0) eta = -20.0;
+        else if(eta > -1e-10) eta = -1e-10;
+        double p = exp(eta);
+        P[i+N] = p;
+        P[i] = 1.0 - p;
+    }
+}
+
+void monopoly_z(const double &theta, const vector<double> &b, const int &k,
+    double &out)
+{
+    out = 0.0;
+    for(int i = 0; i < 2*k+1; ++i)
+        out += b[i] * pow(theta, i+1);
+}
+
+void monopoly_getb (const vector<double> &a, const int &k,
+    vector<double> &b)
+{
+    for(int i = 0; i < 2*k+1; ++i)
+        b[i] = a[i] / (i+1);
+}
+
+void monopoly_geta (const int &k, const double &alpha, const double &tau,
+          const vector<double> &a, vector<double>  &newa)
+
+{
+  vector<double> t(3);
+  t[0] = 1;
+  t[1] = -2.0 * alpha;
+  t[2] = pow(alpha, 2.0) + exp(tau);
+  int indx = 0;
+  int indx2 = 0;
+  for(int i = 0; i < 2*k-1; ++i){
+    for(int j = 0; j < 2*k+1; ++j){
+      if(j >= indx && j< indx + 3){
+        newa[j] += a[i] * t[indx2];
+        ++indx2;
+      }
+    }
+    ++indx;
+    indx2 = 0;
+  }
+}
+
+void monopoly_getarec (const int &k, const double &omega, const vector<double> &alpha,
+    const vector<double> &tau, vector<double> &a)
+{
+  vector<double> olda(2*k + 1);
+  olda[0] = exp(omega);
+  for(int i = 1; i <= k; ++i){
+    vector<double> newa(i*2 + 1);
+    std::fill(newa.begin(), newa.end(), 0.0);
+    monopoly_geta(i, alpha[i-1], tau[i-1], olda, newa);
+    for (int j = 0; j < i*2+1; ++j)
+        olda[j] = newa[j];
+  }
+  for(int i = 0; i < 2*k + 1; ++i){
+      a[i] = olda[i];
+  }
+}
+
+void P_monopoly(vector<double> &P, const vector<double> &par,
+    const NumericMatrix &Theta, const int &N,
+    const int &nfact, const int &ncat, const int &k)
+{
+    const double omega = par[0];
+    vector<double> xic(ncat);
+    vector<double> alpha(k);
+    vector<double> tau(k);
+    for(int i = 1; i < ncat; ++i)
+        xic[i] = par[i] + xic[i-1];
+    for(int i = 0; i < k; ++i){
+        alpha[i] = par[i*2 + ncat];
+        tau[i] = par[i*2 + ncat + 1];
+    }
+    vector<double> a(2*k + 1);
+    vector<double> b(2*k + 1);
+    NumericMatrix Num(N, ncat);
+    vector<double> Den(N);
+    for (int i = 0; i < N; ++i){
+        double zp = 0;
+        monopoly_getarec(k, omega, alpha, tau, a);
+        monopoly_getb(a, k, b);
+        monopoly_z(Theta(i, 0), b, k, zp);
+        vector<double> z(ncat);
+        for(int j = 0; j < ncat; ++j)
+            z[j] = xic[j] + zp * j;
+        double maxz = *std::max_element(z.begin(), z.end());
+        for(int j = 0; j < ncat; ++j){
+            z[j] = z[j] - maxz;
+            if(z[j] < -ABS_MAX_Z) z[j] = -ABS_MAX_Z;
+            Num(i,j) = exp(z[j]);
+            Den[i] += Num(i,j);
+        }
+    }
+    int which = 0;
+    for(int j = 0; j < ncat; ++j){
+        for(int i = 0; i < N; ++i){
+            P[which] = Num(i,j) / Den[i];
+            ++which;
+        }
+    }
+}
+
+void P_ggum(vector<double> &P, const vector<double> &par,
+    const NumericMatrix &Theta, const int &N,
+    const int &nfact, const int &ncat)
+{
+    const int C = ncat - 1;
+    const int D = nfact;
+    const int M = 2 * C + 1;
+
+    vector<double> dist(N);
+    for (int i = 0; i < N; ++i){
+        double sumdist = 0.0;
+        for (int d = 0; d < D; ++d)
+            sumdist += pow(par[d], 2) * pow(Theta(i,d) - par[D+d], 2);
+        dist[i] = sqrt(sumdist);
+    }
+
+    NumericMatrix Num(N, ncat);
+    vector<double> Den(N);
+    for (int i = 0; i < N; ++i){
+        double sumtau = 0;
+        vector<double> z1(ncat), z2(ncat);
+        for (int w = 0; w < ncat; ++w){
+            if(w > 0){
+                for (int d = 0; d < D; ++d)
+                    sumtau += par[d] * par[w + 2*D - 1];
+            }
+            z1[w] = w * dist[i] + sumtau;
+            z2[w] = (M - w) * dist[i] + sumtau;
+        }
+        double maxz1 = *std::max_element(z1.begin(), z1.end());
+        double maxz2 = *std::max_element(z2.begin(), z2.end());
+        double maxz = std::max(maxz1, maxz2);
+        for(int j = 0; j < ncat; ++j){
+            Num(i,j) = exp(z1[j] - maxz) + exp(z2[j] - maxz);
+            Den[i] += Num(i,j);
+        }
+    }
+
+    int which = 0;
+    for(int j = 0; j < ncat; ++j){
+       for(int i = 0; i < N; ++i){
+            P[which] = Num(i,j) / Den[i];
+            if(P[which] < 1e-50) P[which] = 1e-50;
+            else if((1.0 - P[which]) < 1e-50) P[which] = 1.0 - 1e-50;
+            ++which;
+        }
+    }
+}
+
+RcppExport SEXP monopolyTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rncat, SEXP Rk)
+{
+    BEGIN_RCPP
+
+    const vector<double> par = as< vector<double> >(Rpar);
+    const int k = as<int>(Rk);
+    const int ncat = as<int>(Rncat);
+    const NumericMatrix Theta(RTheta);
+    const int nfact = Theta.ncol();
+    const int N = Theta.nrow();
+    vector<double> P(N*ncat);
+    P_monopoly(P, par, Theta, N, nfact, ncat, k);
+    NumericMatrix ret = vec2mat(P, N, ncat);
+    return(ret);
+
+    END_RCPP
+}
 
 RcppExport SEXP traceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rot)
 {
@@ -434,7 +618,6 @@ RcppExport SEXP gpcmIRTTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Ritemexp, SEXP 
     const NumericMatrix Theta(RTheta);
     const int nfact = Theta.ncol();
     const int N = Theta.nrow();
-    const int itemexp = as<int>(Ritemexp);
     int ncat = par.size() - nfact;
     vector<double> P(N * ncat);
     P_gpcmIRT(P, par, Theta, ot, N, 1, ncat-1);
@@ -524,6 +707,23 @@ RcppExport SEXP partcompTraceLinePts(SEXP Rpar, SEXP RTheta)
     END_RCPP
 }
 
+RcppExport SEXP ggumTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rncat)
+{
+    BEGIN_RCPP
+
+    const vector<double> par = as< vector<double> >(Rpar);
+    const NumericMatrix Theta(RTheta);
+    const int ncat = as<int>(Rncat);
+    const int nfact = Theta.ncol();
+    const int N = Theta.nrow();
+    vector<double> P(N*ncat);
+    P_ggum(P, par, Theta, N, nfact, ncat);
+    NumericMatrix ret = vec2mat(P, N, ncat);
+    return(ret);
+
+    END_RCPP
+}
+
 RcppExport SEXP lcaTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rncat, SEXP RreturnNum)
 {
     BEGIN_RCPP
@@ -542,6 +742,31 @@ RcppExport SEXP lcaTraceLinePts(SEXP Rpar, SEXP RTheta, SEXP Rncat, SEXP Rreturn
     END_RCPP
 }
 
+void P_switch(vector<double> &P, const vector<double> &par,
+    const NumericMatrix &theta, const NumericVector &ot,
+    const int &N, const int &ncat, const int &nfact2,
+    const int &k, const int &itemclass)
+{
+    // add traceline functions for items without pre-evaluated gradient/Hessian here
+    switch(itemclass){
+        case 1 : // example
+            P_dich(P, par, theta, ot, N, nfact2);
+            break;
+        case 6 :
+            P_gpcmIRT(P, par, theta, ot, N, nfact2, ncat);
+            break;
+        case 9 :
+            P_ideal(P, par, theta, ot, N, nfact2);
+            break;
+        case 11 :
+            P_ggum(P, par, theta, N, nfact2, ncat);
+            break;
+        case 12 :
+            P_monopoly(P, par, theta, N, nfact2, ncat, k);
+            break;
+    }
+}
+
 void _computeItemTrace(vector<double> &itemtrace, const NumericMatrix &Theta,
     const List &pars, const NumericVector &ot, const vector<int> &itemloc, const int &which,
     const int &nfact, const int &N, const int &USEFIXED)
@@ -555,8 +780,11 @@ void _computeItemTrace(vector<double> &itemtrace, const NumericMatrix &Theta,
     int itemclass = as<int>(item.slot("itemclass"));
     int correct = 0;
     int has_mat = 0;
+    int k = 1;
     if(itemclass == 8)
         correct = as<int>(item.slot("correctcat"));
+    if(itemclass == 12)
+        k = as<int>(item.slot("k"));
 
     /*
         1 = dich
@@ -569,6 +797,8 @@ void _computeItemTrace(vector<double> &itemtrace, const NumericMatrix &Theta,
         8 = nestlogit
         9 = custom....have to do in R for now
         10 = lca
+        11 = ggum
+        12 = monopoly
     */
 
     if(USEFIXED){
@@ -609,10 +839,19 @@ void _computeItemTrace(vector<double> &itemtrace, const NumericMatrix &Theta,
             P_nested(P, par, theta, N, nfact2, ncat, correct);
             break;
         case 9 :
+            P_ideal(P, par, theta, ot, N, nfact2);
             break;
         case 10 :
-            P_lca(P, par, theta, N, ncat, nfact, 0);
+            P_lca(P, par, theta, N, ncat, nfact2, 0);
             break;
+        case 11 :
+            P_ggum(P, par, theta, N, nfact2, ncat);
+            break;
+        case 12 :
+            P_monopoly(P, par, Theta, N, nfact2, ncat, k);
+            break;
+        default :
+            P_switch(P, par, theta, ot, N, ncat, nfact, k, itemclass);
     }
     int where = (itemloc[which]-1) * N;
     for(int i = 0; i < N*ncat; ++i)

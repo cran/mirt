@@ -1,5 +1,5 @@
 Package: mirt
-Version: 1.25
+Version: 1.26.1
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", family="Chalmers", email =
@@ -9,7 +9,9 @@ Authors@R: c( person("Phil", family="Chalmers", email =
     person("Mateusz", family="Zoltak", role=c('ctb')),
     person("KwonHyun", family="Kim", role=c('ctb')),
     person("Carl F.", family="Falk", role=c('ctb')),
-    person("Adam", family="Meade", role=c('ctb')))
+    person("Adam", family="Meade", role=c('ctb')),
+    person("Lennart", family="Schneider", role=c('ctb')),
+    person("David", family="King", role=c('ctb')))
 Description: Analysis of dichotomous and polytomous response data using
     unidimensional and multidimensional latent trait models under the Item
     Response Theory paradigm. Exploratory and confirmatory models can be
@@ -22,7 +24,7 @@ Description: Analysis of dichotomous and polytomous response data using
     variable models are supported.
 VignetteBuilder: knitr
 Depends: stats, R (>= 3.1.0), stats4, lattice, methods
-Imports: GPArotation, Rcpp, sfsmisc, mgcv, splines, numDeriv
+Imports: GPArotation, Rcpp, mgcv, vegan, splines
 Suggests: boot, latticeExtra, directlabels, shiny, knitr, Rsolnp,
         nloptr, sirt, mirtCAT
 ByteCompile: yes
@@ -38,12 +40,14 @@ URL: https://github.com/philchalmers/mirt,
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-07-22 05:18:18 UTC; phil
+Packaged: 2017-11-27 04:53:01 UTC; phil
 Author: Phil Chalmers [aut, cre, cph],
   Joshua Pritikin [ctb],
   Alexander Robitzsch [ctb],
   Mateusz Zoltak [ctb],
   KwonHyun Kim [ctb],
   Carl F. Falk [ctb],
-  Adam Meade [ctb]
-Date/Publication: 2017-07-23 17:33:22 UTC
+  Adam Meade [ctb],
+  Lennart Schneider [ctb],
+  David King [ctb]
+Date/Publication: 2017-11-27 08:51:42 UTC

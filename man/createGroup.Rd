@@ -27,7 +27,7 @@ defined by \code{createGroup()} and \code{Theta} is a matrix of latent trait par
 
 \item{hss}{Hessian function (matrix of second derivatives) of the log-likelihood used in
 estimation. If not specified a numeric approximation will be used.
-The input is idential to the \code{gr} argument}
+The input is identical to the \code{gr} argument}
 
 \item{gen}{a function used when \code{GenRandomPars = TRUE} is passed to the estimation function
 to generate random starting values. Function must be of the form \code{function(object) ...}
@@ -44,7 +44,7 @@ then the bounds will be set to Inf}
 obtain them numerically. Default is 'Richardson'}
 }
 \description{
-Initializes the proper S4 class and methods necessary for mirt functions to use in estimation for definiting
+Initializes the proper S4 class and methods necessary for mirt functions to use in estimation for defining
 customized group-level functions. To use the defined objects pass to the
 \code{mirt(..., customGroup = OBJECT)} command, and ensure that the class parameters are properly labeled.
 }
@@ -52,15 +52,16 @@ customized group-level functions. To use the defined objects pass to the
 
 \dontrun{
 
-# normal density example
-den <- function(obj, Theta) dnorm(Theta, obj@par[1], obj@par[2])
-par <- c(mu = 0, sigma = 1)
+# normal density example, N(mu, sigma^2)
+den <- function(obj, Theta) dnorm(Theta, obj@par[1], sqrt(obj@par[2]))
+par <- c(mu = 0, sigma2 = .5)
 est <- c(FALSE, TRUE)
 lbound <- c(-Inf, 0)
 grp <- createGroup(par, est, den, nfact = 1, lbound=lbound)
 
-mod <- mirt(Science, 1, 'Rasch')
-modcustom <- mirt(Science, 1, 'Rasch', customGroup=grp)
+dat <- expand.table(LSAT6)
+mod <- mirt(dat, 1, 'Rasch')
+modcustom <- mirt(dat, 1, 'Rasch', customGroup=grp)
 
 coef(mod)
 coef(modcustom)

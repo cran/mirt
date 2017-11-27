@@ -1,13 +1,17 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact,
                      parprior, parnumber, estLambdas, BFACTOR = FALSE, mixed.design, customItems,
-                     key, gpcm_mats, spline_args, itemnames)
+                     key, gpcm_mats, spline_args, itemnames, monopoly.k)
 {
     customItemNames <- unique(names(customItems))
     if(is.null(customItemNames)) customItemNames <- 'UsElEsSiNtErNaLNaMe'
     valid.items <- Valid_iteminputs()
     invalid.items <- is.na(match(itemtype, valid.items))
-    if (any(invalid.items & !(itemtype %in% customItemNames)))
+    if(any(invalid.items & !(itemtype %in% customItemNames)))
         stop(paste("Unknown itemtype:", paste(itemtype[invalid.items], collapse=" ")), call.=FALSE)
+    if(any(itemtype %in% c('gpcmIRT', 'monopoly', 'grsmIRT')) && nfact > 1L)
+        stop('Multidimensional model not supported for select itemtype(s)', call.=FALSE)
+    if(any(itemtype == 'spline' & K > 2L))
+        stop('spline itemtype only supported for dichotomous items', call.=FALSE)
     if(length(gpcm_mats)){
         tmp <- sapply(gpcm_mats, ncol)
         if(!all(tmp == nfact))
@@ -17,6 +21,40 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     pars <- vector('list', J)
     guess <- logit(guess)
     upper <- logit(upper)
+    ggum.start.values <- vector('list', length(K))
+    if(any(itemtype == 'ggum')){
+        dca <- try(vegan::decorana(fulldata), TRUE)
+        if(is(dca, 'try-error')){
+            for (i in 1L:length(K))
+                ggum.start.values[[i]] <- c(rep(1, nfact), numeric(nfact),
+                                            seq(3, -3, length.out = K[i]-1))
+        } else {
+            tmp <- utils::capture.output(a <- as.list(summary(dca, digits=5, origin=TRUE,
+                                                       display="species")))
+            data.dca <- as.data.frame(a$spec.scores)
+            dca.mat <- as.matrix(data.dca[,1:nfact])
+
+            for (i in 1L:length(K)) {
+                if(itemtype[i] != 'ggum') next
+
+                dca.dist <- 0
+                tmppar <- numeric(2*nfact + K[i]-1)
+                for (d in 1:nfact) {
+                    tmppar[d] <- 1   #alphas
+                    tmppar[nfact+d] <- dca.mat[i,d]   #deltas
+                    dca.dist <- dca.mat[i,d]^2 + dca.dist
+                }
+
+                for (k in 1:(K[i]-1)) {
+                    origin <- 1.002+.449*sqrt(dca.dist) - .093*K[i]
+                    delta <- .921+.058*sqrt(dca.dist) - .129*K[i]
+                    tmppar[2*nfact+k] <- origin + delta*(K[i]-k) #taus
+                }
+                ggum.start.values[[i]] <- tmppar
+            }
+        }
+    }
+
 
     #start values and free parameters
     startvalues <- freepars <- vector('list', J)
@@ -67,6 +105,13 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             val <- c(lambdas[i,], zetas[[i]])
             fp <- c(estLambdas[i, ], rep(TRUE, K[i]-1L))
             names(val) <- c(paste('a', 1L:nfact, sep=''), paste('d', 1L:(K[i]-1L), sep=''))
+        } else if(itemtype[i] == 'monopoly'){
+            val <- c(suppressWarnings(log(lambdas[i,])),
+                     zetas[[i]], rep(0, monopoly.k[i]*2))
+            if(!is.finite(val[1L])) val[1L] <- -4
+            fp <- c(estLambdas[i, ], rep(TRUE, K[i]-1L + monopoly.k[i]*2))
+            names(val) <- c('omega', paste('xi', 1L:(K[i]-1L), sep=''),
+                            paste(c('alpha', 'tau'), 1L:(monopoly.k[i]*2), sep=''))
         } else if(itemtype[i] %in% c('gpcmIRT', 'rsm')){
             if(itemtype[i] == 'rsm'){
                 val <- c(1, seq(-2, 2, length.out=K[i]-1), 0)
@@ -138,6 +183,14 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 names(val) <- paste('a', 1L:length(val), sep='')
             }
             val[!fp] <- 0
+        } else if (itemtype[i] == 'ggum'){
+            val <- ggum.start.values[[i]]
+            fp <- c(rep(TRUE,length(val)))
+            names(val) <- c(paste('a', 1L:nfact, sep=''), paste('b', 1L:nfact, sep=''),
+                paste('t', 1L:(max(K[i]) - 1), sep=''))
+            names(fp) <- names(val)
+            startvalues[[i]] <- val
+            freepars[[i]] <- fp
         } else if (itemtype[i] == 'spline') next
         if(all(itemtype[i] != valid.items) || itemtype[i] %in% Experimental_itemtypes()) next
         names(fp) <- names(val)
@@ -348,6 +401,28 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
+        if(itemtype[i] == 'monopoly'){
+            pars[[i]] <- new('monopoly',
+                             par=startvalues[[i]],
+                             nfact=nfact,
+                             ncat=K[i],
+                             k=as.integer(monopoly.k[i]),
+                             itemclass=12L,
+                             nfixedeffects=nfixedeffects,
+                             any.prior=FALSE,
+                             prior.type=rep(0L, length(startvalues[[i]])),
+                             fixed.design=fixed.design.list[[i]],
+                             est=freepars[[i]],
+                             lbound=rep(-Inf, length(startvalues[[i]])),
+                             ubound=rep(Inf, length(startvalues[[i]])),
+                             prior_1=rep(NaN,length(startvalues[[i]])),
+                             prior_2=rep(NaN,length(startvalues[[i]])))
+            tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1L)
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(freepars[[i]])
+            next
+        }
+
         if(itemtype[i] == 'nominal'){
             pars[[i]] <- new('nominal',
                              par=startvalues[[i]],
@@ -470,6 +545,28 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             tmp2 <- parnumber:(parnumber + length(p) - 1L)
             pars[[i]]@parnum <- tmp2
             parnumber <- parnumber + length(p)
+            next
+        }
+
+        if(itemtype[i] == 'ggum'){
+            pars[[i]] <- new('ggum',
+                             par=startvalues[[i]],
+                             est=freepars[[i]],
+                             nfact=nfact,
+                             ncat=K[i],
+                             nfixedeffects=nfixedeffects,
+                             any.prior=FALSE,
+                             itemclass=11L,
+                             prior.type=rep(0L, length(startvalues[[i]])),
+                             fixed.design=fixed.design.list[[i]],
+                             lbound=c(rep(1e-4, nfact),
+                                      rep(-Inf, length(startvalues[[i]])-nfact)),
+                             ubound=c(rep(Inf, length(startvalues[[i]]))),
+                             prior_1=rep(NaN,length(startvalues[[i]])),
+                             prior_2=rep(NaN,length(startvalues[[i]])))
+            tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1L)
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(freepars[[i]])
             next
         }
 

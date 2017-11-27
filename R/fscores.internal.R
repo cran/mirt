@@ -126,9 +126,12 @@ setMethod(
                 formulas <- try(extract.mirt(object, 'lrformulas'), TRUE)
                 if(!is(formulas, 'try-error'))
                     stop('MH plausible.type currently not supported for latent regression model', call.=FALSE)
+                sv <- mod2values(object)
+                sv$est <- FALSE
                 ret <- mirt(extract.mirt(object, 'data'),
                             extract.mirt(object, 'model'),
                             extract.mirt(object, 'itemtype'),
+                            pars=sv,
                             method='MHRM',
                             technical=technical)
                 if(plausible.draws == 1L) return(ret[[1L]])
@@ -219,7 +222,7 @@ setMethod(
         dots <- list(...)
         discrete <- FALSE
         if(object@Model$nfact > 3L && !QMC && method %in% c('EAP', 'EAPsum'))
-            warning('High-dimensional models should use quasi-Monte Carlo integration. Pass QMC=TRUE',
+            warning('High-dimensional models factor scores should use quasi-Monte Carlo integration. Pass QMC=TRUE',
                     call.=FALSE)
         if(method == 'Discrete' || method == 'DiscreteSum'){
             discrete <- TRUE
@@ -668,7 +671,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         Sum.Scores <- 1L:nrow(L0)-1L
         MAX.Scores <- cumsum(K-1L)
         for(i in seq_len(J-1L)){
-            T <- itemtrace[itemloc[i+1L]:(itemloc[i+2L] - 1L), ]
+            T <- itemtrace[itemloc[i+1L]:(itemloc[i+2L] - 1L), , drop=FALSE]
             L1[1L, ] <- L0[1L, ] * T[1L, ]
             for(j in 1L:nstar+1L){
                 sums <- 0
@@ -743,8 +746,8 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         Elist <- vector('list', J)
         for(i in which.items){
             KK <- K[-i]
-            T <- itemtrace[c(itemloc[i]:(itemloc[i+1L]-1L)), ]
-            itemtrace2 <- itemtrace[-c(itemloc[i]:(itemloc[i+1L]-1L)), ]
+            T <- itemtrace[c(itemloc[i]:(itemloc[i+1L]-1L)), , drop=FALSE]
+            itemtrace2 <- itemtrace[-c(itemloc[i]:(itemloc[i+1L]-1L)), , drop=FALSE]
             if(i != J){
                 itemloc2 <- itemloc[-i]
                 itemloc2[i:J] <- itemloc2[i:J] - nrow(T)

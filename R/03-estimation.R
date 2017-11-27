@@ -3,7 +3,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                        parprior = NULL, mixed.design = NULL, customItems = NULL,
                        customGroup = NULL, GenRandomPars = FALSE, large = FALSE,
                        survey.weights = NULL, discrete=FALSE, latent.regression = NULL,
-                       gpcm_mats=list(), spline_args=list(), control = list(), ...)
+                       gpcm_mats=list(), spline_args=list(), monopoly.k=1,
+                       control = list(), ...)
 {
     start.time <- proc.time()[3L]
     dots <- list(...)
@@ -52,7 +53,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         stopifnot(is(invariance, 'character'))
         stopifnot(is(GenRandomPars, 'logical'))
         stopifnot(is(large, 'logical') || is(large, 'list'))
-        opts <- makeopts(GenRandomPars=GenRandomPars, ...)
+        opts <- makeopts(GenRandomPars=GenRandomPars,
+                         hasCustomGroup=!is.null(customGroup), ...)
         if(opts$Moptim == 'NR'){
             if(is.null(control$tol)) control$tol <- opts$TOL/1000
             if(is.null(control$maxit)) control$maxit <- 50L
@@ -191,28 +193,22 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             model <- mirt.model(model, itemnames = if(tmp) colnames(data) else NULL)
         }
         oldmodel <- model
-        if(length(model) == 1L){
-            newmodel <- list()
-            for(g in seq_len(Data$ngroups))
-                newmodel[[g]] <- model
-            names(newmodel) <- Data$groupNames
-            model <- newmodel
-        }
-        Data$model <- model
         PrepList <- vector('list', Data$ngroups)
         names(PrepList) <- Data$groupNames
         tmp <- 1L:Data$ngroups
-        selectmod <- Data$model[[tmp[names(Data$model) == Data$groupNames[1L]]]]
+        model <- buildModelSyntax(model, J=Data$nitems, groupNames=Data$groupNames,
+                                  itemtype=itemtype)
+        Data$model <- model
         if(!is.null(dots$PrepList)) {
             PrepListFull <- PrepList[[1L]] <- dots$PrepList
         } else {
             PrepListFull <- PrepList[[1L]] <-
-                PrepData(data=Data$data, model=selectmod, itemtype=itemtype, guess=guess,
+                PrepData(data=Data$data, model=Data$model, itemtype=itemtype, guess=guess,
                          upper=upper, parprior=parprior, verbose=opts$verbose,
                          technical=opts$technical, parnumber=1L, BFACTOR=opts$dentype == 'bfactor',
                          grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
                          mixed.design=mixed.design, customItems=customItems,
-                         customGroup=customGroup, spline_args=spline_args,
+                         customGroup=customGroup, spline_args=spline_args, monopoly.k=monopoly.k,
                          fulldata=opts$PrepList[[1L]]$fulldata, key=key, opts=opts,
                          gpcm_mats=gpcm_mats, internal_constraints=opts$internal_constraints)
             if(!is.null(dots$Return_PrepList)) return(PrepListFull)
@@ -288,7 +284,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(opts$returnPrepList) return(PrepList)
     if(opts$dentype == 'bfactor'){
         #better start values
-        if((PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec')) == 1L){
+        if((PrepList[[1L]]$nfact - attr(model, 'nspec')) == 1L){
             nfact <- PrepListFull$nfact
             for(g in seq_len(Data$ngroups)){
                 for(i in seq_len(Data$nitems)){
@@ -302,11 +298,12 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
     }
-    PrepList <- UpdatePrior(PrepList, model, groupNames=Data$groupNames)
+    PrepList <- UpdateParameters(PrepList, model, groupNames=Data$groupNames)
     if(GenRandomPars){
         for(g in seq_len(Data$ngroups))
             for(i in seq_len(length(PrepList[[g]]$pars)))
                 PrepList[[g]]$pars[[i]] <- GenRandomPars(PrepList[[g]]$pars[[i]])
+
     }
     if(discrete){
         PrepList[[1L]]$exploratory <- FALSE
@@ -336,7 +333,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
        stop('Rasch itemtypes are for confimatory models only.', call.=FALSE)
     nLambdas <- PrepList[[1L]]$pars[[1L]]@nfact
     if(is.null(constrain)) constrain <- list()
-    nspec <- ifelse(!is.null(attr(model[[1L]], 'nspec')), attr(model[[1L]], 'nspec'), 1L)
+    nspec <- ifelse(!is.null(attr(model, 'nspec')), attr(model, 'nspec'), 1L)
     #default MG uses configural model (independent groups but each identified)
     if('free_means' %in% invariance ){ #Free factor means (means 0 for ref)
         if(opts$dentype == 'bfactor'){
@@ -488,7 +485,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             opts$quadpts <- nrow(Theta)
         } else {
             if(is.null(opts$quadpts)){
-                tmp <- if(opts$dentype == 'bfactor') PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec') + 1L
+                tmp <- if(opts$dentype == 'bfactor') PrepList[[1L]]$nfact - attr(model, 'nspec') + 1L
                     else nfact
                 opts$quadpts <- select_quadpts(tmp)
             }
@@ -508,7 +505,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                         ind <- ind + 1L
                     }
                 }
-                nfact2 <- PrepList[[1L]]$nfact - attr(model[[1L]], 'nspec') + 1L
+                nfact2 <- PrepList[[1L]]$nfact - attr(model, 'nspec') + 1L
                 Theta <- thetaComb(theta, nfact2)
                 Theta <- cbind(Theta[,1L:(nfact2-1L),drop=FALSE],
                                matrix(Theta[,nfact2], nrow=nrow(Theta), ncol=ncol(sitems)))
@@ -555,22 +552,23 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         rlist <- ESTIMATE$rlist
         logLik <- G2 <- SElogLik <- 0
         logPrior <- ESTIMATE$logPrior
+        Pl <- vector('list', length(rlist))
         for(g in seq_len(Data$ngroups)){
-            Pl <- rlist[[g]]$expected
+            Pl[[g]] <- rlist[[g]]$expected
+            Pltmp <- Pl[[g]]
             if(opts$full){
                 rg <- 1
                 G2group[g] <- NaN
             } else {
                 rg <- Data$Freq[[g]]
-                Pl <- Pl[rg != 0]
+                Pltmp <- Pltmp[rg != 0]
                 rg <- rg[rg != 0]
                 Ng <- sum(rg)
-                G2group[g] <- 2 * sum(rg * log(rg/(Ng*Pl)))
+                G2group[g] <- 2 * sum(rg * log(rg/(Ng*Pltmp)))
             }
             G2 <- G2 + G2group[g]
-            logLik <- logLik + sum(rg*log(Pl))
+            logLik <- logLik + sum(rg*log(Pltmp))
         }
-        Pl <- list(Pl)
     } else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM estimation
         Theta <- matrix(0, Data$N, nitems)
         if(opts$method == 'SEM') opts$NCYCLES <- NA

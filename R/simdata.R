@@ -17,14 +17,15 @@
 #' @param itemtype a character vector of length \code{nrow(a)} (or 1, if all the item types are
 #'   the same) specifying the type of items to simulate. Inputs can either be the same as
 #'   the inputs found in the \code{itemtype} argument in \code{\link{mirt}} or the
-#'   internal clases defined by the package. Typical \code{itemtype} inputs that
+#'   internal classes defined by the package. Typical \code{itemtype} inputs that
 #'   are passed to \code{\link{mirt}} are used then these will be converted into
 #'   the respective internal classes automatically.
 #'
 #'   If the internal class of the object is specified instead, the inputs can
-#'   be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit', 'partcomp'}, or \code{'lca'}, for
+#'   be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit', 'partcomp', 'gumm'}, or \code{'lca'}, for
 #'   dichotomous, graded, generalized partial credit, nominal, nested logit, partially compensatory,
-#'   and latent class analysis model. Note that for the gpcm, nominal, and nested logit models there should
+#'   generalized graded unfolding model, and latent class analysis model.
+#'   Note that for the gpcm, nominal, and nested logit models there should
 #'   be as many parameters as desired categories, however to parametrized them for meaningful
 #'   interpretation the first category intercept should
 #'   equal 0 for these models (second column for \code{'nestlogit'}, since first column is for the
@@ -36,12 +37,14 @@
 #'   in locations where not applicable. Note that during estimation the first slope will be
 #'   constrained to 0 and the last will be constrained to the number of categories minus 1,
 #'   so it is best to set these as the values for the first and last categories as well
+#' @param t matrix of t-values for the 'ggum' itemtype, where each row corresponds to a given item.
+#'   Also determines the number of categories, where \code{NA} can be used for non-applicable categories
 #' @param N sample size
 #' @param guess a vector of guessing parameters for each item; only applicable
 #'   for dichotomous items. Must be either a scalar value that will affect all of
 #'   the dichotomous items, or a vector with as many values as to be simulated items
 #' @param upper same as \code{guess}, but for upper bound parameters
-#' @param gpcm_mats a list of matricies specifying the scoring scheme for generalized partial
+#' @param gpcm_mats a list of matrices specifying the scoring scheme for generalized partial
 #'   credit models (see \code{\link{mirt}} for details)
 #' @param sigma a covariance matrix of the underlying distribution. Default is
 #'   the identity matrix. Used when \code{Theta} is not supplied
@@ -55,7 +58,10 @@
 #'   latent trait matrix \code{Theta}? Default is FALSE
 #' @param model a single group object, typically returned by functions such as \code{\link{mirt}} or
 #'   \code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the
-#'   \code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent (unless explicitly provided)
+#'   \code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundant (unless explicitly provided)
+#' @param equal.K logical; when a \code{model} input is supplied, should the generated data contain the same
+#'   number of categories as the original data indicated by \code{extract.mirt(model, 'K')}? Default is TRUE,
+#'   which will redrawn data until this condition is satisfied
 #' @param which.items an integer vector used to indicate which items to simulate when a
 #'   \code{model} input is included. Default simulates all items
 #' @param mins an integer vector (or single value to be used for each item) indicating what
@@ -268,6 +274,17 @@
 #' obj <- generate.mirt_object(pars, '3PL')
 #' dat <- simdata(N=200, model=obj)
 #'
+#' #### 10 item GGUMs test with 4 categories each
+#' a <- rlnorm(10, .2, .2)
+#' b <- rnorm(10) #passed to d= input, but used as the b parameters
+#' diffs <- t(apply(matrix(runif(10*3, .3, 1), 10), 1, cumsum))
+#' t <- -(diffs - rowMeans(diffs))
+#'
+#' dat <- simdata(a, b, 1000, 'ggum', t=t)
+#' apply(dat, 2, table)
+#' # mod <- mirt(dat, 1, 'ggum')
+#' # coef(mod)
+#'
 #' ######
 #' # prob.list example
 #'
@@ -290,8 +307,8 @@
 #'
 #' }
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
-	upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(), returnList = FALSE,
-	model = NULL, which.items = NULL, mins = 0, lca_cats = NULL, prob.list = NULL)
+	upper = 1, nominal = NULL, t = NULL, Theta = NULL, gpcm_mats = list(), returnList = FALSE,
+	model = NULL, equal.K = TRUE, which.items = NULL, mins = 0, lca_cats = NULL, prob.list = NULL)
 {
     if(!is.null(prob.list)){
         if(!all(sapply(prob.list, function(x) is.matrix(x) || is.data.frame(x))))
@@ -324,10 +341,14 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         } else N <- nrow(Theta)
         data <- matrix(0, N, nitems)
         colnames(data) <- extract.mirt(model, 'itemnames')
+        K <- extract.mirt(model, 'K')
         for(i in which.items){
             obj <- extract.item(model, i)
             P <- ProbTrace(obj, Theta)
             data[,i] <- respSample(P)
+            if(equal.K)
+                while(length(unique(data[,i])) != K[i])
+                    data[,i] <- respSample(P)
         }
         ret <- t(t(data) + model@Data$mins)
         return(ret[,which.items, drop=FALSE])
@@ -342,6 +363,8 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
     if(any(itemtype == 'nominal') && is.null(nominal))
         stop('nominal itemtypes require a \'nominal\' matrix input of scoring coefs (the ak values)',
              call.=FALSE)
+    if(any(apply(d, 1, function(x) all(is.na(x)))))
+        stop('d input contains only NA elements associated with its respective item. Please fix', call.=FALSE)
 	nfact <- ncol(a)
 	nitems <- nrow(a)
 	if(length(mins) == 1L) mins <- rep(mins, nitems)
@@ -365,9 +388,12 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         itemtype <- ifelse(itemtype %in% c('PC2PL', 'PC3PL'), 'partcomp', itemtype)
         itemtype <- ifelse(itemtype %in% c("2PLNRM", "3PLNRM", "3PLuNRM", "4PLNRM"), 'nestlogit', itemtype)
     }
+	if(any(itemtype == 'ggum') && is.null(t))
+	    stop('ggum requires t matrix input')
 	for(i in 1L:length(K)){
 	    K[i] <- length(na.omit(d[i, ])) + 1L
 	    if(itemtype[i] =='partcomp') K[i] <- 2L
+	    if(itemtype[i] == 'ggum') K[i] <- length(na.omit(t[i, ])) + 1L
 	    if(any(itemtype[i] == c('gpcm', 'nominal', 'nestlogit'))) K[i] <- K[i] - 1L
 	}
 	if(!is.null(lca_cats)) K[itemtype == 'lca'] <- lca_cats[itemtype == 'lca']
@@ -419,7 +445,12 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
             if(itemtype[i] %in% c('gpcm', 'nominal')) obj@mat <- FALSE
             if(use_gpcm_mats[i]) obj@mat <- TRUE
 	    }
-        if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit')))
+	    if(itemtype[i] == 'ggum'){
+	        if(length(na.omit(a[i,])) != length(na.omit(d[i,])))
+	            stop('ggums must have the same number of a and d values per item', call.=FALSE)
+	        par <- c(na.omit(a[i, ]), -d[i,], t[i,])
+	    }
+        if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit', 'ggum')))
             obj@ncat <- K[i]
         P <- ProbTrace(obj, Theta)
         data[,i] <- respSample(P)

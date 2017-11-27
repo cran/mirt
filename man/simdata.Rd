@@ -5,9 +5,9 @@
 \title{Simulate response patterns}
 \usage{
 simdata(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
-  upper = 1, nominal = NULL, Theta = NULL, gpcm_mats = list(),
-  returnList = FALSE, model = NULL, which.items = NULL, mins = 0,
-  lca_cats = NULL, prob.list = NULL)
+  upper = 1, nominal = NULL, t = NULL, Theta = NULL,
+  gpcm_mats = list(), returnList = FALSE, model = NULL, equal.K = TRUE,
+  which.items = NULL, mins = 0, lca_cats = NULL, prob.list = NULL)
 }
 \arguments{
 \item{a}{a matrix/vector of slope parameters. If slopes are to be constrained to
@@ -24,14 +24,15 @@ be used}
 \item{itemtype}{a character vector of length \code{nrow(a)} (or 1, if all the item types are
   the same) specifying the type of items to simulate. Inputs can either be the same as
   the inputs found in the \code{itemtype} argument in \code{\link{mirt}} or the
-  internal clases defined by the package. Typical \code{itemtype} inputs that
+  internal classes defined by the package. Typical \code{itemtype} inputs that
   are passed to \code{\link{mirt}} are used then these will be converted into
   the respective internal classes automatically.
 
   If the internal class of the object is specified instead, the inputs can
-  be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit', 'partcomp'}, or \code{'lca'}, for
+  be \code{'dich', 'graded', 'gpcm','nominal', 'nestlogit', 'partcomp', 'gumm'}, or \code{'lca'}, for
   dichotomous, graded, generalized partial credit, nominal, nested logit, partially compensatory,
-  and latent class analysis model. Note that for the gpcm, nominal, and nested logit models there should
+  generalized graded unfolding model, and latent class analysis model.
+  Note that for the gpcm, nominal, and nested logit models there should
   be as many parameters as desired categories, however to parametrized them for meaningful
   interpretation the first category intercept should
   equal 0 for these models (second column for \code{'nestlogit'}, since first column is for the
@@ -57,11 +58,14 @@ in locations where not applicable. Note that during estimation the first slope w
 constrained to 0 and the last will be constrained to the number of categories minus 1,
 so it is best to set these as the values for the first and last categories as well}
 
+\item{t}{matrix of t-values for the 'ggum' itemtype, where each row corresponds to a given item.
+Also determines the number of categories, where \code{NA} can be used for non-applicable categories}
+
 \item{Theta}{a user specified matrix of the underlying ability parameters,
 where \code{nrow(Theta) == N} and \code{ncol(Theta) == ncol(a)}. When this is supplied the
 \code{N} input is not required}
 
-\item{gpcm_mats}{a list of matricies specifying the scoring scheme for generalized partial
+\item{gpcm_mats}{a list of matrices specifying the scoring scheme for generalized partial
 credit models (see \code{\link{mirt}} for details)}
 
 \item{returnList}{logical; return a list containing the data, item objects defined
@@ -70,7 +74,11 @@ latent trait matrix \code{Theta}? Default is FALSE}
 
 \item{model}{a single group object, typically returned by functions such as \code{\link{mirt}} or
 \code{\link{bfactor}}. Supplying this will render all other parameter elements (excluding the
-\code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundent (unless explicitly provided)}
+\code{Theta}, \code{N}, \code{mu}, and \code{sigma} inputs) redundant (unless explicitly provided)}
+
+\item{equal.K}{logical; when a \code{model} input is supplied, should the generated data contain the same
+number of categories as the original data indicated by \code{extract.mirt(model, 'K')}? Default is TRUE,
+which will redrawn data until this condition is satisfied}
 
 \item{which.items}{an integer vector used to indicate which items to simulate when a
 \code{model} input is included. Default simulates all items}
@@ -286,6 +294,17 @@ head(pars)
 
 obj <- generate.mirt_object(pars, '3PL')
 dat <- simdata(N=200, model=obj)
+
+#### 10 item GGUMs test with 4 categories each
+a <- rlnorm(10, .2, .2)
+b <- rnorm(10) #passed to d= input, but used as the b parameters
+diffs <- t(apply(matrix(runif(10*3, .3, 1), 10), 1, cumsum))
+t <- -(diffs - rowMeans(diffs))
+
+dat <- simdata(a, b, 1000, 'ggum', t=t)
+apply(dat, 2, table)
+# mod <- mirt(dat, 1, 'ggum')
+# coef(mod)
 
 ######
 # prob.list example

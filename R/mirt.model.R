@@ -17,6 +17,22 @@
 #' combination on the left hand side of the declaration (e.g., \code{(F1*F1)} would create a
 #' quadratic factor for \code{F1}).
 #'
+#' Finally, the keywords \code{CONSTRAIN, CONSTRAINB, PRIOR, FIXED, FREE, START, UBOUND, LBOUND} can
+#' be applied to specific sub-groups in multiple-group models by included square brackets before the
+#' = sign, where groups are separated by commas. For example, to apply within-group equality
+#' constraints to a group called "male", then specifying:
+#'
+#' \code{CONSTRAIN [male] = (1-5, a1)}
+#'
+#' is appropriate, while specifying the same constraints to the sub-groups
+#' "male" and "female" would appear as
+#'
+#' \code{CONSTRAIN [male, female] = (1-5, a1)}
+#'
+#' For all other groups in the multi-group model, these within-group equality constraints would not appear. Therefore, these
+#' bracketed group specifications are useful when modifying priors, starting values, between/within group equality constraints,
+#' and so on when the specifications for each sub-group may differ.
+#'
 #' \describe{
 #'   \item{COV}{Specify the relationship between the latent factors.
 #'   Estimating a correlation between factors is declared by joining the two
@@ -28,9 +44,8 @@
 #'
 #' \item{CONSTRAIN}{A bracketed, comma separated list specifying equality constrains between items.
 #'   The input format is
-#'   \code{CONSTRAIN = (items, ..., parameterName(s), OptionalGroup),
-#'   (items, ..., parameterName, OptionalGroup)}.
-#'   If \code{OptionalGroup} is omitted then the constraints are applied within all groups.
+#'   \code{CONSTRAIN = (items, ..., parameterName(s)),
+#'   (items, ..., parameterName)}.
 #'
 #'   For example, in a single group 10-item dichotomous tests, using the default 2PL model,
 #'   the first and last 5 item slopes (a1) can be constrained to be equal by using
@@ -52,9 +67,8 @@
 #'
 #' \item{PRIOR}{A bracketed, comma separate list specifying prior parameter distributions.
 #'   The input format is
-#'   \code{PRIOR = (items, ..., parameterName, priorType, val1, val2, OptionalGroup),
-#'   (items, ..., parameterName, priorType, val1, val2, OptionalGroup)}.
-#'   If \code{OptionalGroup} is omitted then the priors are defined for all groups.
+#'   \code{PRIOR = (items, ..., parameterName, priorType, val1, val2),
+#'   (items, ..., parameterName, priorType, val1, val2)}.
 #'   For example, in a single group 10-item dichotomous tests, using the default 2PL model,
 #'   defining a normal prior of N(0,2) for the first 5 item intercepts (d) can be defined by
 #'   \code{PRIOR = (1-5, d, norm, 0, 2)}
@@ -182,7 +196,7 @@
 #'        PRIOR = (C3,A2-A4,a2,lnorm, .2, .2),(B3,d,norm,0,.0001)"
 #' # create a mirt model
 #' mirtmodel <- mirt.model(mirtsyn2, itemnames=dat)
-#' # or equivelently:
+#' # or equivalently:
 #' # mirtmodel <- mirt.model(mirtsyn2, itemnames=colnames(dat))
 #'
 #' # mod <- mirt(dat , mirtmodel)

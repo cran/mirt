@@ -10,7 +10,7 @@ mirt(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
   optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
   calcNull = FALSE, draws = 5000, survey.weights = NULL, quadpts = NULL,
   TOL = NULL, gpcm_mats = list(), grsm.block = NULL, rsm.block = NULL,
-  key = NULL, large = FALSE, GenRandomPars = FALSE,
+  monopoly.k = 1L, key = NULL, large = FALSE, GenRandomPars = FALSE,
   accelerate = "Ramsay", empiricalhist = FALSE, verbose = TRUE,
   solnp_args = list(), nloptr_args = list(), spline_args = list(),
   control = list(), technical = list(), ...)
@@ -46,6 +46,8 @@ of factors to extract is also supported}
       (unidimensional only; Andrich, 1978)
     \item \code{'nominal'} - nominal response model (Bock, 1972)
     \item \code{'ideal'} - dichotomous ideal point model (Maydeu-Olivares, 2006)
+    \item \code{'ggum'} - generalized graded unfolding model (Roberts, Donoghue, & Laughlin, 2000)
+      and its multidimensional extension
     \item \code{'PC2PL'} and \code{'PC3PL'} - 2-3 parameter partially compensatory model.
       Note that constraining the slopes to be equal across items will reduce the model to
       Embretson's (a.k.a. Whitely's) multicomponent model (1980).
@@ -54,6 +56,8 @@ of factors to extract is also supported}
       the upper asymptote only (Suh and Bolt, 2010)
     \item \code{'spline'} - spline response model with the \code{\link{bs}} (default)
       or the \code{\link{ns}} function (Winsberg, Thissen, and Wainer, 1984)
+    \item \code{'monopoly'} - monotonic polynomial model for unidimensional tests
+      for dichotomous and polytomous response data (Falk and Cai, 2016)
  }
 
  Additionally, user defined item classes can also be defined using the \code{\link{createItem}} function}
@@ -87,10 +91,11 @@ will estimate the regression parameters for all latent traits by default}
       Fisher scores as well as Louis' (1982) exact computation of the observed information matrix.
       Note that Louis' estimates can take a long time to obtain for large sample sizes and long tests
     \item \code{'sandwich'} for the sandwich covariance estimate based on the
-      \code{'crossprod'} and \code{'Oakes'} estimates
+      \code{'crossprod'} and \code{'Oakes'} estimates (see Chalmers, in press, for details)
     \item \code{'sandwich.Louis'} for the sandwich covariance estimate based on the
       \code{'crossprod'} and \code{'Louis'} estimates
     \item \code{'Oakes'} for Oakes' (1999) method using a central difference approximation
+      (see Chalmers, in press, for details)
     \item \code{'SEM'} for the supplemented EM (disables the \code{accelerate} option automatically; EM only)
     \item \code{'Fisher'} for the expected information, \code{'complete'} for information based
       on the complete-data Hessian used in EM algorithm
@@ -221,6 +226,11 @@ to be within the same group and therefore have the same number of item categorie
 
 \item{rsm.block}{same as \code{grsm.block}, but for \code{'rsm'} blocks}
 
+\item{monopoly.k}{a vector of values (or a single value to repeated for each item) which indicate
+the degree of the monotone polynomial fitted, where the monotone polynomial
+corresponds to \code{monopoly.k * 2 + 1} (e.g., \code{monopoly.k = 2} fits a
+5th degree polynomial). Default is \code{monopoly.k = 1}, which fits a 3rd degree polynomial}
+
 \item{key}{a numeric vector of the response scoring key. Required when using nested logit item
 types, and must be the same length as the number of items used. Items that are not nested logit
 will ignore this vector, so use \code{NA} in item locations that are not applicable}
@@ -288,7 +298,7 @@ control input)}
   \item{set.seed}{seed number used during estimation. Default is 12345}
   \item{SEtol}{standard error tolerance criteria for the S-EM and MHRM computation of the
     information matrix. Default is 1e-3}
-  \item{symmetric}{logical; force S-EM/Oakes information matrix to be symmetric? Default is TRUE
+  \item{symmetric}{logical; force S-EM/Oakes information matrix estimates to be symmetric? Default is TRUE
     so that computation of standard errors are more stable. Setting this to FALSE can help
     to detect solutions that have not reached the ML estimate}
   \item{SEM_window}{ratio of values used to define the S-EM window based on the
@@ -336,7 +346,7 @@ control input)}
   \item{MHRM_SE_draws}{number of fixed draws to use when \code{SE=TRUE} and \code{SE.type = 'FMHRM'}
     and the maximum number of draws when \code{SE.type = 'MHRM'}. Default is 2000}
   \item{MCEM_draws}{a function used to determine the number of quadrature points to draw for the
-    \code{'MCEM'} method. Must include one arguemnt which indicates the iteration number of the
+    \code{'MCEM'} method. Must include one argument which indicates the iteration number of the
     EM cycle. Default is \code{function(cycles) 500 + (cycles - 1)*2}, which starts the number of
     draws at 500 and increases by 2 after each full EM iteration}
   \item{info_if_converged}{logical; compute the information matrix when using the MH-RM algorithm
@@ -603,16 +613,42 @@ of categories.
     endorsement the probability trace is the 1-4PL model, while for unsuccessful endorsement:
     \deqn{P(x = 0 | \theta, \psi) =
     (1 - P_{1-4PL}(x = 1 | \theta, \psi)) * P_{nominal}(x = k | \theta, \psi)}
-    which is the product of the compliment of the dichotomous trace line with the nominal
+    which is the product of the complement of the dichotomous trace line with the nominal
     response model. In the nominal model, the slope parameters defined above are constrained
     to be 1's, while the last value of the \eqn{ak} is freely estimated.
   }
+  \item{ggum}{The (multidimensional) generalized graded unfolding model is a
+    class of ideal point models useful for ordinal response data. The form is
+    \deqn{P(z=k|\theta,\psi)=\frac{exp\left[\left(z\sqrt{\sum_{d=1}^{D}
+    a_{id}^{2}(\theta_{jd}-b_{id})^{2}}\right)+\sum_{k=0}^{z}\psi_{ik}\right]+
+    exp\left[\left((M-z)\sqrt{\sum_{d=1}^{D}a_{id}^{2}(\theta_{jd}-b_{id})^{2}}\right)+
+    \sum_{k=0}^{z}\psi_{ik}\right]}{\sum_{w=0}^{C}\left(exp\left[\left(w
+    \sqrt{\sum_{d=1}^{D}a_{id}^{2}(\theta_{jd}-b_{id})^{2}}\right)+
+    \sum_{k=0}^{z}\psi_{ik}\right]+exp\left[\left((M-w)
+    \sqrt{\sum_{d=1}^{D}a_{id}^{2}(\theta_{jd}-b_{id})^{2}}\right)+
+    \sum_{k=0}^{z}\psi_{ik}\right]\right)}}
+    where \eqn{\theta_{jd}} is the location of the \eqn{j}th individual on the \eqn{d}th dimension,
+    \eqn{b_{id}} is the difficulty location of the \eqn{i}th item on the \eqn{d}th dimension,
+    \eqn{a_{id}} is the discrimination of the \eqn{j}th individual on the \eqn{d}th dimension
+    (where the discrimination values are constrained to be positive),
+    \eqn{\psi_{ik}} is the \eqn{k}th subjective response category threshold for the \eqn{i}th item,
+    assumed to be symmetric about the item and constant across dimensions, where
+    \eqn{\psi_{ik} = \sum_{d=1}^D a_{id} t_{ik}}
+    \eqn{z = 1,2,\ldots, C} (where \eqn{C} is the number of categories minus 1),
+    and \eqn{M = 2C + 1}.
+    }
   \item{spline}{Spline response models attempt to model the response curves uses non-linear and potentially
     non-monotonic patterns. The form is
     \deqn{P(x = 1|\theta, \eta) = \frac{1}{1 + exp(-(\eta_1 * X_1 + \eta_2 * X_2 + \cdots + \eta_n * X_n))}}
     where the \eqn{X_n} are from the spline design matrix \eqn{X} organized from the grid of \eqn{\theta}
     values. B-splines with a natural or polynomial basis are supported, and the \code{intercept} input is
     set to \code{TRUE} by default.}
+  \item{monopoly}{Monotone polynomial model for polytomous reponse data of the form
+    \deqn{P(x = k | \theta, \psi) =
+    \frac{exp(\sum_1^k (m^*(\psi) + \xi_{c-1})}
+    {\sum_1^C exp(\sum_1^k (m^*(\psi) + \xi_{c-1}))}}
+    where \eqn{m^*(\psi)} is the monotone polynomial function without the intercept.
+    }
 }
 }
 
@@ -731,6 +767,20 @@ coef(gpcmod)
 coef(nomod) #ordering of ak values suggest that the items are indeed ordinal
 anova(gpcmod, nomod)
 itemplot(nomod, 3)
+
+#generalized graded unfolding model
+(ggum <- mirt(Science, 1, 'ggum'))
+coef(ggum, simplify=TRUE)
+plot(ggum)
+plot(ggum, type = 'trace')
+plot(ggum, type = 'itemscore')
+
+#monotonic polyomial models
+(monopoly <- mirt(Science, 1, 'monopoly'))
+coef(monopoly, simplify=TRUE)
+plot(monopoly)
+plot(monopoly, type = 'trace')
+plot(monopoly, type = 'itemscore')
 
 ## example applying survey weights.
 # weight the first half of the cases to be more representative of population
@@ -1065,12 +1115,19 @@ Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-
 Chalmers, R. P. (2015). Extended Mixed-Effects Item Response Models with the MH-RM Algorithm.
 \emph{Journal of Educational Measurement, 52}, 200-222. \doi{10.1111/jedm.12072}
 
+Chalmers, R. P. (in press). Numerical Approximation of the ObservedInformation Matrix with Oakes' Identity.
+\emph{British Journal of Mathematical and Statistical Psychology} \emph{DOI: 10.1111/bmsp.12127}
+
 Chalmers, R., P. & Flora, D. (2014). Maximum-likelihood Estimation of Noncompensatory IRT
 Models with the MH-RM Algorithm. \emph{Applied Psychological Measurement, 38}, 339-358.
 \doi{10.1177/0146621614520958}
 
 Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
+
+Falk, C. F. & Cai, L. (2016). Maximum Marginal Likelihood Estimation of a
+Monotonic Polynomial Generalized Partial Credit Model with Applications to
+Multiple Group Analysis. \emph{Psychometrika, 81}, 434-460.
 
 Lord, F. M. & Novick, M. R. (1968). Statistical theory of mental test scores. Addison-Wesley.
 
@@ -1079,6 +1136,10 @@ Ramsay, J. O. (1975). Solving implicit equations in psychometric data analysis.
 
 Rasch, G. (1960). Probabilistic models for some intelligence and attainment tests.
 \emph{Danish Institute for Educational Research}.
+
+Roberts, J. S., Donoghue, J. R., & Laughlin, J. E. (2000).
+A General Item Response Theory Model for Unfolding Unidimensional Polytomous Responses.
+\emph{Applied Psychological Measurement, 24}, 3-32.
 
 Maydeu-Olivares, A., Hernandez, A. & McDonald, R. P. (2006).
 A Multidimensional Ideal Point Item Response Theory Model for Binary Data.

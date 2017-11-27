@@ -1,10 +1,50 @@
+# Changes in mirt 1.26.1
+
+- `mod2values()` and passing `pars = 'values'` now return `data.frame` objects without any
+  factor variables (previously the defaults to `data.frame()` were used, which created factors
+  for all categorical variables by default)
+
+- Add `monopoly` itemtype to fit unidimensional monotonic polynomial item response model
+  for polytomous data (see Falk and Cai, 2016)
+  
+- Add `ggum` itemtype to fit unidimensional/multidimensional graded unfolding model 
+  (e.g., Roberts & Laughlin, 1996). Special thanks to David King for providing the 
+  necessary C++ derivative functions and starting values
+
+- Square brackets can now be included in the `mirt.model()` syntax to indicate
+  group-specific constraints, priors, starting/fixed values, and so on. These
+  are all of the general form `"CONSTRAIN [group1, group2] = ..."` or 
+  `"FIXED [group1] = ..."`
+
+- Added delta method for several classical IRT parameterization 
+  (via `coef(model, IRTpars = TRUE)`) when a suitable information matrix 
+  was previously estimated
+
+- `numDeriv` dependency removed because `numerical_deriv()` now supports a local 
+  Richardson extrapolation type. For best accuracy, this is now used as the default
+  throughout the package
+
+- `createItem()` and `lagrange()` now use Richardson extrapolation as default 
+  instead of the less accurate forward/central difference method
+
+- `estfun()` function added to extract gradient information directly from fitted objects 
+  (contributed by Lennart Schneider)
+  
+- `simdata()` gains an `equal.K` argument to redraw data until $K$ categories are 
+  populated for a given item
+  
+- Fix initialization of `fscores()` when using 'MH' plausible value imputations (reported by 
+  Charlie Iaconangelo)
+
+- Various other small bug fixes and performance improvements
+
 # Changes in mirt 1.25
 
 - `mdirt()` now supports latent regression covariate predictors. Associated function
   (e.g., `fscores()`) also include the latent regression information for discrete 
   models by default
 
-- `SIBTEST()` replaced with the asymtotic sampling distribution version of 
+- `SIBTEST()` replaced with the asymptotic sampling distribution version of 
    CSIBTEST described by Chalmers (accepted)
 
 - `calcNull` set to `FALSE` by default
