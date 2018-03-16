@@ -105,6 +105,14 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             val <- c(lambdas[i,], zetas[[i]])
             fp <- c(estLambdas[i, ], rep(TRUE, K[i]-1L))
             names(val) <- c(paste('a', 1L:nfact, sep=''), paste('d', 1L:(K[i]-1L), sep=''))
+        } else if(itemtype[i] %in% c('sequential', 'Tutz')){
+            val <- c(lambdas[i,], zetas[[i]])
+            fp <- c(estLambdas[i, ], rep(TRUE, K[i]-1L))
+            names(val) <- c(paste('a', 1L:nfact, sep=''), paste('d', 1L:(K[i]-1L), sep=''))
+            if(itemtype[i] == 'Tutz'){
+                val[1L] <- 1
+                fp[1L] <- FALSE
+            }
         } else if(itemtype[i] == 'monopoly'){
             val <- c(suppressWarnings(log(lambdas[i,])),
                      zetas[[i]], rep(0, monopoly.k[i]*2))
@@ -233,6 +241,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
 
         if(any(itemtype[i] == c('Rasch')) && K[i] == 2L){
             pars[[i]] <- new('dich', par=startvalues[[i]], est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=2L,
                              nfixedeffects=nfixedeffects,
@@ -253,6 +262,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(itemtype[i] == 'Rasch' && K[i] > 2L){
             pars[[i]] <- new('gpcm',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
@@ -277,6 +287,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             pars[[i]] <- new('dich',
                              par=startvalues[[i]],
                              est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              itemclass=1L,
                              nfixedeffects=nfixedeffects,
@@ -298,6 +309,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             pars[[i]] <- new('nestlogit',
                              par=startvalues[[i]],
                              est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              itemclass=8L,
                              nfixedeffects=nfixedeffects,
@@ -319,6 +331,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(any(itemtype[i] == 'grsm')){
             pars[[i]] <- new('rating',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
@@ -340,6 +353,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(itemtype[i] == 'graded'){
             pars[[i]] <- new('graded',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              itemclass=2L,
@@ -358,9 +372,32 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
+        if(itemtype[i] %in% c('sequential', 'Tutz')){
+            pars[[i]] <- new('sequential',
+                             par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
+                             nfact=nfact,
+                             ncat=K[i],
+                             itemclass=9L,
+                             nfixedeffects=nfixedeffects,
+                             any.prior=FALSE,
+                             prior.type=rep(0L, length(startvalues[[i]])),
+                             fixed.design=fixed.design.list[[i]],
+                             est=freepars[[i]],
+                             lbound=rep(-Inf, length(startvalues[[i]])),
+                             ubound=rep(Inf, length(startvalues[[i]])),
+                             prior_1=rep(NaN,length(startvalues[[i]])),
+                             prior_2=rep(NaN,length(startvalues[[i]])))
+            tmp2 <- parnumber:(parnumber + length(freepars[[i]]) - 1L)
+            pars[[i]]@parnum <- tmp2
+            parnumber <- parnumber + length(freepars[[i]])
+            next
+        }
+
         if(itemtype[i] == 'gpcm'){
             pars[[i]] <- new('gpcm',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
@@ -383,6 +420,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(itemtype[i] %in% c('gpcmIRT', 'rsm')){
             pars[[i]] <- new('gpcmIRT',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              itemclass=6L,
@@ -404,6 +442,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(itemtype[i] == 'monopoly'){
             pars[[i]] <- new('monopoly',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              k=as.integer(monopoly.k[i]),
@@ -426,6 +465,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(itemtype[i] == 'nominal'){
             pars[[i]] <- new('nominal',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              est=freepars[[i]],
                              mat=FALSE,
                              nfact=nfact,
@@ -448,6 +488,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(any(itemtype[i] == c('PC2PL','PC3PL'))){
             pars[[i]] <- new('partcomp',
                              par=startvalues[[i]],
+                             parnames=names(freepars[[i]]),
                              est=freepars[[i]],
                              nfact=nfact,
                              ncat=2L,
@@ -468,6 +509,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
 
         if(any(itemtype[i] == c('ideal'))){
             pars[[i]] <- new('ideal', par=startvalues[[i]], est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=2L,
                              nfixedeffects=nfixedeffects,
@@ -487,6 +529,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
 
         if(any(itemtype[i] == 'lca')){
             pars[[i]] <- new('lca', par=startvalues[[i]], est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
@@ -527,6 +570,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             est <- rep(TRUE, ncol(Theta_prime))
             names(est) <- paste0('s', 1L:length(p))
             pars[[i]] <- new('spline', par=p,
+                             parnames=names(est),
                              est=est,
                              nfact=nfact,
                              ncat=K[i],
@@ -552,6 +596,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             pars[[i]] <- new('ggum',
                              par=startvalues[[i]],
                              est=freepars[[i]],
+                             parnames=names(freepars[[i]]),
                              nfact=nfact,
                              ncat=K[i],
                              nfixedeffects=nfixedeffects,
@@ -573,6 +618,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         if(all(itemtype[i] %in% Experimental_itemtypes())){
             pars[[i]] <- new(itemtype[i], nfact=nfact, ncat=K[i])
             names(pars[[i]]@est) <- names(pars[[i]]@par)
+            pars[[i]]@parnames <- names(pars[[i]]@est)
             pars[[i]]@nfact <- nfact
             pars[[i]]@ncat <- K[i]
             pars[[i]]@nfixedeffects <- nfixedeffects
@@ -671,7 +717,8 @@ LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, parprior,
         diag(tmp) <- 1e-4
         lbound <- c(rep(-Inf, nfact), tmp[tri])
         Nans <- rep(NaN,length(par))
-        ret <- new('GroupPars', par=par, est=est, nfact=nfact, any.prior=FALSE, den=den,
+        ret <- new('GroupPars', par=par, est=est, parnames=names(est),
+                   nfact=nfact, any.prior=FALSE, den=den,
                    safe_den=den, parnum=parnum, lbound=lbound, ubound=rep(Inf, length(par)),
                    prior.type=rep(0L, length(par)), prior_1=Nans, prior_2=Nans, rrb=0, rrs=matrix(0),
                    BFACTOR=FALSE, itemclass=0L)

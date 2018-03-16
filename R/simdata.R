@@ -306,6 +306,22 @@
 #' dat <- simdata(prob.list=prob.list)
 #' head(dat)
 #'
+#' # prob.list input is useful when defining custom items as well
+#' name <- 'old2PL'
+#' par <- c(a = .5, b = -2)
+#' est <- c(TRUE, TRUE)
+#' P.old2PL <- function(par,Theta, ncat){
+#'      a <- par[1]
+#'      b <- par[2]
+#'      P1 <- 1 / (1 + exp(-1*a*(Theta - b)))
+#'      cbind(1-P1, P1)
+#' }
+#'
+#' x <- createItem(name, par=par, est=est, P=P.old2PL)
+#'
+#' prob.list[[1]] <- x@P(x@par, theta)
+#'
+#'
 #' }
 simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	upper = 1, nominal = NULL, t = NULL, Theta = NULL, gpcm_mats = list(), returnList = FALSE,
@@ -450,6 +466,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	        if(length(na.omit(a[i,])) != length(na.omit(d[i,])))
 	            stop('ggums must have the same number of a and d values per item', call.=FALSE)
 	        par <- c(na.omit(a[i, ]), -d[i,], t[i,])
+	        obj <- new(itemtype[i], par=par, nfact=nfact, ncat=K[i])
 	    }
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit', 'ggum')))
             obj@ncat <- K[i]

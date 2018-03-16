@@ -32,9 +32,20 @@
 #'   then the bounds will be set to -Inf
 #' @param ubound optional vector indicating the lower bounds of the parameters. If not specified
 #'   then the bounds will be set to Inf
-#' @param derivType if the \code{gr} or \code{hss} terms are not specified this type will be used to
-#'   obtain them numerically. Default is the 'Richardson' extrapolation method; see
-#'   \code{\link{numerical_deriv}} for details and other options
+#' @param derivType if the \code{gr} term is not specified this type will be used to
+#'   obtain the gradient numerically or symbolically. Default is the 'Richardson'
+#'   extrapolation method; see \code{\link{numerical_deriv}} for details and other options. If
+#'   \code{'symbolic'} is supplied then the gradient will be computed using
+#'   a symbolical approach (potentially the most accurate method, though may fail depending
+#'   on how the \code{P} function was defined)
+#' @param derivType.hss if the \code{hss} term is not specified this type will be used to
+#'   obtain the Hessian numerically. Default is the 'Richardson'
+#'   extrapolation method; see \code{\link{numerical_deriv}} for details and other options. If
+#'   \code{'symbolic'} is supplied then the Hessian will be computed using
+#'   a symbolical approach (potentially the most accurate method, though may fail depending
+#'   on how the \code{P} function was defined)
+#' @param bytecompile logical; where applicable, byte compile the functions provided? Default is
+#'   \code{TRUE} to provide
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -67,6 +78,12 @@
 #' coef(mod)
 #' mod2 <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=x), method = 'MHRM')
 #' coef(mod2)
+#'
+#' # same definition as above, but using symbolic derivative computations
+#' # (can be more accurate/stable)
+#' xs <- createItem(name, par=par, est=est, P=P.old2PL, derivType = 'symbolic')
+#' mod <- mirt(dat, 1, c(rep('2PL',4), 'old2PL'), customItems=list(old2PL=xs))
+#' coef(mod, simplify=TRUE)
 #'
 #' #several secondary functions supported
 #' M2(mod, calcNull=FALSE)
@@ -142,13 +159,32 @@
 #'
 #' }
 createItem <- function(name, par, est, P, gr=NULL, hss = NULL, gen = NULL,
-                       lbound = NULL, ubound = NULL, derivType = 'Richardson'){
+                       lbound = NULL, ubound = NULL, derivType = 'Richardson',
+                       derivType.hss = 'Richardson', bytecompile = TRUE){
     if(missing(name)) missingMsg('name')
     if(missing(par)) missingMsg('par')
     if(missing(est)) missingMsg('est')
     if(missing(P)) missingMsg('P')
     if(any(names(par) %in% c('g', 'u')) || any(names(est) %in% c('g', 'u')))
         stop('Parameter names cannot be \'g\' or \'u\', please change.', call.=FALSE)
-    return(new('custom', name=name, par=par, est=est, lbound=lbound,
-               ubound=ubound, P=P, gr=gr, hss=hss, gen=gen, userdata=NULL, derivType=derivType))
+    if(bytecompile) P <- compiler::cmpfun(P)
+    dps <- dps2 <- function() NULL
+    if(derivType == 'symbolic' || derivType.hss == 'symbolic'){
+        tmppars <- 1L:length(par)
+        names(tmppars) <- rep("par", length(par))
+        dps <- Deriv::Deriv(P, tmppars)
+        if(bytecompile) dps <- compiler::cmpfun(dps)
+    }
+    if(is.null(gr) && derivType == "symbolic")
+        gr <- symbolicGrad_par
+    if(bytecompile && !is.null(gr)) gr <- compiler::cmpfun(gr)
+    if(is.null(hss) && derivType.hss == "symbolic"){
+        dps2 <- Deriv::Deriv(dps, tmppars)
+        if(bytecompile) dps2 <- compiler::cmpfun(dps2)
+        hss <- symbolicHessian_par
+    }
+    if(bytecompile && !is.null(hss)) hss <- compiler::cmpfun(hss)
+    return(new('custom', name=name, par=par, est=est, parnames=names(par), lbound=lbound,
+               ubound=ubound, P=P, dps=dps, dps2=dps2, gr=gr, hss=hss, gen=gen, userdata=NULL,
+               derivType=derivType, derivType.hss=derivType.hss))
 }

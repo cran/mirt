@@ -175,7 +175,6 @@ setMethod(
             colnames(h2) <- "h2"
             rownames(Phi) <- colnames(Phi) <- names(SS) <- colnames(F)[seq_len(object@Model$nfact)]
             loads <- cbind(F,h2)
-            rownames(loads) <- colnames(object@Data$data)
             if(verbose){
                 if(object@Options$exploratory)
                     cat("\nUnrotated factor loadings: \n\n")
@@ -195,7 +194,6 @@ setMethod(
             L <- rotF$loadings
             L[abs(L) < suppress] <- NA
             loads <- cbind(L,h2)
-            rownames(loads) <- colnames(object@Data$data)
             Phi <- diag(ncol(F))
             if(!rotF$orthogonal){
                 Phi <- rotF$Phi
@@ -228,10 +226,14 @@ setMethod(
 #' @param CI the amount of converged used to compute confidence intervals; default is
 #'   95 percent confidence intervals
 #' @param IRTpars logical; convert slope intercept parameters into traditional IRT parameters?
-#'   Only applicable to unidimensional models
+#'   Only applicable to unidimensional models. If a suitable ACOV estimate was computed in the fitted
+#'   model, and \code{printSE = FALSE}, then suitable CIs will be included based on the delta
+#'   method (where applicable)
 #' @param rotate see \code{summary} method for details. The default rotation is \code{'none'}
 #' @param Target a dummy variable matrix indicting a target rotation pattern
-#' @param printSE logical; print the standard errors instead of the confidence intervals?
+#' @param printSE logical; print the standard errors instead of the confidence intervals? When
+#'   \code{IRTpars = TRUE} then the delta method will be used to compute the associated standard errors
+#'   from mirt's default slope-intercept form
 #' @param as.data.frame logical; convert list output to a data.frame instead?
 #' @param simplify logical; if all items have the same parameter names (indicating they are
 #'   of the same class) then they are collapsed to a matrix, and a list of length 2 is returned
@@ -309,8 +311,11 @@ setMethod(
                 stop('traditional parameterization is only available for unidimensional models',
                      call.=FALSE)
             vcov <- vcov(object)
-            for(i in 1L:J)
+            for(i in 1L:J){
+                if(class(object@ParObjects$pars[[i]]) %in% c('gpcmIRT')) next
                 object@ParObjects$pars[[i]] <- mirt2traditional(object@ParObjects$pars[[i]], vcov=vcov)
+
+            }
         }
         allPars <- list()
         if(length(object@ParObjects$pars[[1L]]@SEpar)){
@@ -321,7 +326,7 @@ setMethod(
                                                  2, byrow = TRUE)
                     rownames(allPars[[i]]) <- c('par', 'SE')
                     nms <- names(object@ParObjects$pars[[i]]@est)
-                    if(i <= J && object@Model$itemtype[i] != 'custom'){
+                    if(i <= J && object@Model$itemtype[i] != 'custom' && !IRTpars){
                         nms[nms == 'g'] <- 'logit(g)'
                         nms[nms == 'u'] <- 'logit(u)'
                     }
@@ -334,17 +339,17 @@ setMethod(
                                                    object@ParObjects$pars[[i]]@par + z*object@ParObjects$pars[[i]]@SEpar),
                                                  3, byrow = TRUE)
                     rownames(allPars[[i]]) <- c('par', SEnames)
-                    colnames(allPars[[i]]) <- names(object@ParObjects$pars[[i]]@est)
+                    colnames(allPars[[i]]) <- object@ParObjects$pars[[i]]@parnames
                 }
             }
         } else {
             for(i in seq_len(J+1L)){
                 allPars[[i]] <- matrix(object@ParObjects$pars[[i]]@par, 1L)
-                colnames(allPars[[i]]) <- names(object@ParObjects$pars[[i]]@est)
+                colnames(allPars[[i]]) <- object@ParObjects$pars[[i]]@parnames
                 rownames(allPars[[i]]) <- 'par'
             }
         }
-        if(!rawug){
+        if(!rawug && !IRTpars){
             allPars <- lapply(allPars, function(x, digits){
                 x[ , colnames(x) %in% c('g', 'u')] <- antilogit(x[ , colnames(x) %in% c('g', 'u')])
                 x
@@ -809,6 +814,7 @@ setMethod(
 #' plot(x2)
 #' plot(x2, type = 'trace')
 #' plot(x2, type = 'trace', which.items = 1:2)
+#' plot(x2, type = 'itemscore', which.items = 1:2)
 #' plot(x2, type = 'trace', which.items = 1, facet_items = FALSE) #facet by group
 #' plot(x2, type = 'info')
 #'
@@ -820,7 +826,7 @@ setMethod(
 setMethod(
     f = "plot",
     signature = signature(x = 'SingleGroupClass', y = 'missing'),
-    definition = function(x, y, type = 'score', npts = 50, degrees = 45,
+    definition = function(x, y, type = 'score', npts = 200, degrees = 45,
                           theta_lim = c(-6,6), which.items = 1:extract.mirt(x, 'nitems'),
                           MI = 0, CI = .95, rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE, main = NULL,
@@ -840,8 +846,7 @@ setMethod(
         nfact <- x@Model$nfact
         if(nfact > 3) stop("Can't plot high dimensional solutions.", call.=FALSE)
         J <- x@Data$nitems
-        theta <- seq(theta_lim[1L],theta_lim[2L],length.out=npts)
-        if(nfact == 3) theta <- seq(theta_lim[1L],theta_lim[2L], length.out=20)
+        theta <- seq(theta_lim[1L],theta_lim[2L],length.out=npts/(nfact^2))
         ThetaFull <- Theta <- thetaComb(theta, nfact)
         prodlist <- attr(x@ParObjects$pars, 'prodlist')
         if(all(x@Data$K[which.items] == 2L) && facet_items) auto.key <- FALSE
@@ -1278,8 +1283,20 @@ mirt2traditional <- function(x, vcov){
             }
             ret
         }
-        delta_index <- list(NA, 1L:2L, NA, NA)
+        fns[[3]] <- function(par, index, opar){
+            if(index == 3L)
+                ret <- plogis(par)
+            ret
+        }
+        fns[[4]] <- function(par, index, opar){
+            if(index == 4L)
+                ret <- plogis(par)
+            ret
+        }
+        delta_index <- list(NA, 1L:2L, 3L, 4L)
         par[2] <- -par[2]/par[1]
+        par[3] <- plogis(par[3])
+        par[4] <- plogis(par[4])
         names(par) <- c('a', 'b', 'g', 'u')
     } else if(cls == 'graded'){
         fns <- vector('list', ncat+1L)
@@ -1355,6 +1372,7 @@ mirt2traditional <- function(x, vcov){
     }
     x@par <- par
     names(x@est) <- names(par)
+    x@parnames <- names(x@par)
     if(is.na(vcov[1L,1L]) || !(cls %in% c('dich', 'graded', 'gpcm'))){
         x@SEpar <- numeric()
     } else {
@@ -1368,7 +1386,10 @@ mirt2traditional <- function(x, vcov){
             parnum <- x@parnum[delta_index[[i]]]
             pick <- numeric(length(grad))
             for(j in 1L:length(parnum))
-                pick[j] <- min(which(do.call(c, lapply(splt, function(x) any(x %in% parnum[j])))))
+                pick[j] <- suppressWarnings(min(which(do.call(c, lapply(splt, function(x)
+                    any(x %in% parnum[j]))))))
+            grad <- grad[is.finite(pick)]
+            pick <- pick[is.finite(pick)]
             x@SEpar[i] <- as.vector(sqrt(grad %*% vcov[pick, pick, drop=FALSE] %*% grad))
         }
         if(cls == 'gpcm') x@SEpar <- x@SEpar[1L:length(x@par)]
@@ -1386,7 +1407,11 @@ traditional2mirt <- function(x, cls, ncat, digits = 3){
         for(i in 2L:ncat)
             par[i] <- -par[i]*par[1L]
         names(par) <- c('a1', paste0('d', 1:(length(par)-1)))
-    } else if(cls == 'gpcm'){
+    } else if(cls %in% c('gpcm', 'gpcmIRT')){
+        if(cls == 'gpcmIRT'){
+            x[-c(1, length(x))] <- x[-c(1, length(x))] + x[length(x)]
+            x <- x[-length(x)]
+        }
         par <- c(x[1L], 0L:(ncat-1L), 0, x[-1L])
         ds <- -par[-c(1:(ncat+1))]*par[1]
         newd <- numeric(length(ds))

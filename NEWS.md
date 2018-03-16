@@ -1,3 +1,44 @@
+# Changes in mirt 1.27
+
+- Added multidimensional version of sequential response model (e.g., Tutz, 1990). Includes 
+  `itemtype = 'sequential'` for the multidimensional 2PL variant, and `itemtype = 'Tutz'`
+  for the Rasch variant
+
+- Printing IRT parameters via `coef(mod, IRTpars = TRUE)` now computes the delta method 
+  for the `g` and `u` terms as well. Interpreting these is generally not recommended 
+  due to their bounded parameter nature (CIs can be outside the range [0,1]), 
+  but are included for posterity
+
+- `createItem()` gains a `bytecompile` flag to indicate whether the internal functions should 
+  be byte-compiled before using (default is TRUE)
+
+- Special `GROUP` location holder in `mirt.model()` to index the group-level
+  hyper-parameter terms
+
+- `key2binary()` gains a `score_missing` flag to indicate whether missing values should be scored 
+  as 0 or left as NA
+
+- `customItem()` gains support for `derivType = 'symbolic'` and 
+  `derivType.hss = 'symbolic'` to symbolically compute the gradient/Hessian 
+  functions (template code-base contributed by Chen-Wei Liu)
+
+- `customItem()` gains a `derivType.hss` argument to distinguish gradient from 
+  Hessian numerical computations
+
+- `mdirt()` gains support for `createItem()` inputs
+
+- More plotting points added to default `plot()` and `itemplot()` generics to create 
+  smoother traceline functions
+
+## Bug fixes
+  
+- fix `simdata()` bug for new `ggum` itemtype
+
+- fix new grouping syntax specification in `mirt.model()` when combining START and FIXED 
+  (reported by Garron Gianopulos)
+  
+- fix `IRTpars = TRUE` input when itemtype was `Rasch` (reported by Benjamin Shear)
+
 # Changes in mirt 1.26.3
 
 - `mod2values()` and passing `pars = 'values'` now return `data.frame` objects without any

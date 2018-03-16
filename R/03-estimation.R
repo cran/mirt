@@ -357,6 +357,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         for(g in 2L:Data$ngroups){
             pars[[g]][[nitems + 1L]]@est <- c(pars[[g]][[nitems + 1L]]@est[1L:pars[[g]][[nitems + 1L]]@nfact], tmp)
             names(pars[[g]][[nitems + 1L]]@est) <- names(pars[[g]][[nitems + 1L]]@par)
+            pars[[g]][[nitems + 1L]]@parnames <- names(pars[[g]][[nitems + 1L]]@est)
         }
     }
     if(RETURNVALUES){
@@ -483,6 +484,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             theta <- 0
             Theta <- opts$technical$customTheta
             opts$quadpts <- nrow(Theta)
+            if(pars[[1L]][[1L]]@nfact != ncol(Theta))
+                stop("mirt.model definition does not have same number of traits/attributes as customTheta input", call.=FALSE)
         } else {
             if(is.null(opts$quadpts)){
                 tmp <- if(opts$dentype == 'bfactor') PrepList[[1L]]$nfact - attr(model, 'nspec') + 1L
@@ -674,7 +677,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         for(i in seq_len(length(pars[[1L]]))){
             if(class(pars[[g]][[i]]) == 'dich'){
                 tmp <- ESTIMATE$pars[[g]][[i]]@par
-                nms <- names(ESTIMATE$pars[[g]][[i]]@est)
+                nms <- ESTIMATE$pars[[g]][[i]]@parnames
                 if(tmp[nms == 'g'] > tmp[nms == 'u']){
                     if(opts$warn)
                         warning('g paramater greater than u detected. Model did not converge', call.=FALSE)
