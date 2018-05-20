@@ -53,17 +53,28 @@ test_that('one factor', {
     mod_scalar1 <- multipleGroup(dat, newmodel, group = group, verbose = FALSE, invariance='free_var')
     expect_is(mod_scalar1, 'MultipleGroupClass')
     mod_EH <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
-                            empiricalhist=TRUE, optimizer = 'NR')
+                            dentype="empiricalhist", optimizer = 'NR')
     expect_is(mod_EH, 'MultipleGroupClass')
     cfs <- as.numeric(do.call(c, coef(mod_EH)[[1L]]))
     expect_equal(cfs, c(1.0035,0.5413,0,1,1.186,-0.6822,0,1,0.8913,-0.1695,0,1,0.8556,0.8614,0,1,1.0557,0.1476,0,1,0.5402,0.694,0,1,1.2011,1.0217,0,1,0.8957,-0.3138,0,1,0.8306,-1.0388,0,1,0.6773,-1.072,0,1,0.7762,1.2018,0,1,1.4008,-0.2289,0,1,1.2235,0.4661,0,1,0.9764,0.4707,0,1,0.8229,-0.0455,0,1,0,1),
                  tolerance = 1e-2)
+    mod_mixture <- multipleGroup(dat, 1, itemtype = 'Rasch',
+                                 verbose = FALSE, dentype = 'mixture-2', SE=TRUE)
+    expect_equal(extract.mirt(mod_mixture, 'condnum'), 133.1968, tolerance=1e-4)
+    so <- summary(mod_mixture, verbose=FALSE)
+    expect_equal(so[[1]]$class_proportion, .43211, tolerance=1e-4)
 
     dat[1,1] <- dat[2,2] <- NA
     mod_missing <- multipleGroup(dat, models, group = group, verbose = FALSE, method = 'EM',
                                  invariance=c('slopes', 'intercepts', 'free_var'))
     expect_is(mod_missing, 'MultipleGroupClass')
     expect_equal(extract.mirt(mod_missing, 'df'), 32736)
+    out1 <- M2(mod_missing, na.rm=TRUE)
+    out2 <- itemfit(mod_missing, na.rm=TRUE)
+    out3 <- fscores(mod_missing, na.rm=TRUE, method = 'EAPsum', full.scores=FALSE, verbose = FALSE)
+    expect_equal(out1$M2, 201.2824, tolerance=1e-4)
+    expect_equal(out2$D1$S_X2[1], 8.129985, tolerance=1e-4)
+    expect_equal(out3$D1$expected[1], 4.859826, tolerance=1e-4)
 
     fs1 <- fscores(mod_metric, verbose = FALSE, full.scores=FALSE)
     expect_true(mirt:::closeEnough(fs1[[1]][1:6, 'F1'] - c(-2.0826, -1.6822, -1.3988, -1.5287, -1.7450, -1.3712), -1e-2, 1e-2))

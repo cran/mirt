@@ -5,7 +5,8 @@
 \title{Simultaneous Item Bias Test (SIBTEST)}
 \usage{
 SIBTEST(dat, group, suspect_set, match_set, focal_name, guess_correction = 0,
-  Jmin = 2, pk_focal = FALSE, correction = TRUE, details = FALSE)
+  Jmin = 2, na.rm = FALSE, pk_focal = FALSE, correction = TRUE,
+  details = FALSE)
 }
 \arguments{
 \item{dat}{integer dataset to be tested containing dichotomous or polytomous responses}
@@ -19,7 +20,7 @@ If missing, a simultaneous test using all the items not listed in match_set
 will be used (i.e., DTF)}
 
 \item{match_set}{an integer vector indicating which items to use as the items which are matched
-(i.e., contain no DIF). These are analogous to 'achor' items in the likelihood method to locate
+(i.e., contain no DIF). These are analogous to 'anchor' items in the likelihood method to locate
 DIF. If missing, all items other than the items found in the suspect_set will be used}
 
 \item{focal_name}{name of the focal group; e.g., 'focal'. If not specified then one will be
@@ -30,6 +31,10 @@ for guessing. It's length should be the same as ncol(dat)}
 
 \item{Jmin}{the minimum number of observations required when splitting the data into focal and
 reference groups conditioned on the matched set}
+
+\item{na.rm}{logical; remove rows in \code{dat} with any missing values? If \code{TRUE},
+rows with missing data will be removed, as well as the corresponding elements in the \code{group}
+input}
 
 \item{pk_focal}{logical; using the group weights from the focal group instead of the total
 sample? Default is FALSE as per Shealy and Stout's recommendation}

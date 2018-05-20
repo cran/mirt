@@ -79,6 +79,22 @@ numDeriv_dP <- function(item, Theta){
     ret
 }
 
+numDeriv_dP2 <- function(item, Theta){
+    P <- function(par, Theta, item, cat){
+        item@par[item@est] <- par
+        ProbTrace(item, Theta)[cat]
+    }
+    par <- item@par[item@est]
+    tmpmat <- matrix(0, nrow(Theta), length(item@par))
+    ret <- lapply(2L:item@ncat - 1L, function(x) tmpmat)
+    for(i in seq_len(nrow(Theta))){
+        for(j in 2L:item@ncat)
+            ret[[j-1L]][i, item@est] <- numerical_deriv(P, par, Theta=Theta[i, , drop=FALSE],
+                                                     item=item, cat=j)
+    }
+    ret
+}
+
 symbolicGrad_par <- function(x, Theta, dp1 = NULL, P = NULL){
     if(is.null(P)) P <- ProbTrace(x, Theta)
     xLength <- length(x@par)
@@ -116,7 +132,7 @@ symbolicHessian_par <- function(x, Theta, dp1 = NULL, dp2 = NULL, P = NULL){
 
 #' Print generic for customized data.frame console output
 #'
-#' Privides a nicer output for most printed \code{data.frame} objects defined by functions in \code{mirt}.
+#' Provides a nicer output for most printed \code{data.frame} objects defined by functions in \code{mirt}.
 #'
 #' @method print mirt_df
 #' @param x object of class \code{'mirt_df'}
@@ -135,7 +151,7 @@ print.mirt_df <- function(x, digits = 3, ...){
 
 #' Print generic for customized matrix console output
 #'
-#' Privides a nicer output for most printed \code{matrix} objects defined by functions in \code{mirt}.
+#' Provides a nicer output for most printed \code{matrix} objects defined by functions in \code{mirt}.
 #'
 #' @method print mirt_matrix
 #' @param x object of class \code{'mirt_matrix'}
@@ -151,7 +167,7 @@ print.mirt_matrix <- function(x, digits = 3, ...){
 
 #' Print generic for customized list console output
 #'
-#' Privides a nicer output for most printed \code{list} objects defined by functions in \code{mirt}.
+#' Provides a nicer output for most printed \code{list} objects defined by functions in \code{mirt}.
 #'
 #' @method print mirt_list
 #' @param x object of class \code{'mirt_list'}
@@ -199,6 +215,7 @@ setClass("GroupPars",
                         theta='matrix',
                         Thetabetween='matrix',
                         density='numeric',
+                        dentype='character',
                         sig='matrix',
                         invsig='matrix',
                         mu='numeric',
@@ -233,6 +250,11 @@ setMethod(
     f = "GenRandomPars",
     signature = signature(x = 'GroupPars'),
     definition = function(x){
+        if(x@dentype == "Davidian"){
+            pick <- x@est
+            pick[1L:2L] <- FALSE
+            x@par[pick] <- runif(sum(pick), -pi/2, pi/2)
+        }
         x
     }
 )

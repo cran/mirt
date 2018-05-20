@@ -61,7 +61,8 @@ on how the \code{P} function was defined)}
 \description{
 Initializes the proper S4 class and methods necessary for mirt functions to use in estimation.
 To use the defined objects pass to the \code{mirt(..., customItems = list())} command, and
-ensure that the classes are properly labeled and unique in the list.
+ensure that the classes are properly labeled and unique in the list. For further examples
+regarding how this function can be used for fitting unfolding-type models see Liu and Chalmers (2018).
 }
 \details{
 The \code{summary()} function will not return proper standardized loadings since the function
@@ -177,6 +178,10 @@ Tnom.dev(4) \%*\% coef(nommod)[[1]][4:6] #d
 Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 \doi{10.18637/jss.v048.i06}
+
+Liu, C.-W. and Chalmers, R. P. (2018). Fitting item response unfolding models to
+  Likert-scale data using mirt in R. \emph{PLoS ONE, 13}, 5.
+  \doi{https://doi.org/10.1371/journal.pone.0196292}
 }
 \author{
 Phil Chalmers \email{rphilip.chalmers@gmail.com}

@@ -77,7 +77,6 @@
 #' @export mdirt
 #' @examples
 #'
-
 #' #LSAT6 dataset
 #' dat <- expand.table(LSAT6)
 #'
@@ -109,15 +108,15 @@
 #' # classify individuals either with the largest posterior probability.....
 #' fs <- fscores(mod2)
 #' head(fs)
-#' classes <- matrix(1:2, nrow(fs), 2, byrow=TRUE)
-#' class_max <- classes[t(apply(fs, 1, max) == fs)]
+#' classes <- 1:2
+#' class_max <- classes[apply(apply(fs, 1, max) == fs, 1, which)]
 #' table(class_max)
 #'
-#' # ... or by probability sampling (closer to estimated class proportions)
+#' # ... or by probability sampling (i.e., plausible value draws)
 #' class_prob <- apply(fs, 1, function(x) sample(1:2, 1, prob=x))
 #' table(class_prob)
 #'
-#' # plausible value imputations for stocastic classification in both classes
+#' # plausible value imputations for stochastic classification in both classes
 #' pvs <- fscores(mod2, plausible.draws=10)
 #' tabs <- lapply(pvs, function(x) apply(x, 2, table))
 #' tabs[[1]]
@@ -264,7 +263,7 @@ mdirt <- function(data, model, customTheta = NULL, nruns = 1, method = 'EM',
     Call <- match.call()
     dots <- list(...)
     latent.regression <- latentRegression_obj(data=data, covdata=covdata, formula=formula,
-                                              empiricalhist=FALSE, method=method)
+                                              dentype = 'discrete', method=method)
     technical$customTheta <- customTheta
     valid_itemtype <- 'lca'
     if(!is.null(dots$customItems))
@@ -279,7 +278,7 @@ mdirt <- function(data, model, customTheta = NULL, nruns = 1, method = 'EM',
                      latent.regression=latent.regression,
                      data=data, model=model, group=group, itemtype=itemtype, optimizer=optimizer,
                      technical=technical, calcNull=FALSE, GenRandomPars=GenRandomPars,
-                     discrete=TRUE, verbose=ifelse(nruns > 1L, FALSE, verbose), pars=pars, ...)
+                     dentype = 'discrete', verbose=ifelse(nruns > 1L, FALSE, verbose), pars=pars, ...)
     if(is(mods[[1L]], 'DiscreteClass')){
         for(i in 1:length(mods)) mods[[i]]@Call <- Call
     }

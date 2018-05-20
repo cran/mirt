@@ -231,7 +231,7 @@
 #'     The multidimensional sequential response model has the form
 #'     \deqn{P(x = k | \theta, \psi) = \prod (1 - F(a_1 \theta_1 + a_2 \theta_2 + d_{sk}))
 #'       F(a_1 \theta_1 + a_2 \theta_2 + d_{jk})}
-#'     where \eqn{F(\cdot)} is the cumlative logistic function.
+#'     where \eqn{F(\cdot)} is the cumulative logistic function.
 #'     The Tutz variant of this model (Tutz, 1990) (via \code{itemtype = 'Tutz'})
 #'     assumes that the slope terms are all equal to 1 and the latent
 #'     variance terms are estimated (i.e., is a Rasch variant).
@@ -283,7 +283,7 @@
 #'     where the \eqn{X_n} are from the spline design matrix \eqn{X} organized from the grid of \eqn{\theta}
 #'     values. B-splines with a natural or polynomial basis are supported, and the \code{intercept} input is
 #'     set to \code{TRUE} by default.}
-#'   \item{monopoly}{Monotone polynomial model for polytomous reponse data of the form
+#'   \item{monopoly}{Monotone polynomial model for polytomous response data of the form
 #'     \deqn{P(x = k | \theta, \psi) =
 #'     \frac{exp(\sum_1^k (m^*(\psi) + \xi_{c-1})}
 #'     {\sum_1^C exp(\sum_1^k (m^*(\psi) + \xi_{c-1}))}}
@@ -329,7 +329,7 @@
 #'       and its multidimensional extension
 #'     \item \code{'sequential'} - multidimensional sequential response model (Tutz, 1990) in slope-intercept form
 #'     \item \code{'Tutz'} - same as the \code{'sequential'} itemtype, except the slopes are fixed to 1
-#'       and the latent variance terms are freely estimated (similiar to the \code{'Rasch'} itemtype input)
+#'       and the latent variance terms are freely estimated (similar to the \code{'Rasch'} itemtype input)
 #'     \item \code{'PC2PL'} and \code{'PC3PL'} - 2-3 parameter partially compensatory model.
 #'       Note that constraining the slopes to be equal across items will reduce the model to
 #'       Embretson's (a.k.a. Whitely's) multicomponent model (1980).
@@ -462,13 +462,30 @@
 #'   the default number of quasi-Monte Carlo integration nodes will be set to 5000 in total
 #' @param TOL convergence threshold for EM or MH-RM; defaults are .0001 and .001. If
 #'   \code{SE.type = 'SEM'} and this value is not specified, the default is set to \code{1e-5}.
-#'   If \code{empiricalhist = TRUE} and \code{TOL} is not specified then the default \code{3e-5}
+#'   If \code{dentype = 'empiricalhist'} (i.e., \code{'EH'}) or \code{'empiricalhist_Woods'} (i.e., \code{'EHW'})
+#'   and \code{TOL} is not specified then the default \code{3e-5}
 #'   will be used. To evaluate the model using only the starting values pass \code{TOL = NaN}, and
 #'   to evaluate the starting values without the log-likelihood pass \code{TOL = NA}
-#' @param empiricalhist logical; estimate prior distribution using an empirical histogram approach.
-#'   Only applicable for unidimensional models estimated with the EM algorithm.
-#'   The number of cycles, TOL, and quadpts are adjusted
-#'   accommodate for less precision during estimation (TOL = 3e-5, NCYCLES = 2000, quadpts = 199)
+#' @param dentype type of density form to use for the latent trait parameters. Current options include
+#'
+#'   \itemize{
+#'     \item \code{'Gaussian'} (default) assumes a multivariate Gaussian distribution with an associated
+#'       mean vector and variance-covariance matrix
+#'     \item \code{'empiricalhist'} or \code{'EH'} estimates latent distribution using an empirical histogram described by
+#'       Bock and Aitkin (1981). Only applicable for unidimensional models estimated with the EM algorithm.
+#'       For this option, the number of cycles, TOL, and quadpts are adjusted accommodate for
+#'       less precision during estimation (namely: \code{TOL = 3e-5}, \code{NCYCLES = 2000}, \code{quadpts = 121})
+#'     \item \code{'empiricalhist_Woods'} or \code{'EHW'} estimates latent distribution using an empirical histogram described by
+#'       Bock and Aitkin (1981), with the same specifications as in \code{dentype = 'empiricalhist'},
+#'       but with the extrapolation-interpolation method described by Woods (2007). NOTE: to improve stability
+#'       in the presence of extreme response styles (i.e., all highest or lowest in each item) the \code{technical} option
+#'       \code{zeroExtreme = TRUE} may be required to down-weight the contribution of these problematic patterns
+#'     \item \code{'Davidian-#'} estimates semiparametric Davidian curves described by Woods and Lin (2009),
+#'       where the \code{#} placeholder represents the number of Davidian parameters to estimate
+#'       (e.g., \code{'Davidian-6'} will estimate 6 smoothing parameters). By default, the number of
+#'       \code{quadpts} is increased to 121, and this method is only applicable for
+#'       unidimensional models estimated with the EM algorithm
+#'    }
 #' @param survey.weights a optional numeric vector of survey weights to apply for each case in the
 #'   data (EM estimation only). If not specified, all cases are weighted equally (the standard IRT
 #'   approach). The sum of the \code{survey.weights} must equal the total sample size for proper
@@ -563,11 +580,16 @@
 #'       computations. For proper integration, the returned vector should sum to
 #'       1 (i.e., normalized). Note that if using the \code{Etable} it will be NULL
 #'       on the first call, therefore the prior will have to deal with this issue accordingly}
+#'     \item{zeroExtreme}{logical; assign extreme response patterns a \code{survey.weight} of 0
+#'       (formally equivalent to removing these data vectors during estimation)?
+#'       When \code{dentype = 'EHW'}, where Woods' extrapolation is utilized,
+#'       this option may be required if the extrapolation causes expected densities to tend towards
+#'       positive or negative infinity. The default is \code{FALSE}}
 #'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
 #'     \item{delta}{the deviation term used in numerical estimates when computing the ACOV matrix
 #'       with the 'forward' or 'central' numerical approaches, as well as Oakes' method with the
-#'       Richarson extrapolation. Default is 1e-5}
+#'       Richardson extrapolation. Default is 1e-5}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
 #'     \item{removeEmptyRows}{logical; remove response vectors that only contain \code{NA}'s?
@@ -1033,15 +1055,15 @@
 #' datBimodal <- simdata(a, d, 2000, itemtype = '2PL', Theta=ThetaBimodal)
 #' datSkew <- simdata(a, d, 2000, itemtype = '2PL', Theta=ThetaSkew)
 #'
-#' normal <- mirt(datNormal, 1, empiricalhist = TRUE)
+#' normal <- mirt(datNormal, 1, dentype = "empiricalhist")
 #' plot(normal, type = 'empiricalhist')
 #' histogram(ThetaNormal, breaks=30)
 #'
-#' bimodal <- mirt(datBimodal, 1, empiricalhist = TRUE)
+#' bimodal <- mirt(datBimodal, 1, dentype = "empiricalhist")
 #' plot(bimodal, type = 'empiricalhist')
 #' histogram(ThetaBimodal, breaks=30)
 #'
-#' skew <- mirt(datSkew, 1, empiricalhist = TRUE)
+#' skew <- mirt(datSkew, 1, dentype = "empiricalhist")
 #' plot(skew, type = 'empiricalhist')
 #' histogram(ThetaSkew, breaks=30)
 #'
@@ -1143,21 +1165,37 @@
 #'               technical = list(customTheta = Theta2, customPriorFun = prior))
 #' summary(GHmod2, suppress=.2)
 #'
+#' ############
+#' # Davidian curve example
+#'
+#' dat <- key2binary(SAT12,
+#'                    key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#' dav <- mirt(dat, 1, dentype = 'Davidian-4') # use four smoothing parameters
+#' plot(dav, type = 'Davidian') # shape of latent trait disribution
+#' coef(dav, simplify=TRUE)
+#'
+#' fs <- fscores(dav) # assume normal prior
+#' fs2 <- fscores(dav, use_dentype_estimate=TRUE) # use Davidian estimated prior shape
+#' head(cbind(fs, fs2))
+#'
+#' itemfit(dav) # assume normal prior
+#' itemfit(dav, use_dentype_estimate=TRUE) # use Davidian estimated prior shape
+#'
 #' }
 mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  covdata = NULL, formula = NULL, SE.type = 'Oakes', method = 'EM',
-                 optimizer = NULL, pars = NULL, constrain = NULL, parprior = NULL,
+                 optimizer = NULL, dentype = 'Gaussian',
+                 pars = NULL, constrain = NULL, parprior = NULL,
                  calcNull = FALSE, draws = 5000, survey.weights = NULL,
                  quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL,
                  rsm.block = NULL, monopoly.k = 1L, key = NULL,
-                 large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay',
-                 empiricalhist = FALSE, verbose = TRUE,
+                 large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay', verbose = TRUE,
                  solnp_args = list(), nloptr_args = list(), spline_args = list(),
                  control = list(), technical = list(), ...)
 {
     Call <- match.call()
-    latent.regression <- latentRegression_obj(data=data, covdata=covdata, formula=formula,
-                                              empiricalhist=empiricalhist, method=method)
+    latent.regression <- latentRegression_obj(data=data, covdata=covdata,
+                                              dentype=dentype, formula=formula, method=method)
     mod <- ESTIMATION(data=data, model=model, group=rep('all', nrow(data)),
                       itemtype=itemtype, guess=guess, upper=upper, grsm.block=grsm.block,
                       pars=pars, method=method, constrain=constrain, SE=SE, TOL=TOL,
@@ -1165,10 +1203,10 @@ mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                       technical=technical, verbose=verbose, survey.weights=survey.weights,
                       calcNull=calcNull, SE.type=SE.type, large=large, key=key,
                       accelerate=accelerate, draws=draws, rsm.block=rsm.block,
-                      empiricalhist=empiricalhist, GenRandomPars=GenRandomPars,
-                      optimizer=optimizer, solnp_args=solnp_args, nloptr_args=nloptr_args,
+                      GenRandomPars=GenRandomPars, optimizer=optimizer,
+                      solnp_args=solnp_args, nloptr_args=nloptr_args,
                       latent.regression=latent.regression, gpcm_mats=gpcm_mats,
-                      control=control, spline_args=spline_args, ...)
+                      control=control, spline_args=spline_args, dentype=dentype, ...)
     if(is(mod, 'SingleGroupClass'))
         mod@Call <- Call
     return(mod)
