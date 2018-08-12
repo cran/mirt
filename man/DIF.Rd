@@ -170,7 +170,7 @@ Chalmers, R. P., Counsell, A., and Flora, D. B. (2016). It might not
   \doi{10.1177/0013164415584576}
 }
 \seealso{
-\code{\link{multipleGroup}}
+\code{\link{multipleGroup}}, \code{\link{DRF}}
 }
 \author{
 Phil Chalmers \email{rphilip.chalmers@gmail.com}

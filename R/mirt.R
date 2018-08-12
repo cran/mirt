@@ -1,18 +1,17 @@
 #' Full-Information Item Factor Analysis (Multidimensional Item Response
 #' Theory)
 #'
-#' \code{mirt} fits an unconditional maximum likelihood factor analysis model
+#' \code{mirt} fits a maximum likelihood (or maximum a posteriori) factor analysis model
 #' to any mixture of dichotomous and polytomous data under the item response theory paradigm
 #' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm, with
 #' an EM algorithm approach outlined by Bock and Aiken (1981) using rectangular or
 #' quasi-Monte Carlo integration grids, or with the stochastic EM (i.e., the first two stages
-#' of the MH-RM algorithm).
-#' Models containing 'explanatory' person or item level predictors
+#' of the MH-RM algorithm). Models containing 'explanatory' person or item level predictors
 #' can only be included by using the \code{\link{mixedmirt}} function, though latent
-#' regression models can be fit using the \code{formula} input below. Tests that form a
-#' two-tier or bi-factor structure should be estimated with the \code{\link{bfactor}} function,
-#' which uses a dimension reduction EM algorithm for modeling item parcels.
-#' Multiple group analyses (useful for DIF and DTF testing) are
+#' regression models can be fit using the \code{formula} input in this function.
+#' Tests that form a two-tier or bi-factor structure should be estimated with the
+#' \code{\link{bfactor}} function, which uses a dimension reduction EM algorithm for
+#' modeling item parcels.  Multiple group analyses (useful for DIF and DTF testing) are
 #' also available using the \code{\link{multipleGroup}} function.
 #'
 #' @section Confirmatory and Exploratory IRT:
@@ -358,8 +357,7 @@
 #'   \code{SE.type = 'MHRM'} by default to avoid the use of quadrature
 #' @param optimizer a character indicating which numerical optimizer to use. By default, the EM
 #'   algorithm will use the \code{'BFGS'} when there are no upper and lower bounds box-constraints and
-#'   \code{'L-BFGS-B'} when there are. Another good option which supports bound constraints is
-#'   the \code{'nlminb'}, which may be more stable than the BFGS family of optimizers (though slightly slower).
+#'   \code{'nlminb'} when there are.
 #'
 #'   Other options include the Newton-Raphson (\code{'NR'}),
 #'   which can be more efficient than the \code{'BFGS'} but not as stable for more complex
@@ -367,11 +365,11 @@
 #'   and the related \code{'NR1'} which is also the Newton-Raphson
 #'   but consists of only 1 update that has been coupled with RM Hessian (only
 #'   applicable when the MH-RM algorithm is used). The MH-RM algorithm uses the \code{'NR1'} by default,
-#'   and though currently the \code{'BFGS'}, \code{'L-BFGS-B'}, and \code{'NR'}
+#'   though currently the \code{'BFGS'}, \code{'L-BFGS-B'}, and \code{'NR'}
 #'   are also supported with this method (with
-#'   few iterations by default) to emulate stochastic EM updates.
+#'   fewer iterations by default) to emulate stochastic EM updates.
 #'   As well, the \code{'Nelder-Mead'} and \code{'SANN'}
-#'   estimators are also available, but their routine use generally is not required or recommended.
+#'   estimators are available, but their routine use generally is not required or recommended.
 #'
 #'   Additionally, estimation subroutines from the \code{Rsolnp} and \code{nloptr}
 #'   packages are available by passing the arguments \code{'solnp'} and \code{'nloptr'},
@@ -480,7 +478,7 @@
 #'       but with the extrapolation-interpolation method described by Woods (2007). NOTE: to improve stability
 #'       in the presence of extreme response styles (i.e., all highest or lowest in each item) the \code{technical} option
 #'       \code{zeroExtreme = TRUE} may be required to down-weight the contribution of these problematic patterns
-#'     \item \code{'Davidian-#'} estimates semiparametric Davidian curves described by Woods and Lin (2009),
+#'     \item \code{'Davidian-#'} estimates semi-parametric Davidian curves described by Woods and Lin (2009),
 #'       where the \code{#} placeholder represents the number of Davidian parameters to estimate
 #'       (e.g., \code{'Davidian-6'} will estimate 6 smoothing parameters). By default, the number of
 #'       \code{quadpts} is increased to 121, and this method is only applicable for
@@ -1171,7 +1169,7 @@
 #' dat <- key2binary(SAT12,
 #'                    key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #' dav <- mirt(dat, 1, dentype = 'Davidian-4') # use four smoothing parameters
-#' plot(dav, type = 'Davidian') # shape of latent trait disribution
+#' plot(dav, type = 'Davidian') # shape of latent trait distribution
 #' coef(dav, simplify=TRUE)
 #'
 #' fs <- fscores(dav) # assume normal prior

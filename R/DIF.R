@@ -77,7 +77,7 @@
 #'   sampling variability. \emph{Educational and Psychological Measurement, 76}, 114-140.
 #'   \doi{10.1177/0013164415584576}
 #' @keywords DIF
-#' @seealso \code{\link{multipleGroup}}
+#' @seealso \code{\link{multipleGroup}}, \code{\link{DRF}}
 #, \code{\link{DTF}}
 #' @export DIF
 #' @examples
@@ -179,6 +179,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             return(res)
         }
         if(drop){
+            sv <- values
             for(j in seq_len(length(parnum))){
                 for(i in length(constrain):1L){
                     if(all(parnum[[j]] == sort(constrain[[i]])))
@@ -186,12 +187,13 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 }
             }
         } else {
+            sv <- NULL
             for(i in seq_len(length(parnum)))
                 constrain[[length(constrain) + 1L]] <- parnum[[i]]
         }
         newmodel <- multipleGroup(model@Data$data, model@Model$model, group=model@Data$group,
-                                  invariance = invariance, constrain=constrain,
-                                  itemtype = model@Model$itemtype, verbose = FALSE, ...)
+                                  invariance = invariance, constrain=constrain, pars=sv,
+                                  itemtype = model@Model$itemtype, verbose=FALSE, ...)
         aov <- anova(newmodel, model, verbose = FALSE)
         attr(aov, 'parnum') <- parnum
         if(return_models) aov <- newmodel
@@ -200,6 +202,9 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
 
     if(missing(MGmodel)) missingMsg('MGmodel')
     if(missing(which.par)) missingMsg('which.par')
+    if(!is(MGmodel, 'MultipleGroupClass'))
+        stop('Input model must be fitted by multipleGroup()', call.=FALSE)
+
     if(!any(sapply(MGmodel@ParObjects$pars, function(x, pick) x@ParObjects$pars[[pick]]@est,
                    pick = MGmodel@Data$nitems + 1L)))
         message('No hyper-parameters were estimated in the DIF model. For effective

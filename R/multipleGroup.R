@@ -63,7 +63,7 @@
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
-#' @seealso \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}, \code{\link{DTF}}
+#' @seealso \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}, \code{\link{DRF}}
 #' @keywords models
 #' @export multipleGroup
 #' @examples
@@ -93,12 +93,12 @@
 #'                              invariance=c('slopes', 'intercepts', 'free_var'))
 #' mod_fullconstrain <- multipleGroup(dat, models, group = group,
 #'                              invariance=c('slopes', 'intercepts'))
-#' slot(mod_fullconstrain, 'time') #time of estimation components
+#' extract.mirt(mod_fullconstrain, 'time') #time of estimation components
 #'
 #' #optionally use Newton-Raphson for (generally) faster convergence in the M-step's
 #' mod_fullconstrain <- multipleGroup(dat, models, group = group, optimizer = 'NR',
 #'                              invariance=c('slopes', 'intercepts'))
-#' slot(mod_fullconstrain, 'time') #time of estimation components
+#' extract.mirt(mod_fullconstrain, 'time') #time of estimation components
 #'
 #' summary(mod_scalar2)
 #' coef(mod_scalar2, simplify=TRUE)

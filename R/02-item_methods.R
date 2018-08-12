@@ -212,6 +212,7 @@ setClass("GroupPars",
                         bindex='integer',
                         sindex='matrix',
                         BFACTOR='logical',
+                        structure='matrix',
                         theta='matrix',
                         Thetabetween='matrix',
                         density='numeric',
@@ -1981,7 +1982,8 @@ setMethod(
 # ----------------------------------------------------------------
 
 setClass("lca", contains = 'AllItemsClass',
-         representation = representation(score='numeric'))
+         representation = representation(score='numeric',
+                                         item.Q='matrix'))
 
 setMethod(
     f = "print",
@@ -2035,15 +2037,15 @@ setMethod(
     }
 )
 
-P.lca <- function(par, Theta, ncat, returnNum = FALSE){
-    return(.Call('lcaTraceLinePts', par, Theta, ncat, returnNum))
+P.lca <- function(par, Theta, ncat, item.Q, returnNum = FALSE){
+    return(.Call('lcaTraceLinePts', par, Theta, item.Q, ncat, returnNum))
 }
 
 setMethod(
     f = "ProbTrace",
     signature = signature(x = 'lca', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        P <- P.lca(x@par, Theta=Theta, ncat=x@ncat)
+        P <- P.lca(x@par, Theta=Theta, ncat=x@ncat, item.Q=x@item.Q)
         return(P)
     }
 )
@@ -2052,7 +2054,8 @@ setMethod(
     f = "Deriv",
     signature = signature(x = 'lca', Theta = 'matrix'),
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
-        ret <- .Call('dparslca', x@par, Theta, FALSE, x@dat, offterm) #TODO change FALSE to estHess
+        ret <- .Call('dparslca', x@par, Theta, x@item.Q,
+                     FALSE, x@dat, offterm) #TODO change FALSE to estHess
         if(estHess && any(x@est)){
             ret$hess[x@est, x@est] <- numerical_deriv(EML, x@par[x@est], obj=x,
                                                          Theta=Theta, gradient=FALSE)
@@ -2093,6 +2096,7 @@ setMethod(
 setClass("spline", contains = 'AllItemsClass',
          representation = representation(stype='character',
                                          Theta_prime='matrix',
+                                         item.Q='matrix',
                                          sargs='list'))
 
 setMethod(
@@ -2151,7 +2155,8 @@ setMethod(
     definition = function(x, Theta, useDesign = TRUE, ot=0){
         if(nrow(Theta) != nrow(x@Theta_prime))
             x <- loadSplineParsItem(x, Theta)
-        P <- P.lca(x@par, Theta=x@Theta_prime, ncat=x@ncat)
+        P <- P.lca(x@par, item.Q=x@item.Q,
+                   Theta=x@Theta_prime, ncat=x@ncat)
         return(P)
     }
 )
@@ -2160,7 +2165,7 @@ setMethod(
     f = "Deriv",
     signature = signature(x = 'spline', Theta = 'matrix'),
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
-        ret <- .Call('dparslca', x@par, x@Theta_prime, FALSE, x@dat, offterm)
+        ret <- .Call('dparslca', x@par, x@Theta_prime, x@item.Q, FALSE, x@dat, offterm)
         if(estHess && any(x@est)){
             ret$hess[x@est, x@est] <- numerical_deriv(EML, x@par[x@est], obj=x,
                                                         Theta=x@Theta_prime, gradient=FALSE)
@@ -2376,7 +2381,7 @@ setClass('custom', contains = 'AllItemsClass',
                                          hss='function',
                                          gen='function',
                                          usehss='logical',
-                                         userdata='matrix',
+                                         userdata='list',
                                          useuserdata='logical',
                                          derivType='character',
                                          derivType.hss='character'))
@@ -2435,15 +2440,15 @@ setMethod(
     f = "ProbTrace",
     signature = signature(x = 'custom', Theta = 'matrix'),
     definition = function(x, Theta, useDesign = TRUE, ot=0){
-        if(x@useuserdata) Theta <- cbind(Theta, x@userdata)
-        return(x@P(x@par, Theta=Theta, ncat=x@ncat))
+        if(x@useuserdata) return(x@P(x@par, Theta, x@ncat, x@userdata[[1L]]))
+        else return(x@P(x@par, Theta, x@ncat))
     }
 )
 
 setMethod("initialize",
           'custom',
-          function(.Object, name, par, est, parnames, lbound, ubound, P, gr, hss, gen, userdata, derivType,
-                   derivType.hss, dps, dps2) {
+          function(.Object, name, par, est, parnames, lbound, ubound,
+                   P, gr, hss, gen, userdata, derivType, derivType.hss, dps, dps2) {
               dummyfun <- function(...) return(NULL)
               names(est) <- names(par)
               usegr <- usehss <- useuserdata <- TRUE
@@ -2469,14 +2474,14 @@ setMethod("initialize",
                   .Object@gen <- function(object) object@par
               } else .Object@gen <- gen
               if(is.null(userdata)){
-                  .Object@userdata <- matrix(NaN)
+                  .Object@userdata <- list()
                   useuserdata <- FALSE
               } else .Object@userdata <- userdata
               .Object@usegr <- usegr
               .Object@usehss <- usehss
               .Object@useuserdata <- useuserdata
-              .Object@lbound <- if(!is.null(lbound)) lbound  else rep(-Inf, length(par))
-              .Object@ubound <- if(!is.null(ubound)) ubound  else rep(Inf, length(par))
+              .Object@lbound <- if(!is.null(lbound)) lbound else rep(-Inf, length(par))
+              .Object@ubound <- if(!is.null(ubound)) ubound else rep(Inf, length(par))
               .Object
           }
 )
@@ -2485,7 +2490,6 @@ setMethod(
     f = "Deriv",
     signature = signature(x = 'custom', Theta = 'matrix'),
     definition = function(x, Theta, estHess = FALSE, offterm = numeric(1L)){
-        if(x@useuserdata) Theta <- cbind(Theta, x@userdata)
         grad <- rep(0, length(x@par))
         hess <- matrix(0, length(x@par), length(x@par))
         if(x@usegr) grad <- x@gr(x, Theta)
@@ -2860,7 +2864,7 @@ setMethod(
     f = "DerivTheta",
     signature = signature(x = 'gpcmIRT', Theta = 'matrix'),
     definition = function(x, Theta){
-        outpar <- traditional2mirt(x@par, cls = 'gpcmIRT', ncat = x@ncat, digits=Inf)
+        outpar <- traditional2mirt(x@par, cls = 'gpcmIRT', ncat = x@ncat)
         xx <- new('gpcm',
                   par=outpar,
                   parnames=names(outpar),

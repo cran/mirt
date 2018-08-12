@@ -11,15 +11,17 @@
 #' Function supports the standard SIBTEST for dichotomous and polytomous data (compensatory) and
 #' supports crossing DIF testing (i.e., non-compensatory/non-uniform) using the asymptotic sampling
 #' distribution version of the Crossing-SIBTEST (CSIBTEST) statistic described by
-#' Chalmers (accepted).
+#' Chalmers (2018). For convenience, the beta coefficient for CSIBTEST is always reported as an
+#' absolute value.
 #'
-#' @param dat integer dataset to be tested containing dichotomous or polytomous responses
-#' @param group a vector indicating group membership
+#' @param dat integer-based dataset to be tested, containing dichotomous or polytomous responses
+#' @param group a vector indicating group membership with the same length as the number of rows in
+#'   \code{dat}
 #' @param match_set an integer vector indicating which items to use as the items which are matched
 #'   (i.e., contain no DIF). These are analogous to 'anchor' items in the likelihood method to locate
-#'   DIF. If missing, all items other than the items found in the suspect_set will be used
-#' @param focal_name name of the focal group; e.g., 'focal'. If not specified then one will be
-#'   selected automatically
+#'   DIF. If missing, all items other than the items found in the \code{suspect_set} will be used
+#' @param focal_name name of the focal group; e.g., \code{'focal'}. If not specified then one will be
+#'   selected automatically using \code{unique(group)[2]}
 #' @param suspect_set an integer vector indicating which items to inspect with SIBTEST. Including only
 #'   one value will perform a DIF test, while including more than one will perform a simultaneous
 #'   bundle test (DBF); including all non-matched items will perform DTF.
@@ -36,7 +38,7 @@
 #'   sample? Default is FALSE as per Shealy and Stout's recommendation
 #' @param correction logical; apply the composite correction for the difference between focal
 #'   composite scores using the true-score regression technique? Default is \code{TRUE},
-#'   reflecting Shealy and Stout's method
+#'   reflecting Shealy and Stout's linear extrapolation method
 #' @param details logical; return a data.frame containing the details required to compute SIBTEST?
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
@@ -46,8 +48,8 @@
 #'
 #' @references
 #'
-#' Chalmers, R. P. (accepted). Improving the Crossing-SIBTEST statistic for
-#' detecting non-uniform DIF. \emph{Psychometrika}.
+#' Chalmers, R. P. (2018). Improving the Crossing-SIBTEST statistic for
+#' detecting non-uniform DIF. \emph{Psychometrika, 83}, 2, 376-386.
 #'
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
@@ -126,8 +128,8 @@
 #' SIBTEST(dat, group, suspect_set = 30, match_set = 1:5)
 #'
 #' }
-SIBTEST <- function(dat, group, suspect_set, match_set, focal_name,
-                    guess_correction = 0, Jmin = 2, na.rm = FALSE,
+SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(group)[2],
+                    guess_correction = 0, Jmin = 5, na.rm = FALSE,
                     pk_focal = FALSE, correction = TRUE, details = FALSE){
 
     CA <- function(dat, guess_correction = rep(0, ncol(dat))){
@@ -162,8 +164,6 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name,
     if(any(is.na(dat)))
         stop(c('SIBTEST does not support datasets with missing values. \n  ',
              'Pass na.rm=TRUE to remove missing rows list-wise'), call.=FALSE)
-    if(missing(focal_name))
-        focal_name <- unique(group)[2L]
     stopifnot(focal_name %in% group)
     stopifnot(nrow(dat) == length(group))
     group <- ifelse(group == focal_name, 'reference', 'focal')
@@ -259,7 +259,7 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name,
     beta_uni <- beta_cross <- 0
     for(kk in seq_len(length(tab_scores))){
         if(!II[kk]) next
-        beta_uni <- beta_uni + pkstar[kk] * (ystar_focal_vec[kk] - ystar_ref_vec[kk])
+        beta_uni <- beta_uni + pkstar[kk] * (ystar_ref_vec[kk]- ystar_focal_vec[kk])
         if(!crossvec[kk]) beta_cross <- beta_cross + pkstar[kk] * (ystar_ref_vec[kk] - ystar_focal_vec[kk])
         else beta_cross <- beta_cross + pkstar[kk] * (ystar_focal_vec[kk] - ystar_ref_vec[kk])
     }

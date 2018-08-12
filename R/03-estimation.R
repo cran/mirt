@@ -1,7 +1,8 @@
 ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1,
                        invariance = '', pars = NULL, constrain = NULL, key = NULL,
                        parprior = NULL, mixed.design = NULL, customItems = NULL,
-                       customGroup = NULL, GenRandomPars = FALSE, large = FALSE,
+                       customItemsData = NULL, customGroup = NULL,
+                       GenRandomPars = FALSE, large = FALSE,
                        survey.weights = NULL, latent.regression = NULL,
                        gpcm_mats=list(), spline_args=list(), monopoly.k=1,
                        control = list(), ...)
@@ -13,6 +14,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         stop('items must have unique names in data input', call.=FALSE)
     if(missing(model)) missingMsg('model')
     if(missing(group)) missingMsg('group')
+    if(!(is.factor(group) || is.character(group)) || length(group) != nrow(data))
+        stop('group input provided is not valid', call.=FALSE)
     if(is.logical(large) && large){
         Data <- opts <- list()
         opts$zeroExtreme <- FALSE
@@ -33,7 +36,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         tmp <- list(...)
         if(!is.null(tmp$technical$customK)) K <- tmp$technical$customK
         itemloc <- c(1L, cumsum(K) + 1L)
-        PrepListFull <- list(K=K, itemloc=itemloc, Names=NULL, itemnames=colnames(Data$data))
+        Names <- NULL
+        for(i in 1L:length(K))
+            Names <- c(Names, paste("Item.",i,"_",1L:K[i],sep=""))
+        PrepListFull <- list(K=K, itemloc=itemloc,
+                             Names=Names, itemnames=colnames(Data$data))
     } else {
         if(missing(data) || is.null(nrow(data)))
             stop('data argument is required', call.=FALSE)
@@ -51,6 +58,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             stopifnot(is(parprior, 'list'))
         if(!is.null(customItems))
             stopifnot(is(customItems, 'list'))
+        if(!is.null(customItemsData))
+            stopifnot(is(customItemsData, 'list') || length(customItemsData) == ncol(data))
         if(!is.null(customGroup))
             stopifnot(is(customGroup, 'GroupPars'))
         stopifnot(is(invariance, 'character'))
@@ -62,6 +71,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             if(is.null(control$tol)) control$tol <- opts$TOL/1000
             if(is.null(control$maxit)) control$maxit <- 50L
         }
+        if(opts$Moptim == 'nlminb')
+            if(is.null(control$rel.tol)) control$rel.tol <- opts$TOL/100
 
         if(opts$dentype == "discrete" && is.null(customGroup)){
             den <- function(obj, Theta, mus = 0){
@@ -71,14 +82,23 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     ret <- t(apply(mus, 1L, function(x)
                         c(exp(par + x[-ncol(mus)]), 1)))
                     ret <- ret / rowSums(ret)
+                } else if(length(obj@structure)){
+                    d <- exp(obj@structure %*% par)
+                    d[length(d)] <- 1
+                    ret <- as.vector(d / sum(d))
                 } else {
                     d <- c(exp(par), 1)
                     ret <- d / sum(d)
                 }
                 ret
-
             }
-            par <- if(is.null(opts$technical$customTheta)){
+            par <- if(!is.null(dots$structure)){
+                if(is.null(opts$technical$customTheta))
+                    stop('customTheta must be defined when using structure input', call.=FALSE)
+                opts$structure <- model.matrix(dots$structure, as.data.frame(opts$technical$customTheta))
+                tmpnfact <- ncol(opts$technical$customTheta)
+                numeric(ncol(opts$structure))
+            } else if(is.null(opts$technical$customTheta)){
                 tmpnfact <- model
                 numeric(model-1L)
             } else {
@@ -181,6 +201,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         if(is.null(opts$grsm.block)) Data$grsm.block <- rep(1L, ncol(data))
         else Data$grsm.block <- opts$grsm.block
         if(is.null(opts$rsm.block)) Data$rsm.block <- rep(1L, ncol(data))
+        else Data$rsm.block <- opts$rsm.block
         Data$group <- factor(group)
         Data$groupNames <- levels(Data$group)
         if(any(grepl('-', Data$groupNames)))
@@ -213,11 +234,18 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                          technical=opts$technical, parnumber=1L, BFACTOR=opts$dentype == 'bfactor',
                          grsm.block=Data$grsm.block, rsm.block=Data$rsm.block,
                          mixed.design=mixed.design, customItems=customItems,
+                         customItemsData=customItemsData,
                          customGroup=customGroup, spline_args=spline_args, monopoly.k=monopoly.k,
                          fulldata=opts$PrepList[[1L]]$fulldata, key=key, opts=opts,
                          gpcm_mats=gpcm_mats, internal_constraints=opts$internal_constraints,
-                         dcIRT_nphi=opts$dcIRT_nphi, dentype=opts$dentype)
+                         dcIRT_nphi=opts$dcIRT_nphi, dentype=opts$dentype, item.Q=opts$item.Q)
             if(!is.null(dots$Return_PrepList)) return(PrepListFull)
+        }
+        if(!is.null(opts$structure)){
+            PrepList[[1L]]$pars[[Data$nitems+1L]]@structure <- opts$structure
+            PrepList[[1L]]$pars[[Data$nitems+1L]]@parnames <-
+                names(PrepList[[1L]]$pars[[Data$nitems+1L]]@est) <- colnames(opts$structure)
+            PrepList[[1L]]$pars[[Data$nitems+1L]]@itemclass <- -999L
         }
         parnumber <- max(PrepList[[1L]]$pars[[Data$nitems+1L]]@parnum) + 1L
         attr(PrepListFull$pars, 'nclasspars') <- attr(PrepList[[1L]]$pars, 'nclasspars') <-
@@ -429,6 +457,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     }
     if(length(lrPars))
         nestpars <- nestpars + sum(lrPars@est)
+    if(!is.null(dots$structure)) nestpars <- nestpars - 1L
     if(length(constrain) > 0L)
         for(i in seq_len(length(constrain)))
             nconstr <- nconstr + length(constrain[[i]]) - 1L
@@ -474,7 +503,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     lr.random=latent.regression$lr.random, lrPars=lrPars)
     CUSTOM.IND <- which(sapply(pars[[1L]], class) %in% Use_R_ProbTrace())
     SLOW.IND <- which(sapply(pars[[1L]], class) %in% Use_R_Deriv())
-    if(pars[[1]][[length(pars[[1L]])]]@itemclass == -999L)
+    if(pars[[1]][[length(pars[[1L]])]]@itemclass %in% c(-1L, -999L))
         SLOW.IND <- c(SLOW.IND, length(pars[[1L]]))
     if(opts$dentype != 'Gaussian' && opts$method %in% c('MHRM', 'MIXED', 'SEM'))
         stop('Non-Gaussian densities not currently supported with MHRM algorithm')
@@ -555,7 +584,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                         if(is.null(opts$technical$customTheta))
                             Theta <- thetaComb(theta, nfact)
                     } else stop('Greater than ', opts$MAXQUAD, ' quadrature points.', call.=FALSE)
-                    if(opts$message && nfact > 3L)
+                    if(opts$message && nfact > 3L && !(opts$odentype %in% c('custom', 'discrete')))
                         message('EM quadrature for high dimensional models are better handled
                                  \twith the \"QMCEM\" or \"MCEM\" method')
                 }
@@ -811,7 +840,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                               delta=opts$delta, lrPars=ESTIMATE$lrPars)
         } else if(opts$SE.type == 'MHRM' && opts$method == 'EM'){
             if(opts$dentype %in% c('EH', 'EHW'))
-                stop('MHRM standard error not available when using empirical histograms', call.=FALSE)
+                stop('MHRM standard error methods not available when using empirical histograms', call.=FALSE)
             ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
                                    list = list(NCYCLES=1000L, BURNIN=1L, SEMCYCLES=opts$SEMCYCLES,
                                                KDRAWS=opts$KDRAWS, MHDRAWS=opts$MHDRAWS,
@@ -962,7 +991,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                   itemloc=PrepList[[1L]]$itemloc, nfact=nfact, pis=pis,
                   Theta=Theta, constrain=constrain, parprior=parprior, nest=as.integer(dfsubtr),
                   invariance=invariance, lrPars=lrPars, formulas=attr(mixed.design, 'formula'),
-                  prodlist=PrepList[[1L]]$prodlist)
+                  prodlist=PrepList[[1L]]$prodlist, nestpars=nestpars)
     if(!is.null(opts$technical$Etable)){
         Model$Etable <- ESTIMATE$rlist
         Model$Etable$Theta <- Theta
@@ -989,9 +1018,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     OptimInfo$condnum <- kappa(info, exact=TRUE)
                     OptimInfo$secondordertest <- all(eigen(info)$values > 0)
                     } else OptimInfo$secondordertest <- FALSE
-                } else {
-                    OptimInfo$secondordertest <- FALSE
-                }
+            } else {
+                OptimInfo$secondordertest <- FALSE
+            }
         }
     }
     Internals <- list(collectLL=ESTIMATE$collectLL, Prior=ESTIMATE$Prior, Pl=Pl,
@@ -1001,7 +1030,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(opts$storeEtable)
         Internals$Etable <- ESTIMATE$Etable
     if(opts$method == 'SEM') Options$TOL <- NA
-    if(opts$dentype == "discrete"){
+    if(opts$odentype == "discrete"){
         Fit$F <- Fit$h2 <- NULL
         mod <- new('DiscreteClass',
                    Data=Data,
@@ -1058,7 +1087,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 Internals$bfactor <- list(prior=ESTIMATE$prior,
                                           Priorbetween=ESTIMATE$Priorbetween,
                                           sitems=ESTIMATE$sitems, specific=specific)
-            cls <- ifelse(opts$dentype == 'mixture', 'MixtureClass', 'MultipleGroupClass')
+            cls <- ifelse(opts$odentype == 'mixture', 'MixtureClass', 'MultipleGroupClass')
             mod <- new(cls,
                        Data=Data,
                        Options=Options,

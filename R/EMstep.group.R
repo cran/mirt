@@ -114,7 +114,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     if(list$Moptim != 'BFGS') {
         Moptim <- list$Moptim
     } else {
-        Moptim <- if(all(c(LBOUND[est], UBOUND[est]) %in% c(-Inf, Inf))) 'BFGS' else 'L-BFGS-B'
+        Moptim <- if(all(c(LBOUND[est], UBOUND[est]) %in% c(-Inf, Inf))) 'BFGS' else 'nlminb'
     }
     if(Moptim == 'NR' && sum(est) > 300L && list$message)
         message('NR optimizer should not be used for models with a large number of parameters.
@@ -168,7 +168,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     if(list$method == 'BL'){
         start <- proc.time()[3L]
         lower <- LBOUND[est]; upper <- UBOUND[est]
-        Moptim <- ifelse(any(is.finite(lower) | is.finite(upper)), 'L-BFGS-B', 'BFGS')
+        Moptim <- ifelse(any(is.finite(lower) | is.finite(upper)), 'nlminb', 'BFGS')
         if(Moptim == 'BFGS'){
             control <- list(fnscale=-1, reltol=TOL)
             lower <- -Inf; upper <- Inf
@@ -451,6 +451,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     any.prior=FALSE, itemclass=10L,
                     dat=matrix(sapply(1L:length(pars),
                                       function(g) sum(pars[[g]][[J+1L]]@rr)), 1L))
+            mixtype@item.Q <- matrix(1, nrow = mixtype@ncat, ncol = mixtype@nfact)
             deriv <- Deriv(mixtype, Theta = matrix(1, 1L, length(pars)), estHess=TRUE)
             h[mixtype@parnum, mixtype@parnum] <- deriv$hess
         } else mixtype <- NULL

@@ -1,3 +1,42 @@
+# Changes in mirt 1.29
+
+- When lower/upper bounded parameters are included the default optimizer is now 'nlminb' rather 
+  than 'L-BFGS-B'. This is mainly due to the instability in the 'L-BFGS-B' algorithm which 
+  is prone to converging instantly for unknown reasons
+
+- `mdirt()` gains a `item.Q` list to specify Q-matrices at the item-category level for each item
+  
+- `createItem()` functions gain an optional argument to the function definitions to allow for
+  list-specified data from functions such as `mirt()` via a silent `mirt(..., customItemsData)`
+  argument
+
+- lattice `auto.key` default now reports lines rather than points. This is now more consistent
+  when, for example, color theme is changed to black and white in the trellis window
+
+- Added Differential Response Function (DRF) statistics from upcoming publication (Chalmers, accepted)
+  in a new function entitled `DRF()`. These are related to compensatory and non-compensatory measures 
+  of response bias for DIF, DBF, and DTF available from the SIBTEST framework but 
+  for IRT model fitted within the multiple-group estimation framework
+
+- `structure` argument added to `mdirt()` function to allow log-linear models for 
+  simplifying the profile probability model computations
+  
+- export internally used `traditional2mirt()` function to transform a small selection of 
+  classical IRT parameterizations into the slope-intercept form
+  
+- fix `survey.weights` input for multiple group models (reported by Leigh Allison)
+
+- fix `itemtype = "rsm"` block restriction when items contain unequal category lengths 
+  (reported by Aiden Loe)
+
+- `SIBTEST()` computation of beta coefficient changed to match Shealy and Stout's (1993) 
+  form of `p_k * (Y_R - Y_F)` (was previously `p_k * (Y_F - Y_R)`; reported by Craig Wells). 
+  As well, `Jmin` default is increased to 5 to avoid conservative Type I error behavior in 
+  longer tests
+  
+- Fix negative chi-square differences in `DIF()` function due to non-converged sub-models 
+  (reported by Daniel McKelvey)
+
 # Changes in mirt 1.28
 
 - `M2()` function gains a `type` input to distinguish between the univariate-bivariate 

@@ -1,6 +1,6 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact,
                      parprior, parnumber, estLambdas, BFACTOR = FALSE, mixed.design, customItems,
-                     key, gpcm_mats, spline_args, itemnames, monopoly.k)
+                     key, gpcm_mats, spline_args, itemnames, monopoly.k, customItemsData, item.Q)
 {
     customItemNames <- unique(names(customItems))
     if(is.null(customItemNames)) customItemNames <- 'UsElEsSiNtErNaLNaMe'
@@ -535,6 +535,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfixedeffects=nfixedeffects,
                              any.prior=FALSE,
                              itemclass=10L,
+                             item.Q=item.Q[[i]],
                              prior.type=rep(0L, length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
                              lbound=rep(-Inf, length(startvalues[[i]])),
@@ -575,6 +576,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=K[i],
                              stype=stype,
+                             item.Q=matrix(1, K[i], length(p)),
                              Theta_prime=matrix(0),
                              sargs=sargs,
                              nfixedeffects=nfixedeffects,
@@ -586,6 +588,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              ubound=rep(Inf, length(p)),
                              prior_1=rep(NaN,length(p)),
                              prior_2=rep(NaN,length(p)))
+            pars[[i]]@item.Q[1L, ] <- 0
             tmp2 <- parnumber:(parnumber + length(p) - 1L)
             pars[[i]]@parnum <- tmp2
             parnumber <- parnumber + length(p)
@@ -647,6 +650,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             tmp2 <- parnumber:(parnumber + length(pars[[i]]@est) - 1L)
             pars[[i]]@parnum <- tmp2
             pars[[i]]@fixed.design <- fixed.design.list[[i]]
+            if(pars[[i]]@useuserdata) pars[[i]]@userdata <- list(customItemsData[[i]])
             parnumber <- parnumber + length(pars[[i]]@est)
             next
         }

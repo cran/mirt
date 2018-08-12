@@ -148,6 +148,8 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
                 }
             }
         } else if(Moptim == 'nlminb'){
+            if(is.null(control$iter.max))
+                control$iter.max <- max(ceiling(Mrate * 100), 25)
             opt <- try(nlminb(p, Mstep.LL, Mstep.grad,
                               DERIV=DERIV, rlist=rlist, CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
                               est=est, longpars=longpars, pars=pars, ngroups=ngroups, J=J, gTheta=gTheta,
@@ -158,7 +160,6 @@ Mstep <- function(pars, est, longpars, ngroups, J, gTheta, itemloc, PrepList, L,
         } else {
             stop('M-step optimizer not supported', call.=FALSE)
         }
-        if(is(opt, 'try-error')) browser()
         if(is(opt, 'try-error'))
             stop(opt, call.=FALSE)
 
@@ -355,18 +356,16 @@ LogLikMstep <- function(x, Theta, itemloc, rs, any.prior, CUSTOM.IND){
 
 Mstep.grad <- function(p, est, longpars, pars, ngroups, J, gTheta, PrepList, L, ANY.PRIOR,
                        constrain, itemloc, DERIV, rlist, CUSTOM.IND, SLOW.IND, keep_vcov_PD){
-
     longpars[est] <- p
     longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
-    if(pars[[1L]][[J + 1L]]@itemclass == -1L){
+    if(pars[[1L]][[J + 1L]]@itemclass %in% c(-1L, -999L)){
         for(g in seq_len(length(pars))){
             gp <- pars[[g]][[J + 1L]]
             pars[[g]][[J + 1L]]@density <- gp@safe_den(gp, gTheta[[g]])
         }
     }
     g <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 0L, 0L, 1L, TRUE)$grad
-
     if(length(SLOW.IND)){
         for(group in seq_len(ngroups)){
             for (i in SLOW.IND){

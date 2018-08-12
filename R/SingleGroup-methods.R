@@ -76,7 +76,7 @@ setMethod(
             } else {
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
-                cat('Estimated parameters:', length(extract.mirt(x, 'parvec')), '\n')
+                cat('Estimated parameters:', extract.mirt(x, 'nestpars'), '\n')
                 cat("AIC = ", x@Fit$AIC, "; AICc = ", x@Fit$AICc, "\n", sep='')
                 cat("BIC = ", x@Fit$BIC, "; SABIC = ", x@Fit$SABIC, "\n", sep='')
             }
@@ -327,7 +327,7 @@ setMethod(
             }
         }
         allPars <- list()
-        if(length(object@ParObjects$pars[[1L]]@SEpar)){
+        if(length(object@ParObjects$pars[[1L]]@SEpar) && !simplify){
             if(printSE){
                 for(i in seq_len(J+1L)){
                     allPars[[i]] <- matrix(c(object@ParObjects$pars[[i]]@par,
@@ -919,7 +919,8 @@ setMethod(
                           par.strip.text = list(cex = 0.7),
                           par.settings = list(strip.background = list(col = '#9ECAE1'),
                                               strip.border = list(col = "black")),
-                          auto.key = list(space = 'right'), profile = FALSE, ...)
+                          auto.key = list(space = 'right', points=FALSE, lines=TRUE),
+                          profile = FALSE, ...)
     {
         dots <- list(...)
         if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score', 'itemscore',
@@ -1457,6 +1458,8 @@ mirt2traditional <- function(x, vcov){
     } else if(cls == 'nestlogit'){
         par1 <- par[1:4]
         par1[2] <- -par1[2]/par1[1]
+        par1[3] <- plogis(par1[3])
+        par1[4] <- plogis(par1[4])
         names(par1) <- c('a', 'b', 'g', 'u')
         par2 <- par[5:length(par)]
         as <- par2[1:(ncat-1)]
@@ -1494,7 +1497,64 @@ mirt2traditional <- function(x, vcov){
     x
 }
 
-traditional2mirt <- function(x, cls, ncat, digits = 3){
+#' Convert traditional IRT metric into slope-intercept form used in mirt
+#'
+#' This is a helper function for users who have previously available traditional/classical
+#' IRT parameters and want to know the equivalent slope-intercept translation used in \code{mirt}.
+#' Note that this function assumes that the supplied models are unidimensional by definition (i.e.,
+#' will have only one slope/discrimination). If there is no supported slope-interecept transformation
+#' available then the original vector of parameters will be returned by default.
+#'
+#' Supported class transformations for the \code{cls} input are:
+#'
+#' \describe{
+#'   \item{Rasch, 2PL, 3PL, 3PLu, 4PL}{
+#'     Form must be: (discrimination, difficulty, lower-bound, upper-bound)
+#'     }
+#'   \item{graded}{
+#'     Form must be: (discrimination, difficulty 1, difficulty 2, ..., difficulty k-1)
+#'     }
+#'   \item{gpcm}{
+#'     Form must be: (discrimination, difficulty 1, difficulty 2, ..., difficulty k-1)
+#'     }
+#'   \item{nominal}{
+#'     Form must be: (discrimination 1, discrimination 2, ..., discrimination k,
+#'       difficulty 1, difficulty 2, ..., difficulty k)
+#'     }
+#' }
+#'
+#' @param x a vector of parameters to tranform
+#' @param cls the class or itemtype of the supplied model
+#' @param ncat the number of categories implied by the IRT model
+#'
+#' @return a named vector of slope-intercept parameters (if supported)
+#' @export
+#'
+#' @examples
+#'
+#' # classical 3PL model
+#' vec <- c(a=1.5, b=-1, g=.1, u=1)
+#' slopeint <- traditional2mirt(vec, '3PL', ncat=2)
+#' slopeint
+#'
+#' # classical graded model (four category)
+#' vec <- c(a=1.5, b1=-1, b2=0, b3=1.5)
+#' slopeint <- traditional2mirt(vec, 'graded', ncat=4)
+#' slopeint
+#'
+#' # classical generalize partial credit model (four category)
+#' vec <- c(a=1.5, b1=-1, b2=0, b3=1.5)
+#' slopeint <- traditional2mirt(vec, 'gpcm', ncat=4)
+#' slopeint
+#'
+#' # classical nominal model (4 category)
+#' vec <- c(a1=.5, a2 = -1, a3=1, a4=-.5, d1=1, d2=-1, d3=-.5, d4=.5)
+#' slopeint <- traditional2mirt(vec, 'nominal', ncat=4)
+#' slopeint
+#'
+#'
+traditional2mirt <- function(x, cls, ncat){
+    cls <- toInternalItemtype(cls)
     if(cls == 'dich'){
         par <- x
         par[2L] <- -par[2L]*par[1L]

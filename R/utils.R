@@ -1,5 +1,35 @@
-# theta combinations
-thetaComb <- function(theta, nfact)
+#' Create all possible combinations of vector input
+#'
+#' This function constructs all possible k-way combinations of an input vector.
+#' It is primarily useful when used in conjunction with the \code{\link{mdirt}} function,
+#' though users may have other uses for it as well. See \code{\link{expand.grid}} for more
+#' flexible combination formats.
+#'
+#' @param theta the vector from which all possible combinations should be obtained
+#' @param nfact the number of observations (and therefore the number of columns to return in
+#'   the matrix of combinations)
+#' @param intercept logical; should a vector of 1's be appended to the first column of the
+#'   result to include an intercept design component? Default is \code{FALSE}
+#'
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @return a matrix with all possible combinations
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#' @export
+#' @examples
+#'
+#' # all possible joint combinations for the vector -4 to 4
+#' thetaComb(-4:4, 2)
+#'
+#' # all possible binary combinations for four observations
+#' thetaComb(c(0,1), 4)
+#'
+#' # all possible binary combinations for four observations (with intercept)
+#' thetaComb(c(0,1), 4, intercept=TRUE)
+#'
+thetaComb <- function(theta, nfact, intercept = FALSE)
 {
 	if (nfact == 1L){
         Theta <- matrix(theta)
@@ -8,7 +38,9 @@ thetaComb <- function(theta, nfact)
         for(i in seq_len(nfact))
             thetalist[[i]] <- theta
         Theta <- as.matrix(expand.grid(thetalist))
-    }
+	}
+    if(intercept) Theta <- cbind(1, Theta)
+    colnames(Theta) <- NULL
 	return(Theta)
 }
 
@@ -1279,7 +1311,7 @@ maketabData <- function(stringfulldata, stringtabdata, group, groupNames, nitem,
         if(!is.null(survey.weights)){
             Freq <- mySapply(seq_len(nrow(tabdata)), function(x, std, tstd, w)
                 sum(w[stringtabdata[x] == tstd]), std=stringtabdata, tstd=tmpstringdata,
-                w=survey.weights)
+                w=survey.weights[group == groupNames[g]])
         } else {
             Freq[stringtabdata %in% tmpstringdata] <- as.integer(table(
                 match(tmpstringdata, stringtabdata)))
@@ -1322,7 +1354,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                      rsm.block = NULL, calcNull = FALSE, BFACTOR = FALSE,
                      technical = list(), hasCustomGroup = FALSE,
                      SE.type = 'Oakes', large = NULL, accelerate = 'Ramsay',
-                     optimizer = NULL, solnp_args = list(), nloptr_args = list(), ...)
+                     optimizer = NULL, solnp_args = list(), nloptr_args = list(),
+                     item.Q = NULL, ...)
 {
     opts <- list()
     tnames <- names(technical)
@@ -1377,9 +1410,10 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$rsm.block = rsm.block
     opts$calcNull = calcNull
     opts$customPriorFun = technical$customPriorFun
+    opts$item.Q = item.Q
     if(dentype == "empiricalhist") dentype <- 'EH'
     if(dentype == "empiricalhist_Woods") dentype <- 'EHW'
-    opts$dentype <- dentype
+    opts$dentype <- opts$odentype <- dentype
     opts$zeroExtreme <- FALSE
     if(!is.null(technical$zeroExtreme)) opts$zeroExtreme <- technical$zeroExtreme
     if(BFACTOR) opts$dentype <- 'bfactor'
@@ -1553,8 +1587,10 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     SEtmp <- diag(solve(info))
     if(any(SEtmp < 0)){
         if(warn)
-            warning("Negative SEs set to NaN.\n", call.=FALSE)
-        SEtmp[SEtmp < 0 ] <- NaN
+            warning('Could not invert information matrix; model likely is not empirically identified.',
+                    call.=FALSE)
+        ESTIMATE$fail_invert_info <- TRUE
+        return(ESTIMATE)
     }
     SEtmp <- sqrt(SEtmp)
     SE <- rep(NA, length(longpars))
@@ -1877,7 +1913,7 @@ mirt_rmvnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean
         NCOL <- ncol(sigma)
         if(check)
             if (!all(ev$values >= -sqrt(.Machine$double.eps) * abs(ev$values[1])))
-                warning("sigma is numerically not positive definite", call.=FALSE)
+                warning("sigma is numerically non-positive definite", call.=FALSE)
     } else {
         ev <- pre.ev
         NCOL <- length(ev$values)
@@ -2161,6 +2197,14 @@ latentRegression_obj <- function(data, covdata, formula, dentype, method){
     latent.regression
 }
 
+bs_range <- function(x, CI){
+    ss <- sort(x)
+    N <- length(ss)
+    ret <- c(lower = ss[floor(N * (1-CI)/2)],
+             upper = ss[ceiling(N * (1 - (1-CI)/2))])
+    ret
+}
+
 # borrowed and modified from emdbook package, March 1 2017
 mixX2 <- function (p, df = 1, mix = 0.5, lower.tail = TRUE)
 {
@@ -2227,6 +2271,13 @@ controlCandVar <- function(PA, cand, min = .1, max = .6){
     else if(PA < min) cand <- cand * 0.9
     if(cand < .001) cand <- .001
     cand
+}
+
+toInternalItemtype <- function(itemtype){
+    itemtype <- ifelse(itemtype %in% c('2PL', '3PL', '3PLu', '4PL'), 'dich', itemtype)
+    itemtype <- ifelse(itemtype %in% c('PC2PL', 'PC3PL'), 'partcomp', itemtype)
+    itemtype <- ifelse(itemtype %in% c("2PLNRM", "3PLNRM", "3PLuNRM", "4PLNRM"), 'nestlogit', itemtype)
+    itemtype
 }
 
 # function borrowed and edited from the sfsmisc package, v1.1-1. Date: 18, Oct, 2017

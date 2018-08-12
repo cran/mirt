@@ -1,8 +1,8 @@
 PrepData <- function(data, model, itemtype, guess, upper, gpcm_mats, opts,
                      parprior, verbose, technical, parnumber = 1, BFACTOR = FALSE,
                      grsm.block = NULL, rsm.block = NULL, mixed.design, customItems,
-                     customGroup, fulldata = NULL, key, spline_args, internal_constraints,
-                     monopoly.k, dentype, dcIRT_nphi)
+                     customGroup, customItemsData, fulldata = NULL, key,
+                     spline_args, internal_constraints, monopoly.k, dentype, dcIRT_nphi, item.Q)
 {
     if(is.null(grsm.block)) grsm.block <- rep(1, ncol(data))
     if(is.null(rsm.block)) rsm.block <- rep(1, ncol(data))
@@ -103,9 +103,10 @@ PrepData <- function(data, model, itemtype, guess, upper, gpcm_mats, opts,
                            itemloc=itemloc, data=data, N=N, guess=guess, upper=upper,
                            itemnames=itemnames, exploratory=exploratory, parprior=parprior,
                            parnumber=parnumber, BFACTOR=BFACTOR, mixed.design=mixed.design,
-                           customItems=customItems, customGroup=customGroup, key=key,
+                           customItems=customItems, customItemsData=customItemsData,
+                           customGroup=customGroup, key=key,
                            gpcm_mats=gpcm_mats, spline_args=spline_args, monopoly.k=monopoly.k,
-                           dcIRT_nphi=dcIRT_nphi, dentype=dentype)
+                           dcIRT_nphi=dcIRT_nphi, dentype=dentype, item.Q=item.Q)
     prodlist <- attr(pars, 'prodlist')
     exploratory <- attr(pars, 'exploratory')
     if(is(pars[[1L]], 'numeric') || is(pars[[1L]], 'logical')){
@@ -159,7 +160,7 @@ PrepData <- function(data, model, itemtype, guess, upper, gpcm_mats, opts,
         if(any(itemtype == 'rsm')){
             unique.rsmgroups <- unique(na.omit(rsm.block))
             for(group in unique.rsmgroups){
-                Kk <- unique(K[rsm.block[rsm.block == unique.rsmgroups[group]]])
+                Kk <- unique(K[rsm.block == unique.rsmgroups[group]])
                 if(length(Kk) > 1L) stop('Rating scale models require that items to have the
                                         same number of categories', call.=FALSE)
                 for(k in 1L:(Kk-1L)){
