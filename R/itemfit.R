@@ -8,7 +8,8 @@
 #' If the latent trait density was approximated (e.g., Davidian curves, Empirical histograms, etc)
 #' then passing \code{use_dentype_estimate = TRUE} will use the internally saved quadrature and
 #' density components (where applicable). Currently, only S-X2 statistic supported for
-#' mixture IRT models.
+#' mixture IRT models. Finally, where applicable the root mean-square error of approximation (RMSEA)
+#' is reported to help guage the magnitude of item misfit.
 #'
 #' @aliases itemfit
 #' @param x a computed model object of class \code{SingleGroupClass},
@@ -41,7 +42,7 @@
 #' }
 #'
 #' Note that 'infit', 'S_X2', and 'Zh' cannot be computed when there are missing response data
-#' (i.e., will require multiple-imputation techniques).
+#' (i.e., will require multiple-imputation/row-removal techniques).
 #'
 #' @param which.items an integer vector indicating which items to test for fit.
 #'   Default tests all possible items
@@ -72,6 +73,8 @@
 #' @param empirical.CI a numeric value indicating the width of the empirical confidence interval
 #'   ranging between 0 and 1 (default of 0 plots not interval). For example, a 95% confidence
 #'   interval would be plotted when \code{empirical.CI = .95}. Only applicable to dichotomous items
+#' @param empirical.poly.collapse logical; collapse polytomous item categories to for expected scoring
+#'   functions for empirical plots? Default is \code{FALSE}
 #' @param method type of factor score estimation method. See \code{\link{fscores}} for more detail
 #' @param na.rm logical; remove rows with any missing values? This is required for methods such
 #'   as S-X2 because they require the "EAPsum" method from \code{\link{fscores}}
@@ -161,9 +164,10 @@
 #'
 #' itemfit(x)
 #' itemfit(x, 'X2') # just X2
+#' itemfit(x, 'X2', method = 'ML') # X2 with maximum-likelihood estimates for traits
 #' itemfit(x, c('S_X2', 'X2')) #both S_X2 and X2
-#' itemfit(x, group.bins=15, empirical.plot = 1) #empirical item plot with 15 points
-#' itemfit(x, group.bins=15, empirical.plot = 21)
+#' itemfit(x, group.bins=15, empirical.plot = 1, method = 'ML') #empirical item plot with 15 points
+#' itemfit(x, group.bins=15, empirical.plot = 21, method = 'ML')
 #'
 #' # PV and X2* statistics (parametric bootstrap stats not run to save time)
 #' itemfit(x, 'PV_Q1')
@@ -180,9 +184,11 @@
 #' #infit/outfit statistics. method='ML' agrees better with eRm package
 #' itemfit(raschfit, 'infit', method = 'ML') #infit and outfit stats
 #'
-#' #same as above, but inputting ML estimates instead
+#' #same as above, but inputting ML estimates instead (saves time for re-use)
 #' Theta <- fscores(raschfit, method = 'ML')
 #' itemfit(raschfit, 'infit', Theta=Theta)
+#' itemfit(raschfit, empirical.plot=1, Theta=Theta)
+#' itemfit(raschfit, empirical.table=1, Theta=Theta)
 #'
 #' # fit a new more flexible model for the mis-fitting item
 #' itemtype <- c(rep('2PL', 20), 'spline')
@@ -203,12 +209,13 @@
 #' itemfit(mod)
 #' itemfit(mod, 'X2') #pretty much useless given inflated Type I error rates
 #' itemfit(mod, empirical.plot = 1)
+#' itemfit(mod, empirical.plot = 1, empirical.poly.collapse=TRUE)
 #'
 #' # collapsed tables (see mincell.X2) for X2 and G2
 #' itemfit(mod, empirical.table = 1)
 #'
 #' mod2 <- mirt(dat, 1, 'Rasch')
-#' itemfit(mod2, 'infit')
+#' itemfit(mod2, 'infit', method = 'ML')
 #'
 #' #massive list of tables
 #' tables <- itemfit(mod, S_X2.tables = TRUE)
@@ -218,8 +225,8 @@
 #' tables$E[[1]]
 #'
 #' # fit stats with missing data (run in parallel using all cores)
-#' data[sample(1:prod(dim(data)), 500)] <- NA
-#' raschfit <- mirt(data, 1, itemtype='Rasch')
+#' dat[sample(1:prod(dim(dat)), 100)] <- NA
+#' raschfit <- mirt(dat, 1, itemtype='Rasch')
 #'
 #' # use imputation if the proportion of missing data is relatively small
 #' mirtCluster() # run in parallel
@@ -229,9 +236,10 @@
 #' itemfit(raschfit, c('S_X2', 'infit'), na.rm = TRUE)
 #'
 #' # note that X2, G2, PV-Q1, and X2* do not require complete datasets
-#' itemfit(raschfit, c('X2', 'G2'))
-#' itemfit(raschfit, empirical.plot=1)
-#' itemfit(raschfit, empirical.table=1)
+#' thetas <- fscores(raschfit, method = 'ML') # save scores for faster computations
+#' itemfit(raschfit, c('X2', 'G2'), Theta=thetas)
+#' itemfit(raschfit, empirical.plot=1, Theta=thetas)
+#' itemfit(raschfit, empirical.table=1, Theta=thetas)
 #'
 #'}
 #'
@@ -241,7 +249,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                     pv_draws = 30, boot = 1000, boot_dfapprox = 200,
                     ETrange = c(-2,2), ETpoints = 11,
                     empirical.plot = NULL, empirical.CI = .95, empirical.table = NULL,
-                    method = 'EAP', Theta = NULL, impute = 0,
+                    empirical.poly.collapse = FALSE, method = 'EAP', Theta = NULL, impute = 0,
                     par.strip.text = list(cex = 0.7),
                     par.settings = list(strip.background = list(col = '#9ECAE1'),
                                         strip.border = list(col = "black")), ...){
@@ -268,9 +276,10 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         }
         Q1_m <- rowMeans(Q1)
         df.X2_m <- rowMeans(df.X2)
+        RMSEA.X2_m <- rmsea(Q1_m, df.X2_m, N=nrow(pv[[1L]]))
         p.Q1 <- pchisq(Q1_m, df.X2_m, lower.tail = FALSE)
         p.Q1 <- ifelse(df.X2_m == 0, NaN, p.Q1)
-        ret <- data.frame(PV_Q1=Q1_m, df.PV_Q1=df.X2_m, p.PV_Q1=p.Q1)
+        ret <- data.frame(PV_Q1=Q1_m, df.PV_Q1=df.X2_m, RMSEA.PV_Q1=RMSEA.X2_m, p.PV_Q1=p.Q1)
         ret
     }
     boot_PV <- function(mod, org, is_NA, which.items = 1:extract.mirt(mod, 'nitems'),
@@ -370,6 +379,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                 df[i] <- upsilon[i] - sum(item@est)
             }
             ret <- data.frame(X2_star_scaled=org/gamma, df.X2_star_scaled=df,
+                              RMSEA.X2_star_scaled=rmsea(org/gamma, df, N=N),
                               p.X2_star_scaled=pchisq(org/gamma, df, lower.tail=FALSE))
         } else {
             p <- apply(t(X2bs) > org, 1, mean)
@@ -674,6 +684,22 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
             empirical.plot_P <- ProbTrace(pars[[empirical.plot]], ThetaFull)
             empirical.plot_points <- empirical.plot_points[,-2]
             colnames(empirical.plot_points) <- c('theta', paste0('p.', 1:K))
+            if(empirical.poly.collapse){
+                score <- 1L:ncol(P) - 1L
+                plt1 <- data.frame(ThetaFull, colSums(t(empirical.plot_P) * score))
+                plt2 <- data.frame(empirical.plot_points[,1], colSums(t(empirical.plot_points[,-1]) * score))
+                colnames(plt1) <- colnames(plt2) <- c('Theta', "E")
+                return(xyplot(E~Theta, plt1,
+                              main = paste('Empirical plot for item', empirical.plot),
+                              xlab = expression(theta), ylab=expression(E(theta)),
+                              panel = function(x, y, subscripts, ...){
+                                  panel.xyplot(x=x, y=y, type='l',
+                                               subscripts=subscripts, ...)
+                                  panel.points(cbind(plt2$Theta[subscripts], plt2$E[subscripts]),
+                                               col='black', ...)
+                              },
+                              par.strip.text=par.strip.text, par.settings=par.settings, ...))
+            }
             while(nrow(empirical.plot_points) < nrow(empirical.plot_P))
                 empirical.plot_points <- rbind(empirical.plot_points,
                                                rep(NA, length(empirical.plot_points[1,])))
@@ -706,6 +732,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         if(X2){
             ret$X2 <- X2.value[which.items]
             ret$df.X2 <- df.X2[which.items]
+            ret$RMSEA.X2 <- rmsea(ret$X2, ret$df.X2, N=nrow(fulldata))
             ret$p.X2 <- suppressWarnings(pchisq(ret$X2, ret$df.X2, lower.tail=FALSE))
             ret$df.X2[ret$df.X2 <= 0] <- 0
             ret$p.X2[ret$df.X2 <= 0] <- NaN
@@ -713,6 +740,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         if(G2){
             ret$G2 <- G2.value[which.items]
             ret$df.G2 <- df.G2[which.items]
+            ret$RMSEA.G2 <- rmsea(ret$G2, ret$df.G2, N=nrow(fulldata))
             ret$p.G2 <- suppressWarnings(pchisq(ret$G2, ret$df.G2, lower.tail=FALSE))
             ret$df.G2[ret$df.G2 <= 0] <- 0
             ret$p.G2[ret$df.G2 <= 0] <- NaN
@@ -764,6 +792,7 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         S_X2[df.S_X2 == 0] <- NaN
         ret$S_X2 <- S_X2[which.items]
         ret$df.S_X2 <- df.S_X2[which.items]
+        ret$RMSEA.S_X2 <- rmsea(ret$S_X2, ret$df.S_X2, N=nrow(dat))
         ret$p.S_X2 <- suppressWarnings(pchisq(ret$S_X2, ret$df.S_X2, lower.tail=FALSE))
     }
     itemtype <- extract.mirt(x, 'itemtype')

@@ -28,6 +28,9 @@
 #'   when using sequential schemes)
 #' @param return_models logical; return estimated model objects for further analysis?
 #'   Default is FALSE
+#' @param simplify logical; simplify the output by returning a data.frame object with
+#'   the differences between AIC, BIC, etc, as well as the chi-squared test (X2) and associated
+#'   df and p-values
 #' @param scheme type of DIF analysis to perform, either by adding or dropping constraints across
 #'   groups. These can be:
 #' \describe{
@@ -50,10 +53,12 @@
 #'     stops when no more items showing DIF are found and returns the items that displayed DIF}
 #' }
 #' @param seq_stat select a statistic to test for in the sequential schemes. Potential values are
-#'   (in descending order of power) \code{'AIC'}, \code{'AICc'}, \code{'SABIC'}, and \code{'BIC'}.
+#'   (in descending order of power) \code{'AIC'}, \code{'AICc'}, \code{'SABIC'}, \code{'HQ'}, and \code{'BIC'}.
 #'   If a numeric value is input that ranges between 0 and 1, the 'p' value will be tested
 #'   (e.g., \code{seq_stat = .05} will test for the difference of p < .05 in the add scheme,
-#'   or p > .05 in the drop scheme), along with the specified \code{p.adjust} input
+#'   or p > .05 in the drop scheme), along with the specified \code{p.adjust} input.
+#'   For models fitted with prior distributions \code{'DIC'} is also supported, though for these models
+#'   the p-value approach is not
 #' @param max_run a number indicating the maximum number of cycles to perform in sequential
 #'   searches. The default is to perform search until no further DIF is found
 #' @param plotdif logical; create item plots for items that are displaying DIF according to the
@@ -106,22 +111,28 @@
 #'      # but instead reflects a combination of DIF + latent-trait distribution effects
 #' model <- multipleGroup(dat, 1, group, SE = TRUE)
 #'
+#' # Likelihood-ratio test for DIF (as well as model information)
+#' DIF(model, c('a1', 'd'))
+#' DIF(model, c('a1', 'd'), simplify=FALSE) # return list output
+#'
+#' #same as above, but using Wald tests with Benjamini & Hochberg adjustment
+#' DIF(model, c('a1', 'd'), Wald = TRUE, p.adjust = 'fdr')
+#'
+#' # equate the groups by assuming the first 10 items have no DIF
+#' itemnames <- colnames(dat)
+#' model <- multipleGroup(dat, 1, group, SE = TRUE,
+#'    invariance = c(itemnames[1:10], 'free_means', 'free_var'))
+#'
 #' #test whether adding slopes and intercepts constraints results in DIF. Plot items showing DIF
 #' resulta1d <- DIF(model, c('a1', 'd'), plotdif = TRUE)
 #' resulta1d
 #'
-#' #same as above, but using Wald tests with Benjamini & Hochberg adjustment
-#' resulta1dWald <- DIF(model, c('a1', 'd'), Wald = TRUE, p.adjust = 'fdr')
-#' resulta1dWald
-#' round(resulta1dWald$adj_pvals, 4)
-#'
 #' #test whether adding only slope constraints results in DIF for all items
-#' resulta1 <- DIF(model, 'a1')
-#' resulta1
+#' DIF(model, 'a1')
 #'
-#' #following up on resulta1d, to determine whether it's a1 or d parameter causing DIF
-#' (a1s <- DIF(model, 'a1', items2test = 1:3))
-#' (ds <- DIF(model, 'd', items2test = 1:3))
+#' #Determine whether it's a1 or d parameter causing DIF (could be joint, however)
+#' (a1s <- DIF(model, 'a1', items2test = 11:13))
+#' (ds <- DIF(model, 'd', items2test = 11:13))
 #'
 #' ####
 #' # using items 4 to 15 as anchors to test for DIF after adjusting for latent-trait differences
@@ -145,13 +156,14 @@
 #' stepup
 #'
 #' #step down procedure for highly constrained model
-#' model <- multipleGroup(dat, 1, group, invariance = itemnames)
+#' model <- multipleGroup(dat, 1, group,
+#'   invariance = c(itemnames, 'free_means', 'free_var'))
 #' stepdown <- DIF(model, c('a1', 'd'), scheme = 'drop_sequential')
 #' stepdown
 #' }
 DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(MGmodel, 'nitems'),
                 seq_stat = 'SABIC', Wald = FALSE, p.adjust = 'none', return_models = FALSE,
-                max_run = Inf, plotdif = FALSE, type = 'trace', verbose = TRUE, ...){
+                max_run = Inf, plotdif = FALSE, type = 'trace', simplify = TRUE, verbose = TRUE, ...){
 
     loop_test <- function(item, model, which.par, values, Wald, itemnames, invariance, drop,
                           return_models, ...)
@@ -204,6 +216,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
     if(missing(which.par)) missingMsg('which.par')
     if(!is(MGmodel, 'MultipleGroupClass'))
         stop('Input model must be fitted by multipleGroup()', call.=FALSE)
+    aov <- anova(MGmodel)
+    has_priors <- !is.null(aov$DIC)
+    if(has_priors && is.numeric(seq_stat))
+        stop('p-value seq_stat for models fitted with Bayesian priors in not meaningful. Please select alternative',
+             call.=FALSE)
 
     if(!any(sapply(MGmodel@ParObjects$pars, function(x, pick) x@ParObjects$pars[[pick]]@est,
                    pick = MGmodel@Data$nitems + 1L)))
@@ -231,7 +248,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
     if(is.numeric(seq_stat)){
         pval <- seq_stat
         seq_stat <- 'p'
-    } else if(!any(seq_stat %in% c('p', 'AIC', 'AICc', 'SABIC', 'BIC'))){
+    } else if(!any(seq_stat %in% c('p', 'AIC', 'AICc', 'SABIC', 'BIC', 'DIC'))){
         stop('Invalid seq_stat input', call.=FALSE)
     }
     if(is.character(items2test)) items2test <- which(items2test %in% itemnames)
@@ -350,11 +367,15 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                     statdiff <- do.call(c, lapply(res, function(x, stat){
                         if(stat == 'p') return(x[2L, 'p'])
                         return(x[1L, stat] - x[2L, stat])
-                    }, stat = 'p'))
+                    }, stat = seq_stat))
                 }
             }
-            statdiff <- p.adjust(statdiff, p.adjust)
-            keep <- statdiff > pval
+            if(seq_stat == 'p' || Wald){
+                statdiff <- p.adjust(statdiff, p.adjust)
+                keep <- statdiff > pval
+            } else {
+                keep <- !(statdiff < 0 & !sapply(statdiff, closeEnough, low=-1e-4, up=1e-4))
+            }
         }
         which.item <- which(!keep)
         if(length(which.item)){
@@ -362,6 +383,29 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
         } else {
             message('No DIF items were detected for plotting.')
         }
+    }
+    pick <- names(res)
+    pick <- pick[pick != 'adj_pvals']
+    if(Wald && !return_models){
+        adj_pvals <- res$adj_pvals
+        res <- do.call(rbind, res[pick])
+        res$adj_pvals <- adj_pvals
+        class(res) <- c('mirt_df', 'data.frame')
+        return(res)
+    }
+    if(simplify && !return_models){
+        adj_pvals <- res$adj_pvals
+        out <- lapply(res[pick], function(x){
+             r <- x[2L, ] - x[1L, ]
+             if(!has_priors)
+                r[,c("X2", 'df', 'p')] <- x[2L, c("X2", 'df', 'p')]
+             else r[,c('df', 'Bayes_Factor')] <- x[2L, c('df', 'Bayes_Factor')]
+             r$logLik <- NULL
+             r
+         })
+         res <- do.call(rbind, out)
+         if(!has_priors) res$adj_pvals <- adj_pvals
+         class(res) <- c('mirt_df', 'data.frame')
     }
     return(res)
 }

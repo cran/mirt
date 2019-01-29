@@ -235,7 +235,8 @@ RcppExport SEXP buildXi2els(SEXP Rdim1, SEXP Rdim2, SEXP Rnitems, SEXP REIs,
 }
 
 RcppExport SEXP buildXi2els_C2(SEXP Rdim1, SEXP Rdim2, SEXP Rnitems0, 
-	SEXP Rnitems, SEXP RPIs, SEXP REIs, SEXP REIs2, SEXP RPrior)
+	SEXP Rnitems, SEXP RPIs, SEXP REIs, SEXP REIs2, SEXP RPrior, 
+	SEXP Rabcats, SEXP Rabcats2)
 {
     BEGIN_RCPP
     const int dim1 = as<int>(Rdim1);
@@ -246,6 +247,8 @@ RcppExport SEXP buildXi2els_C2(SEXP Rdim1, SEXP Rdim2, SEXP Rnitems0,
     const NumericMatrix EIs(REIs);
     const NumericMatrix EIs2(REIs2);
     const vector<double> Prior = as< vector<double> >(RPrior);
+    const vector<int> abcats = as< vector<int> >(Rabcats);
+    const vector<int> abcats2 = as< vector<int> >(Rabcats2);
     const int N = EIs.nrow();
     NumericMatrix Xi11(dim1, dim1);
     NumericMatrix Xi12(dim1, dim2);
@@ -259,9 +262,10 @@ RcppExport SEXP buildXi2els_C2(SEXP Rdim1, SEXP Rdim2, SEXP Rnitems0,
                     pa += PIs(n,i) * Prior[n];
                     pb += PIs(n,j) * Prior[n];
                 }
-                if(i == j){
-                    for(int n = 0; n < N; ++n)
-                        pab += PIs(n,i) * Prior[n];
+                if(abcats[i] == abcats[j]){
+                	if(abcats2[i] == abcats2[j])
+	                    for(int n = 0; n < N; ++n)
+	                        pab += PIs(n,i) * Prior[n];
                 } else {
                     for(int n = 0; n < N; ++n)
                 		pab += PIs(n,i) * PIs(n,j) * Prior[n];
@@ -280,13 +284,13 @@ RcppExport SEXP buildXi2els_C2(SEXP Rdim1, SEXP Rdim2, SEXP Rnitems0,
                     for(int n = 0; n < N; ++n){
                         pab += EIs(n,i) * EIs(n,j) * Prior[n];
                         pc += PIs(n,k) * Prior[n];
-                    } 
-                    if(i == k){
-                        for(int n = 0; n < N; ++n)
-                            pabc += EIs2(n,i) * EIs(n,j) * Prior[n];
-                    } else if(j == k){
-                        for(int n = 0; n < N; ++n)
-                            pabc += EIs(n,i) * EIs2(n,j) * Prior[n];
+                    }
+                    if(i == abcats[k]){ 
+	                    for(int n = 0; n < N; ++n)
+	                    	pabc += abcats2[k] * PIs(n,k) * EIs(n,j) * Prior[n];
+                    } else if(j == abcats[k]){
+	                    for(int n = 0; n < N; ++n)
+	                        pabc += abcats2[k] * PIs(n,k) * EIs(n,i) * Prior[n];
                     } else {
                         for(int n = 0; n < N; ++n)
                     		pabc += EIs(n,i) * EIs(n,j) * PIs(n,k) * Prior[n];

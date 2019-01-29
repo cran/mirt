@@ -50,8 +50,8 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
 #' Cai, L. & Hansen, M. (2013). Limited-information goodness-of-fit testing of
-#' hierarchical item factor models. British Journal of Mathematical and Statistical
-#' Psychology, 66, 245-276.
+#' hierarchical item factor models. \emph{British Journal of Mathematical and Statistical
+#' Psychology, 66}, 245-276.
 #'
 #' Cai, L. & Monro, S. (2014). \emph{A new statistic for evaluating item response theory
 #' models for ordinal data}. National Center for Research on Evaluation, Standards,
@@ -62,7 +62,7 @@
 #' \doi{10.18637/jss.v048.i06}
 #'
 #' Maydeu-Olivares, A. & Joe, H. (2006). Limited information goodness-of-fit testing in
-#' multidimensional contingency tables Psychometrika, 71, 713-732.
+#' multidimensional contingency tables. \emph{Psychometrika, 71}, 713-732.
 #' @keywords model fit
 #' @export M2
 #' @examples
@@ -175,14 +175,12 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
             ind <- 1L
             for(i in seq_len(nitems)){
                 x <- extract.item(obj, i)
+                scs <- 1L:x@ncat - 1L
                 EIs[,i] <- expected.item(x, Theta, min=0L)
-                tmp <- ProbTrace(x, Theta)
-                E11s[,i] <- colSums((1L:ncol(tmp)-1L)^2 * t(tmp))
-                for(j in ncol(tmp):2L)
-                    tmp[,j-1L] <- tmp[,j] + tmp[,j-1L]
-                cfs <- c(0,1)
-                if(K[i] > 2L) cfs <- c(cfs, 2:(ncol(tmp)-1L) * 2 - 1)
-                EIs2[,i] <- t(cfs %*% t(tmp))
+                prob <- ProbTrace(x, Theta)
+                E11s[,i] <- colSums((1L:ncol(prob)-1L)^2 * t(prob))
+                cfs <- scs * scs
+                EIs2[,i] <- t(cfs %*% t(prob))
                 tmp <- length(x@parnum)
                 DP[ ,ind:(ind+tmp-1L)] <- dP(x, Theta)
                 ind <- ind + tmp
@@ -200,7 +198,7 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
                 }
             }
             e <- c(E1, E2[lower.tri(E2)])
-            if(all(sapply(obj@ParObjects$pars, class) %in% c('dich', 'graded', 'gpcm', 'GroupPars'))){
+            if(all(sapply(obj@ParObjects$pars, class) %in% c(ordinal_itemtypes(), 'GroupPars'))){
                 E2[is.na(E2)] <- 0
                 E2 <- E2 + t(E2)
                 diag(E2) <- E11
@@ -245,15 +243,13 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
             ind <- pind <- 1L
             for(i in seq_len(nitems)){
                 x <- extract.item(obj, i)
+                scs <- 1L:x@ncat - 1L
                 EIs[,i] <- expected.item(x, Theta, min=0L)
-                tmp <- ProbTrace(x, Theta)
-                PIs[,pind:(pind+ncol(tmp)-2L)] <- tmp[,-1L]
-                E11s[,i] <- colSums((1L:ncol(tmp)-1L)^2 * t(tmp))
-                for(j in ncol(tmp):2L)
-                    tmp[,j-1L] <- tmp[,j] + tmp[,j-1L]
-                cfs <- c(0,1)
-                if(K[i] > 2L) cfs <- c(cfs, 2:(ncol(tmp)-1L) * 2 - 1)
-                EIs2[,i] <- t(cfs %*% t(tmp))
+                prob <- ProbTrace(x, Theta)
+                PIs[,pind:(pind+ncol(prob)-2L)] <- prob[,-1L]
+                E11s[,i] <- colSums((1L:ncol(prob)-1L)^2 * t(prob))
+                cfs <- scs * scs
+                EIs2[,i] <- t(cfs %*% t(prob))
                 tmp <- length(x@parnum)
                 DP[ ,ind:(ind+tmp-1L)] <- dP(x, Theta)
                 pind <- pind + K[i] - 1L
@@ -273,7 +269,7 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
             }
             P1 <- colSums(PIs * Prior)
             e <- c(P1, E2[lower.tri(E2)])
-            if(all(sapply(obj@ParObjects$pars, class) %in% c('dich', 'graded', 'gpcm', 'GroupPars'))){
+            if(all(sapply(obj@ParObjects$pars, class) %in% c(ordinal_itemtypes(), 'GroupPars'))){
                 E2[is.na(E2)] <- 0
                 E2 <- E2 + t(E2)
                 diag(E2) <- E11
@@ -310,9 +306,12 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
             # M2 TODO
         }
         delta <- rbind(delta1, delta2)
+        abcats <- do.call(c, lapply(1:nitems, function(x) rep(x, each=K[x]-1))) - 1L
+        abcats2 <- do.call(c, lapply(K, function(x) 2L:x - 1L))
         Xi2els <- if(type == "M2*"){
             .Call('buildXi2els', nrow(delta1), nrow(delta2), nitems, EIs, EIs2, Prior)
-        } else .Call('buildXi2els_C2', nrow(delta1), nrow(delta2), ncol(PIs), nitems, PIs, EIs, EIs2, Prior)
+        } else .Call('buildXi2els_C2', nrow(delta1), nrow(delta2), ncol(PIs), nitems,
+                     PIs, EIs, EIs2, Prior, abcats, abcats2)
         Xi2 <- rbind(cbind(Xi2els$Xi11, Xi2els$Xi12), cbind(t(Xi2els$Xi12), Xi2els$Xi22))
         ret <- list(Xi2=Xi2, delta=delta, estpars=estpars, p=sqrt(N)*p, e=sqrt(N)*e, SRMSR=SRMSR)
         ret
@@ -321,11 +320,9 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
     #main
     if(residmat) type <- "M2*"
     stopifnot(type %in% c('M2*', 'M2', 'C2'))
-    if(type == "M2"){
-        type <- "M2*"
+    if(type == "M2")
         if(!all(extract.mirt(obj, 'K') == 2L))
-            warning("M2 statistic currently not supported for polytomous data. Using M2* or C2 instead", call.=FALSE)
-    }
+            stop("M2 statistic currently not supported for polytomous data. Use M2* or C2 instead", call.=FALSE)
     if(missing(obj)) missingMsg('obj')
     if(is(obj, 'MixedClass'))
         stop('MixedClass objects are not yet supported', call.=FALSE)
@@ -336,6 +333,7 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
             stop('Fit statistics cannot be computed when there are missing data. Either pass a suitable
                  impute argument to compute statistics following multiple data imputations,
                  or remove cases row-wise by passing na.rm=TRUE', call.=FALSE)
+        if(residmat) stop('residmat not supported when imputing data')
         if(sum(is.na(obj@Data$data))/length(obj@Data$data) > .1)
             warning('Imputing too much data can lead to very conservative results. Use with caution.',
                     call.=FALSE)
@@ -455,7 +453,7 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, na.rm=FALSE, quadpts = NULL, th
                                          key=obj@Internals$key))
         if(is(null.mod, 'try-error'))
             stop('Null model did not converge or is not supported', call.=FALSE)
-        null.fit <- M2(null.mod, calcNull=FALSE, type=type)
+        null.fit <- M2(null.mod, calcNull=FALSE, type=type, quadpts=2)
         newret$TLI <- tli(X2=newret$M2, X2.null=null.fit$M2, df=newret$df,
                           df.null=null.fit$df)
         newret$CFI <- cfi(X2=newret$M2, X2.null=null.fit$M2, df=newret$df,
