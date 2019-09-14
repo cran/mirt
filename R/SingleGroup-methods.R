@@ -60,12 +60,14 @@ setMethod(
                "EHW" = 'Empirical histogram (scaled)',
                x@Options$dentype)
         cat('Latent density type:', dentype, '\n')
-        if(!is.na(x@OptimInfo$condnum)){
+        if(!is.na(x@OptimInfo$secondordertest)){
             cat("\nInformation matrix estimated with method:", x@Options$SE.type)
-            cat("\nCondition number of information matrix = ", x@OptimInfo$condnum,
-                '\nSecond-order test: model ', if(!x@OptimInfo$secondordertest)
-                    'is not a maximum, or the information matrix is too inaccurate' else
-                        'is a possible local maximum', '\n', sep = "")
+            cat('\nSecond-order test: model ', if(!x@OptimInfo$secondordertest)
+                'is not a maximum or the information matrix is too inaccurate' else
+                    'is a possible local maximum', sep = "")
+            if(x@OptimInfo$secondordertest)
+                cat("\nCondition number of information matrix = ", x@OptimInfo$condnum)
+            cat('\n')
         }
         if(length(x@Fit$logLik) > 0){
             if(x@Fit$logPrior != 0){
@@ -385,6 +387,7 @@ setMethod(
                 if(object@ParObjects$pars[[J+1L]]@dentype == "Davidian"){
                     covs <- matrix(NA, nfact, nfact)
                     covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[2L]
+                    covs[upper.tri(covs, FALSE)] <- covs[lower.tri(covs, FALSE)]
                     colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[seq_len(nfact)]
                     allPars <- list(items=items, means=means, cov=covs,
                                     Davidian_phis=allPars$GroupPars[-c(1:2)])
@@ -393,6 +396,7 @@ setMethod(
                     if(object@ParObjects$pars[[J+1L]]@dentype == "mixture")
                         covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-c(seq_len(nfact), length(allPars$GroupPars))]
                     else covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-seq_len(nfact)]
+                    covs[upper.tri(covs, FALSE)] <- covs[lower.tri(covs, FALSE)]
                     colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[seq_len(nfact)]
                     allPars <- list(items=items, means=means, cov=covs)
                 }
@@ -558,7 +562,9 @@ setMethod(
 #' @param type type of residuals to be displayed.
 #'   Can be either \code{'LD'} or \code{'LDG2'} for a local dependence matrix based on the
 #'   X2 or G2 statistics (Chen & Thissen, 1997), \code{'Q3'} for the statistic proposed by
-#'   Yen (1984), or \code{'exp'} for the expected values for the frequencies of every response pattern.
+#'   Yen (1984), \code{'JSI'} for the jack-knife statistic proposed Edwards et al. (2018),
+#'   \code{'exp'} for the expected values for the frequencies of every response pattern,
+#'   and \code{'expfull'} for the expected values for every theoretically observable response pattern.
 #'   For the 'LD' and 'LDG2' types, the upper diagonal elements represent the standardized
 #'   residuals in the form of signed Cramers V coefficients
 #' @param tables logical; for LD type, return the observed, expected, and standardized residual
@@ -574,6 +580,7 @@ setMethod(
 #'   If supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
 #'   be used instead
 #' @param theta_lim range for the integration grid
+#' @param fold logical; apply the sum 'folding' described by Edwards et al. (2018) for the JSI statistic?
 #' @param quadpts number of quadrature nodes to use. The default is extracted from model (if available)
 #'   or generated automatically if not available
 #' @param QMC logical; use quasi-Monte Carlo integration? If \code{quadpts} is omitted the
@@ -596,6 +603,10 @@ setMethod(
 #' Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 #' response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
 #'
+#' Edwards, M. C., Houts, C. R. & Cai, L. (2018). A Diagnostic Procedure to Detect Departures
+#' From Local Independence in Item Response Theory Models.
+#' \emph{Psychological Methods, 23}, 138-149.
+#'
 #' Yen, W. (1984). Effects of local item dependence on the fit and equating performance of the three
 #' parameter logistic model. \emph{Applied Psychological Measurement, 8}, 125-145.
 #' @examples
@@ -609,6 +620,25 @@ setMethod(
 #' residuals(x, suppress = .15)
 #' residuals(x, df.p = TRUE)
 #'
+#' # Pearson's X2 estimate for goodness-of-fit
+#' full_table <- residuals(x, type = 'expfull')
+#' head(full_table)
+#' X2 <- with(full_table, sum((freq - exp)^2 / exp))
+#' df <- nrow(full_table) - extract.mirt(x, 'nest') - 1
+#' p <- pchisq(X2, df = df, lower.tail=FALSE)
+#' data.frame(X2, df, p, row.names='Pearson-X2')
+#'
+#' # above FOG test as a function
+#' PearsonX2 <- function(x){
+#'    full_table <- residuals(x, type = 'expfull')
+#'    X2 <- with(full_table, sum((freq - exp)^2 / exp))
+#'    df <- nrow(full_table) - extract.mirt(x, 'nest') - 1
+#'    p <- pchisq(X2, df = df, lower.tail=FALSE)
+#'    data.frame(X2, df, p, row.names='Pearson-X2')
+#' }
+#' PearsonX2(x)
+#'
+#'
 #' # extract results manually
 #' out <- residuals(x, df.p = TRUE, verbose=FALSE)
 #' str(out)
@@ -619,13 +649,35 @@ setMethod(
 #' residuals(x, type = 'Q3', Theta=Theta)
 #' residuals(x, type = 'Q3', method = 'ML')
 #'
+#' # Edwards et al. (2018) JSI statistic
+#' N <- 250
+#' a <- rnorm(10, 1.7, 0.3)
+#' d <- rnorm(10)
+#' dat <- simdata(a, d, N=250, itemtype = '2PL')
+#'
+#' mod <- mirt(dat, 1)
+#' residuals(mod, type = 'JSI')
+#' residuals(mod, type = 'JSI', fold=FALSE) # unfolded
+#'
+#' # LD between items 1-2
+#' aLD <- numeric(10)
+#' aLD[1:2] <- rnorm(2, 2.55, 0.15)
+#' a2 <- cbind(a, aLD)
+#' dat <- simdata(a2, d, N=250, itemtype = '2PL')
+#'
+#' mod <- mirt(dat, 1)
+#'
+#' # JSI executed in parallel over multiple cores
+#' mirtCluster()
+#' residuals(mod, type = 'JSI')
+#'
 #' }
 setMethod(
     f = "residuals",
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, type = 'LD', df.p = FALSE, full.scores = FALSE, QMC = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
-                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, ...)
+                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE, ...)
     {
         dots <- list(...)
         if(.hasSlot(object@Model$lrPars, 'beta'))
@@ -770,6 +822,47 @@ setMethod(
                 class(tabdata) <- c('mirt_df', 'data.frame')
                 return(tabdata)
             }
+        } else if(type == 'expfull'){
+            K <- extract.mirt(object, 'K')
+            nitems <- length(K)
+            resp <- vector('list', nitems)
+            for(i in seq_len(nitems))
+                resp[[i]] <- 0L:(K[i]-1L)
+            tabdata <- expand.grid(resp)
+            rownames(tabdata) <- NULL
+            tabdata <- t(t(tabdata) + extract.mirt(object, 'mins'))
+            colnames(tabdata) <- colnames(extract.mirt(object, 'data'))
+            sv <- mod2values(object)
+            itemtype <- extract.mirt(object, 'itemtype')
+            nfact <- extract.mirt(object, 'nfact')
+            tmpdat <- matrix(0, nrow=2, ncol=nitems)
+            colnames(tmpdat) <- colnames(tabdata)
+            large <- mirt(tmpdat, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large=TRUE,
+                                      technical = list(customK=K))
+            large$tabdata <- poly2dich(tabdata)
+            large$Freq$all <- rep(1L, nrow(tabdata))
+            large$tabdata2 <- matrix(1L)
+            full_object <- mirt(tabdata, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large=large)
+            Pl <- full_object@Internals$Pl
+            r <- integer(length(Pl))
+            ro <- object@Data$Freq[[1L]]
+            N <- sum(ro)
+            for(i in seq_len(length(ro))){
+                pick <- colSums(t(tabdata) == object@Data$tabdata[i,]) == ncol(tabdata)
+                r[pick] <- ro[i]
+            }
+            res <- (r - Pl * N) / sqrt(Pl * N)
+            expected <- N * Pl
+            tabdata <- data.frame(tabdata,r,expected,res)
+            colnames(tabdata) <- c(colnames(object@Data$data),"freq","exp","res")
+            tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
+            rownames(tabdata) <- 1:length(r)
+            if(!is.null(printvalue)){
+                if(!is.numeric(printvalue)) stop('printvalue is not a number.', call.=FALSE)
+                tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
+            }
+            class(tabdata) <- c('mirt_df', 'data.frame')
+            return(tabdata)
         } else if(type == 'Q3'){
             if(discrete && !use_dentype_estimate)
                 stop('residual type not supported for discrete density forms', call.=FALSE)
@@ -797,6 +890,30 @@ setMethod(
             class(res) <- c('mirt_matrix', 'matrix')
             if(verbose) print(res, ...)
             return(invisible(res))
+        } else if(type == 'JSI'){
+            nfact <- extract.mirt(object, 'nfact')
+            stopifnot(nfact == 1L)
+            nitems <- extract.mirt(object, 'nitems')
+            as_drop <- myLapply(seq_len(nitems), function(item, mod, ...){
+                itemtype <- extract.mirt(mod, 'itemtype')[-item]
+                tmpdat <- extract.mirt(mod, 'data')[,-item]
+                tmpmod <- mirt(tmpdat, 1L, itemtype=itemtype, SE=TRUE, verbose=FALSE, ...)
+                ret <- sapply(coef(tmpmod, printSE=TRUE)[1:ncol(tmpdat)], function(x) x[1L:2L, 'a1'])
+                ret
+            }, mod=object, ...)
+            as <- sapply(coef(object)[1:nitems], function(x) x[1L, 'a1'])
+            retmat <- matrix(NA, nitems, nitems)
+            colnames(retmat) <- rownames(retmat) <- extract.mirt(object, 'itemnames')
+            for(i in seq_len(nitems)){
+                tmp <- as_drop[[i]]
+                pick <- colnames(tmp)
+                zs <- (as[pick] - tmp[1L, ]) / tmp[2L, ]
+                retmat[i, pick] <- zs
+            }
+            if(fold) retmat <- retmat + t(retmat)
+            class(retmat) <- c('mirt_matrix', 'matrix')
+            retmat
+
         } else {
             stop('specified type does not exist', call.=FALSE)
         }

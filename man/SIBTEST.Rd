@@ -6,8 +6,9 @@
 \usage{
 SIBTEST(dat, group, suspect_set, match_set,
   focal_name = unique(group)[2], guess_correction = 0, Jmin = 5,
-  na.rm = FALSE, pk_focal = FALSE, correction = TRUE,
-  details = FALSE)
+  na.rm = FALSE, LiStout1996 = FALSE, permute = 1000,
+  pk_focal = FALSE, correction = TRUE, details = FALSE,
+  plot = "none", ...)
 }
 \arguments{
 \item{dat}{integer-based dataset to be tested, containing dichotomous or polytomous responses}
@@ -38,6 +39,12 @@ reference groups conditioned on the matched set}
 rows with missing data will be removed, as well as the corresponding elements in the \code{group}
 input}
 
+\item{LiStout1996}{logical; perform the crossing test for non-compensatory bias
+using Li and Stout's (1996) permutation approach? Default is \code{FALSE}, which uses the
+Chalmers (2018) mixed degrees of freedom method}
+
+\item{permute}{number of permutations to perform when \code{LiStout1996 = TRUE}. Default is 1000}
+
 \item{pk_focal}{logical; using the group weights from the focal group instead of the total
 sample? Default is FALSE as per Shealy and Stout's recommendation}
 
@@ -46,6 +53,16 @@ composite scores using the true-score regression technique? Default is \code{TRU
 reflecting Shealy and Stout's linear extrapolation method}
 
 \item{details}{logical; return a data.frame containing the details required to compute SIBTEST?}
+
+\item{plot}{a character input indicating the type of plot to construct. Options are \code{'none'}
+(default), \code{'observed'} for the scaled focal subtest scores against the matched subtest
+scores, \code{'weights'} for the proportion weights used (i.e., the proportion of observations at
+each matched score), \code{'difference'} for the difference between the scaled focal subtest scores
+against the matched subtest scores, and \code{'wdifference'} for the conditional differences multiplied
+by each respective weight. Note that the last plot reflects the compnents used in SIBTEST, and therefore
+the sum of these plotted observations will equal the beta coefficient for SIBTEST}
+
+\item{...}{additional plotting arguments to be passed}
 }
 \description{
 Classical test theory approach to detecting unidirectional and bidirectional (with one
@@ -60,8 +77,8 @@ differences when the latent trait distributions are not equal.
 Function supports the standard SIBTEST for dichotomous and polytomous data (compensatory) and
 supports crossing DIF testing (i.e., non-compensatory/non-uniform) using the asymptotic sampling
 distribution version of the Crossing-SIBTEST (CSIBTEST) statistic described by
-Chalmers (2018). For convenience, the beta coefficient for CSIBTEST is always reported as an
-absolute value.
+Chalmers (2018) and the permutation method described by Li and Stout (1996).
+For convenience, the beta coefficient for CSIBTEST is always reported as an absolute value.
 }
 \examples{
 
@@ -80,17 +97,26 @@ dat1 <- simdata(a, d, N, itemtype = 'dich')
 dat2 <- simdata(a, d, N*2, itemtype = 'dich')
 dat <- rbind(dat1, dat2)
 
-#DIF (all other items as anchors)
+# DIF (all other items as anchors)
 SIBTEST(dat, group, suspect_set = 6)
 
-#DIF (specific anchors)
+# Some plots depicting the above tests
+SIBTEST(dat, group, suspect_set = 6, plot = 'observed')
+SIBTEST(dat, group, suspect_set = 6, plot = 'weights')
+SIBTEST(dat, group, suspect_set = 6, plot = 'wdifference')
+
+# Include CSIBTEST with randomization method
+SIBTEST(dat, group, suspect_set = 6, LiStout1996 = TRUE)
+
+# DIF (specific anchors)
 SIBTEST(dat, group, match_set = 1:5, suspect_set = 6)
+SIBTEST(dat, group, match_set = 1:5, suspect_set = 6, LiStout1996=TRUE)
 
 # DBF (all and specific anchors, respectively)
 SIBTEST(dat, group, suspect_set = 11:30)
 SIBTEST(dat, group, match_set = 1:5, suspect_set = 11:30)
 
-#DTF
+# DTF
 SIBTEST(dat, group, suspect_set = 11:30)
 SIBTEST(dat, group, match_set = 1:10) #equivalent
 
@@ -101,12 +127,12 @@ dat <- rbind(dat1, dat2)
 SIBTEST(dat, group, 6:30)
 SIBTEST(dat, group, 11:30)
 
-#DIF testing with anchors 1 through 5
+# DIF testing with anchors 1 through 5
 SIBTEST(dat, group, 6, match_set = 1:5)
 SIBTEST(dat, group, 7, match_set = 1:5)
 SIBTEST(dat, group, 8, match_set = 1:5)
 
-#DIF testing with all other items as anchors
+# DIF testing with all other items as anchors
 SIBTEST(dat, group, 6)
 SIBTEST(dat, group, 7)
 SIBTEST(dat, group, 8)
@@ -120,10 +146,19 @@ dat <- rbind(dat1, dat2)
 SIBTEST(dat, group, 6:30)
 SIBTEST(dat, group, 11:30)
 
-#DIF testing using valid anchors
+# Some plots depicting the above tests
+SIBTEST(dat, group, suspect_set = 11:30, plot = 'observed')
+SIBTEST(dat, group, suspect_set = 11:30, plot = 'weights')
+SIBTEST(dat, group, suspect_set = 11:30, plot = 'wdifference')
+
+# DIF testing using valid anchors
 SIBTEST(dat, group, suspect_set = 6, match_set = 1:5)
 SIBTEST(dat, group, suspect_set = 7, match_set = 1:5)
 SIBTEST(dat, group, suspect_set = 30, match_set = 1:5)
+
+# randomization method is fairly poor when smaller matched-set used
+SIBTEST(dat, group, suspect_set = 30, match_set = 1:5, LiStout1996=TRUE)
+SIBTEST(dat, group, suspect_set = 30, LiStout1996=TRUE)
 
 }
 }
@@ -149,5 +184,4 @@ Shealy, R. & Stout, W. (1993). A model-based standardization approach that separ
 Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }
 \keyword{SIBTEST}
-\keyword{SIBTEST,}
-\keyword{crossing}
+\keyword{crossing-SIBTEST}

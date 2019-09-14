@@ -1,3 +1,37 @@
+# Changes in mirt 1.31
+
+- added `likert2int()` to convert Likert-type character/factor responses to integert data
+
+- `estfun()` gains a `centering` argument to center the scores (contributed by Rudolf Debelak)
+
+- `impute` argument in `itemfit()` and `M2()` have been deprecated in favour of removing data
+  row-wise via `na.rm=TRUE`
+
+- Acceptance ratio when using MH samplers now retuned prior to 'Stage 2' during estimation so that 
+  these ratios are better behaved. As well, an heuristic improved method for increasing/decreasing
+  the acceptance ratios is now implemented
+
+- Added `return_seq_model` to  `DIF()` to return the final MG model on the last iteration of the
+  sequential search schemes
+
+- Bugfix in `DIF()` when sequential scheme was selected but no items contained DIF on the first
+  iteration (reported by Scott Withrow)
+
+- `SIBTEST()` gains a `plot` argument to create various plots depicting the (weighted) differences 
+  between the focal subtest versus the matched subtest information
+
+- `residuals()` gains a `'JSI'` type to compute the JSI statistics proposed 
+  by Edwards et al. (2018)
+
+- `residuals()` gains an `'expfull'` type to compute an expected value table for 
+  all possible response patterns (not just those observed in the data)
+  
+- Fix for `key` variable for nested-logit models when data are collapsed to have equal intervals 
+  (reported by Emil Kirkegaard)
+  
+- Added delta method for IRT parameter transformations when using multiple-group models 
+  (reported by Alex Miller)
+
 # Changes in mirt 1.30
 
 - `empirical.poly.collapse` argument added to `itemfit()` to plot expected score functions for polytomous

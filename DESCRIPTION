@@ -1,9 +1,10 @@
 Package: mirt
-Version: 1.30
+Version: 1.31
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", family="Chalmers", email =
-    "rphilip.chalmers@gmail.com", role = c("aut", "cre", "cph")),
+                     "rphilip.chalmers@gmail.com", role = c("aut", "cre"), 
+                     comment = c(ORCID="0000-0001-5332-2810")),
     person("Joshua", family="Pritikin", role=c('ctb')),
     person("Alexander", family="Robitzsch", role=c('ctb')),
     person("Mateusz", family="Zoltak", role=c('ctb')),
@@ -44,8 +45,8 @@ URL: https://github.com/philchalmers/mirt,
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
 RoxygenNote: 6.1.1
 NeedsCompilation: yes
-Packaged: 2019-01-29 03:53:22 UTC; phil
-Author: Phil Chalmers [aut, cre, cph],
+Packaged: 2019-09-14 03:15:46 UTC; phil
+Author: Phil Chalmers [aut, cre] (<https://orcid.org/0000-0001-5332-2810>),
   Joshua Pritikin [ctb],
   Alexander Robitzsch [ctb],
   Mateusz Zoltak [ctb],
@@ -56,4 +57,4 @@ Author: Phil Chalmers [aut, cre, cph],
   David King [ctb],
   Chen-Wei Liu [ctb],
   Ogreden Oguzhan [ctb]
-Date/Publication: 2019-01-29 09:10:03 UTC
+Date/Publication: 2019-09-15 00:10:12 UTC

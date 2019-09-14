@@ -11,8 +11,8 @@
 #' Function supports the standard SIBTEST for dichotomous and polytomous data (compensatory) and
 #' supports crossing DIF testing (i.e., non-compensatory/non-uniform) using the asymptotic sampling
 #' distribution version of the Crossing-SIBTEST (CSIBTEST) statistic described by
-#' Chalmers (2018). For convenience, the beta coefficient for CSIBTEST is always reported as an
-#' absolute value.
+#' Chalmers (2018) and the permutation method described by Li and Stout (1996).
+#' For convenience, the beta coefficient for CSIBTEST is always reported as an absolute value.
 #'
 #' @param dat integer-based dataset to be tested, containing dichotomous or polytomous responses
 #' @param group a vector indicating group membership with the same length as the number of rows in
@@ -32,6 +32,10 @@
 #' @param na.rm logical; remove rows in \code{dat} with any missing values? If \code{TRUE},
 #'   rows with missing data will be removed, as well as the corresponding elements in the \code{group}
 #'   input
+#' @param LiStout1996 logical; perform the crossing test for non-compensatory bias
+#'   using Li and Stout's (1996) permutation approach? Default is \code{FALSE}, which uses the
+#'   Chalmers (2018) mixed degrees of freedom method
+#' @param permute number of permutations to perform when \code{LiStout1996 = TRUE}. Default is 1000
 #' @param Jmin the minimum number of observations required when splitting the data into focal and
 #'   reference groups conditioned on the matched set
 #' @param pk_focal logical; using the group weights from the focal group instead of the total
@@ -40,9 +44,17 @@
 #'   composite scores using the true-score regression technique? Default is \code{TRUE},
 #'   reflecting Shealy and Stout's linear extrapolation method
 #' @param details logical; return a data.frame containing the details required to compute SIBTEST?
+#' @param plot a character input indicating the type of plot to construct. Options are \code{'none'}
+#'   (default), \code{'observed'} for the scaled focal subtest scores against the matched subtest
+#'   scores, \code{'weights'} for the proportion weights used (i.e., the proportion of observations at
+#'   each matched score), \code{'difference'} for the difference between the scaled focal subtest scores
+#'   against the matched subtest scores, and \code{'wdifference'} for the conditional differences multiplied
+#'   by each respective weight. Note that the last plot reflects the compnents used in SIBTEST, and therefore
+#'   the sum of these plotted observations will equal the beta coefficient for SIBTEST
+#' @param ... additional plotting arguments to be passed
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
-#' @keywords SIBTEST, crossing SIBTEST
+#' @keywords SIBTEST crossing-SIBTEST
 #' @aliases SIBTEST
 #' @export SIBTEST
 #'
@@ -82,17 +94,26 @@
 #' dat2 <- simdata(a, d, N*2, itemtype = 'dich')
 #' dat <- rbind(dat1, dat2)
 #'
-#' #DIF (all other items as anchors)
+#' # DIF (all other items as anchors)
 #' SIBTEST(dat, group, suspect_set = 6)
 #'
-#' #DIF (specific anchors)
+#' # Some plots depicting the above tests
+#' SIBTEST(dat, group, suspect_set = 6, plot = 'observed')
+#' SIBTEST(dat, group, suspect_set = 6, plot = 'weights')
+#' SIBTEST(dat, group, suspect_set = 6, plot = 'wdifference')
+#'
+#' # Include CSIBTEST with randomization method
+#' SIBTEST(dat, group, suspect_set = 6, LiStout1996 = TRUE)
+#'
+#' # DIF (specific anchors)
 #' SIBTEST(dat, group, match_set = 1:5, suspect_set = 6)
+#' SIBTEST(dat, group, match_set = 1:5, suspect_set = 6, LiStout1996=TRUE)
 #'
 #' # DBF (all and specific anchors, respectively)
 #' SIBTEST(dat, group, suspect_set = 11:30)
 #' SIBTEST(dat, group, match_set = 1:5, suspect_set = 11:30)
 #'
-#' #DTF
+#' # DTF
 #' SIBTEST(dat, group, suspect_set = 11:30)
 #' SIBTEST(dat, group, match_set = 1:10) #equivalent
 #'
@@ -103,12 +124,12 @@
 #' SIBTEST(dat, group, 6:30)
 #' SIBTEST(dat, group, 11:30)
 #'
-#' #DIF testing with anchors 1 through 5
+#' # DIF testing with anchors 1 through 5
 #' SIBTEST(dat, group, 6, match_set = 1:5)
 #' SIBTEST(dat, group, 7, match_set = 1:5)
 #' SIBTEST(dat, group, 8, match_set = 1:5)
 #'
-#' #DIF testing with all other items as anchors
+#' # DIF testing with all other items as anchors
 #' SIBTEST(dat, group, 6)
 #' SIBTEST(dat, group, 7)
 #' SIBTEST(dat, group, 8)
@@ -122,15 +143,25 @@
 #' SIBTEST(dat, group, 6:30)
 #' SIBTEST(dat, group, 11:30)
 #'
-#' #DIF testing using valid anchors
+#' # Some plots depicting the above tests
+#' SIBTEST(dat, group, suspect_set = 11:30, plot = 'observed')
+#' SIBTEST(dat, group, suspect_set = 11:30, plot = 'weights')
+#' SIBTEST(dat, group, suspect_set = 11:30, plot = 'wdifference')
+#'
+#' # DIF testing using valid anchors
 #' SIBTEST(dat, group, suspect_set = 6, match_set = 1:5)
 #' SIBTEST(dat, group, suspect_set = 7, match_set = 1:5)
 #' SIBTEST(dat, group, suspect_set = 30, match_set = 1:5)
 #'
+#' # randomization method is fairly poor when smaller matched-set used
+#' SIBTEST(dat, group, suspect_set = 30, match_set = 1:5, LiStout1996=TRUE)
+#' SIBTEST(dat, group, suspect_set = 30, LiStout1996=TRUE)
+#'
 #' }
 SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(group)[2],
-                    guess_correction = 0, Jmin = 5, na.rm = FALSE,
-                    pk_focal = FALSE, correction = TRUE, details = FALSE){
+                    guess_correction = 0, Jmin = 5, na.rm = FALSE, LiStout1996 = FALSE,
+                    permute = 1000, pk_focal = FALSE, correction = TRUE, details = FALSE,
+                    plot = 'none', ...){
 
     CA <- function(dat, guess_correction = rep(0, ncol(dat))){
         n <- ncol(dat)
@@ -154,6 +185,22 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
         cfs <- coef(mod)
         ks <- -cfs[1L]/cfs[2L]
         scores > signif(ks, 1L)
+    }
+    find_intersectionNA <- function(diff, weight, use, scores){
+        k <- scores[use]
+        diff <- diff[use]
+        weight <- weight[use]
+        mod <- lm(diff ~ k, weights = weight)
+        cfs <- coef(mod)
+        ks <- -cfs[1L]/cfs[2L]
+        ret <- scores > signif(ks, 1L)
+        pick <- which(ret)
+        if(length(pick)){
+            ret[min(pick)] <- NA
+        } else {
+            ret[length(ret)] <- NA
+        }
+        ret
     }
 
     if(na.rm){
@@ -278,12 +325,48 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
     if(sigma2 > 0) df <- df + 1L else sigma2 <- NA
     X2_cross <- sum((beta1/sigma1)^2, (beta2/sigma2)^2, na.rm = TRUE)
     p_cross <- pchisq(X2_cross, df, lower.tail = FALSE)
+    B_vec <- numeric(permute)
+    sigma_cross <- NA
     ret <- data.frame(focal_group=focal_name, n_matched_set=length(match_set),
                       n_suspect_set = length(suspect_set),
                       beta = c(beta_uni, beta_cross), SE=c(sigma_uni, NA),
                       X2=c(X2_uni, X2_cross),
                       df=c(1, df), p = c(p_uni, p_cross))
     rownames(ret) <- c('SIBTEST', 'CSIBTEST')
+    if(LiStout1996){
+        crossvec <- find_intersectionNA(ystar_ref_vec - ystar_focal_vec, pmax(tab_ref, tab_focal),
+                                        use = pmax(tab_ref, tab_focal)/N > .01, scores=scores)
+        beta_cross2 <- 0
+        for(kk in seq_len(length(tab_scores))){
+            if(!II[kk] || is.na(crossvec[kk])) next
+            if(!crossvec[kk]) beta_cross2 <- beta_cross2 + pkstar[kk] * (ystar_ref_vec[kk] - ystar_focal_vec[kk])
+            else beta_cross2 <- beta_cross2 + pkstar[kk] * (ystar_focal_vec[kk] - ystar_ref_vec[kk])
+        }
+        sigma_cross <- sqrt(sum((pkstar^2 * (sigma_focal/tab_focal + sigma_ref/tab_ref))[!is.na(crossvec)],
+                              na.rm = TRUE))
+        beta_cross2 <- abs(beta_cross2)
+        B <- abs(beta_cross2/sigma_cross)
+        for(p in 1L:permute){
+            diff <- sample(c(-1,1), length(ystar_ref_vec), replace = TRUE) *
+                (ystar_ref_vec - ystar_focal_vec)
+            crossvec <- find_intersectionNA(diff, pmax(tab_ref, tab_focal),
+                                          use = pmax(tab_ref, tab_focal)/N > .01, scores=scores)
+            beta <- 0
+            for(kk in 1L:length(tab_scores)){
+                if(!II[kk] || is.na(crossvec[kk])) next
+                if(!crossvec[kk]) beta <- beta + pkstar[kk] * (diff[kk])
+                else beta <- beta + pkstar[kk] * (-diff[kk])
+            }
+            B_vec[p] <- beta/sigma_cross
+        }
+        p_cross2 <- mean(abs(B_vec) >= B)
+        ret <- rbind(ret, data.frame(focal_group=focal_name, n_matched_set=length(match_set),
+                                     n_suspect_set = length(suspect_set),
+                                     beta = beta_cross2, SE=sigma_cross,
+                                     X2=B^2,
+                                     df=NA, p = p_cross2))
+        rownames(ret) <- c('SIBTEST', 'CSIBTEST', 'CSIBTEST_randomized')
+    }
     class(ret) <- c('mirt_df', 'data.frame')
     if(details){
         ret <- data.frame(pkstar=unname(as.numeric(pkstar)),
@@ -291,6 +374,39 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
                           Y_focal=Ybar_focal, Y_ref=Ybar_ref,
                           Ystar_focal=ystar_focal_vec, Ystar_ref=ystar_ref_vec,
                           row.names = names(pkstar))
+        if(LiStout1996) attr(ret, "B_vec") <- B_vec
+    }
+    if(plot != 'none'){
+        ret <- data.frame(total_score = 1:length(pkstar) - 1,
+                          pkstar=unname(as.numeric(pkstar)),
+                          Ystar=c(ystar_focal_vec, ystar_ref_vec),
+                          Ystar_diff =ystar_focal_vec - ystar_ref_vec,
+                          Ystar_diff_pkstar =unname((ystar_focal_vec - ystar_ref_vec)*as.numeric(pkstar)),
+                          group = rep(c('focal', 'reference'), each=length(pkstar)))
+        if(plot != "freq")
+            for(i in 1L:nrow(ret))
+                if(ret$pkstar[i] == 0) ret[i, ] <- NA
+        if(plot == "observed")
+            return(lattice::xyplot(Ystar ~ total_score, data=ret, groups = group, xlab='Matched subtest',
+                                   ylab = 'Scaled focal subtest', auto.key=list(space='right'), ...))
+        if(plot == "weights")
+            return(lattice::xyplot(pkstar~total_score, data=subset(ret, group=='focal'),
+                                   xlab='Matched subtest', ylab = 'Proportion', type = 'b', ...))
+        if(plot == "difference")
+            return(lattice::xyplot(Ystar_diff~total_score, data=subset(ret, group=='focal'),
+                                   xlab='Matched subtest', ylab = 'Focal subtest difference',
+                                   panel = function(x, y, ...){
+                                       panel.xyplot(x, y, ...)
+                                       panel.abline(h=0, lty=2, col='red')
+                                   }, ...))
+        if(plot == "wdifference")
+            return(lattice::xyplot(Ystar_diff_pkstar~total_score, data=subset(ret, group=='focal'),
+                                   xlab='Matched subtest', ylab = 'Weighted focal subtest difference',
+                                   panel = function(x, y, ...){
+                                       panel.xyplot(x, y, ...)
+                                       panel.abline(h=0, lty=2, col='red')
+                                   }, ...))
+        stop('plot argument not supported', call.=FALSE)
     }
     ret
 }
