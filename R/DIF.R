@@ -147,7 +147,7 @@
 #' dropdown <- DIF(model_constrained, c('a1', 'd'), scheme = 'drop')
 #' dropdown
 #'
-#' ### sequential schemes
+#' ### sequential schemes (add constraints)
 #'
 #' ### sequential searches using SABIC as the selection criteria
 #' # starting from completely different models
@@ -171,9 +171,10 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 simplify = TRUE, verbose = TRUE, ...){
 
     loop_test <- function(item, model, which.par, values, Wald, itemnames, invariance, drop,
-                          return_models, ...)
+                          return_models, technical = list(), ...)
     {
         constrain <- model@Model$constrain
+        technical$omp <- FALSE
         parnum <- list()
         for(i in seq_len(length(which.par)))
             parnum[[i]] <- values$parnum[values$name == which.par[i] &
@@ -210,7 +211,8 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
         }
         newmodel <- multipleGroup(model@Data$data, model@Model$model, group=model@Data$group,
                                   invariance = invariance, constrain=constrain, pars=sv,
-                                  itemtype = model@Model$itemtype, verbose=FALSE, ...)
+                                  itemtype = model@Model$itemtype, verbose=FALSE, technical=technical,
+                                  ...)
         aov <- anova(newmodel, model, verbose = FALSE)
         attr(aov, 'parnum') <- parnum
         if(return_models) aov <- newmodel
@@ -280,15 +282,22 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 }, stat = seq_stat))
             if(seq_stat == 'p'){
                 statdiff <- p.adjust(statdiff, p.adjust)
-                if(scheme == 'drop_sequential')
-                    keep <- statdiff < pval
-                else keep <- statdiff > pval
+                keep <- statdiff > pval
             } else {
-                if(scheme == 'drop_sequential')
-                    keep <- statdiff > 0
-                else keep <- statdiff < 0
+                keep <- statdiff < 0
             }
-            if(run_number == 2L && all(!keep)){
+            if(run_number == 2L && (all(!keep) || all(keep))){
+                if(verbose)
+                    message('sequential scheme not required; all/no items contain DIF on first iteration')
+                if(return_seq_model) return(MGmodel)
+                if(scheme == 'add_sequential'){
+                    scheme <- 'add'
+                    if(all(!keep)) break
+                }
+                if(scheme == 'drop_sequential'){
+                    scheme <- 'drop'
+                    if(all(!keep)) break
+                }
                 ret <- data.frame()
                 class(ret) <- c('mirt_df', 'data.frame')
                 return(ret)
@@ -298,7 +307,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 lastkeep <- keep | lastkeep
             } else lastkeep <- keep
             if(verbose)
-                cat(sprintf('\rChecking for DIF in %d more items', sum(!keep)))
+                cat(sprintf('\rChecking for DIF in %d more items', if(drop) sum(keep) else sum(!keep)))
             if(ifelse(drop, sum(keep), sum(!keep)) == 0) break
             constrain <- updatedModel@Model$constrain
             for(j in seq_len(length(keep))){
@@ -336,16 +345,18 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             if(run_number == max_run) break
             run_number <- run_number + 1L
         }
-        if(verbose)
+
+        if(verbose && !(scheme %in% c('add', 'drop')))
             cat('\nComputing final DIF estimates...\n')
         pick <- !lastkeep
-        if(drop) pick <- !pick
         if(return_seq_model) return(updatedModel)
-        res <- myLapply(X=items2test[pick], FUN=loop_test, model=updatedModel,
-                        which.par=which.par, values=values, Wald=Wald, drop=drop,
-                        itemnames=itemnames, invariance=invariance, return_models=return_models,
-                        ...)
-        names(res) <- itemnames[items2test][pick]
+        if(!(scheme %in% c('add', 'drop'))){ # will equal 'add/drop' if all items on first loop have DIF
+            res <- myLapply(X=items2test[pick], FUN=loop_test, model=updatedModel,
+                            which.par=which.par, values=values, Wald=Wald, drop=FALSE,
+                            itemnames=itemnames, invariance=invariance, return_models=return_models,
+                            ...)
+            names(res) <- itemnames[items2test][pick]
+        }
     }
 
     for(i in seq_len(length(res)))

@@ -5,16 +5,43 @@
 \title{Full-Information Item Factor Analysis (Multidimensional Item Response
 Theory)}
 \usage{
-mirt(data, model, itemtype = NULL, guess = 0, upper = 1,
-  SE = FALSE, covdata = NULL, formula = NULL, SE.type = "Oakes",
-  method = "EM", optimizer = NULL, dentype = "Gaussian",
-  pars = NULL, constrain = NULL, parprior = NULL, calcNull = FALSE,
-  draws = 5000, survey.weights = NULL, quadpts = NULL, TOL = NULL,
-  gpcm_mats = list(), grsm.block = NULL, rsm.block = NULL,
-  monopoly.k = 1L, key = NULL, large = FALSE,
-  GenRandomPars = FALSE, accelerate = "Ramsay", verbose = TRUE,
-  solnp_args = list(), nloptr_args = list(), spline_args = list(),
-  control = list(), technical = list(), ...)
+mirt(
+  data,
+  model,
+  itemtype = NULL,
+  guess = 0,
+  upper = 1,
+  SE = FALSE,
+  covdata = NULL,
+  formula = NULL,
+  SE.type = "Oakes",
+  method = "EM",
+  optimizer = NULL,
+  dentype = "Gaussian",
+  pars = NULL,
+  constrain = NULL,
+  parprior = NULL,
+  calcNull = FALSE,
+  draws = 5000,
+  survey.weights = NULL,
+  quadpts = NULL,
+  TOL = NULL,
+  gpcm_mats = list(),
+  grsm.block = NULL,
+  rsm.block = NULL,
+  monopoly.k = 1L,
+  key = NULL,
+  large = FALSE,
+  GenRandomPars = FALSE,
+  accelerate = "Ramsay",
+  verbose = TRUE,
+  solnp_args = list(),
+  nloptr_args = list(),
+  spline_args = list(),
+  control = list(),
+  technical = list(),
+  ...
+)
 }
 \arguments{
 \item{data}{a \code{matrix} or \code{data.frame} that consists of
@@ -260,16 +287,23 @@ corresponds to \code{monopoly.k * 2 + 1} (e.g., \code{monopoly.k = 2} fits a
 types, and must be the same length as the number of items used. Items that are not nested logit
 will ignore this vector, so use \code{NA} in item locations that are not applicable}
 
-\item{large}{either a \code{logical}, indicating whether the internal collapsed data should
-  be returned, or a \code{list} of internally computed data tables. If \code{TRUE} is passed,
-  a list containing  the organized tables is returned. This list object can then be passed back
-  into \code{large} to avoid reorganizing the data again (useful when the dataset are very large
-  and computing the tabulated data is computationally burdensome).
+\item{large}{a \code{logical} indicating whether unique response patterns should be obtained prior
+  to performing the estimation so as to avoid repeating computations on identical patterns.
+  The default \code{TRUE} provides the correct degrees of freedom for the model since all unique patterns
+  are tallied (typically only affects goodness of fit statistics such as G2, but also will influence
+  nested model comparison methods such as \code{anova(mod1, mod2)}), while \code{FALSE} will use the
+  number of rows in \code{data} as a placeholder for the total degrees of freedom. As such, model
+  objects should only be compared if all flags were set to \code{TRUE} or all were set to \code{FALSE}
 
-  The best strategy for large data is to always pass the internal data to the estimation
-  function, shown below:
+  Alternatively, if the collapse table of frequencies is desired for the purpose of saving computations
+  (i.e., only computing the collapsed frequencies for the data onte-time) then a character vector can
+  be passed with the arguement \code{large = 'return'} to return a list of all the desired
+  table information used by \code{mirt}. This list object can then be reused by passing it back
+  into the \code{large} argument to avoid re-tallying the data again
+  (again, useful when the dataset are very large and computing the tabulated data is
+  computationally burdensome). This strategy is shown below:
   \describe{
-  \item{Compute organized data}{e.g., \code{internaldat <- mirt(Science, 1, large = TRUE)}}
+  \item{Compute organized data}{e.g., \code{internaldat <- mirt(Science, 1, large = 'return')}}
   \item{Pass the organized data to all estimation functions}{e.g.,
   \code{mod <- mirt(Science, 1, large = internaldat)}}
 }}
@@ -376,7 +410,7 @@ control input)}
     draws at 500 and increases by 2 after each full EM iteration}
   \item{info_if_converged}{logical; compute the information matrix when using the MH-RM algorithm
     only if the model converged within a suitable number of iterations? Default is \code{TRUE}}
-  \item{loglik_if_converged}{logical; compute the observed log-likelihood when using the MH-RM algorithm
+  \item{logLik_if_converged}{logical; compute the observed log-likelihood when using the MH-RM algorithm
     only if the model converged within a suitable number of iterations? Default is \code{TRUE}}
   \item{keep_vcov_PD}{logical; attempt to keep the variance-covariance matrix of the latent traits
     positive definite during estimation in the EM algorithm? This generally improves the convergence
@@ -532,8 +566,8 @@ These are:
 \section{IRT Models}{
 
 
-The parameter labels use the follow convention, here using two factors and \eqn{k} as the number
-of categories.
+The parameter labels use the follow convention, here using two factors and \eqn{K} as the total
+number of categories (using \eqn{k} for specific category instances).
 
 \describe{
   \item{Rasch}{
@@ -548,9 +582,9 @@ of categories.
       1 + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d))}}
   }
   \item{graded}{
-    The graded model consists of sequential 2PL models, and here \eqn{k} is
-    the predicted category.
+    The graded model consists of sequential 2PL models,
     \deqn{P(x = k | \theta, \psi) = P(x \ge k | \theta, \phi) - P(x \ge k + 1 | \theta, \phi)}
+    Note that \eqn{P(x \ge 1 | \theta, \phi) = 1} while \eqn{P(x \ge K + 1 | \theta, \phi) = 0}
   }
   \item{grsm and grsmIRT}{
     A more constrained version of the graded model where graded spacing is equal across item
@@ -566,14 +600,14 @@ of categories.
     with the form of other IRT models in \code{mirt}
   }
   \item{gpcm/nominal}{For the gpcm the \eqn{d} values are treated as fixed and ordered values
-    from 0:(k-1) (in the nominal model \eqn{d_0} is also set to 0). Additionally, for
-    identification in the nominal model \eqn{ak_0 = 0}, \eqn{ak_{(k-1)} = (k - 1)}.
+    from \eqn{0:(K-1)} (in the nominal model \eqn{d_0} is also set to 0). Additionally, for
+    identification in the nominal model \eqn{ak_0 = 0}, \eqn{ak_{(K-1)} = (K - 1)}.
     \deqn{P(x = k | \theta, \psi) =
     \frac{exp(ak_{k-1} * (a_1 * \theta_1 + a_2 * \theta_2) + d_{k-1})}
-    {\sum_1^k exp(ak_{k-1} * (a_1 * \theta_1 + a_2 * \theta_2) + d_{k-1})}}
+    {\sum_{k=1}^K exp(ak_{k-1} * (a_1 * \theta_1 + a_2 * \theta_2) + d_{k-1})}}
 
     For the partial credit model (when \code{itemtype = 'Rasch'}; unidimensional only) the above
-    model is further constrained so that \eqn{ak = (0,1,\ldots, k-1)}, \eqn{a_1 = 1}, and the
+    model is further constrained so that \eqn{ak = (0,1,\ldots, K-1)}, \eqn{a_1 = 1}, and the
     latent variance of \eqn{\theta_1} is freely estimated. Alternatively, the partial credit model
     can be obtained by containing all the slope parameters in the gpcms to be equal.
     More specific scoring function may be included by passing a suitable list or matrices
@@ -591,7 +625,7 @@ of categories.
     NOTE: The nominal model can become numerical unstable if poor choices for the high and low
     values are chosen, resulting in \code{ak} values greater than \code{abs(10)} or more. It is
     recommended to choose high and low anchors that cause the estimated parameters to fall
-    between 0 and the number of categories - 1 either by theoretical means or by re-estimating
+    between 0 and \eqn{K - 1} either by theoretical means or by re-estimating
     the model with better values following convergence.
   }
    \item{gpcmIRT and rsm}{
@@ -599,7 +633,7 @@ of categories.
      data. It will obtain the same fit as the \code{gpcm} presented above, however the parameterization
      allows for the Rasch/generalized rating scale model as a special case.
 
-     E.g., for a 4 category response model,
+     E.g., for a K = 4 category response model,
 
      \deqn{P(x = 0 | \theta, \psi) = exp(1) / G}
      \deqn{P(x = 1 | \theta, \psi) = exp(1 + a(\theta - b1) + c) / G}
@@ -607,7 +641,7 @@ of categories.
      \deqn{P(x = 3 | \theta, \psi) = exp(1 + a(3\theta - b1 - b2 - b3) + 3c) / G}
      where
      \deqn{G = exp(1) + exp(1 + a(\theta - b1) + c) + exp(1 + a(2\theta - b1 - b2) + 2c) +
-       a(3\theta - b1 - b2 - b3) + 3c)}
+       exp(1 + a(3\theta - b1 - b2 - b3) + 3c)}
      Here \eqn{a} is the slope parameter, the \eqn{b} parameters are the threshold
      values for each adjacent category, and \eqn{c} is the so-called difficulty parameter when
      a rating scale model is fitted (otherwise, \eqn{c = 0} and it drops out of the computations).
@@ -680,7 +714,7 @@ of categories.
   \item{monopoly}{Monotone polynomial model for polytomous response data of the form
     \deqn{P(x = k | \theta, \psi) =
     \frac{exp(\sum_1^k (m^*(\psi) + \xi_{c-1})}
-    {\sum_1^C exp(\sum_1^k (m^*(\psi) + \xi_{c-1}))}}
+    {\sum_1^C exp(\sum_1^K (m^*(\psi) + \xi_{c-1}))}}
     where \eqn{m^*(\psi)} is the monotone polynomial function without the intercept.
     }
 }

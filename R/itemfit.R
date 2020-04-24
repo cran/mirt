@@ -37,8 +37,7 @@
 #'     bootstrapping
 #'   \item \code{'X2*_df'} : Stone's (2000) fit statistics that require parametric
 #'     bootstrapping to obtain scaled versions of the X2* and degrees of freedom
-#'   \item \code{'infit'} : (Unidimensional Rasch model only) compute the
-#'     infit and outfit statistics. Ignored if models are not from the Rasch family
+#'   \item \code{'infit'} : Compute the infit and outfit statistics
 #' }
 #'
 #' Note that 'infit', 'S_X2', and 'Zh' cannot be computed when there are missing response data
@@ -283,12 +282,14 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                         itemtype, boot = 1000, draws = 30, verbose = FALSE, ...){
         pb_fun <- function(ind, mod, N, sv, which.items, draws, itemtype, ...){
             count <- 0L
+            K <- extract.mirt(mod, 'K')
             while(TRUE){
                 count <- count + 1L
                 if(count == 20)
                     stop('20 consecutive parametric bootstraps failed for PV_Q1*', call.=FALSE)
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
+                if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
                 mod2 <- mirt(dat, model, itemtype=itemtype,
                              verbose=FALSE, pars=sv, technical=list(warn=FALSE))
                 if(!extract.mirt(mod2, 'converged')) next
@@ -317,11 +318,13 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         X2star <- function(mod, which.items, ETrange, ETpoints, itemtype, ...){
             sv <- mod2values(mod)
             sv$est <- FALSE
-            Theta <- matrix(seq(ETrange[1L], ETrange[2L], length.out=ETpoints))
+            nfact <- extract.mirt(mod, 'nfact')
+            Theta <- thetaComb(seq(ETrange[1L], ETrange[2L], length.out=ETpoints),
+                               nfact=nfact)
             dat <- extract.mirt(mod, 'data')
-            Emod <- mirt(dat, 1, itemtype=itemtype,
+            Emod <- mirt(dat, extract.mirt(mod, 'model'), itemtype=itemtype,
                          pars=sv, verbose=FALSE,
-                         technical=list(storeEtable=TRUE, customTheta=Theta))
+                         technical=list(storeEtable=TRUE, customTheta=Theta), ...)
             Etable <- Emod@Internals$Etable[[1]]$r1
             itemloc <- extract.mirt(mod, 'itemloc')
             X2 <- rep(NA, ncol(dat))
@@ -337,14 +340,16 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         pb_fun <- function(ind, is_NA, mod, N, model, itemtype, sv, which.items, ETrange,
                            ETpoints, ...){
             count <- 0L
+            K <- extract.mirt(mod, 'K')
             while(TRUE){
                 count <- count + 1L
                 if(count == 20)
                     stop('20 consecutive parametric bootstraps failed for X2*', call.=FALSE)
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
+                if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
                 mod2 <- mirt(dat, model, itemtype=itemtype, verbose=FALSE, pars=sv,
-                             technical=list(warn=FALSE))
+                             technical=list(warn=FALSE, omp=FALSE), ...)
                 if(!extract.mirt(mod2, 'converged')) next
                 ret <- X2star(mod2, which.items=which.items, ETrange=ETrange,
                               ETpoints=ETpoints, itemtype=itemtype, ...)
@@ -458,51 +463,10 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         discrete <- TRUE
         pis <- extract.mirt(x, 'pis')
     }
-    # if(impute != 0 && !is(x, 'MultipleGroupClass')){
-    #     if(impute == 0)
-    #         stop('Fit statistics cannot be computed when there are missing data. Pass na.rm=TRUE to remove cases row-wise', call.=FALSE)
-    #     if(sum(is.na(x@Data$data)) / length(x@Data$data) > .10)
-    #         warning('Imputations for large amounts of missing data may be overly conservative. Use with caution', call.=FALSE)
-    #     stopifnot(impute > 1L)
-    #     if(is.null(Theta))
-    #         Theta <- fscores(x, plausible.draws = impute, method = ifelse(method == 'MAP', 'MAP', 'EAP'), ...)
-    #     collect <- vector('list', impute)
-    #     vals <- mod2values(x)
-    #     vals$est <- FALSE
-    #     collect <- myLapply(1L:impute, fn, Theta=Theta, obj=x, vals=vals, fit_stats=fit_stats,
-    #                         group.size=group.size, group.bins=group.bins,
-    #                         mincell=mincell, mincell.X2=mincell.X2,
-    #                         S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
-    #                         empirical.CI=empirical.CI, empirical.table=empirical.table,
-    #                         method=method, impute=0, discrete=discrete, ...)
-    #     ave <- SD <- collect[[1L]]
-    #     pick1 <- 1:nrow(ave)
-    #     pick2 <- sapply(ave, is.numeric)
-    #     ave[pick1, pick2] <- SD[pick1, pick2] <- 0
-    #     for(i in seq_len(impute))
-    #         ave[pick1, pick2] <- ave[pick1, pick2] + collect[[i]][pick1, pick2]
-    #     ave[pick1, pick2] <- ave[pick1, pick2]/impute
-    #     for(i in seq_len(impute))
-    #         SD[pick1, pick2] <- SD[pick1, pick2] + (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
-    #     SD[pick1, pick2] <- sqrt(SD[pick1, pick2]/impute)
-    #     SD$item <- paste0('SD_', SD$item)
-    #     SD <- rbind(NA, SD)
-    #     ret <- rbind(ave, SD)
-    #     class(ret) <- c('mirt_df', 'data.frame')
-    #     return(ret)
-    # }
     if(S_X2.tables || discrete) Zh <- X2 <- FALSE
     ret <- data.frame(item=colnames(x@Data$data)[which.items])
     itemloc <- x@Model$itemloc
     pars <- x@ParObjects$pars
-    if(all(x@Model$itemtype %in% c('Rasch', '2PL', 'rsm', 'gpcm')) && infit){
-        infit <- FALSE
-        oneslopes <- rep(FALSE, length(x@Model$itemtype))
-        slope <- x@ParObjects$pars[[1L]]@par[1L]
-        for(i in seq_len(length(x@Model$itemtype)))
-            oneslopes[i] <- closeEnough(x@ParObjects$pars[[i]]@par[1L], slope-1e-10, slope+1e-10)
-        if(all(oneslopes)) infit <- TRUE
-    } else infit <- FALSE
     if(Zh || infit){
         if(is.null(Theta))
             Theta <- fscores(x, verbose=FALSE, full.scores=TRUE, method=method, ...)
@@ -537,7 +501,6 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         }
         tmp <- (colSums(Lmatrix) - mu) / sqrt(sigma2)
         if(Zh) ret$Zh <- tmp[which.items]
-        #if all Rasch models, infit and outfit
         if(infit){
             attr(x, 'inoutfitreturn') <- TRUE
             pf <- personfit(x, method=method, Theta=Theta)
@@ -762,6 +725,12 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         theta_lim <- dots$theta_lim
         if(is.null(theta_lim)) theta_lim <- c(-6,6)
         gp <- if(mixture) list() else ExtractGroupPars(pars[[length(pars)]])
+        if(!mixture && x@ParObjects$pars[[extract.mirt(x, 'nitems')+1L]]@dentype == 'custom'){
+            den_fun <- function(Theta, ...){
+                obj <- x@ParObjects$pars[[extract.mirt(x, 'nitems')+1L]]
+                obj@den(obj, Theta=Theta)
+            }
+        } else den_fun <- mirt_dmvnorm
         E <- EAPsum(x, S_X2 = TRUE, gp = gp, CUSTOM.IND=x@Internals$CUSTOM.IND, den_fun=mirt_dmvnorm,
                     quadpts=quadpts, theta_lim=theta_lim, discrete=discrete, QMC=QMC, mixture=mixture,
                     pis=pis, which.items=which.items, use_dentype_estimate=use_dentype_estimate)

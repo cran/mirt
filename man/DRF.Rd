@@ -4,13 +4,25 @@
 \alias{DRF}
 \title{Differential Response Functioning statistics}
 \usage{
-DRF(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, "nitems"),
-  param_set = NULL, CI = 0.95, npts = 1000, quadpts = NULL,
-  theta_lim = c(-6, 6), Theta_nodes = NULL, plot = FALSE,
-  DIF = FALSE, par.strip.text = list(cex = 0.7),
-  par.settings = list(strip.background = list(col = "#9ECAE1"),
-  strip.border = list(col = "black")), auto.key = list(space = "right",
-  points = FALSE, lines = TRUE), ...)
+DRF(
+  mod,
+  draws = NULL,
+  focal_items = 1L:extract.mirt(mod, "nitems"),
+  param_set = NULL,
+  CI = 0.95,
+  npts = 1000,
+  quadpts = NULL,
+  theta_lim = c(-6, 6),
+  Theta_nodes = NULL,
+  plot = FALSE,
+  DIF = FALSE,
+  p.adjust = "none",
+  par.strip.text = list(cex = 0.7),
+  par.settings = list(strip.background = list(col = "#9ECAE1"), strip.border = list(col
+    = "black")),
+  auto.key = list(space = "right", points = FALSE, lines = TRUE),
+  ...
+)
 }
 \arguments{
 \item{mod}{a multipleGroup object which estimated only 2 groups}
@@ -56,6 +68,10 @@ If plausible parameter sets were obtained/supplied then imputed confidence inter
 These can generally be used as a DIF detection method and as a graphical display for
 understanding DIF within each item}
 
+\item{p.adjust}{string to be passed to the \code{\link{p.adjust}} function to adjust p-values.
+Adjustments are located in the \code{adj_pvals} element in the returned list. Only applicable when
+\code{DIF = TRUE}}
+
 \item{par.strip.text}{plotting argument passed to \code{\link{lattice}}}
 
 \item{par.settings}{plotting argument passed to \code{\link{lattice}}}
@@ -68,7 +84,7 @@ understanding DIF within each item}
 Function performs various omnibus differential item (DIF), bundle (DBF), and test (DTF)
 functioning procedures on an object
 estimated with \code{multipleGroup()}. The compensatory and non-compensatory statistics provided
-are described in Chalmers (accepted), which generally can be interpreted as IRT generalizations
+are described in Chalmers (2018), which generally can be interpreted as IRT generalizations
 of the SIBTEST and CSIBTEST statistics. These require the ACOV matrix to be computed in the
 fitted multiple-group model (otherwise, sets of plausible draws from the posterior are explicitly
 required).

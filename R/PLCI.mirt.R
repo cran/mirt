@@ -85,6 +85,7 @@ PLCI.mirt <- function(mod, parnum = NULL, alpha = .05,
             technical$message <- technical$warn <- technical$parallel <- FALSE
             technical$PLCI <- TRUE
         }
+        technical$omp <- FALSE
         tmpmod <- mirt::mirt(dat, model, itemtype=itemtype, pars = sv, verbose = FALSE,
                              parprior=parprior, PrepList=PrepList, large=large, calcNull=FALSE,
                              technical=technical, constrain=constrain, ...)
@@ -256,7 +257,7 @@ PLCI.mirt <- function(mod, parnum = NULL, alpha = .05,
     itemtype <- extract.mirt(mod, 'itemtype')
     PrepList <- mirt(mod@Data$data, mod@Model$model, itemtype=itemtype,
                      Return_PrepList=TRUE, ...)
-    large <- mirt(mod@Data$data, mod@Model$model, large = TRUE)
+    large <- mirt(mod@Data$data, mod@Model$model, large = 'return')
     as <- matrix(sv$value[sv$name %in% paste0('a', 1L:30L)], ncol(dat))
     asigns <- sign(as)
     if(!is.null(parnum)){

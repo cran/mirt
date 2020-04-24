@@ -36,7 +36,7 @@ MHRM.deriv <- function(pars, gtheta, OffTerm, longpars, USE.FIXED, list, ngroups
             }
         } else {
             for(i in seq_len(length(random))){
-                deriv2 <- RandomDeriv(x=random[[i]], estHess=estHess)
+                deriv2 <- force(RandomDeriv(x=random[[i]], estHess=estHess))
                 g[random[[i]]@parnum] <- deriv2$grad
                 if(estHess)
                     h[random[[i]]@parnum, random[[i]]@parnum] <- deriv2$hess
@@ -61,7 +61,7 @@ MHRM.deriv <- function(pars, gtheta, OffTerm, longpars, USE.FIXED, list, ngroups
             }
         } else {
             for(i in seq_len(length(lr.random))){
-                deriv4 <- RandomDeriv(x=lr.random[[i]], estHess=estHess)
+                deriv4 <- force(RandomDeriv(x=lr.random[[i]], estHess=estHess))
                 g[lr.random[[i]]@parnum] <- deriv4$grad
                 if(estHess)
                     h[lr.random[[i]]@parnum, lr.random[[i]]@parnum] <- deriv4$hess
@@ -367,34 +367,34 @@ MHRM.draws <- function(pars, lrPars, lr.random, random, gstructgrouppars, OffTer
     if(is.na(attr(gtheta0[[1L]],"log.lik")))
         stop('Estimation halted. Model did not converge.', call.=FALSE)
     printmsg <- ""
+    AR <- do.call(c, lapply(gtheta0, function(x) attr(x, "Proportion Accepted")))
+    CTV <- cand.t.var
+    if(RAND && cycles > RANDSTART){
+        AR <- c(AR, do.call(c, lapply(random,
+                                      function(x) attr(x@drawvals, "Proportion Accepted"))))
+        CTV <- c(CTV, do.call(c, lapply(random,
+                                        function(x) x@cand.t.var)))
+    }
+    if(LR.RAND && cycles > RANDSTART){
+        AR <- c(AR, do.call(c, lapply(lr.random,
+                                      function(x) attr(x@drawvals, "Proportion Accepted"))))
+        CTV <- c(CTV, do.call(c, lapply(lr.random,
+                                        function(x) x@cand.t.var)))
+    }
     if(verbose){
-        AR <- do.call(c, lapply(gtheta0, function(x) attr(x, "Proportion Accepted")))
-        CTV <- cand.t.var
-        if(RAND && cycles > RANDSTART){
-            AR <- c(AR, do.call(c, lapply(random,
-                                          function(x) attr(x@drawvals, "Proportion Accepted"))))
-            CTV <- c(CTV, do.call(c, lapply(random,
-                                            function(x) x@cand.t.var)))
-        }
-        if(LR.RAND && cycles > RANDSTART){
-            AR <- c(AR, do.call(c, lapply(lr.random,
-                                          function(x) attr(x@drawvals, "Proportion Accepted"))))
-            CTV <- c(CTV, do.call(c, lapply(lr.random,
-                                            function(x) x@cand.t.var)))
-        }
-        AR <- paste0(sapply(AR, function(x) sprintf('%.2f', x)), collapse='; ')
+        ARprint <- paste0(sapply(AR, function(x) sprintf('%.2f', x)), collapse='; ')
         CTV <- paste0(sapply(CTV, function(x) sprintf('%.2f', x)), collapse='; ')
         if(cycles <= BURNIN)
             printmsg <- sprintf("\rStage 1 = %i, LL = %.1f, AR(%s) = [%s]",
-                                cycles, LL, CTV, AR)
+                                cycles, LL, CTV, ARprint)
         if(cycles > BURNIN && cycles <= BURNIN + SEMCYCLES)
             printmsg <- sprintf("\rStage 2 = %i, LL = %.1f, AR(%s) = [%s]",
-                                cycles-BURNIN, LL, CTV, AR)
+                                cycles-BURNIN, LL, CTV, ARprint)
         if(cycles > BURNIN + SEMCYCLES)
             printmsg <- sprintf("\rStage 3 = %i, LL = %.1f, AR(%s) = [%s]",
-                                cycles-BURNIN-SEMCYCLES, LL, CTV, AR)
+                                cycles-BURNIN-SEMCYCLES, LL, CTV, ARprint)
     }
-    list(pars=pars, gstructgrouppars=gstructgrouppars, lr.random=lr.random, random=random,
+    list(pars=pars, gstructgrouppars=gstructgrouppars, lr.random=lr.random, random=random, AR=AR,
          lrPars=lrPars, gtheta0=gtheta0, OffTerm=OffTerm, printmsg=printmsg, cand.t.var=cand.t.var)
 }
 

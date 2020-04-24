@@ -4,8 +4,15 @@
 \alias{multipleGroup}
 \title{Multiple Group Estimation}
 \usage{
-multipleGroup(data, model, group, invariance = "", method = "EM",
-  rotate = "oblimin", dentype = "Gaussian", ...)
+multipleGroup(
+  data,
+  model,
+  group,
+  invariance = "",
+  method = "EM",
+  dentype = "Gaussian",
+  ...
+)
 }
 \arguments{
 \item{data}{a \code{matrix} or \code{data.frame} that consists of
@@ -14,14 +21,17 @@ numerically ordered data, with missing data coded as \code{NA}}
 \item{model}{string to be passed to, or a model object returned from, \code{\link{mirt.model}}
 declaring how the global model is to be estimated (useful to apply constraints here)}
 
-\item{group}{a \code{character} or \code{factor} vector indicating group membership}
+\item{group}{a \code{character} or \code{factor} vector indicating group membership. If a \code{character}
+vector is supplied this will be automatically transformed into a \code{\link{factor}} variable.
+As well, the first level of the (factorized) grouping variable will be treated as the "reference" group}
 
 \item{invariance}{a character vector containing the following possible options:
   \describe{
-    \item{\code{'free_means'}}{for freely estimating all latent means
-      (reference group constrained to 0)}
-    \item{\code{'free_var'}}{for freely estimating all latent variances
-      (reference group constrained to 1's)}
+    \item{\code{'free_mean'} or \code{'free_means'}}{freely estimate all latent means in all focal groups
+      (reference group constrained to a vector of 0's)}
+    \item{\code{'free_var'}, \code{'free_vars'}, \code{'free_variance'}, or \code{'free_variances'}}{
+      freely estimate all latent variances in focal groups
+      (reference group variances all constrained to 1)}
     \item{\code{'slopes'}}{to constrain all the slopes to be equal across all groups}
     \item{\code{'intercepts'}}{to constrain all the intercepts to be equal across all
       groups, note for nominal models this also includes the category specific slope parameters}
@@ -34,8 +44,6 @@ declaring how the global model is to be estimated (useful to apply constraints h
 
 \item{method}{a character object that is either \code{'EM'}, \code{'QMCEM'}, or \code{'MHRM'}
 (default is \code{'EM'}). See \code{\link{mirt}} for details}
-
-\item{rotate}{rotation if models are exploratory (see \code{\link{mirt}} for details)}
 
 \item{dentype}{type of density form to use for the latent trait parameters. Current options include
   all of the methods described in \code{\link{mirt}}, as well as

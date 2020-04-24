@@ -3,7 +3,7 @@
 #' Function performs various omnibus differential item (DIF), bundle (DBF), and test (DTF)
 #' functioning procedures on an object
 #' estimated with \code{multipleGroup()}. The compensatory and non-compensatory statistics provided
-#' are described in Chalmers (accepted), which generally can be interpreted as IRT generalizations
+#' are described in Chalmers (2018), which generally can be interpreted as IRT generalizations
 #' of the SIBTEST and CSIBTEST statistics. These require the ACOV matrix to be computed in the
 #' fitted multiple-group model (otherwise, sets of plausible draws from the posterior are explicitly
 #' required).
@@ -42,6 +42,9 @@
 #' @param DIF logical; return a list of item-level imputation properties using the DRF statistics?
 #'   These can generally be used as a DIF detection method and as a graphical display for
 #'   understanding DIF within each item
+#' @param p.adjust string to be passed to the \code{\link{p.adjust}} function to adjust p-values.
+#'   Adjustments are located in the \code{adj_pvals} element in the returned list. Only applicable when
+#'   \code{DIF = TRUE}
 #' @param auto.key plotting argument passed to \code{\link{lattice}}
 #' @param par.strip.text plotting argument passed to \code{\link{lattice}}
 #' @param par.settings plotting argument passed to \code{\link{lattice}}
@@ -250,7 +253,7 @@
 #' }
 DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'), param_set = NULL,
                 CI = .95, npts = 1000, quadpts = NULL, theta_lim=c(-6,6), Theta_nodes = NULL,
-                plot = FALSE, DIF = FALSE,
+                plot = FALSE, DIF = FALSE, p.adjust = 'none',
                 par.strip.text = list(cex = 0.7),
                 par.settings = list(strip.background = list(col = '#9ECAE1'),
                                  strip.border = list(col = "black")),
@@ -369,12 +372,12 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
     max_score <- sum(mod@Data$mins + mod@Data$K - 1L)
 
     large <- multipleGroup(extract.mirt(mod, 'data'), 1, group=extract.mirt(mod, 'group'),
-                           large=TRUE)
+                           large='return')
     details <- list(data = extract.mirt(mod, 'data'),
                     model = extract.mirt(mod, 'model'),
                     group = extract.mirt(mod, 'group'),
                     itemtype = extract.mirt(mod, 'itemtype'),
-                    technical = list(storeEtable=TRUE, theta_lim=theta_lim),
+                    technical = list(storeEtable=TRUE, theta_lim=theta_lim, omp=FALSE),
                     quadpts=quadpts, large=large, TOL = NaN)
     if(plot) Theta_nodes <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=1000))
     oCM <- lapply(1L, fn, omod=mod, Theta_nodes=Theta_nodes,
@@ -419,6 +422,10 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                         uDIF = data.frame(uDIF = oCM[,2L],
                                           t(CIs[,1L:length(focal_items) + length(focal_items)]),
                                           t2, row.names=focal_items))
+            if(p.adjust != 'none'){
+                ret$sDIF$adj_pvals <- p.adjust(ret$sDIF$p, method=p.adjust)
+                ret$uDIF$adj_pvals <- p.adjust(ret$uDIF$p, method=p.adjust)
+            }
         } else {
             t1 <- compute_ps(oCM[1L], scores[,1L])
             t2 <- compute_ps(oCM[3L:4L], scores[,3L:4L], X2=TRUE)
@@ -559,8 +566,13 @@ draw_parameters <- function(mod, draws, method = c('parametric', 'boostrap'),
     ubound[logits] <- logit(ubound[logits])
     est <- m2v$est
     constrain <- mod@Model$constrain
-    pars <- list(mod@ParObjects$pars[[1L]]@ParObjects$pars,
-                 mod@ParObjects$pars[[2L]]@ParObjects$pars)
+    ngroups <- extract.mirt(mod, 'ngroups')
+    pars <- if(ngroups > 1L){
+        lapply(1:ngroups, function(i) mod@ParObjects$pars[[i]]@ParObjects$pars)
+    } else {
+        list(mod@ParObjects$pars)
+    }
+
     if(method == 'parametric'){
         if(!mod@OptimInfo$secondordertest)
             stop('ACOV matrix is not positive definite')
@@ -574,7 +586,7 @@ draw_parameters <- function(mod, draws, method = c('parametric', 'boostrap'),
         ret <- do.call(rbind, ret)
         if(any(logits))
             ret[,logits] <- antilogit(ret[,logits])
-        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=2L, J=length(pars[[1L]])-1L)
+        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=extract.mirt(mod, 'nitems'))
         return(ret)
     } else stop('bootstrap not supported yet') #TODO
 

@@ -1,3 +1,57 @@
+# Changes in mirt 1.32
+
+- OpenMP support added to E-step portion of the package, where number of threads can be 
+  specified via the `mirtCluster()` function argument `omp_threads`. Special thanks to 
+  Matthias von Davier for providing the `omp reduction` code in the `Estep.cpp` file
+
+- Behaviour of `mirt(..., large)` has now been modified, where `large = TRUE` now skips computing
+  the unique response patterns for datasets that likely contain little to no repeated response patterns
+  (suggested by Matthias von Davier). The previous two-step behaviour is now acheive by passing 
+  `large = 'return'`, storing this list object, and passing it back to the `large` input argument 
+
+- Positive/negative sign remove from chi-square componenets in `residuals(type = 'LD')` 
+  (requested by Cengiz Zopluoglu to help avoid confusion). Sign is still however present in the
+  standardized correlation estimates
+
+- `itemtype = 'rsm'` reported the incorrect information functions due to use of - instead of +
+  from `traditional2mirt()` (reported by Nasser Hasan)
+  
+- column names of the `fscores()` results now correspond to the model syntax definition names instead
+  of the previous F# convention
+
+- fix `method = 'classify'` option in `fscores()` when more than two mixtures are fitted
+  (reported by Lisa Limeri)
+
+- fix bug in `'drop_sequential'` scheme in `DIF()` introduced in the previous 
+  version of mirt due to some internal organization changes (reported by Balal Izanloo)
+
+- allow infit/outfit statistics to be computed for non-Rasch models (suggested by 
+  Alexander Freund for use with GGUMs)
+
+- added `p.adjust` argument to `DRF()` (requested by Keri J. S. Brady)
+
+- support for computation of the ACOV matrix when the variance of the specific 
+  factors are freely estimated in `bfactor()` 
+
+- fix for `invariance = 'free_var'` argument in `multipleGroup()` for multidiemnsional 
+  models with correlated traits, which previously fixed the correlation parameters 
+  inadvertently (reported by Ruoyi Zhu)
+
+- use proper `mins` internal when using `extract.group()` to keep the original minimum
+  response scoring pattern (reported by Adam Ťápal)
+
+- bugfix for single-group models for `draw_parameters()` (reported by Keri Brady 
+  and @ddueber)
+
+- numeric model specification in `bfactor()` bug patched when intervals were not 
+  1 unit apart due to NA placeholders (reported by Luis Manuel Lozano)
+
+- latent trait/class names now are forced to be different than the data column names 
+  (bug reported by Nathan Carter)
+  
+- fixed `X2*_df` and `PV_Q1*` when missing data pattern resulted in dropped categories
+  (reported by Mac Pank)
+
 # Changes in mirt 1.31
 
 - added `likert2int()` to convert Likert-type character/factor responses to integert data

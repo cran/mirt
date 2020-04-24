@@ -25,14 +25,16 @@
 #'   numerically ordered data, with missing data coded as \code{NA}
 #' @param model string to be passed to, or a model object returned from, \code{\link{mirt.model}}
 #'   declaring how the global model is to be estimated (useful to apply constraints here)
-#' @param group a \code{character} or \code{factor} vector indicating group membership
-#' @param rotate rotation if models are exploratory (see \code{\link{mirt}} for details)
+#' @param group a \code{character} or \code{factor} vector indicating group membership. If a \code{character}
+#'   vector is supplied this will be automatically transformed into a \code{\link{factor}} variable.
+#'   As well, the first level of the (factorized) grouping variable will be treated as the "reference" group
 #' @param invariance a character vector containing the following possible options:
 #'   \describe{
-#'     \item{\code{'free_means'}}{for freely estimating all latent means
-#'       (reference group constrained to 0)}
-#'     \item{\code{'free_var'}}{for freely estimating all latent variances
-#'       (reference group constrained to 1's)}
+#'     \item{\code{'free_mean'} or \code{'free_means'}}{freely estimate all latent means in all focal groups
+#'       (reference group constrained to a vector of 0's)}
+#'     \item{\code{'free_var'}, \code{'free_vars'}, \code{'free_variance'}, or \code{'free_variances'}}{
+#'       freely estimate all latent variances in focal groups
+#'       (reference group variances all constrained to 1)}
 #'     \item{\code{'slopes'}}{to constrain all the slopes to be equal across all groups}
 #'     \item{\code{'intercepts'}}{to constrain all the intercepts to be equal across all
 #'       groups, note for nominal models this also includes the category specific slope parameters}
@@ -332,13 +334,15 @@
 #' coef(zip, simplify=TRUE)
 #'
 #' }
-multipleGroup <- function(data, model, group, invariance = '', method = 'EM', rotate = 'oblimin',
+multipleGroup <- function(data, model, group, invariance = '', method = 'EM',
                           dentype = 'Gaussian', ...)
 {
     Call <- match.call()
     dots <- list(...)
     if(!is.null(dots$formula))
         stop('latent regression models not supported for multiple group yet', call.=FALSE) #TODO
+    invariance[invariance %in% c("free_mean")] <- 'free_means'
+    invariance[invariance %in% c("free_vars", 'free_variance', 'free_variances')] <- 'free_var'
     constrain <- dots$constrain
     invariance.check <- invariance %in% c('free_means', 'free_var')
     if(missing(model)) missingMsg('model')
@@ -353,12 +357,12 @@ multipleGroup <- function(data, model, group, invariance = '', method = 'EM', ro
                 warn <- FALSE
         }
         if(warn)
-            stop('Model is not identified without further constrains (may require additional
+            stop('Model is not identified without further constraints (may require additional
                  anchoring items).', call.=FALSE)
     }
     if(grepl('mixture', dentype)) group <- rep('full', nrow(data))
     mod <- ESTIMATION(data=data, model=model, group=group, invariance=invariance, method=method,
-                      rotate=rotate, dentype=dentype, ...)
+                      dentype=dentype, ...)
     if(is(mod, 'MultipleGroupClass') || is(mod, 'MixtureClass'))
         mod@Call <- Call
     return(mod)

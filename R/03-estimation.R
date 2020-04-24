@@ -16,7 +16,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(missing(group)) missingMsg('group')
     if(!(is.factor(group) || is.character(group)) || length(group) != nrow(data))
         stop('group input provided is not valid', call.=FALSE)
-    if(is.logical(large) && large){
+    if(is.character(large) && large == 'return'){
         Data <- opts <- list()
         opts$zeroExtreme <- FALSE
         opts$dentype <- 'default'
@@ -64,7 +64,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             stopifnot(is(customGroup, 'GroupPars'))
         stopifnot(is(invariance, 'character'))
         stopifnot(is(GenRandomPars, 'logical'))
-        stopifnot(is(large, 'logical') || is(large, 'list'))
+        stopifnot(is(large, 'logical') || is(large, 'list') || is(large, 'character'))
         opts <- makeopts(GenRandomPars=GenRandomPars,
                          hasCustomGroup=!is.null(customGroup), ...)
         if(opts$Moptim == 'NR'){
@@ -175,6 +175,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 x
             }, message = opts$message)
         }
+        Data$rowID <- 1L:nrow(data)
         if(any(rowSums(is.na(data)) == ncol(data))){
             if(!opts$removeEmptyRows)
                 stop('data contains completely empty response patterns. ',
@@ -182,6 +183,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                      call.=FALSE)
             else {
                 pick <- rowSums(is.na(data)) != ncol(data)
+                Data$rowID <- unname(which(pick))
                 data <- subset(data, pick)
                 group <- subset(group, pick)
                 if(!is.null(latent.regression) || !is.null(mixed.design))
@@ -204,6 +206,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         Data$N <- nrow(Data$data)
         Data$mins <- suppressWarnings(apply(data, 2L, min, na.rm=TRUE))
         Data$mins[!is.finite(Data$mins)] <- 0L
+        if(!is.null(opts$technical$mins)) Data$mins <- opts$technical$mins
         if(is.character(model)){
             tmp <- any(sapply(colnames(data), grepl, x=model))
             model <- mirt.model(model, itemnames = if(tmp) colnames(data) else NULL)
@@ -294,17 +297,20 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 if(is.null(survey.weights)) survey.weights <- rep(1, nrow(tmpdata))
                 survey.weights[sums == 0L | (sums + n_is_na) == sum(maxs)] <- 0
             }
-            tmpdata[is.na(tmpdata)] <- 99999L
-            stringfulldata <- apply(tmpdata, 1L, paste, sep='', collapse = '/')
-            stringtabdata <- unique(stringfulldata)
-            tmptabdata <- maketabData(stringfulldata=stringfulldata, stringtabdata=stringtabdata,
-                                      group=Data$group,
-                                      groupNames=if(opts$dentype != 'mixture') Data$groupNames else 'full',
-                                      nitem=Data$nitems,
-                                      K=PrepListFull$K, itemloc=PrepListFull$itemloc,
-                                      Names=PrepListFull$Names, itemnames=PrepListFull$itemnames,
-                                      survey.weights=survey.weights)
-            if(is.logical(large) && large){
+            tmptabdata <- if(is.logical(large) && large){
+                maketabDataLarge(tmpdata=tmpdata, group=Data$group,
+                                 groupNames=if(opts$dentype != 'mixture') Data$groupNames else 'full',
+                                 nitem=Data$nitems, K=PrepListFull$K, itemloc=PrepListFull$itemloc,
+                                 Names=PrepListFull$Names, itemnames=PrepListFull$itemnames,
+                                 survey.weights=survey.weights)
+            } else {
+                maketabData(tmpdata=tmpdata, group=Data$group,
+                            groupNames=if(opts$dentype != 'mixture') Data$groupNames else 'full',
+                            nitem=Data$nitems, K=PrepListFull$K, itemloc=PrepListFull$itemloc,
+                            Names=PrepListFull$Names, itemnames=PrepListFull$itemnames,
+                            survey.weights=survey.weights)
+            }
+            if(is.character(large) && large == 'return'){
                 return(tmptabdata)
             } else large <- tmptabdata
         }
@@ -399,7 +405,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 pars[[g]][[nitems + 1L]]@est[2L] <- TRUE
         } else {
             for(g in 2L:Data$ngroups){
-                pars[[g]][[nitems + 1L]]@est <- c(pars[[g]][[nitems + 1L]]@est[1L:pars[[g]][[nitems + 1L]]@nfact], tmp)
+                pars[[g]][[nitems + 1L]]@est <- pars[[g]][[nitems + 1L]]@est |
+                    c(pars[[g]][[nitems + 1L]]@est[1L:pars[[g]][[nitems + 1L]]@nfact], tmp)
                 names(pars[[g]][[nitems + 1L]]@est) <- names(pars[[g]][[nitems + 1L]]@par)
                 pars[[g]][[nitems + 1L]]@parnames <- names(pars[[g]][[nitems + 1L]]@est)
             }
@@ -437,7 +444,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         r <- Data$Freq[[g]]
         rr <- rr + r
     }
-    df <- prod(PrepList[[1L]]$K) - 1
+    df <- Data$ngroups * (prod(PrepList[[1L]]$K) - 1)
     if(df > 1e10) df <- 1e10
     nestpars <- nconstr <- 0L
     for(g in seq_len(Data$ngroups))
@@ -526,7 +533,11 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
 
     #EM estimation
     opts$times$start.time.Estimate <- proc.time()[3L]
+    logLik <- G2 <- SElogLik <- NaN
+    logPrior <- 0
+    Pl <- vector('list', Data$ngroups)
     if(opts$method %in% c('EM', 'BL', 'QMCEM', 'MCEM')){
+        logLik <- G2 <- SElogLik <- 0
         if(length(lrPars)){
             if(opts$SE && !(opts$SE.type %in% c('complete', 'forward', 'central', 'Richardson')))
                 stop('Information matrix method for latent regression estimates not supported',
@@ -601,7 +612,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          lrPars=lrPars, SE=opts$SE && opts$SE.type == 'numerical', Etable=opts$Etable,
                                          NULL.MODEL=opts$NULL.MODEL, PLCI=opts$PLCI, Norder=opts$Norder,
                                          keep_vcov_PD=opts$keep_vcov_PD, symmetric=opts$technical$symmetric,
-                                         MCEM_draws=opts$MCEM_draws),
+                                         MCEM_draws=opts$MCEM_draws, omp_threads=opts$omp_threads),
                              Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         if(opts$method == 'MCEM')
             opts$quadpts <- opts$MCEM_draws(ESTIMATE$cycles)
@@ -609,9 +620,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         lrPars <- ESTIMATE$lrPars
         startlongpars <- ESTIMATE$longpars
         rlist <- ESTIMATE$rlist
-        logLik <- G2 <- SElogLik <- 0
         logPrior <- ESTIMATE$logPrior
-        Pl <- vector('list', length(rlist))
         for(g in seq_len(Data$ngroups)){
             if(g > 1L && opts$dentype == 'mixture') break
             Pl[[g]] <- rlist[[g]]$expected
@@ -829,8 +838,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                               dentype=opts$dentype, itemloc=PrepList[[1L]]$itemloc, ESTIMATE=ESTIMATE,
                               constrain=constrain, Ls=Ls, specific=oldmodel, sitems=sitems,
                               CUSTOM.IND=CUSTOM.IND, EHPrior=ESTIMATE$Prior, warn=opts$warn, type=opts$SE.type,
-                              delta=opts$delta, lrPars=ESTIMATE$lrPars)
-        } else if(opts$SE.type == 'MHRM' && opts$method == 'EM'){
+                              delta=opts$delta, lrPars=ESTIMATE$lrPars, omp_threads=opts$omp_threads)
+        } else if(opts$SE.type %in% c('MHRM', 'FMHRM') && opts$method == 'EM'){
             if(opts$dentype %in% c('EH', 'EHW'))
                 stop('MHRM standard error methods not available when using empirical histograms', call.=FALSE)
             ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
@@ -860,7 +869,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                         account for prior parameter distribution information')
             ESTIMATE <- SE.Fisher(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
                                   constrain=constrain, Ls=Ls, N=nrow(data), full=opts$full,
-                                  CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn)
+                                  CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn, omp_threads=opts$omp_threads)
         }
         ESTIMATE$cycles <- tmp$cycles
         ESTIMATE$Prior <- tmp$Prior
@@ -900,9 +909,9 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     #missing stats for MHRM
-    if(opts$method %in% c('MHRM', 'MIXED', 'SEM')){
-        Pl <- vector('list', Data$ngroups)
-        logPrior <- logLik <- SElogLik <- G2 <- 0
+    if(opts$method %in% c('MHRM', 'MIXED', 'SEM') &&
+       (!opts$logLik_if_converged || !(!ESTIMATE$converge && opts$logLik_if_converged))){
+        logLik <- G2 <- SElogLik <- 0
         if(opts$draws > 0L){
             if(opts$verbose) cat("\nCalculating log-likelihood...\n")
             flush.console()
@@ -992,7 +1001,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Data$itemdesign <- attr(mixed.design, 'itemdesign')
     ParObjects <- list(pars=cmods, lrPars=lrPars, random=ESTIMATE$random, lr.random=ESTIMATE$lr.random)
     OptimInfo <- list(iter=ESTIMATE$cycles, converged=ESTIMATE$converge, cand.t.var=ESTIMATE$cand.t.var,
-                      condnum=NA, secondordertest=NA, SEMconv=SEMconv)
+                      condnum=NA, secondordertest=NA, SEMconv=SEMconv, aveAR=ESTIMATE$aveAR)
     vcov <- matrix(NA, 1, 1)
     if(Options$SE){
         information <- ESTIMATE$info

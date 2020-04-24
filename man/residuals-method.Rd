@@ -9,11 +9,23 @@
 \alias{residuals,DiscreteClass-method}
 \title{Compute model residuals}
 \usage{
-\S4method{residuals}{SingleGroupClass}(object, type = "LD",
-  df.p = FALSE, full.scores = FALSE, QMC = FALSE,
-  printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
-  suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
-  ...)
+\S4method{residuals}{SingleGroupClass}(
+  object,
+  type = "LD",
+  df.p = FALSE,
+  full.scores = FALSE,
+  QMC = FALSE,
+  printvalue = NULL,
+  tables = FALSE,
+  verbose = TRUE,
+  Theta = NULL,
+  suppress = 1,
+  theta_lim = c(-6, 6),
+  quadpts = NULL,
+  fold = TRUE,
+  technical = list(),
+  ...
+)
 }
 \arguments{
 \item{object}{an object of class \code{SingleGroupClass} or
@@ -60,6 +72,9 @@ this value will be returned, while all values less than this value will be set t
 or generated automatically if not available}
 
 \item{fold}{logical; apply the sum 'folding' described by Edwards et al. (2018) for the JSI statistic?}
+
+\item{technical}{list of technical arguments when models are re-estimated (see \code{\link{mirt}}
+for details)}
 
 \item{...}{additional arguments to be passed to \code{fscores()}}
 }

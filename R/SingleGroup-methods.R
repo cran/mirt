@@ -60,6 +60,8 @@ setMethod(
                "EHW" = 'Empirical histogram (scaled)',
                x@Options$dentype)
         cat('Latent density type:', dentype, '\n')
+        if(method == 'MHRM')
+            cat("Average MH acceptance ratio(s):", paste0(round(x@OptimInfo$aveAR,3), collapse=', '), "\n")
         if(!is.na(x@OptimInfo$secondordertest)){
             cat("\nInformation matrix estimated with method:", x@Options$SE.type)
             cat('\nSecond-order test: model ', if(!x@OptimInfo$secondordertest)
@@ -588,6 +590,8 @@ setMethod(
 #' @param suppress a numeric value indicating which parameter local dependency combinations
 #'   to flag as being too high. Absolute values for the standardized estimates greater than
 #'   this value will be returned, while all values less than this value will be set to NA
+#' @param technical list of technical arguments when models are re-estimated (see \code{\link{mirt}}
+#'   for details)
 #' @param ... additional arguments to be passed to \code{fscores()}
 #'
 #' @name residuals-method
@@ -677,7 +681,8 @@ setMethod(
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, type = 'LD', df.p = FALSE, full.scores = FALSE, QMC = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
-                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE, ...)
+                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
+                          technical = list(), ...)
     {
         dots <- list(...)
         if(.hasSlot(object@Model$lrPars, 'beta'))
@@ -754,11 +759,11 @@ setMethod(
                         if(calcG2){
                             tmp <- tab
                             tmp[tab == 0] <- NA
-                            res[j,i] <- 2 * sum(tmp * log(tmp/Etab), na.rm=TRUE) * sign(s)
+                            res[j,i] <- 2 * sum(tmp * log(tmp/Etab), na.rm=TRUE)
                         } else {
-                            res[j,i] <- sum(((tab - Etab)^2)/Etab) * sign(s)
+                            res[j,i] <- sum(((tab - Etab)^2)/Etab)
                         }
-                        res[i,j] <- sign(res[j,i]) * sqrt( abs(res[j,i]) / (NN * min(c(K[i],K[j]) - 1L)))
+                        res[i,j] <- sign(s) * sqrt( abs(res[j,i]) / (NN * min(c(K[i],K[j]) - 1L)))
                         df[i,j] <- pchisq(abs(res[j,i]), df=df[j,i], lower.tail=FALSE)
                         if(tables){
                             tmp <- paste0(itemnames[i], '_', itemnames[j])
@@ -837,7 +842,7 @@ setMethod(
             nfact <- extract.mirt(object, 'nfact')
             tmpdat <- matrix(0, nrow=2, ncol=nitems)
             colnames(tmpdat) <- colnames(tabdata)
-            large <- mirt(tmpdat, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large=TRUE,
+            large <- mirt(tmpdat, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large='return',
                                       technical = list(customK=K))
             large$tabdata <- poly2dich(tabdata)
             large$Freq$all <- rep(1L, nrow(tabdata))
@@ -894,13 +899,15 @@ setMethod(
             nfact <- extract.mirt(object, 'nfact')
             stopifnot(nfact == 1L)
             nitems <- extract.mirt(object, 'nitems')
-            as_drop <- myLapply(seq_len(nitems), function(item, mod, ...){
+            technical$omp <- FALSE
+            as_drop <- myLapply(seq_len(nitems), function(item, mod, technical, ...){
                 itemtype <- extract.mirt(mod, 'itemtype')[-item]
                 tmpdat <- extract.mirt(mod, 'data')[,-item]
-                tmpmod <- mirt(tmpdat, 1L, itemtype=itemtype, SE=TRUE, verbose=FALSE, ...)
+                tmpmod <- mirt(tmpdat, 1L, itemtype=itemtype, SE=TRUE, verbose=FALSE,
+                               technical=technical, ...)
                 ret <- sapply(coef(tmpmod, printSE=TRUE)[1:ncol(tmpdat)], function(x) x[1L:2L, 'a1'])
                 ret
-            }, mod=object, ...)
+            }, mod=object, technical=technical, ...)
             as <- sapply(coef(object)[1:nitems], function(x) x[1L, 'a1'])
             retmat <- matrix(NA, nitems, nitems)
             colnames(retmat) <- rownames(retmat) <- extract.mirt(object, 'itemnames')
@@ -1685,7 +1692,7 @@ traditional2mirt <- function(x, cls, ncat){
         names(par) <- c('a1', paste0('d', 1:(length(par)-1)))
     } else if(cls %in% c('gpcm', 'gpcmIRT')){
         if(cls == 'gpcmIRT'){
-            x[-c(1, length(x))] <- x[-c(1, length(x))] + x[length(x)]
+            x[-c(1, length(x))] <- x[-c(1, length(x))] - x[length(x)]
             x <- x[-length(x)]
         }
         par <- c(x[1L], 0L:(ncat-1L), 0, x[-1L])
