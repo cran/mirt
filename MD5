@@ -1,6 +1,6 @@
-0574bd8dc43cfa4f16d97fd4a9381591 *DESCRIPTION
+66ecd7e73efd162fc8a5a4517f105ba6 *DESCRIPTION
 2e5f941392961e37da674e23e340f75f *NAMESPACE
-8a0dd7d422835ad12866c8bf60a9cc93 *NEWS.md
+c5d32762dc8a512a02d6372f37702f23 *NEWS.md
 236f5b264fe1cce117fc5b79c8428bab *R/00-classes.R
 8b0ae4fe0ae3f40133526ba82f3ad614 *R/01-itemclass.R
 1a6f614d827f2adbd597ce5f60906a5c *R/02-item_methods.R
@@ -77,7 +77,7 @@ a4765f17f878f3f4beb91a132afecece *R/simdata.R
 b6d65b41d08f8eb4025df0a18d677353 *R/utils.R
 660ec8f9f859a2e78745573000470697 *R/wald.R
 90c393dbacdb834e0df3df1e3587bd02 *README.md
-dac8da413d83aae46b5a1163b41f40bf *build/partial.rdb
+d0166d10560f15c182a08e3ce57c673f *build/partial.rdb
 52e02a882fcc3fb99f56d17847c6bcc0 *build/vignette.rds
 f18054f6397f08c45154429a41459aa9 *data/Bock1997.RData
 30c37ee02040314730b304566dddae92 *data/LSAT6.RData
@@ -166,7 +166,7 @@ a6c5fd577be750db25e75d770414810a *man/residuals-method.Rd
 7fecce3a784dd17e9be9759047e4ec9b *man/traditional2mirt.Rd
 651901c7480f583784a9a974f8e1d79d *man/vcov-method.Rd
 ecb7a8d8713960e50098fdf34190c05d *man/wald.Rd
-0ca7f59c620efae8821c2407e03b9687 *src/Estep.cpp
+0e8582210014a7e4f4eaa16ac8df9d1c *src/Estep.cpp
 bb01bae1a9b0ecccbc2940565cfaff30 *src/Estep.h
 41408da60c33734c54676599c0e07bf7 *src/Makevars
 f339e742110231dbd106e240c84eec52 *src/Makevars.win
