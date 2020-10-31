@@ -201,7 +201,7 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
         mu <- tmpitem@par[tmpitem@est]
         vcov <- extract.mirt(x, 'vcov')
         smallinfo <- vcov[tmp, tmp]
-        smallinfo <-(smallinfo + t(smallinfo))/2 #make symetric
+        smallinfo <- (smallinfo + t(smallinfo))/2 #make symmetric
         delta <- mirt_rmvnorm(CEdraws, mean=mu, sigma=smallinfo)
         tmp <- mirt_dmvnorm(delta, mu, smallinfo)
         sorttmp <- sort(tmp)
@@ -336,8 +336,8 @@ itemplot.main <- function(x, item, type, degrees, CE, CEalpha, CEdraws, drop.zer
             if(is.null(main))
                 main <- paste('Item information and standard errors for item', item)
             obj1 <- xyplot(info~Theta, plt, type='l',
-                           main = main, xlab = expression(theta), ylab=expression(I(theta)))
-            obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)))
+                           main = main, xlab = expression(theta), ylab=expression(I(theta)),...)
+            obj2 <- xyplot(SE~Theta, plt, type='l', ylab=expression(SE(theta)), ...)
             if(requireNamespace("latticeExtra", quietly = TRUE)){
                 return(latticeExtra::doubleYScale(obj1, obj2, add.ylab2 = add.ylab2))
             } else {

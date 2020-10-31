@@ -83,8 +83,8 @@
 #' plot(pmod, type='trace', par.settings=bwtheme)
 #' itemplot(pmod, 1, type = 'trace', par.settings=bwtheme)
 #'
+#' # infoSE plot
 #' itemplot(pmod, 1, type = 'infoSE')
-#' update(trellis.last.object(), par.settings = bwtheme)
 #'
 #' # uncomment to run interactive shiny applet
 #' # itemplot(shiny = TRUE)
@@ -119,6 +119,8 @@ itemplot <- function(object, item, type = 'trace', degrees = 45, CE = FALSE, CEa
         if(object[[1]]@Model$nfact == 1L) degrees <- 0
     } else if(object@Model$nfact == 1L) degrees <- 0
     rotate <- if(is.null(dots$rotate)) 'none' else dots$rotate
+    if(type == 'infoSE') par.settings <- c(par.settings,
+                                           lattice::simpleTheme(col = c("#0080ff",'red'), lty = 1:2))
     ret <- itemplot.internal(object=object, item=item, type=type, degrees=degrees, CE=CE,
                              CEalpha=CEalpha, CEdraws=CEdraws, drop.zeros=drop.zeros, rot=rot,
                              theta_lim=theta_lim, par.strip.text=par.strip.text,

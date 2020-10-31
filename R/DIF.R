@@ -174,6 +174,9 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                           return_models, technical = list(), ...)
     {
         constrain <- model@Model$constrain
+        mirt_model <- model@Model$model
+        if(is(mirt_model, 'mirt.model'))
+            mirt_model$x <- mirt_model$x[mirt_model$x[,"Type"] != 'CONSTRAINB', ]
         technical$omp <- FALSE
         parnum <- list()
         for(i in seq_len(length(which.par)))
@@ -200,7 +203,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             sv <- values
             for(j in seq_len(length(parnum))){
                 for(i in length(constrain):1L){
-                    if(all(parnum[[j]] == sort(constrain[[i]])))
+                    if(all(parnum[[j]] %in% sort(constrain[[i]])))
                         constrain[[i]] <- NULL
                 }
             }
@@ -209,7 +212,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             for(i in seq_len(length(parnum)))
                 constrain[[length(constrain) + 1L]] <- parnum[[i]]
         }
-        newmodel <- multipleGroup(model@Data$data, model@Model$model, group=model@Data$group,
+        newmodel <- multipleGroup(model@Data$data, mirt_model, group=model@Data$group,
                                   invariance = invariance, constrain=constrain, pars=sv,
                                   itemtype = model@Model$itemtype, verbose=FALSE, technical=technical,
                                   ...)
@@ -255,7 +258,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
     if(is.numeric(seq_stat)){
         pval <- seq_stat
         seq_stat <- 'p'
-    } else if(!any(seq_stat %in% c('p', 'AIC', 'AICc', 'SABIC', 'BIC', 'DIC'))){
+    } else if(!any(seq_stat %in% c('p', 'AIC', 'AICc', 'SABIC', 'BIC', 'DIC', 'HQ'))){
         stop('Invalid seq_stat input', call.=FALSE)
     }
     if(is.character(items2test)) items2test <- which(items2test %in% itemnames)
@@ -282,9 +285,9 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 }, stat = seq_stat))
             if(seq_stat == 'p'){
                 statdiff <- p.adjust(statdiff, p.adjust)
-                keep <- statdiff > pval
+                keep <- statdiff >= pval
             } else {
-                keep <- statdiff < 0
+                keep <- statdiff <= 0
             }
             if(run_number == 2L && (all(!keep) || all(keep))){
                 if(verbose)
@@ -380,7 +383,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                 if(stat == 'p') return(x[2L, 'p'])
                 return(x[1L, stat] - x[2L, stat])
             }, stat = seq_stat))
-            keep <- statdiff < 0
+            keep <- statdiff <= 0
         } else {
             statdiff <- res$adj_pvals
             if(is.null(statdiff)){
@@ -395,9 +398,9 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             }
             if(seq_stat == 'p' || Wald){
                 statdiff <- p.adjust(statdiff, p.adjust)
-                keep <- statdiff > pval
+                keep <- statdiff >= pval
             } else {
-                keep <- !(statdiff < 0 & !sapply(statdiff, closeEnough, low=-1e-4, up=1e-4))
+                keep <- !(statdiff <= 0 & !sapply(statdiff, closeEnough, low=-1e-4, up=1e-4))
             }
         }
         which.item <- which(!keep)

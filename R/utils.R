@@ -352,8 +352,7 @@ ExtractGroupPars <- function(x){
         tmp <- x@par[-c(seq_len(nfact), which(phi_matches))]
         gcov <- matrix(0, nfact, nfact)
         gcov[lower.tri(gcov, diag=TRUE)] <- tmp
-        if(nfact != 1L)
-            gcov <- gcov + t(gcov) - diag(diag(gcov))
+        gcov <- makeSymMat(gcov)
         return(list(gmeans=gmeans, gcov=gcov, phi=phi))
     } else {
         par <- x@par
@@ -361,8 +360,7 @@ ExtractGroupPars <- function(x){
         tmp <- par[-seq_len(nfact)]
         gcov <- matrix(0, nfact, nfact)
         gcov[lower.tri(gcov, diag=TRUE)] <- tmp
-        if(nfact != 1L)
-            gcov <- gcov + t(gcov) - diag(diag(gcov))
+        gcov <- makeSymMat(gcov)
         return(list(gmeans=gmeans, gcov=gcov))
     }
 }
@@ -969,6 +967,7 @@ buildModelSyntax <- function(model, J, groupNames, itemtype){
             cat(paste('F', i,' = 1-', (J-i+1L), "\n", sep=''), file=tmp, append = TRUE)
         model <- mirt.model(file=tmp, quiet = TRUE)
         model$x <- rbind(model$x, oldmodel$x[oldmodel$x[,1L] != 'NEXPLORE'])
+        unlink(tmp)
     } else if((is(model, 'numeric') && length(model) == 1L)){
         if(any(itemtype == 'lca')){
             tmp <- tempfile('tempfile')
@@ -1194,10 +1193,11 @@ DerivativePriors <- function(x, grad, hess){
         else diag(hess[ind, ind]) <- diag(hess[ind, ind]) + h
     }
     if(any(x@prior.type %in% c(3L, 4L))){ #beta
-        ind <- x@prior.type %in% c(3L, 4L)
-        val <- x@par[ind]
+        tmp <- x@par
         ind <- x@prior.type == 4L
-        val[ind] <- plogis(val[ind])
+        tmp[ind] <- plogis(tmp[ind])
+        ind <- x@prior.type %in% c(3L, 4L)
+        val <- tmp[ind]
         val <- ifelse(val < 1e-10, 1e-10, val)
         val <- ifelse(val > 1-1e-10, 1-1e-10, val)
         a <- x@prior_1[ind]
@@ -1373,7 +1373,8 @@ maketabDataLarge <- function(tmpdata, group, groupNames, nitem, K, itemloc,
     ret
 }
 
-makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.random = list()){
+makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.random = list(),
+                      nconstrain = NULL){
     ngroups <- length(pars)
     J <- length(pars[[1L]]) - 1L
     L <- c()
@@ -1392,6 +1393,14 @@ makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.rand
         L[constrain[[i]], constrain[[i]]] <- 1L
         for(j in 2L:length(constrain[[i]]))
             redun_constr[constrain[[i]][j]] <- TRUE
+    }
+    if(!is.null(nconstrain)){
+        for(i in seq_len(length(nconstrain))){
+            stopifnot(length(nconstrain[[i]]) == 2L)
+            L[nconstrain[[i]], nconstrain[[i]]] <- c(1L, -1L)
+            for(j in 2L:length(nconstrain[[i]]))
+                redun_constr[nconstrain[[i]][j]] <- TRUE
+        }
     }
     return(list(L=L, redun_constr=redun_constr))
 }
@@ -1415,7 +1424,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
                 'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder', 'MCEM_draws',
-                "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp')
+                "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1477,8 +1486,9 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$storeEtable <- ifelse(is.null(technical$storeEtable), FALSE, technical$storeEtable)
     if(!is.null(TOL))
         if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- FALSE
-    opts$TOL <- ifelse(is.null(TOL), if(method %in% c('EM', 'QMCEM', 'MCEM')) 1e-4 else
-        if(method == 'BL') 1e-8 else 1e-3, TOL)
+    opts$TOL <- ifelse(is.null(TOL),
+                       if(method %in% c('EM', 'QMCEM', 'MCEM')) 1e-4 else
+                           if(method == 'BL') 1e-8 else 1e-3, TOL)
     if(SE.type == 'SEM' && SE){
         opts$accelerate <- 'none'
         if(is.null(TOL)) opts$TOL <- 1e-5
@@ -1519,9 +1529,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     if(dentype %in% c("EH", 'EHW')){
         if(opts$method != 'EM')
             stop('empirical histogram method only applicable when method = \'EM\' ', call.=FALSE)
-        if(opts$TOL == 1e-4) opts$TOL <- 3e-5
         if(is.null(opts$quadpts)) opts$quadpts <- 121L
-        if(opts$NCYCLES == 500L) opts$NCYCLES <- 2000L
+        if(is.null(opts$technical$NCYCLES)) opts$NCYCLES <- 2000L
     }
     if(dentype == 'Davidian'){
         if(opts$method != 'EM')
@@ -1740,11 +1749,11 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
         X <- model.matrix(formula, df)
     }
     tXX <- t(X) %*% X
-    inv_tXX <- try(solve(tXX), silent = TRUE)
+    qr_XX <- try(qr(tXX), silent = TRUE)
     if(!is.nan(TOL)){
-        if(is(inv_tXX, 'try-error'))
-            stop('Latent regression design matrix contains multi-collinear terms.', call. = FALSE)
-    } else inv_tXX <- matrix(0, ncol(tXX), ncol(tXX))
+        if(is(qr_XX, 'try-error'))
+            stop('Latent regression design matrix contains problematic terms.', call. = FALSE)
+    } else qr_XX <- qr(0)
     beta <- matrix(0, ncol(X), nfact)
     sigma <- matrix(0, nfact, nfact)
     diag(sigma) <- 1
@@ -1775,7 +1784,7 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
                df=df,
                X=X,
                tXX=tXX,
-               inv_tXX=inv_tXX,
+               qr_XX=list(qr = qr_XX),
                lbound=rep(-Inf,length(par)),
                ubound=rep(Inf,length(par)),
                any.prior=FALSE,
@@ -1879,14 +1888,19 @@ RMSEA.CI <- function(X2, df, N, ci.lower=.05, ci.upper=.95) {
     return(c(RMSEA.lower, RMSEA.upper))
 }
 
-longpars_constrain <- function(longpars, constrain){
+longpars_constrain <- function(longpars, constrain, nconstrain = NULL){
     for(i in seq_len(length(constrain)))
         longpars[constrain[[i]][-1L]] <- longpars[constrain[[i]][1L]]
+    if(!is.null(nconstrain)){
+        for(i in seq_len(length(nconstrain)))
+            longpars[nconstrain[[i]][-1L]] <- -longpars[nconstrain[[i]][1L]]
+    }
     longpars
 }
 
-BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems,
+BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific, sitems, nconstrain,
                CUSTOM.IND, EHPrior, Data, dentype, itemloc, theta, constrain, lrPars, omp_threads){
+    #TODO use nconstrain
     longpars[est] <- p
     longpars <- longpars_constrain(longpars=longpars, constrain=constrain)
     pars2 <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
@@ -2270,6 +2284,98 @@ mixX2 <- function (p, df = 1, mix = 0.5, lower.tail = TRUE)
     r
 }
 
+# borrowed and modified from car package, July 31, 2020
+makeHypothesis <- function (cnames, hypothesis, rhs = NULL)
+{
+    parseTerms <- function(terms) {
+        component <- gsub("^[-\\ 0-9\\.]+", "", terms)
+        component <- gsub(" ", "", component, fixed = TRUE)
+        component
+    }
+    stripchars <- function(x) {
+        x <- gsub("\\n", " ", x)
+        x <- gsub("\\t", " ", x)
+        x <- gsub(" ", "", x, fixed = TRUE)
+        x <- gsub("*", "", x, fixed = TRUE)
+        x <- gsub("-", "+-", x, fixed = TRUE)
+        x <- strsplit(x, "+", fixed = TRUE)[[1]]
+        x <- x[x != ""]
+        x
+    }
+    char2num <- function(x) {
+        x[x == ""] <- "1"
+        x[x == "-"] <- "-1"
+        as.numeric(x)
+    }
+    constants <- function(x, y) {
+        with.coef <- unique(unlist(sapply(y, function(z) which(z ==
+                                                                   parseTerms(x)))))
+        if (length(with.coef) > 0)
+            x <- x[-with.coef]
+        x <- if (is.null(x))
+            0
+        else sum(as.numeric(x))
+        if (any(is.na(x)))
+            stop("The hypothesis \"", hypothesis, "\" is not well formed: contains bad coefficient/variable names.")
+        x
+    }
+    coefvector <- function(x, y) {
+        rv <- gsub(" ", "", x, fixed = TRUE) == parseTerms(y)
+        if (!any(rv))
+            return(0)
+        if (sum(rv) > 1)
+            stop("The hypothesis \"", hypothesis, "\" is not well formed.")
+        rv <- sum(char2num(unlist(strsplit(y[rv], x, fixed = TRUE))))
+        if (is.na(rv))
+            stop("The hypothesis \"", hypothesis, "\" is not well formed: contains non-numeric coefficients.")
+        rv
+    }
+    if (!is.null(rhs))
+        rhs <- rep(rhs, length.out = length(hypothesis))
+    if (length(hypothesis) > 1)
+        return(rbind(Recall(cnames, hypothesis[1], rhs[1]), Recall(cnames,
+                                                                   hypothesis[-1], rhs[-1])))
+    cnames_symb <- sapply(c("@", "#", "~"),
+                          function(x) length(grep(x, cnames)) < 1)
+    if (any(cnames_symb)) {
+        cnames_symb <- head(c("@", "#", "~")[cnames_symb],
+                            1)
+        cnames_symb <- paste(cnames_symb, seq_along(cnames),
+                             cnames_symb, sep = "")
+        hypothesis_symb <- hypothesis
+        for (i in order(nchar(cnames), decreasing = TRUE)) hypothesis_symb <- gsub(cnames[i],
+                                                                                   cnames_symb[i], hypothesis_symb, fixed = TRUE)
+    }
+    else {
+        stop("The hypothesis \"", hypothesis, "\" is not well formed: contains non-standard coefficient names.")
+    }
+    lhs <- strsplit(hypothesis_symb, "=", fixed = TRUE)[[1]]
+    if (is.null(rhs)) {
+        if (length(lhs) < 2)
+            rhs <- "0"
+        else if (length(lhs) == 2) {
+            rhs <- lhs[2]
+            lhs <- lhs[1]
+        }
+        else stop("The hypothesis \"", hypothesis, "\" is not well formed: contains more than one = sign.")
+    }
+    else {
+        if (length(lhs) < 2)
+            as.character(rhs)
+        else stop("The hypothesis \"", hypothesis, "\" is not well formed: contains a = sign although rhs was specified.")
+    }
+    lhs <- stripchars(lhs)
+    rhs <- stripchars(rhs)
+    rval <- sapply(cnames_symb, coefvector, y = lhs) - sapply(cnames_symb,
+                                                              coefvector, y = rhs)
+    rval <- c(rval, constants(rhs, cnames_symb) - constants(lhs,
+                                                            cnames_symb))
+    names(rval) <- c(cnames, "*rhs*")
+    if (is.null(dim(rval)))
+        rval <- t(rval)
+    rval
+}
+
 get_deriv_coefs <- function(order, deriv = 1L){
     if(deriv == 1L){
         ret <- switch(as.character(order),
@@ -2400,6 +2506,13 @@ MC_quad <- function(npts, nfact, lim)
 
 respSample <- function(P) .Call("respSample", P)
 
+makeSymMat <- function(mat){
+    if(ncol(mat) > 1L){
+        mat[is.na(mat)] <- 0
+        mat <- mat + t(mat) - diag(diag(mat))
+    }
+    mat
+}
 missingMsg <- function(string)
     stop(paste0('\'', string, '\' argument is missing.'), call.=FALSE)
 

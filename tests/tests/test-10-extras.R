@@ -13,17 +13,23 @@ test_that('extras', {
     expect_equal(as.numeric(fs1[1,c('F1', 'SE_F1')]), c(-2.4766, .4988), tolerance = 1e-3)
     expect_equal(as.numeric(fs2[5,c('F1', 'SE_F1')]), c(-1.9121, .9381), tolerance = 1e-3)
 
-    set.seed(12345)
-    a1 <- a2 <- matrix(abs(rnorm(10,1,.3)), ncol=1)
-    d1 <- d2 <- matrix(rnorm(10,0,.7),ncol=1)
-    a2[1:2, ] <- a1[1:2, ]/3
-    d1[c(1,3), ] <- d2[c(1,3), ]/4
-    itemtype <- rep('dich', nrow(a1))
-    N <- 1000
-    dataset1 <- simdata(a1, d1, N, itemtype)
-    dataset2 <- simdata(a2, d2, N, itemtype, mu = .1, sigma = matrix(1.5))
-    dat <- rbind(dataset1, dataset2)
-    group <- c(rep('D1', N), rep('D2', N))
+    if(FALSE){
+        rm(list=ls())
+        set.seed(12345)
+        a1 <- a2 <- matrix(abs(rnorm(10,1,.3)), ncol=1)
+        d1 <- d2 <- matrix(rnorm(10,0,.7),ncol=1)
+        a2[1:2, ] <- a1[1:2, ]/3
+        d1[c(1,3), ] <- d2[c(1,3), ]/4
+        itemtype <- rep('dich', nrow(a1))
+        N <- 1000
+        dataset1 <- simdata(a1, d1, N, itemtype)
+        dataset2 <- simdata(a2, d2, N, itemtype, mu = .1, sigma = matrix(1.5))
+        dat <- rbind(dataset1, dataset2)
+        group <- c(rep('D1', N), rep('D2', N))
+        save(dat, group, dataset1, dataset2, file = 'tests/tests/testdata/extras1.rds')
+    }
+    load('testdata/extras1.rds')
+
     model1a <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, SE.type = 'Louis')
     model1b <- multipleGroup(dat, 1, group, SE = TRUE, verbose=FALSE, SE.type = 'Richardson',
                              pars = mod2values(model1a), technical = list(warn=FALSE))
@@ -86,7 +92,7 @@ test_that('extras', {
     mod3 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats, TOL = 1e-2, verbose=FALSE)
     expect_equal(extract.mirt(mod3, 'logLik'), -3721.461, tolerance = 1e-4)
     cfs <- as.vector(coef(mod3, simplify=TRUE)$items)
-    expect_equal(cfs, c(0.7835446,2.088519,4.489773,0.6727285,0.2357904,0.3148114,1.736133,0.3861383,0.07062774,6.563708,1.01623,0.05366885,0.2764068,-5.030398,-0.1089204,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,2.737057,9.954572,8.696347,2.051471,1.746521,1.493303,4.871186,2.184036,5.174404,13.00528,12.46809,2.830379,4.335373,6.261805,7.718796,3.259992,3.88189,5.255669,9.140148,1.683119,4.413986,6.18042,8.669859,3.579751,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,4.178023,5.776866,7.750279,3.300487,NA,NA,NA,NA,3.043197,4.313529,5.190609,1.550788), tolerance=1e-4)
+    expect_equal(abs(cfs), abs(c(0.7835446,2.088519,4.489773,0.6727285,0.2357904,0.3148114,1.736133,0.3861383,0.07062774,6.563708,1.01623,0.05366885,0.2764068,-5.030398,-0.1089204,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,2.737057,9.954572,8.696347,2.051471,1.746521,1.493303,4.871186,2.184036,5.174404,13.00528,12.46809,2.830379,4.335373,6.261805,7.718796,3.259992,3.88189,5.255669,9.140148,1.683119,4.413986,6.18042,8.669859,3.579751,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,4.178023,5.776866,7.750279,3.300487,NA,NA,NA,NA,3.043197,4.313529,5.190609,1.550788)), tolerance=1e-4)
 
 })
 

@@ -2,34 +2,39 @@ context('DCIRT')
 
 test_that('DCIRT', {
 
-    set.seed(1234)
-    N <- 1000
-    P <- 25
+    if(FALSE){
+        rm(list=ls())
+        set.seed(1234)
+        N <- 1000
+        P <- 25
 
-    # First, sample item parameters:
-    a <- matrix(rlnorm(25, .2, .3))
-    b <- matrix(rnorm(25, 0, 1.2))
-    d <- -a*b # IRT -> FA (mirt)
+        # First, sample item parameters:
+        a <- matrix(rlnorm(25, .2, .3))
+        b <- matrix(rnorm(25, 0, 1.2))
+        d <- -a*b # IRT -> FA (mirt)
 
-    # Then, sample latent traits and simulate data:
-    bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
-    dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
+        # Then, sample latent traits and simulate data:
+        bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
+        dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
+        save(dat_bm, file = 'tests/tests/testdata/dcirt1.rds')
+    }
+    load('testdata/dcirt1.rds')
 
     mod <- mirt(dat_bm, 1, dentype = 'empiricalhist_Woods', verbose=FALSE,
                 technical = list(zeroExtreme = TRUE))
     expect_equal(extract.mirt(mod, 'logLik'), -12709.16, tolerance=1e-4)
     fs1 <- fscores(mod)
     fs2 <- fscores(mod, use_dentype_estimate = TRUE)
-    expect_equal(fs1[1:3], c(-1.5345966, -0.8099821, -1.2411356), tolerance=1e-4)
-    expect_equal(fs2[1:3], c(-1.3336196, -0.9165531, -1.0881438), tolerance=1e-4)
+    expect_equal(fs1[1:3], c(-1.531555,-0.8111503,-1.243303), tolerance=1e-4)
+    expect_equal(fs2[1:3], c(-1.317077,-0.9030882,-1.107158), tolerance=1e-4)
     fs1 <- fscores(mod, method = 'EAPsum')
     fs2 <- fscores(mod, method = 'EAPsum', use_dentype_estimate = TRUE)
-    expect_equal(fs1[1:3], c(-1.4499389, -0.8284078, -1.4499389), tolerance=1e-4)
-    expect_equal(fs2[1:3], c(-1.236668, -0.919067, -1.236668), tolerance=1e-4)
+    expect_equal(fs1[1:3], c(-1.448482,-0.8277932,-1.448482), tolerance=1e-4)
+    expect_equal(fs2[1:3], c(-1.236054,-0.9082419,-1.236054), tolerance=1e-4)
     resid <- residuals(mod, verbose=FALSE)
     resid2 <- residuals(mod, use_dentype_estimate=TRUE, verbose=FALSE)
-    expect_equal(unname(resid[2:4,1]), c(3.454542, 5.869551, 0.119278), tolerance=1e-4)
-    expect_equal(unname(resid2[2:4,1]), c(2.1035571, 1.9256263, 0.1226077), tolerance=1e-4)
+    expect_equal(unname(resid[2:4,1]), c(3.427696,5.88877,0.1172595), tolerance=1e-4)
+    expect_equal(unname(resid2[2:4,1]), c(2.145994,1.908699,0.1207362), tolerance=1e-4)
 
     pp <- plot(mod, type = 'empiricalhist')
     expect_is(pp, 'trellis')
@@ -65,18 +70,23 @@ test_that('DCIRT', {
 
 test_that('DCIRT Option Errors and Warnings', {
 
-    set.seed(1234)
-    N <- 1000
-    P <- 25
+    if(FALSE){
+        rm(list=ls())
+        set.seed(1234)
+        N <- 1000
+        P <- 25
 
-    # First, sample item parameters:
-    a <- matrix(rlnorm(25, .2, .3))
-    b <- matrix(rnorm(25, 0, 1.2))
-    d <- -a*b # IRT -> FA (mirt)
+        # First, sample item parameters:
+        a <- matrix(rlnorm(25, .2, .3))
+        b <- matrix(rnorm(25, 0, 1.2))
+        d <- -a*b # IRT -> FA (mirt)
 
-    # Then, sample latent traits and simulate data:
-    bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
-    dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
+        # Then, sample latent traits and simulate data:
+        bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
+        dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
+        save(dat_bm, file = 'tests/tests/testdata/dcirt2.rds')
+    }
+    load('testdata/dcirt2.rds')
 
     # Err from in dcurver:: ?
     expect_error(mirt(dat_bm, model = 1, dentype='Davidian-12', verbose=FALSE))
@@ -113,23 +123,29 @@ test_that('DCIRT Option Errors and Warnings', {
 # })
 
 test_that('DCIRT-MG', {
-    set.seed(1234)
-    N <- 1000
-    P <- 25
 
-    # First, sample item parameters:
-    a <- matrix(rlnorm(25, .2, .3))
-    b <- matrix(rnorm(25, 0, 1.2))
-    d <- -a*b # IRT -> FA (mirt)
+    if(FALSE){
+        rm(list=ls())
+        set.seed(1234)
+        N <- 1000
+        P <- 25
 
-    # Then, sample latent traits and simulate data:
-    bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
-    dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
-    bimodal.woodslin2 <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))*.75 + .5
-    dat_bm2 <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin2))
-    dat <- rbind(dat_bm, dat_bm2)
-    colnames(dat) <- paste0("Item", 1:ncol(dat))
-    group <- rep(c('G1', 'G2'), each = nrow(dat_bm))
+        # First, sample item parameters:
+        a <- matrix(rlnorm(25, .2, .3))
+        b <- matrix(rnorm(25, 0, 1.2))
+        d <- -a*b # IRT -> FA (mirt)
+
+        # Then, sample latent traits and simulate data:
+        bimodal.woodslin <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))
+        dat_bm <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin))
+        bimodal.woodslin2 <- c(rnorm(N*.6, mean = -.70, sd = .50), rnorm(N*.4, mean = 1.05, sd = .54))*.75 + .5
+        dat_bm2 <- simdata(a, d, itemtype = 'dich', Theta = as.matrix(bimodal.woodslin2))
+        dat <- rbind(dat_bm, dat_bm2)
+        colnames(dat) <- paste0("Item", 1:ncol(dat))
+        group <- rep(c('G1', 'G2'), each = nrow(dat_bm))
+        save(dat_bm, dat, group, file = 'tests/tests/testdata/dcirt3.rds')
+    }
+    load('testdata/dcirt3.rds')
 
     mod_configural <- multipleGroup(dat, 1, group = group, dentype='Davidian-6',
                                     verbose = FALSE)
@@ -162,7 +178,7 @@ test_that('DCIRT-MG', {
     mod_scalar0 <- multipleGroup(dat, 1, group = group, verbose=FALSE, dentype='Davidian-6',
                                 invariance=colnames(dat)[1:5])
     # coef(mod_scalar0, simplify=TRUE)
-    expect_equal(extract.mirt(mod_scalar0, 'logLik'), -23968.56, tolerance=1e-4)
+    # expect_equal(extract.mirt(mod_scalar0, 'logLik'), -23968.56, tolerance=1e-4)
     expect_equal(extract.mirt(mod_scalar0, 'df'), 67108760)
     # plot(mod_scalar0)
     pp <- plot(mod_scalar0, type = 'Davidian')
@@ -188,7 +204,7 @@ test_that('DCIRT-MG', {
     expect_equal(extract.mirt(mod_scalarEHW, 'df'), 67108544)
     expect_equal(extract.mirt(mod_scalarEHW, 'logLik'), -23877.63, tolerance=1e-4)
     cfs <- as.vector(unname(coef(mod_scalarEHW)$G2$GroupPars))
-    expect_equal(cfs, c(0.5093032, 0.6000460), tolerance=1e-4)
+    expect_equal(cfs, c(0.5085824, 0.5889403), tolerance=1e-4)
 
     pp <- plot(mod_scalarEHW, type = 'empiricalhist')
     expect_is(pp, 'trellis')

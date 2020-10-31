@@ -163,17 +163,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                     ret
                 }, data=data, key=key)
             }
-            data <- apply(data, 2L, function(x, message){
-                s <- sort(unique(x))
-                se <- min(s, na.rm = TRUE):max(x, na.rm = TRUE)
-                if(length(s) != length(se)){
-                    if(message)
-                        message('Item re-scored so that all values are within a distance of 1')
-                    for(i in 2L:length(s))
-                        x <- ifelse(x == s[i], se[i], x)
-                }
-                x
-            }, message = opts$message)
+            data <- remap.distance(data, message = opts$message)
         }
         Data$rowID <- 1L:nrow(data)
         if(any(rowSums(is.na(data)) == ncol(data))){
@@ -457,6 +447,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(length(lrPars))
         nestpars <- nestpars + sum(lrPars@est)
     if(!is.null(dots$structure)) nestpars <- nestpars - 1L
+    if(!is.null(opts$technical$nconstrain))
+        constrain <- c(constrain, opts$technical$nconstrain)
     if(length(constrain) > 0L)
         for(i in seq_len(length(constrain)))
             nconstr <- nconstr + length(constrain[[i]]) - 1L
@@ -499,7 +491,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             DERIV[[g]][[i]] <- selectMethod(Deriv, c(class(pars[[g]][[i]]), 'matrix'))
     }
     Ls <- makeLmats(pars, constrain, random = mixed.design$random,
-                    lr.random=latent.regression$lr.random, lrPars=lrPars)
+                    lr.random=latent.regression$lr.random, lrPars=lrPars,
+                    nconstrain=opts$technical$nconstrain)
     CUSTOM.IND <- which(sapply(pars[[1L]], class) %in% Use_R_ProbTrace())
     SLOW.IND <- which(sapply(pars[[1L]], class) %in% Use_R_Deriv())
     if(pars[[1]][[length(pars[[1L]])]]@itemclass %in% c(-1L, -999L))
@@ -613,7 +606,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                          NULL.MODEL=opts$NULL.MODEL, PLCI=opts$PLCI, Norder=opts$Norder,
                                          keep_vcov_PD=opts$keep_vcov_PD, symmetric=opts$technical$symmetric,
                                          MCEM_draws=opts$MCEM_draws, omp_threads=opts$omp_threads),
-                             Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
+                             Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control,
+                             nconstrain=opts$technical$nconstrain)
         if(opts$method == 'MCEM')
             opts$quadpts <- opts$MCEM_draws(ESTIMATE$cycles)
         opts$Moptim <- ESTIMATE$Moptim
@@ -856,9 +850,6 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                    DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich.Louis', 'sandwich')) &&
                   !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
-            if(logPrior != 0 && opts$warn)
-                warning('Information matrix with the crossprod, Louis, and sandwich method
-                        do not account for prior parameter distribution information')
             ESTIMATE <- SE.simple(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
                                   constrain=constrain, Ls=Ls, N=nrow(data), type=opts$SE.type,
                                   CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn,

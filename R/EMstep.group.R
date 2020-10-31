@@ -1,4 +1,5 @@
-EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, solnp_args, control)
+EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, solnp_args, control,
+                     nconstrain=NULL)
 {
     verbose <- list$verbose
     lrPars <- list$lrPars
@@ -179,7 +180,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                          pars=pars, ngroups=ngroups, J=J, itemloc=itemloc,
                          Theta=Theta, PrepList=PrepList, dentype=dentype, lrPars=lrPars,
                          specific=specific, sitems=sitems, CUSTOM.IND=CUSTOM.IND,
-                         constrain=constrain, EHPrior=NULL, Data=Data, omp_threads=list$omp_threads,
+                         constrain=constrain, nconstrain=nconstrain,
+                         EHPrior=NULL, Data=Data, omp_threads=list$omp_threads,
                          method=Moptim, control=control, hessian=list$SE,
                          lower=lower, upper=upper), silent=TRUE)
         cycles <- as.integer(opt$counts[1L])
@@ -296,7 +298,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                               CUSTOM.IND=CUSTOM.IND, SLOW.IND=list$SLOW.IND,
                               PrepList=PrepList, L=L, UBOUND=UBOUND, LBOUND=LBOUND, Moptim=Moptim,
                               dentype=dentype, nfact=nfact, keep_vcov_PD=list$keep_vcov_PD,
-                              rlist=rlist, constrain=constrain, DERIV=DERIV, Mrate=Mrate,
+                              rlist=rlist, constrain=constrain, nconstrain=nconstrain, DERIV=DERIV, Mrate=Mrate,
                               TOL=list$MSTEPTOL, solnp_args=solnp_args, full=full, lrPars=lrPars,
                               control=control)
             if(dentype == 'EHW' && cycles > 1L){
@@ -385,14 +387,15 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             }
             Mstep.time <- Mstep.time + proc.time()[3L] - start
         } #END EM
-        if(!is.na(TOL) && !is.nan(TOL)){
+        if(verbose && !list$SE) cat('\n')
+        if(is.nan(TOL) || is.numeric(TOL)){
             if(length(lrPars)) lrPars@mus <- lrPars@X %*% lrPars@beta
             if(MC)
                 gTheta <- updateTheta(npts=if(QMC) list$quadpts else list$MCEM_draws(cycles),
                                       nfact=nfact, pars=pars, QMC=QMC)
             tmp <- updatePrior(pars=pars, gTheta=gTheta,
                                list=list, ngroups=ngroups, nfact=nfact,
-                               J=J, dentype=dentype, sitems=sitems, cycles=cycles,
+                               J=J, dentype=dentype, sitems=sitems, cycles=2L,
                                rlist=rlist, full=full, lrPars=lrPars, MC=MC)
             prior <- tmp$prior; Prior <- tmp$Prior; Priorbetween <- tmp$Priorbetween
             Elist <- Estep(pars=pars, Data=Data, gTheta=gTheta, prior=prior, Prior=Prior,
