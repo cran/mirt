@@ -130,14 +130,14 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
     L <- Ls$L
     redun_constr <- Ls$redun_constr
     estindex_unique <- index[estpars & !redun_constr]
-    if(any(diag(L)[!estpars] > 0L)){
+    if(any(attr(L, 'diag')[!estpars] > 0L)){
         redindex <- index[!estpars]
         stop('Constraint applied to fixed parameter(s) ',
-             paste(paste0(redindex[diag(L)[!estpars] > 0L]), ''), ' but should only be applied to
+             paste(paste0(redindex[attr(L, 'diag')[!estpars] > 0L]), ''), ' but should only be applied to
                  estimated parameters. Please fix!', call.=FALSE)
     }
     #make sure constrained pars are equal
-    tmp <- rowSums(L)
+    tmp <- Matrix::rowSums(L)
     tmp[tmp == 0L] <- 1L
     check <- as.numeric(L %*% longpars) / tmp
     longpars[estpars] <- check[estpars]
@@ -185,10 +185,11 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
             stagecycle <- 3L
             longpars <- colMeans(SEM.stores)
             if(!no_stage_3){
-                Tau <- SEM.stores2[[1L]]
-                for(i in 2L:SEMCYCLES)
-                    Tau <- Tau + SEM.stores2[[i]]
-                Tau <- Tau/SEMCYCLES
+                Tau <- SEM.stores2[[1L]]/SEMCYCLES
+                if(SEMCYCLES > 1L){
+                    for(i in 2L:SEMCYCLES)
+                        Tau <- Tau + SEM.stores2[[i]]/SEMCYCLES
+                }
             }
             k <- KDRAWS
             gamma <- 0
@@ -269,6 +270,7 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
 
         #Step 3. Update R-M step
         Tau <- Tau + gamma*(ave.h - Tau)
+        longpars0 <- longpars
         if(list$Moptim == 'NR1'){
             correction <- try(solve(Tau, grad), TRUE)
             if(is(correction, 'try-error')){
@@ -287,8 +289,8 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
         if(verbose)
             cat(printmsg, sprintf(", gam = %.4f, Max-Change = %.4f",
                                   gamma, max(abs(gamma*correction))), sep='')
-        if(all(abs(gamma*correction) < TOL)) conv <- conv + 1L
-        else conv <- 0L
+        if(hasConverged(longpars0, longpars, TOL)) conv <- conv + 1L
+            else conv <- 0L
         if(!list$SE && conv >= 3L) break
         if(list$SE.type == 'MHRM' && list$SE &&
            cycles >= (400L + BURNIN + SEMCYCLES) && conv >= 3L) break
@@ -371,7 +373,7 @@ MHRM.group <- function(pars, constrain, Ls, Data, PrepList, list, random = list(
         info <- matrix(0, 1L, 1L)
         cycles <- BURNIN + SEMCYCLES
     }
-    ret <- list(pars=pars, cycles = cycles - BURNIN - SEMCYCLES, info=if(list$expl) matrix(0) else info,
+    ret <- list(pars=pars, cycles = cycles-BURNIN-SEMCYCLES, info=if(list$expl) matrix(0) else as.matrix(info),
                 correction=correction, longpars=longpars, converge=converge, SElogLik=0, cand.t.var=cand.t.var,
                 L=L, random=random, lrPars=lrPars, lr.random=lr.random, aveAR=colMeans(do.call(rbind, aveAR)),
                 time=c(MH_draws = as.numeric(Draws.time), Mstep=as.numeric(Mstep.time)),

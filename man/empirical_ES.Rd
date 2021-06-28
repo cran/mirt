@@ -21,8 +21,8 @@ empirical_ES(
 }
 \arguments{
 \item{mod}{a multipleGroup object which estimated only 2 groups. The first group in this object
-is assumed to be the reference group, which conforms to the \code{invariance} arguments in
-\code{\link{multipleGroup}}}
+is assumed to be the reference group by default (i.e., \code{ref.group = 1}), which conforms to the
+ \code{invariance} arguments in \code{\link{multipleGroup}}}
 
 \item{Theta.focal}{an optional matrix of Theta values from the focal group to be evaluated. If not supplied
 the default values to \code{\link{fscores}} will be used in conjunction with the \code{...}

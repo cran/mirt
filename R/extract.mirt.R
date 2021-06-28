@@ -17,7 +17,6 @@
 #'   \item{AICc}{corrected AIC}
 #'   \item{BIC}{BIC}
 #'   \item{SABIC}{sample size adjusted BIC}
-#'   \item{DIC}{DIC}
 #'   \item{HQ}{HQ}
 #'   \item{F}{unrotated standardized loadings matrix}
 #'   \item{h2}{factor communality estimates}
@@ -33,8 +32,7 @@
 #'   \item{itemnames}{a vector of item names from the input data}
 #'   \item{factorNames}{a vector of factor names from the model definition}
 #'   \item{rowID}{an integer vector indicating all valid row numbers used in the model estimation
-#'    (when all cases are used this will be \code{1:nrow(data)}). Mostly useful when the option
-#'     \code{technical = list(removeEmptyRows = TRUE)} was passed}
+#'    (when all cases are used this will be \code{1:nrow(data)})}
 #'   \item{data}{raw input data of item responses}
 #'   \item{covdata}{raw input data of data used as covariates}
 #'   \item{tabdatalong}{similar to \code{tabdata}, however the responses have been transformed into
@@ -111,7 +109,6 @@ extract.mirt <- function(x, what){
                   AICc = x@Fit$AICc,
                   BIC = x@Fit$BIC,
                   SABIC = x@Fit$SABIC,
-                  DIC = x@Fit$DIC,
                   method = x@Options$method,
                   logPrior = x@Fit$logPrior,
                   F = x@Fit$F,
@@ -164,6 +161,7 @@ extract.mirt <- function(x, what){
                   pis = x@Model$pis,
                   nestpars=x@Model$nestpars,
                   prodlist=x@Model$prodlist,
+                  completely_missing=x@Data$completely_missing,
                   stop(sprintf("Could not extract element \'%s\'", what), call.=FALSE))
         ret
 }

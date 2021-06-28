@@ -24,7 +24,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     ggum.start.values <- vector('list', length(K))
     if(any(itemtype == 'ggum')){
         dca <- try(vegan::decorana(fulldata), TRUE)
-        if(is(dca, 'try-error')){
+        if(is(dca, 'try-error') || nfact > 4){
             for (i in 1L:length(K))
                 ggum.start.values[[i]] <- c(rep(1, nfact), numeric(nfact),
                                             seq(3, -3, length.out = K[i]-1))
@@ -671,7 +671,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                     whc <- which(tmp)
                     for(w in 1:length(whc)){
                         pars[[i]]@par[whc[w]] <- switch(type[w],
-                                                     'norm'=p1[w],
+                                                     'norm'=pars[[i]]@par[whc[w]],
                                                      'lnorm'=exp(p1[w]),
                                                      'beta'=(p1[w]-1)/(p1[w] + p2[w] - 2),
                                                      'expbeta'=expbeta_sv(p1[w], p2[w]))

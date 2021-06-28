@@ -62,9 +62,7 @@
 #'   (in descending order of power) \code{'AIC'}, \code{'AICc'}, \code{'SABIC'}, \code{'HQ'}, and \code{'BIC'}.
 #'   If a numeric value is input that ranges between 0 and 1, the 'p' value will be tested
 #'   (e.g., \code{seq_stat = .05} will test for the difference of p < .05 in the add scheme,
-#'   or p > .05 in the drop scheme), along with the specified \code{p.adjust} input.
-#'   For models fitted with prior distributions \code{'DIC'} is also supported, though for these models
-#'   the p-value approach is not
+#'   or p > .05 in the drop scheme), along with the specified \code{p.adjust} input
 #' @param max_run a number indicating the maximum number of cycles to perform in sequential
 #'   searches. The default is to perform search until no further DIF is found
 #' @param plotdif logical; create item plots for items that are displaying DIF according to the
@@ -176,7 +174,8 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
         constrain <- model@Model$constrain
         mirt_model <- model@Model$model
         if(is(mirt_model, 'mirt.model'))
-            mirt_model$x <- mirt_model$x[mirt_model$x[,"Type"] != 'CONSTRAINB', ]
+            mirt_model$x <- mirt_model$x[mirt_model$x[,"Type"] != 'CONSTRAINB',
+                                         , drop=FALSE]
         technical$omp <- FALSE
         parnum <- list()
         for(i in seq_len(length(which.par)))
@@ -218,6 +217,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
                                   ...)
         aov <- anova(newmodel, model, verbose = FALSE)
         attr(aov, 'parnum') <- parnum
+        attr(aov, 'converged') <- extract.mirt(newmodel, 'converged')
         if(return_models) aov <- newmodel
         return(aov)
     }
@@ -227,7 +227,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
     if(!is(MGmodel, 'MultipleGroupClass'))
         stop('Input model must be fitted by multipleGroup()', call.=FALSE)
     aov <- anova(MGmodel)
-    has_priors <- !is.null(aov$DIC)
+    has_priors <- !is.null(aov$logPost)
     if(has_priors && is.numeric(seq_stat))
         stop('p-value seq_stat for models fitted with Bayesian priors in not meaningful. Please select alternative',
              call.=FALSE)
@@ -361,9 +361,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             names(res) <- itemnames[items2test][pick]
         }
     }
-
-    for(i in seq_len(length(res)))
-        attr(res[[i]], 'parnum') <- NULL
+    converged <- logical(length(res))
+    for(i in seq_len(length(res))){
+        if(!Wald) converged[i] <- attr(res[[i]], 'converged')
+        attr(res[[i]], 'converged') <- attr(res[[i]], 'parnum') <- NULL
+    }
     if(return_models) return(res)
     if(p.adjust != 'none'){
         if(Wald){
@@ -425,11 +427,11 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
              r <- x[2L, ] - x[1L, ]
              if(!has_priors)
                 r[,c("X2", 'df', 'p')] <- x[2L, c("X2", 'df', 'p')]
-             else r[,c('df', 'Bayes_Factor')] <- x[2L, c('df', 'Bayes_Factor')]
+             else r[,c('df')] <- x[2L, c('df')]
              r$logLik <- NULL
              r
          })
-         res <- do.call(rbind, out)
+         res <- cbind(converged, do.call(rbind, out))
          if(!has_priors) res$adj_pvals <- adj_pvals
          class(res) <- c('mirt_df', 'data.frame')
     }

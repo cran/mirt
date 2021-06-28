@@ -8,6 +8,7 @@ multipleGroup(
   data,
   model,
   group,
+  itemtype = NULL,
   invariance = "",
   method = "EM",
   dentype = "Gaussian",
@@ -24,6 +25,12 @@ declaring how the global model is to be estimated (useful to apply constraints h
 \item{group}{a \code{character} or \code{factor} vector indicating group membership. If a \code{character}
 vector is supplied this will be automatically transformed into a \code{\link{factor}} variable.
 As well, the first level of the (factorized) grouping variable will be treated as the "reference" group}
+
+\item{itemtype}{can be same type of input as is documented in \code{\link{mirt}}, however may also be a
+\code{ngroups} by \code{nitems} matrix specifying the type of IRT models for each group, respectively.
+Rows of this input correspond to the levels of the \code{group} input. For mixture models the rows correspond
+to the respective mixture grouping variables to be constructed, and the IRT models should be within these
+mixtures}
 
 \item{invariance}{a character vector containing the following possible options:
   \describe{

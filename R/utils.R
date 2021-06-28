@@ -368,8 +368,12 @@ ExtractGroupPars <- function(x){
 ExtractMixtures <- function(pars){
     pick <- length(pars[[1L]])
     logit_pi <- sapply(pars, function(x) x[[pick]]@par[length(x[[pick]]@par)])
-    max_logit_pi <- max(logit_pi)
-    pi <- exp(logit_pi - max_logit_pi)
+    psumexp(logit_pi)
+}
+
+psumexp <- function(logit){
+    max_logit <- max(logit)
+    pi <- exp(logit - max_logit)
     pi / sum(pi)
 }
 
@@ -1293,7 +1297,7 @@ nameInfoMatrix <- function(info, correction, L, npars){
     tmp <- outer(seq_len(npars), rep(1L, npars))
     matind <- matrix(0, ncol(tmp), nrow(tmp))
     matind[lower.tri(matind, diag = TRUE)] <- tmp[lower.tri(tmp, diag = TRUE)]
-    matind <- matind * L
+    matind <- matind * as.matrix(L) # TODO as.matrix could be avoided
     matind[matind == 0 ] <- NA
     matind[!is.na(matind)] <- tmp[!is.na(matind)]
     shortnames <- c()
@@ -1373,35 +1377,61 @@ maketabDataLarge <- function(tmpdata, group, groupNames, nitem, K, itemloc,
     ret
 }
 
+sparseLmat <- function(L, constrain, nconstrain){
+    # no constrain
+    L <- as.numeric(L)
+    whc <- which(L == 1)
+    vals <- L[whc]
+    full_loc <- cbind(whc, whc)
+
+    # constrain
+    for(i in seq_len(length(constrain))){
+        cexp <- expand.grid(constrain[[i]], constrain[[i]])
+        cexp <- cexp[cexp[,1] != cexp[,2], ]
+        full_loc <- rbind(full_loc, as.matrix(cexp))
+        vals <- c(vals, rep(1, nrow(cexp)))
+    }
+
+    # nconstrain
+    for(i in seq_len(length(nconstrain))){
+        cexp <- expand.grid(nconstrain[[i]], nconstrain[[i]])
+        cexp <- cexp[cexp[,1] != cexp[,2], ]
+        full_loc <- rbind(full_loc, as.matrix(cexp))
+        vals <- c(vals, c(1,-1))
+    }
+
+    ret <- Matrix::sparseMatrix(i = full_loc[,1], j = full_loc[,2], x=vals,
+                                dims = c(length(L), length(L)))
+    attr(ret, 'diag') <- L
+    ret
+}
+
 makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.random = list(),
                       nconstrain = NULL){
     ngroups <- length(pars)
     J <- length(pars[[1L]]) - 1L
-    L <- c()
+    LL <- c()
     for(g in seq_len(ngroups))
         for(i in seq_len(J+1L))
-            L <- c(L, pars[[g]][[i]]@est)
+            LL <- c(LL, pars[[g]][[i]]@est)
     for(i in seq_len(length(random)))
-        L <- c(L, random[[i]]@est)
+        LL <- c(LL, random[[i]]@est)
     if(length(lrPars))
-        L <- c(L, lrPars@est)
+        LL <- c(LL, lrPars@est)
     for(i in seq_len(length(lr.random)))
-        L <- c(L, lr.random[[i]]@est)
-    L <- diag(as.numeric(L))
-    redun_constr <- rep(FALSE, ncol(L))
-    for(i in seq_len(length(constrain))){
-        L[constrain[[i]], constrain[[i]]] <- 1L
+        LL <- c(LL, lr.random[[i]]@est)
+    redun_constr <- rep(FALSE, length(LL))
+    for(i in seq_len(length(constrain)))
         for(j in 2L:length(constrain[[i]]))
             redun_constr[constrain[[i]][j]] <- TRUE
-    }
     if(!is.null(nconstrain)){
         for(i in seq_len(length(nconstrain))){
             stopifnot(length(nconstrain[[i]]) == 2L)
-            L[nconstrain[[i]], nconstrain[[i]]] <- c(1L, -1L)
             for(j in 2L:length(nconstrain[[i]]))
                 redun_constr[nconstrain[[i]][j]] <- TRUE
         }
     }
+    L <- sparseLmat(LL, constrain=constrain, nconstrain=nconstrain)
     return(list(L=L, redun_constr=redun_constr))
 }
 
@@ -1424,10 +1454,14 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'parallel', 'NULL.MODEL', 'theta_lim', 'RANDSTART', 'MHDRAWS', 'removeEmptyRows',
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
                 'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder', 'MCEM_draws',
-                "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain')
+                "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain',
+                'standardize_ref')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
+    if(any(tnames == 'removeEmptyRows'))
+        warning(c('removeEmptyRows option has been deprecated. Complete NA response vectors now supported ',
+                  'by using NA placeholders'), call.=FALSE)
     if((method %in% c('MHRM', 'MIXED', 'SEM')) && SE.type == 'Oakes') SE.type <- 'MHRM'
     if(method == 'MCEM' && SE && SE.type != 'complete')
         stop('SE.type not currently supported for MCEM method', call.=FALSE)
@@ -1485,7 +1519,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$plausible.draws <- ifelse(is.null(technical$plausible.draws), 0, technical$plausible.draws)
     opts$storeEtable <- ifelse(is.null(technical$storeEtable), FALSE, technical$storeEtable)
     if(!is.null(TOL))
-        if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- FALSE
+        if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- opts$verbose <- FALSE
     opts$TOL <- ifelse(is.null(TOL),
                        if(method %in% c('EM', 'QMCEM', 'MCEM')) 1e-4 else
                            if(method == 'BL') 1e-8 else 1e-3, TOL)
@@ -1497,8 +1531,6 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
             stop('SEM information matrix not supported with QMCEM estimation', call.=FALSE)
     }
     if(is.null(technical$symmetric)) technical$symmetric <- TRUE
-    opts$removeEmptyRows <- if(is.null(technical$removeEmptyRows)) FALSE
-        else technical$removeEmptyRows
     opts$omp_threads <- ifelse(is.null(technical$omp), .mirtClusterEnv$omp_threads, 1L)
     opts$PLCI <- ifelse(is.null(technical$PLCI), FALSE, technical$PLCI)
     opts$warn <- if(is.null(technical$warn)) TRUE else technical$warn
@@ -1595,8 +1627,10 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
 }
 
 reloadPars <- function(longpars, pars, ngroups, J){
-    .Call('reloadPars', longpars, pars, ngroups, J,
-          attr(pars[[1L]], 'nclasspars'))
+    nclasspars <- if(ngroups > 1L)
+        do.call(rbind, lapply(pars, function(x) attr(x, 'nclasspars')))
+    else attr(pars[[1L]], 'nclasspars')
+    .Call('reloadPars', longpars, pars, ngroups, J, nclasspars)
 }
 
 computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L),
@@ -2070,6 +2104,12 @@ collapseCells <- function(O, E, mincell = 1){
             On <- na.omit(On)
         }
 
+        if(nrow(On) == 0){
+            E[[i]] <- En
+            O[[i]] <- On
+            break
+        }
+
         #drop 0's and 1's
         drop <- rowSums(On) == 0L
         On <- On[!drop,]
@@ -2259,6 +2299,9 @@ latentRegression_obj <- function(data, covdata, formula, dentype, method){
             covdata <- covdata[-tmp, ]
             data <- data[-tmp, ]
         }
+        completely_missing <- which(rowSums(is.na(data)) == ncol(data))
+        if(length(completely_missing))
+            covdata <- covdata[-completely_missing, , drop=FALSE]
         latent.regression <- list(df=covdata, formula=formula, EM=TRUE)
     } else latent.regression <- NULL
     latent.regression
@@ -2497,6 +2540,20 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
     r
 }
 
+hasConverged <- function(p0, p1, TOL){
+    pick <- names(p0) %in% c('g', 'u')
+    if(any(pick)){
+        p0[pick] <- plogis(p0[pick])
+        p1[pick] <- plogis(p1[pick])
+    }
+    pick <- names(p0) == c('PI')
+    if(any(pick)){
+        p0[pick] <- psumexp(p0[pick])
+        p1[pick] <- psumexp(p1[pick])
+    }
+    all(abs(p0 - p1) < TOL)
+}
+
 QMC_quad <- function(npts, nfact, lim, leap=409, norm=FALSE){
     qnorm(QUnif(npts, min=0, max=1, p=nfact, leap=leap))
 }
@@ -2505,6 +2562,17 @@ MC_quad <- function(npts, nfact, lim)
     qnorm(matrix(runif(n=npts * nfact, min = lim[1L], max = lim[2]), npts, nfact))
 
 respSample <- function(P) .Call("respSample", P)
+
+addMissing <- function(mat, whc){
+    if(length(whc)){
+        tmp <- mat
+        mat <- rbind(mat, tmp[1L:length(whc), , drop=FALSE])
+        id <- 1L:nrow(mat)
+        mat[whc, ] <- NA
+        mat[!(id %in% whc), ] <- tmp
+    }
+    mat
+}
 
 makeSymMat <- function(mat){
     if(ncol(mat) > 1L){

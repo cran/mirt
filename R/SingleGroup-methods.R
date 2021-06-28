@@ -76,7 +76,6 @@ setMethod(
                 cat("\nLog-posterior = ", x@Fit$logLik + x@Fit$logPrior, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
                 cat('Estimated parameters:', length(extract.mirt(x, 'parvec')), '\n')
-                cat("DIC = ", x@Fit$DIC, "\n", sep='')
             } else {
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
@@ -463,6 +462,13 @@ setMethod(
 #' # in isolation
 #' anova(x)
 #'
+#' # with priors on first model
+#' model <- "Theta = 1-4
+#'           PRIOR = (1-4, a1, lnorm, 0, 10)"
+#' xp <- mirt(Science, model)
+#' anova(xp, x2)
+#' anova(xp)
+#'
 #' # bounded parameter
 #' dat <- expand.table(LSAT7)
 #' mod <- mirt(dat, 1)
@@ -487,15 +493,16 @@ setMethod(
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, object2, bounded = FALSE, mix = 0.5, verbose = TRUE){
         if(missing(object2)){
+            hasPriors <- object@Fit$logPrior != 0
             ret <- data.frame(AIC = object@Fit$AIC,
                               AICc = object@Fit$AICc,
                               SABIC = object@Fit$SABIC,
                               HQ = object@Fit$HQ,
                               BIC = object@Fit$BIC,
                               logLik = object@Fit$logLik)
-            if(object@Fit$logPrior != 0){
-                ret$DIC <- object@Fit$DIC
-                ret$logPost <- object@Fit$logPrior + object@Fit$logLik
+            if(hasPriors){
+                ret <- ret[!(colnames(ret) %in% c('AIC', 'AICc'))]
+                ret$logPost = object@Fit$logPrior + object@Fit$logLik
             }
             class(ret) <- c('mirt_df', 'data.frame')
             return(ret)
@@ -520,18 +527,13 @@ setMethod(
             cat('\n')
         }
         if(any(object2@Fit$logPrior != 0 || object@Fit$logPrior != 0)){
-            BF <- (object@Fit$logLik + object@Fit$logPrior) - (object2@Fit$logLik + object2@Fit$logPrior)
-            ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
-                              AICc = c(object@Fit$AICc, object2@Fit$AICc),
-                              SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
+            ret <- data.frame(SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
                               HQ = c(object@Fit$HQ, object2@Fit$HQ),
                               BIC = c(object@Fit$BIC, object2@Fit$BIC),
-                              DIC = c(object@Fit$DIC, object2@Fit$DIC),
+                              df = c(NaN, abs(df)),
                               logLik = c(object@Fit$logLik, object2@Fit$logLik),
                               logPost = c(object@Fit$logLik + object@Fit$logPrior,
-                                          object2@Fit$logLik + object2@Fit$logPrior),
-                              df = c(NaN, abs(df)),
-                              Bayes_Factor = c(NA, exp(BF)))
+                                          object2@Fit$logLik + object2@Fit$logPrior))
         } else {
             X2 <- 2*object2@Fit$logLik - 2*object@Fit$logLik
             ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
@@ -699,6 +701,11 @@ setMethod(
         res <- matrix(0,J,J)
         diag(res) <- NA
         colnames(res) <- rownames(res) <- colnames(data)
+        if(!is.null(Theta)){
+            if(!is.matrix(Theta)) Theta <- matrix(Theta)
+            if(nrow(Theta) > nrow(data))
+                Theta <- Theta[-extract.mirt(object, 'completely_missing'), , drop=FALSE]
+        }
         if(!discrete){
             if(is.null(quadpts)){
                 if(QMC) quadpts <- 5000L
@@ -712,11 +719,12 @@ setMethod(
                     QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
                 else {
                     if(nfact > 3L)
-                        warning('High-dimensional models should use QMC integration instead', call.=FALSE)
+                        warning('High-dimensional models should use QMC integration instead',
+                                call.=FALSE)
                     thetaComb(theta, nfact)
                 }
             } else if(is.null(Theta)){
-                Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, ...)
+                Theta <- fscores(object, verbose=FALSE, full.scores=TRUE, leave_missing=TRUE, ...)
             }
         } else {
             Theta <- object@Model$Theta
@@ -1423,9 +1431,11 @@ setMethod(
                 P <- vector('list', length(which.items))
                 names(P) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
+                alltwocats <- all(extract.mirt(x, 'K')[which.items] == 2L)
                 for(i in which.items){
                     tmp <- probtrace(extract.item(x, i), ThetaFull)
-                    if(ncol(tmp) == 2L && facet_items && drop2) tmp <- tmp[,2, drop=FALSE]
+                    if(ncol(tmp) == 2L && (facet_items || (!facet_items && alltwocats)) && drop2)
+                        tmp <- tmp[,2, drop=FALSE]
                     tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta),
                                                            labels=paste0('P', seq_len(ncol(tmp)))))
                     P[[ind]] <- tmp2
@@ -1670,7 +1680,7 @@ mirt2traditional <- function(x, vcov){
         for(i in 1L:length(delta_index)){
             if(!x@est[i]) next
             if(is.na(delta_index[[i]][1L])) next
-            grad <- numerical_deriv(fns[[i]], opar[delta_index[[i]]], opar=opar, index=i)
+            grad <- numerical_deriv(opar[delta_index[[i]]], fns[[i]], opar=opar, index=i)
             parnum <- x@parnum[delta_index[[i]]]
             pick <- numeric(length(grad))
             for(j in 1L:length(parnum))

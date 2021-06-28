@@ -128,7 +128,7 @@
 #'      grad[1] <- sum((Theta - b) * PQ * (r_P[,2] - r_P[,1]))
 #'
 #'      ## check with internal numerical form to be safe
-#'      # numerical_deriv(mirt:::EML, x@par[x@est], obj=x, Theta=Theta)
+#'      # numerical_deriv(x@par[x@est], mirt:::EML, obj=x, Theta=Theta)
 #'      grad
 #' }
 #'
@@ -192,8 +192,8 @@ createItem <- function(name, par, est, P, gr=NULL, hss = NULL, gen = NULL,
     nms_args <- names(formals(P))
     if(!(length(nms_args) %in% c(3L,4L)))
         stop('P function does not have the correct number of arguments', call.=FALSE)
-    if(any(names(par) %in% c('g', 'u')) || any(names(est) %in% c('g', 'u')))
-        stop('Parameter names cannot be \'g\' or \'u\', please change.', call.=FALSE)
+    if(any(names(par) %in% c('g', 'u', 'PI')) || any(names(est) %in% c('g', 'u', 'PI')))
+        stop('Parameter names cannot be \'g\', \'u\', or \'PI\', please change.', call.=FALSE)
     if(bytecompile) P <- compiler::cmpfun(P)
     dps <- dps2 <- function() NULL
     if(derivType == 'symbolic' || derivType.hss == 'symbolic'){

@@ -1,3 +1,17 @@
+# Changes in mirt 1.34
+
+- Previous `technical = list(removeEmptyRows = TRUE)` input now deprecated. Response patterns
+  that are now completely missing are supplied NA placeholders within estimation and 
+  post-estimation supporting functions (e.g., `fscores()`, `personfit()`, `fixed()`, etc)
+
+- Added `converged` element in `DIF()` output to evaluate whether the nested model iteration converged
+
+- Added support for plausible-value draws in `fscores()` when using `response.pattern` argument
+
+- Fix `SE.type = 'Fisher'` computation in multi-group models (reported by Felix Zimmer)
+
+- Switch `par` and `f` inputs in `numerical_deriv()`
+
 # Changes in mirt 1.33.1
 
 - Added `gen.difficulty()` to compute the generalized difficulty statistics 

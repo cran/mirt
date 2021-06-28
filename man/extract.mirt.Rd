@@ -31,7 +31,6 @@ Objects which can be extracted from mirt objects include:
   \item{AICc}{corrected AIC}
   \item{BIC}{BIC}
   \item{SABIC}{sample size adjusted BIC}
-  \item{DIC}{DIC}
   \item{HQ}{HQ}
   \item{F}{unrotated standardized loadings matrix}
   \item{h2}{factor communality estimates}
@@ -47,8 +46,7 @@ Objects which can be extracted from mirt objects include:
   \item{itemnames}{a vector of item names from the input data}
   \item{factorNames}{a vector of factor names from the model definition}
   \item{rowID}{an integer vector indicating all valid row numbers used in the model estimation
-   (when all cases are used this will be \code{1:nrow(data)}). Mostly useful when the option
-    \code{technical = list(removeEmptyRows = TRUE)} was passed}
+   (when all cases are used this will be \code{1:nrow(data)})}
   \item{data}{raw input data of item responses}
   \item{covdata}{raw input data of data used as covariates}
   \item{tabdatalong}{similar to \code{tabdata}, however the responses have been transformed into
