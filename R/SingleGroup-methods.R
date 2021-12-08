@@ -80,7 +80,7 @@ setMethod(
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
                 cat('Estimated parameters:', extract.mirt(x, 'nestpars'), '\n')
-                cat("AIC = ", x@Fit$AIC, "; AICc = ", x@Fit$AICc, "\n", sep='')
+                cat("AIC = ", x@Fit$AIC, "\n", sep='')
                 cat("BIC = ", x@Fit$BIC, "; SABIC = ", x@Fit$SABIC, "\n", sep='')
             }
             if(!is.nan(x@Fit$p)){
@@ -89,6 +89,7 @@ setMethod(
                     ", TLI = ", round(x@Fit$TLI,3), sep='')
             }
         }
+        cat("\n")
     }
 )
 
@@ -427,12 +428,15 @@ setMethod(
 #' Compare nested models with likelihood-based statistics
 #'
 #' Compare nested models using likelihood ratio test (X2), Akaike Information Criterion (AIC),
-#' sample size adjusted AIC (AICc), Bayesian Information Criterion (BIC),
+#' Bayesian Information Criterion (BIC),
 #' Sample-Size Adjusted BIC (SABIC), and Hannan-Quinn (HQ) Criterion.
+#' When given a sequence of objects, \code{anova} tests the models against one another
+#' in the order specified.
 #'
 #' @param object an object of class \code{SingleGroupClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
 #' @param object2 a second model estimated from any of the mirt package estimation methods
+#' @param ... additional model objects to be sequentially compared
 #' @param bounded logical; are the two models comparing a bounded parameter (e.g., comparing a single
 #'   2PL and 3PL model with 1 df)? If \code{TRUE} then a 50:50 mix of chi-squared distributions
 #'   is used to obtain the p-value
@@ -458,6 +462,11 @@ setMethod(
 #' x <- mirt(Science, 1)
 #' x2 <- mirt(Science, 2)
 #' anova(x, x2)
+#'
+#' # compare three models sequentially
+#' x2 <- mirt(Science, 1, 'gpcm')
+#' x3 <- mirt(Science, 1, 'nominal')
+#' anova(x, x2, x3)
 #'
 #' # in isolation
 #' anova(x)
@@ -491,20 +500,34 @@ setMethod(
 setMethod(
     f = "anova",
     signature = signature(object = 'SingleGroupClass'),
-    definition = function(object, object2, bounded = FALSE, mix = 0.5, verbose = TRUE){
+    definition = function(object, object2, ...,
+                          bounded = FALSE, mix = 0.5, verbose = TRUE){
+        dots <- list(...)
+        if(length(dots)){
+            dots <- c(object, object2, dots)
+            ret <- vector('list', length(dots)-1L)
+            for(i in 1L:length(ret)){
+                ret[[i]] <- anova(dots[[i]], dots[[i+1L]], bounded=bounded,
+                                  mix=mix, verbose=FALSE)
+                if(i > 1L)
+                    ret[[i]] <- ret[[i]][2L, ]
+            }
+            ret <- do.call(rbind, ret)
+            rownames(ret) <- 1L:nrow(ret)
+            return(ret)
+        }
         if(missing(object2)){
             hasPriors <- object@Fit$logPrior != 0
             ret <- data.frame(AIC = object@Fit$AIC,
-                              AICc = object@Fit$AICc,
                               SABIC = object@Fit$SABIC,
                               HQ = object@Fit$HQ,
                               BIC = object@Fit$BIC,
                               logLik = object@Fit$logLik)
             if(hasPriors){
-                ret <- ret[!(colnames(ret) %in% c('AIC', 'AICc'))]
+                ret <- ret[!(colnames(ret) %in% c('AIC'))]
                 ret$logPost = object@Fit$logPrior + object@Fit$logLik
             }
-            class(ret) <- c('mirt_df', 'data.frame')
+            ret <- as.mirt_df(ret)
             return(ret)
         }
         df <- object@Fit$df - object2@Fit$df
@@ -537,7 +560,6 @@ setMethod(
         } else {
             X2 <- 2*object2@Fit$logLik - 2*object@Fit$logLik
             ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
-                              AICc = c(object@Fit$AICc, object2@Fit$AICc),
                               SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
                               HQ = c(object@Fit$HQ, object2@Fit$HQ),
                               BIC = c(object@Fit$BIC, object2@Fit$BIC),
@@ -548,7 +570,7 @@ setMethod(
             if(bounded)
                 ret$p[2L] <- 1 - mixX2(X2, df=abs(df), mix=mix)
         }
-        class(ret) <- c('mirt_df', 'data.frame')
+        ret <- as.mirt_df(ret)
         ret
     }
 )
@@ -812,7 +834,7 @@ setMethod(
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,object@Data$Freq[[1L]],expected,res)
-            colnames(tabdata) <- c(colnames(object@Data$tabdata),"freq","exp","res")
+            colnames(tabdata) <- c(colnames(object@Data$tabdata),"freq","exp","std.res")
             if(full.scores){
                 tabdata[, 'exp'] <- object@Internals$Pl / r * N
                 tabdata2 <- object@Data$tabdata
@@ -820,11 +842,11 @@ setMethod(
                 sfulldata <- apply(object@Data$data, 1, paste, sep='', collapse = '/')
                 scoremat <- tabdata[match(sfulldata, stabdata2), 'exp', drop = FALSE]
                 res <- (1-scoremat) / sqrt(scoremat)
-                colnames(res) <- 'res'
+                colnames(res) <- 'std.res'
                 ret <- cbind(object@Data$data, scoremat, res)
-                ret[is.na(rowSums(ret)), c('exp', 'res')] <- NA
+                ret[is.na(rowSums(ret)), c('exp', 'std.res')] <- NA
                 rownames(ret) <- NULL
-                class(ret) <- c('mirt_df', 'data.frame')
+                ret <- as.mirt_df(ret)
                 return(ret)
             } else {
                 tabdata <- tabdata[do.call(order, as.data.frame(tabdata[,1:J])),]
@@ -832,7 +854,7 @@ setMethod(
                     if(!is.numeric(printvalue)) stop('printvalue is not a number.', call.=FALSE)
                     tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
                 }
-                class(tabdata) <- c('mirt_df', 'data.frame')
+                tabdata <- as.mirt_df(tabdata)
                 return(tabdata)
             }
         } else if(type == 'expfull'){
@@ -874,7 +896,7 @@ setMethod(
                 if(!is.numeric(printvalue)) stop('printvalue is not a number.', call.=FALSE)
                 tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
             }
-            class(tabdata) <- c('mirt_df', 'data.frame')
+            tabdata <- as.mirt_df(tabdata)
             return(tabdata)
         } else if(type == 'Q3'){
             if(discrete && !use_dentype_estimate)
@@ -954,6 +976,7 @@ setMethod(
 #'     \item{\code{'itemscore'}}{item scoring traceline plots}
 #'     \item{\code{'score'}}{expected total score surface}
 #'     \item{\code{'scorecontour'}}{expected total score contour plot}
+#'     \item{\code{'EAPsum'}}{compares sum-scores to the expected values based on the EAP for sum-scores method (see \code{\link{fscores}})}
 #'   }
 #'
 #'   Note that if \code{dentype = 'empiricalhist'} was used in estimation then
@@ -1061,7 +1084,8 @@ setMethod(
     {
         dots <- list(...)
         if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score', 'itemscore',
-                       'infocontour', 'infotrace', 'scorecontour', 'empiricalhist', 'Davidian')))
+                       'infocontour', 'infotrace', 'scorecontour', 'empiricalhist', 'Davidian',
+                       'EAPsum')))
             stop('type supplied is not supported')
         if (any(degrees > 90 | degrees < 0))
             stop('Improper angle specified. Must be between 0 and 90.', call.=FALSE)
@@ -1138,6 +1162,16 @@ setMethod(
         maxs <- maxs[which.items]
         ybump <- (max(maxs) - min(mins))/15
         ybump_full <- (sum(maxs) - sum(mins))/15
+        if(type == 'EAPsum'){
+            if(is.null(main))
+                main <- "Expected vs Observed Sum-Scores"
+            fs <- fscores(x, method = 'EAPsum', full.scores=FALSE, verbose=FALSE, ...)
+            plt <- with(fs, data.frame(Scores=Sum.Scores, y=c(observed, expected),
+                                       group = rep(c('observed', 'expected'), each=nrow(fs))))
+            return(xyplot(y~Scores, plt, type='l', main = main, group=plt$group,
+                   auto.key=auto.key, xlab = expression(Sum-Score), ylab=expression(n),
+                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
+        }
         if(nfact == 3){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2", "Theta3")
             plt$SE <- 1 / sqrt(plt$info)
@@ -1234,7 +1268,7 @@ setMethod(
                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'trace'){
                 if(is.null(main))
-                    main <- 'Item trace lines'
+                    main <- 'Item Probability Functions'
                 P <- vector('list', length(which.items))
                 names(P) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
@@ -1259,7 +1293,7 @@ setMethod(
                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'infotrace'){
                 if(is.null(main))
-                    main <- 'Item information trace lines'
+                    main <- 'Item Information'
                 I <- matrix(NA, nrow(Theta), J)
                 for(i in which.items)
                     I[,i] <- iteminfo(extract.item(x, i), ThetaFull, degrees=degrees)
@@ -1273,7 +1307,7 @@ setMethod(
                                  par.strip.text=par.strip.text, par.settings=par.settings, ...))
             } else if(type == 'itemscore'){
                 if(is.null(main))
-                    main <- 'Expected item scoring function'
+                    main <- 'Expected Item Score'
                 S <- vector('list', length(which.items))
                 names(S) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
@@ -1427,7 +1461,7 @@ setMethod(
                 }
             } else if(type == 'trace'){
                 if(is.null(main))
-                    main <- 'Item trace lines'
+                    main <- 'Item Probability Functions'
                 P <- vector('list', length(which.items))
                 names(P) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
@@ -1461,7 +1495,7 @@ setMethod(
                 }
             } else if(type == 'itemscore'){
                 if(is.null(main))
-                    main <- 'Expected item scoring function'
+                    main <- 'Expected Item Score'
                 S <- vector('list', length(which.items))
                 names(S) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
@@ -1486,7 +1520,7 @@ setMethod(
                 }
             } else if(type == 'infotrace'){
                 if(is.null(main))
-                    main <- 'Item information trace lines'
+                    main <- 'Item Information'
                 I <- matrix(NA, nrow(Theta), J)
                 for(i in which.items)
                     I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
@@ -1646,14 +1680,70 @@ mirt2traditional <- function(x, vcov){
         names(par) <- c('a', paste0('b', 1:length(newd)))
         x@est <- x@est[c(1, (ncat+3L):length(x@est))]
     } else if(cls == 'nominal'){
+        fns <- vector('list', ncat*2)
+        for(i in 2L:length(par)-1L){
+            fns[[i]] <- function(par, index, opar){
+                if(index <= floor(length(opar)/2)){
+                    as <- par[2:(ncat+1)] * par[1]
+                    as <- as - mean(as)
+                    ret <- as[index]
+                } else {
+                    ds <- par
+                    ds <- ds - mean(ds)
+                    ret <- ds[index-ncat]
+                }
+                ret
+            }
+        }
+        delta_index <- vector('list', ncat*2)
+        for(i in 1L:(ncat)) delta_index[[i]] <- 1L:(ncat+1L)
+        for(i in (ncat+1L):(ncat*2)) delta_index[[i]] <- (ncat+2L):length(par)
         as <- par[2:(ncat+1)] * par[1]
         as <- as - mean(as)
         ds <- par[(ncat+2):length(par)]
         ds <- ds - mean(ds)
         par <- c(as, ds)
         names(par) <- c(paste0('a', 1:ncat), paste0('c', 1:ncat))
-        x@est <- x@est[-2]
+        x@est <- rep(TRUE, ncat*2)
+        x@SEpar <- rep(as.numeric(NA), ncat*2)
     } else if(cls == 'nestlogit'){
+        fns <- vector('list', ncat*2 + 4)
+        fns[[2]] <- function(par, index, opar){
+            if(index == 2L){
+                opar[1L:2L] <- par
+                ret <- -opar[2L]/opar[1L]
+            }
+            ret
+        }
+        fns[[3]] <- function(par, index, opar){
+            if(index == 3L)
+                ret <- plogis(par)
+            ret
+        }
+        fns[[4]] <- function(par, index, opar){
+            if(index == 4L)
+                ret <- plogis(par)
+            ret
+        }
+        for(i in (2L:length(par)-1L) + 4){
+            fns[[i]] <- function(par, index, opar){
+                if(index <= (5 + ncat-2)){
+                    as <- par
+                    as <- as - mean(as)
+                    ret <- as[index-4]
+                } else {
+                    ds <- par
+                    ds <- ds - mean(ds)
+                    ret <- ds[index-4-(ncat-1)]
+                }
+                ret
+            }
+        }
+
+        delta_index <- vector('list', (ncat-1)*2)
+        for(i in 1L:(ncat-1)) delta_index[[i]] <- 1L:(ncat-1) + 4
+        for(i in ncat:((ncat-1)*2)) delta_index[[i]] <- 1L:(ncat-1) + 4 + ncat - 1L
+        delta_index <- c(list(NA, 1L:2L, 3L, 4L), delta_index)
         par1 <- par[1:4]
         par1[2] <- -par1[2]/par1[1]
         par1[3] <- plogis(par1[3])
@@ -1667,11 +1757,14 @@ mirt2traditional <- function(x, vcov){
         names(as) <- paste0('a', 1:(ncat-1))
         names(ds) <- paste0('c', 1:(ncat-1))
         par <- c(par1, as, ds)
+        x@est <- c(x@est[1:4], rep(TRUE, (ncat-1)*2))
+        x@SEpar <- c(x@SEpar[1], as.numeric(rep(NA, (ncat-1)*2 + 3)))
     }
     x@par <- par
     names(x@est) <- names(par)
     x@parnames <- names(x@par)
-    if(length(vcov) == 0L || (is.na(vcov[1L,1L]) || !(cls %in% c('dich', 'graded', 'gpcm')))){
+    if(length(vcov) == 0L || (is.na(vcov[1L,1L]) || !(cls %in%
+                                                      c('dich', 'graded', 'gpcm', 'nominal', 'nestlogit')))){
         x@SEpar <- numeric()
     } else {
         nms <- colnames(vcov)

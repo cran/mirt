@@ -1154,6 +1154,15 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
         }
         attr(PrepList, 'random') <- random
     }
+    if(length(lrPars)){
+        for(j in seq_len(length(lrPars@par))){
+            lrPars@par[j] <- pars[ind,'value']
+            lrPars@est[j] <- as.logical(pars[ind,'est'])
+            lrPars@lbound[j] <- pars[ind,'lbound']
+            lrPars@ubound[j] <- pars[ind,'ubound']
+            ind <- ind + 1L
+        }
+    }
     if(length(lr.random)){
         for(i in seq_len(length(lr.random))){
             for(j in seq_len(length(lr.random[[i]]@par))){
@@ -1681,7 +1690,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
         return(ESTIMATE)
     } else ESTIMATE$fail_invert_info <- FALSE
     SEtmp <- diag(solve(info))
-    if(any(SEtmp < 0)){
+    if(any(is.na(SEtmp) | is.nan(SEtmp)) || any(SEtmp < 0)){
         if(warn)
             warning('Could not invert information matrix; model likely is not empirically identified.',
                     call.=FALSE)
@@ -1783,11 +1792,14 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
         X <- model.matrix(formula, df)
     }
     tXX <- t(X) %*% X
-    qr_XX <- try(qr(tXX), silent = TRUE)
-    if(!is.nan(TOL)){
-        if(is(qr_XX, 'try-error'))
-            stop('Latent regression design matrix contains problematic terms.', call. = FALSE)
-    } else qr_XX <- qr(0)
+    qr_XX <- qr(0)
+    if(!is.na(TOL)){
+        qr_XX <- try(qr(tXX), silent = TRUE)
+        if(!is.nan(TOL)){
+            if(is(qr_XX, 'try-error'))
+                stop('Latent regression design matrix contains problematic terms.', call. = FALSE)
+        }
+    }
     beta <- matrix(0, ncol(X), nfact)
     sigma <- matrix(0, nfact, nfact)
     diag(sigma) <- 1
@@ -1816,7 +1828,7 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
                nfact=nfact,
                nfixed=ncol(X),
                df=df,
-               X=X,
+               X=as.matrix(X),
                tXX=tXX,
                qr_XX=list(qr = qr_XX),
                lbound=rep(-Inf,length(par)),
@@ -2043,8 +2055,10 @@ mirt_dmvnorm <- function(x, mean, sigma, log = FALSE, quad = FALSE, stable = TRU
             distval <- mahalanobis(x, center = mean, cov = sigma)
         }
     }
-    logdet <- sum(log(eigen(sigma, symmetric=TRUE,
-                            only.values=TRUE)$values))
+    eigs <- eigen(sigma, symmetric=TRUE, only.values=TRUE)$values
+    if(any(eigs < 0))
+        stop('sigma matrix contains negative eigenvalues', call. = FALSE)
+    logdet <- sum(log(eigs))
     logretval <- -(ncol(x)*log(2*pi) + logdet + distval)/2
     if(stable)
         logretval <- ifelse(logretval < -690.7755, -690.7755, logretval)
@@ -2540,6 +2554,16 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
     r
 }
 
+add_completely.missing_back <- function(data, completely_missing){
+    if(length(completely_missing)){
+        tmp <- matrix(0L, nrow(data) + length(completely_missing), ncol(data))
+        tmp[completely_missing, ] <- NA
+        tmp[!(1:nrow(tmp) %in% completely_missing), ] <- data
+        data <- tmp
+    }
+    data
+}
+
 hasConverged <- function(p0, p1, TOL){
     pick <- names(p0) %in% c('g', 'u')
     if(any(pick)){
@@ -2563,15 +2587,13 @@ MC_quad <- function(npts, nfact, lim)
 
 respSample <- function(P) .Call("respSample", P)
 
-addMissing <- function(mat, whc){
-    if(length(whc)){
-        tmp <- mat
-        mat <- rbind(mat, tmp[1L:length(whc), , drop=FALSE])
-        id <- 1L:nrow(mat)
-        mat[whc, ] <- NA
-        mat[!(id %in% whc), ] <- tmp
-    }
-    mat
+as.mirt_df <- function(df){
+    class(df) <- c('mirt_df', class(df))
+    df
+}
+
+is.latent_regression <- function(mod){
+    !is.null(mod@Data$covdata)
 }
 
 makeSymMat <- function(mat){

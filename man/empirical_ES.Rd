@@ -167,5 +167,5 @@ Meade, A. W. (2010). A taxonomy of effect size measures for the differential fun
 of items and scales. \emph{Journal of Applied Psychology, 95}, 728-743.
 }
 \author{
-Adam Meade and Phil Chalmers \email{rphilip.chalmers@gmail.com}
+Adam Meade, with contributions by Phil Chalmers \email{rphilip.chalmers@gmail.com}
 }

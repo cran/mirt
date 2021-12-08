@@ -15,18 +15,18 @@ shinyItemplot <- function(){
 
                 shiny::selectInput(inputId = "itemclass",
                             label = "Class of mirt item:",
-                            choices = c('dich' = 'dich',
-                                        'graded' = 'graded',
-                                        'nominal' = 'nominal',
-                                        'gpcm' = 'gpcm',
-                                        'partcomp' = 'partcomp',
-                                        'ideal' = 'ideal',
-                                        'ggum' = 'ggum'),
+                            choices = c('1-4PL' = 'dich',
+                                        'graded response' = 'graded',
+                                        '(generalized) partial credit' = 'gpcm',
+                                        'nominal response' = 'nominal',
+                                        'partially non-compenstaory' = 'partcomp',
+                                        'ideal-point' = 'ideal',
+                                        'generalized graded unfolding' = 'ggum'),
                             selected = 'dich'),
 
                 shiny::selectInput(inputId = "plottype",
                             label = "Type of plot to display:",
-                            choices = c('trace', 'info', 'score', 'infocontour', 'SE', 'infoSE', 'tracecontour'),
+                            choices = c('trace', 'threshold', 'info', 'score', 'infocontour', 'SE', 'infoSE', 'tracecontour'),
                             selected = 'trace'),
 
                 shiny::numericInput("theta_lim_low", "Theta lower range:", -4,
@@ -316,8 +316,9 @@ shinyItemplot <- function(){
 
             output$main_plot <- shiny::renderPlot({
                 mod <- genmod(input)
-                print(itemplot(mod, 1, type=input$plottype, rotate = 'none',
-                               theta_lim=c(input$theta_lim_low, input$theta_lim_high)))
+                obj <- itemplot(mod, 1, type=input$plottype, rotate = 'none',
+                               theta_lim=c(input$theta_lim_low, input$theta_lim_high))
+                print(obj)
             })
 
             output$coefs <- shiny::renderPrint({

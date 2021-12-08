@@ -32,6 +32,7 @@
 #'
 #' Buchholz, J., and Hartig, J. (2019). Comparing Attitudes Across Groups: An IRT-Based Item-Fit Statistic
 #'   for the Analysis of Measurement Invariance. \emph{Applied Psychological Measurement, 43}(3), 241-250.
+#'   \doi{https://doi.org/10.1177/0146621617748323}
 #'
 #' Lee, S. S., and von Davier, M. (2020). Improving measurement properties of the PISA home
 #'   possessions scale through partial invariance modeling.
@@ -149,7 +150,7 @@ RMSD_DIF <- function(pooled_mod, flag = 0, probfun = TRUE, dentype = 'norm'){
         # standard normal dist for theta
         if(dentype %in% c('norm', 'snorm')){
             mu <- sv$value[sv$name == "MEAN_1"]
-            sigma2 <- mu <- sv$value[sv$name == "COV_11"]
+            sigma2 <- sv$value[sv$name == "COV_11"]
             if(dentype == 'snorm'){
                 mu <- 0
                 sigma2 <- 1
@@ -187,7 +188,7 @@ RMSD_DIF <- function(pooled_mod, flag = 0, probfun = TRUE, dentype = 'norm'){
         if(flag > 0)
             items[items < flag] <- NA
         items <- as.data.frame(items)
-        class(items) <- c('mirt_df', 'data.frame')
+        items <- as.mirt_df(items)
 
         ret[[which.group]] <- items
 

@@ -70,13 +70,16 @@ MHRM.deriv <- function(pars, gtheta, OffTerm, longpars, USE.FIXED, list, ngroups
     }
     if(length(constrain)){
         grad <- as.numeric(updateGrad(g, L))
-        ave.h <- updateHess(-h, L)
+        ave.h <- -h
+        if(length(h))
+            ave.h <- updateHess(-h, L)
     } else {
         grad <- g
         ave.h <- -h
     }
     grad <- grad[estpars & !redun_constr]
-    ave.h <- ave.h[estpars & !redun_constr, estpars & !redun_constr]
+    if(length(ave.h))
+        ave.h <- ave.h[estpars & !redun_constr, estpars & !redun_constr]
     if(any(is.infinite(grad) | is.nan(grad)))
         stop('Inf or NaN values appeared in the gradient', call.=FALSE)
     list(grad=grad, ave.h=ave.h)

@@ -1,7 +1,8 @@
 #' Compute posterior estimates of random effect
 #'
 #' Stochastically compute random effects for \code{MixedClass} objects with Metropolis-Hastings
-#' samplers and averaging over the draws. Returns a list of the estimated effects.
+#' samplers and averaging over the draws to obtain expected a posteriori predictions.
+#' Returns a list of the estimated effects.
 #'
 #' @aliases randef
 #' @param x an estimated model object from the \code{\link{mixedmirt}} function
@@ -162,6 +163,6 @@ randef <- function(x, ndraws = 1000, thin = 10, return.draws=FALSE){
     ret <- lapply(ret, function(x){attr(x, 'log.lik_full') <- NULL; x} )
     names(ret) <- retnames
     completely_missing <- extract.mirt(x, 'completely_missing')
-    ret$Theta <- addMissing(ret$Theta, whc=completely_missing)
+    ret$Theta <- add_completely.missing_back(ret$Theta, completely_missing)
     ret
 }

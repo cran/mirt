@@ -9,6 +9,7 @@ DRF(
   draws = NULL,
   focal_items = 1L:extract.mirt(mod, "nitems"),
   param_set = NULL,
+  den.type = "both",
   CI = 0.95,
   npts = 1000,
   quadpts = NULL,
@@ -42,6 +43,10 @@ parametric sampling approach, bootstrap, of MCMC). If supplied, then these will 
 the DRF measures. Can be much more efficient to pre-compute these values if DIF, DBF, or DTF are
 being evaluated within the same model (especially when using the bootstrap method).
 See \code{\link{draw_parameters}}}
+
+\item{den.type}{character specifying how the density of the latent traits is computed.
+Default is \code{'both'} to include the information from both groups,
+\code{'focal'} for just the focal group, and \code{'reference'} for the reference group}
 
 \item{CI}{range of confidence interval when using draws input}
 
@@ -190,7 +195,8 @@ DRF(mod2, draws=500) #non-sig DTF due to item cancellation
 ## systematic differing slopes and intercepts (clear DTF)
 set.seed(1234)
 dat1 <- simdata(a, d, N, itemtype = 'dich', mu=.50, sigma=matrix(1.5))
-dat2 <- simdata(a + c(numeric(15), rnorm(n-15, 1, .25)), d + c(numeric(15), rnorm(n-15, 1, .5)),
+dat2 <- simdata(a + c(numeric(15), rnorm(n-15, 1, .25)),
+                d + c(numeric(15), rnorm(n-15, 1, .5)),
                 N, itemtype = 'dich')
 dat <- rbind(dat1, dat2)
 mod3 <- multipleGroup(dat, model, group=group, SE=TRUE,
@@ -198,7 +204,7 @@ mod3 <- multipleGroup(dat, model, group=group, SE=TRUE,
 plot(mod3) #visable DTF happening
 
 # DIF(mod3, c('a1', 'd'), items2test=16:30)
-DRF(mod3) #unsigned bias. Signed bias indicates group 2 scores generally higher on average
+DRF(mod3) #unsigned bias. Signed bias (group 2 scores higher on average)
 DRF(mod3, draws=500)
 DRF(mod3, draws=500, plot=TRUE) #multiple DRF areas along Theta
 

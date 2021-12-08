@@ -76,7 +76,7 @@ setMethod(
                           auto.key = list(space = 'right', points=FALSE, lines=TRUE), ...)
     {
         if (!type %in% c('info','infocontour', 'SE', 'RE', 'score', 'empiricalhist', 'trace',
-                         'itemscore', 'infotrace', 'Davidian'))
+                         'itemscore', 'infotrace', 'Davidian', 'EAPsum'))
             stop(type, " is not a valid plot type.", call.=FALSE)
         if (any(degrees > 90 | degrees < 0))
             stop('Improper angle specified. Must be between 0 and 90.', call.=FALSE)
@@ -120,6 +120,20 @@ setMethod(
         maxs <- maxs[which.items]
         ybump <- (max(maxs) - min(mins))/15
         ybump_full <- (sum(maxs) - sum(mins))/15
+        if(type == 'EAPsum'){
+            main <- "Expected vs Observed Sum-Scores"
+            fs <- fscores(x, method = 'EAPsum', full.scores=FALSE, verbose=FALSE, ...)
+            scores <- unname(do.call(c, lapply(fs, function(x) x$Sum.Scores)))
+            observed <- unname(do.call(c, lapply(fs, function(x) x$observed)))
+            expected <- unname(do.call(c, lapply(fs, function(x) x$expected)))
+
+            plt <- data.frame(Scores=scores, y=c(observed, expected),
+                              type = rep(c('observed', 'expected'), each=length(observed)),
+                              group = factor(rep(names(fs), each = nrow(fs[[1]]))))
+            return(xyplot(y~Scores|group, plt, type='l', main = main, group=plt$type,
+                          auto.key=auto.key, xlab = expression(Sum-Score), ylab=expression(n),
+                          par.strip.text=par.strip.text, par.settings=par.settings, ...))
+        }
         if(nfact == 2){
             colnames(plt) <- c("info", "score", "Theta1", "Theta2", "group")
             plt$SE <- 1 / sqrt(plt$info)
@@ -150,7 +164,7 @@ setMethod(
                 return(wireframe(score ~ Theta1 + Theta2|group, data = plt,
                                  zlim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                                  main = if(bundle) "Expected Bundle Score" else "Expected Total Score",
-                                 zlab=expression(Total(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
+                                 zlab=expression(T(theta)), xlab=expression(theta[1]), ylab=expression(theta[2]),
                                  scales = list(arrows = FALSE), screen = rot, colorkey = TRUE, drape = TRUE,
                                  auto.key = auto.key, par.strip.text=par.strip.text, par.settings=par.settings,
                                  ...))
@@ -176,7 +190,7 @@ setMethod(
                 return(xyplot(score~Theta, plt, type='l', groups=plt$group,
                               ylim=c(sum(mins)-ybump_full, sum(maxs)+ybump_full),
                               main = if(bundle) "Expected Bundle Score" else "Expected Total Score",
-                              xlab = expression(theta), ylab=expression(Total(theta)), auto.key = auto.key,
+                              xlab = expression(theta), ylab=expression(T(theta)), auto.key = auto.key,
                               par.strip.text=par.strip.text, par.settings=par.settings, ...))
             if(type == 'empiricalhist'){
                 Prior <- Theta <- pltfull <- vector('list', ngroups)
@@ -244,12 +258,12 @@ setMethod(
                 if(facet_items){
                     return(xyplot(P ~ Theta|item, plt, groups = plt$cat:factor(plt$group), ylim = c(-0.1,1.1),
                            xlab = expression(theta), ylab = expression(P(theta)),
-                           auto.key = auto.key, type = 'l', main = 'Item trace lines',
+                           auto.key = auto.key, type = 'l', main = 'Item Probability Functions',
                            par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 } else {
                     return(xyplot(P ~ Theta|group, plt, groups = plt$cat:plt$item, ylim = c(-0.1,1.1),
                                   xlab = expression(theta), ylab = expression(P(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Item trace lines',
+                                  auto.key = auto.key, type = 'l', main = 'Item Probability Functions',
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 }
             }
@@ -275,12 +289,12 @@ setMethod(
                 if(facet_items){
                     return(xyplot(S ~ Theta|item, plt, groups = plt$group, ylim=c(min(mins)-ybump, max(maxs)+ybump),
                                   xlab = expression(theta), ylab = expression(S(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Expected item scoring function',
+                                  auto.key = auto.key, type = 'l', main = 'Expected Item Score',
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 } else {
                     return(xyplot(S ~ Theta|group, plt, groups = plt$item, ylim=c(min(mins)-ybump, max(maxs)+ybump),
                                   xlab = expression(theta), ylab = expression(S(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Expected item scoring function',
+                                  auto.key = auto.key, type = 'l', main = 'Expected Item Score',
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 }
             }
@@ -301,12 +315,12 @@ setMethod(
                 if(facet_items){
                     return(xyplot(I ~ Theta | item, plt, groups = plt$group,
                                   xlab = expression(theta), ylab = expression(I(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines',
+                                  auto.key = auto.key, type = 'l', main = 'Item Information',
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 } else {
                     return(xyplot(I ~ Theta | group, plt, groups = plt$item,
                                   xlab = expression(theta), ylab = expression(I(theta)),
-                                  auto.key = auto.key, type = 'l', main = 'Item information trace lines',
+                                  auto.key = auto.key, type = 'l', main = 'Item Information',
                                   par.strip.text=par.strip.text, par.settings=par.settings, ...))
                 }
             }

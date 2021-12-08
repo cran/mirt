@@ -1,3 +1,33 @@
+# Changes in mirt 1.35.1
+
+- Added `covdata` argument to `fscores()` to allow latent regression covariate information as well. 
+  Example added to `fscores()` documentation to demonstrate this addition
+
+- Added `RCI()` function to compute reliable change index via IRT modelling
+
+- Added delta method SE in `coef(., IRTpars = TRUE)` for the nominal and nested-logit models
+
+- `itemfit()` gains a `S_X2.plot` argument to visualize the expected-observed probability 
+  differences based on the S-X2 conditional sum-score strategy
+
+- Added `type = 'EAPsum'` to `plot()` generic to view an expected vs observed sum-scores plot
+
+- `itemfit()` gains a `p.adjust` argument to allow for p-value adjustments in the 
+  output for all methods
+
+- `anova()` generic now supports a `...` input to compare many nested models, compared in sequence
+
+- Added `type = 'threshold'` to `itemplot()` to plot cumulative probability information (requested 
+  by Azman Sami)
+  
+- Fixed Bug `Error in if (any(SEtmp < 0))` that appeared due new R 4.0+ behaviour (reported by 
+  Ziying Li and Caroline Böhm)
+  
+- Fix bug in `itemfit()` when plotting multiple-group objects
+
+- Bugfix in `fscores()` report on which row failed to converge when datsets contain response 
+  patterns that were completely missing
+
 # Changes in mirt 1.34
 
 - Previous `technical = list(removeEmptyRows = TRUE)` input now deprecated. Response patterns
@@ -1490,7 +1520,7 @@
   "Generalized" rating scale models can also be estimated, though this requires manipulating the
   starting values directly
 
-- added AICc and sample size adjusted BIC (SABIC) information statistics
+- added sample size adjusted BIC (SABIC) information statistics
 
 - new mixedmirt() function for estimating IRT models with person and item level (e.g., LLTM) covariates.
   Currently only supports fixed effect predictors, but random effect predictors are being developed

@@ -9,6 +9,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
 {
     start.time <- proc.time()[3L]
     dots <- list(...)
+    if(!is.null(itemtype))
+        itemtype <- ifelse(itemtype == 'grsm', 'grsmIRT', itemtype)
     if(missing(data)) missingMsg('data')
     if(length(unique(colnames(data))) != ncol(data))
         stop('items must have unique names in data input', call.=FALSE)
@@ -394,8 +396,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                        lrPars=lrPars, lr.random=latent.regression$lr.random,
                                        MG = TRUE)
             mixed.design$random <- attr(PrepList, 'random')
+            latent.regression$lr.random <- attr(PrepList, 'lr.random')
             if(any(pars$class == 'lrPars')) lrPars <- update.lrPars(pars, lrPars)
             attr(PrepList, 'random') <- NULL
+            attr(PrepList, 'lr.random') <- NULL
         }
         if(!is.null(attr(pars, 'values')) || (is.character(pars) && pars == 'values'))
             RETURNVALUES <- TRUE
@@ -893,10 +897,16 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                    DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         } else if(any(opts$SE.type %in% c('crossprod', 'Louis', 'sandwich.Louis', 'sandwich')) &&
                   !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
-            ESTIMATE <- SE.simple(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
-                                  constrain=constrain, Ls=Ls, N=nrow(data), type=opts$SE.type,
-                                  CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn,
-                                  message=opts$message, complete=ESTIMATE$hess)
+            if(opts$method %in% c('QMCEM', 'MCEM')){
+                if(opts$warn)
+                    warning(sprintf('SE.type not supported when using method = \"%s\"', opts$method),
+                            call. = FALSE)
+            } else {
+                ESTIMATE <- SE.simple(PrepList=PrepList, ESTIMATE=ESTIMATE, Theta=Theta, Data=Data,
+                                      constrain=constrain, Ls=Ls, N=nrow(data), type=opts$SE.type,
+                                      CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND, warn=opts$warn,
+                                      message=opts$message, complete=ESTIMATE$hess)
+            }
         } else if(opts$SE.type == 'Fisher' && !(opts$method %in% c('MHRM', 'SEM', 'MIXED'))){
             if(logPrior != 0 && opts$warn)
                 warning('Information matrix with the Fisher method does not
@@ -984,7 +994,6 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     N <- sum(r)
     tmp <- dfsubtr
     AIC <- (-2) * logLik + 2 * tmp
-    AICc <- AIC + 2 * tmp * (tmp + 1) / (N - tmp - 1L)
     BIC <- (-2) * logLik + tmp*log(N)
     SABIC <- (-2) * logLik + tmp*log((N+2)/24)
     HQ <- (-2) * logLik + 2*tmp*log(log(N))
@@ -1018,7 +1027,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Options <- opts
     Options$exploratory <- PrepList[[1L]]$exploratory
     Fit <- list(G2=G2, p=p.G2, TLI=TLI.G2, CFI=CFI.G2, RMSEA=RMSEA.G2, df=df,
-                AIC=AIC, AICc=AICc, BIC=BIC, SABIC=SABIC, HQ=HQ, logLik=logLik,
+                AIC=AIC, BIC=BIC, SABIC=SABIC, HQ=HQ, logLik=logLik,
                 logPrior=logPrior, SElogLik=SElogLik, F=F, h2=h2)
     pis <- if(opts$dentype == 'mixture')
         ExtractMixtures(lapply(cmods, function(x) x@ParObjects$pars)) else NULL

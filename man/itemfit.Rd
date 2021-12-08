@@ -9,6 +9,7 @@ itemfit(
   fit_stats = "S_X2",
   which.items = 1:extract.mirt(x, "nitems"),
   na.rm = FALSE,
+  p.adjust = "none",
   group.bins = 10,
   group.size = NA,
   group.fun = mean,
@@ -18,6 +19,8 @@ itemfit(
   pv_draws = 30,
   boot = 1000,
   boot_dfapprox = 200,
+  S_X2.plot = NULL,
+  S_X2.plot_raw.score = TRUE,
   ETrange = c(-2, 2),
   ETpoints = 11,
   empirical.plot = NULL,
@@ -29,6 +32,7 @@ itemfit(
   par.strip.text = list(cex = 0.7),
   par.settings = list(strip.background = list(col = "#9ECAE1"), strip.border = list(col
     = "black")),
+  auto.key = list(space = "right", points = FALSE, lines = TRUE),
   ...
 )
 }
@@ -71,6 +75,9 @@ Default tests all possible items}
 \item{na.rm}{logical; remove rows with any missing values? This is required for methods such
 as S-X2 because they require the "EAPsum" method from \code{\link{fscores}}}
 
+\item{p.adjust}{method to use for adjusting all p-values for each respective item fit
+statistic (see \code{\link{p.adjust}} for available options). Default is \code{'none'}}
+
 \item{group.bins}{the number of bins to use for X2 and G2. For example,
 setting \code{group.bins = 10} will will compute Yen's (1981) Q1 statistic when \code{'X2'} is
 requested}
@@ -100,6 +107,12 @@ be omitted in the computations}
 
 \item{boot_dfapprox}{number of parametric bootstrap samples to create for the X2*_df statistic
 to approximate the scaling factor for X2* as well as the scaled degrees of freedom estimates}
+
+\item{S_X2.plot}{argument input is the same as \code{empirical.plot}, however the resulting image
+is constructed according to the S-X2 statistic's conditional sum-score information}
+
+\item{S_X2.plot_raw.score}{logical; use the raw-score information in the plot in stead of the latent
+trait scale score? Default is \code{FALSE}}
 
 \item{ETrange}{rangone of integration nodes for Stone's X2* statistic}
 
@@ -131,6 +144,8 @@ with missing data via imputation}
 \item{par.strip.text}{plotting argument passed to \code{\link{lattice}}}
 
 \item{par.settings}{plotting argument passed to \code{\link{lattice}}}
+
+\item{auto.key}{plotting argument passed to \code{\link{lattice}}}
 
 \item{...}{additional arguments to be passed to \code{fscores()} and \code{\link{lattice}}}
 }
@@ -169,10 +184,20 @@ raschfit <- mirt(data, 1, itemtype='Rasch')
 fit <- itemfit(x)
 fit
 
-itemfit(x)
+# p-value adjustment
+itemfit(x, p.adjust='fdr')
+
+# two different fit stats (with/without p-value adjustment)
+itemfit(x, c('S_X2' ,'X2'), p.adjust='fdr')
+itemfit(x, c('S_X2' ,'X2'))
+
+# Conditional sum-score plot from S-X2 information
+itemfit(x, S_X2.plot = 1) # good fit
+itemfit(x, S_X2.plot = 2) # good fit
+itemfit(x, S_X2.plot = 21) # bad fit
+
 itemfit(x, 'X2') # just X2
 itemfit(x, 'X2', method = 'ML') # X2 with maximum-likelihood estimates for traits
-itemfit(x, c('S_X2', 'X2')) #both S_X2 and X2
 itemfit(x, group.bins=15, empirical.plot = 1, method = 'ML') #empirical item plot with 15 points
 itemfit(x, group.bins=15, empirical.plot = 21, method = 'ML')
 

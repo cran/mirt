@@ -3,7 +3,7 @@ setMethod(
 	signature = 'SingleGroupClass',
 	definition = function(object, rotate, Target, full.scores = FALSE, method = "EAP",
                           quadpts = NULL, response.pattern = NULL, append_response.pattern = TRUE,
-	                      theta_lim, MI, pis=NULL, mixture=FALSE,
+	                      theta_lim, MI, pis=NULL, mixture=FALSE, covdata,
 	                      returnER = FALSE, verbose = TRUE, gmean, gcov,
 	                      plausible.draws, full.scores.SE, return.acov = FALSE,
                           QMC, custom_den = NULL, custom_theta = NULL,
@@ -11,7 +11,7 @@ setMethod(
 	                      use_dentype_estimate, leave_missing = FALSE, ...)
 	{
         den_fun <- mirt_dmvnorm
-        if(extract.mirt(object, 'ngroups') == 1L){
+        if(extract.mirt(object, 'ngroups') == 1L && !mixture){
             if(object@ParObjects$pars[[extract.mirt(object, 'nitems')+1L]]@dentype == 'custom'){
                 den_fun <- function(Theta, ...){
                     obj <- object@ParObjects$pars[[extract.mirt(object, 'nitems')+1L]]
@@ -25,138 +25,12 @@ setMethod(
         if(method == 'classify')
             return.acov <- returnER <- full.scores.SE <- FALSE
 
-	    #local functions for apply
-	    MAP <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                    hessian, mirtCAT = FALSE, return.acov = FALSE, den_fun, max_theta, ...){
-	        if(any(is.na(scores[ID, ])))
-	            return(c(scores[ID, ], rep(NA, ncol(scores))))
-            if(mirtCAT){
-                estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
-                                    itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
-                                    CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=1, stepmax=1e-20, ...))
-            } else {
-    	        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
-    	                            itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
-                                    CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
-            }
-	        if(is(estimate, 'try-error'))
-	            return(rep(NA, ncol(scores)*2 + 1L))
-            if(hessian && any(diag(estimate$hessian) > 0)){
-                vcov <- try(solve(estimate$hessian))
-                if(return.acov) return(vcov)
-    	        SEest <- try(sqrt(diag(vcov)))
-            } else SEest <- rep(NA, ncol(scores))
-	        return(c(estimate$estimate, SEest, estimate$code))
-	    }
-	    ML <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                   hessian, return.acov = FALSE, den_fun, max_theta, ...){
-            if(any(scores[ID, ] %in% c(-Inf, Inf, NA)))
-                return(c(scores[ID, ], rep(NA, ncol(scores) + 1L)))
-            estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars,patdata=tabdata[ID, ], den_fun=NULL,
-    	                        itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE, max_theta=max_theta,
-                                hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
-	        if(is(estimate, 'try-error'))
-	            return(rep(NA, ncol(scores)*2 + 1L))
-	        est <- estimate$estimate
-            if(hessian && any(diag(estimate$hessian) > 0)){
-                pick <- diag(estimate$hessian) > 0
-                if(!all(pick)){
-    	            vcov_small <- try(solve(estimate$hessian[pick,pick,drop=FALSE]), TRUE)
-                    vcov <- matrix(0, length(pick), length(pick))
-                    vcov[pick,pick] <- vcov_small
-                } else vcov <- try(solve(estimate$hessian), TRUE)
-    	        if(return.acov) return(vcov)
-    	        SEest <- try(sqrt(diag(vcov)), TRUE)
-    	        if(is(vcov, 'try-error') || is(SEest, 'try-error') || any(is.nan(SEest))){
-    	            SEest <- rep(NA, ncol(scores))
-    	        } else if(any(SEest > 30)){
-                    est[SEest > 30] <- Inf * sign(est[SEest > 30])
-                    SEest[SEest > 30] <- NA
-                }
-            } else SEest <- rep(NA, ncol(scores))
-	        return(c(est, SEest, estimate$code))
-	    }
-	    WLE <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
-	                    hessian, data, DERIV, return.acov = FALSE, max_theta, ...){
-	        if(any(is.na(scores[ID, ])))
-	            return(c(scores[ID, ], rep(NA, ncol(scores))))
-	        estimate <- try(nlm(WLE.mirt, scores[ID, ], pars=pars, patdata=tabdata[ID, ],
-	                            itemloc=itemloc, gp=gp, prodlist=prodlist, data=data[ID, ], max_theta=max_theta,
-	                            hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, DERIV=DERIV, ...))
-	        if(is(estimate, 'try-error'))
-	            return(rep(NA, ncol(scores)*2 + 1L))
-	        if(hessian){
-	            vcov <- try(solve(estimate$hessian))
-	            if(return.acov) return(vcov)
-	            SEest <- try(sqrt(diag(vcov)))
-	        } else SEest <- rep(NA, ncol(scores))
-	        return(c(estimate$estimate, SEest, estimate$code))
-	    }
-	    EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores, return.acov = FALSE,
-	                    return_zeros = FALSE){
-	        if(any(is.na(scores[ID, ])))
-	            return(c(scores[ID, ], rep(NA, ncol(scores))))
-            nfact <- ncol(ThetaShort)
-	        L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
-            expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
-            LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)
-            maxLW <- max(LW)
-            nc <- sum(exp(LW - maxLW)) * exp(maxLW)
-            if(nc == 0){
-                if(return_zeros){
-                    if(return.acov) return(matrix(NA, nfact, nfact))
-                    return(numeric(nfact*2L + 1L))
-                }
-                warning(paste0('Unable to compute normalization constant for EAP estimates; ',
-                               'consider using MAP estimates instead. Returning NaNs'),
-                        call.=FALSE)
-                return(c(rep(NaN, nfact*2), 0))
-            }
-	        thetas <- colSums(ThetaShort * expLW / nc)
-            if(hessian){
-    	        thetadif <- t((t(ThetaShort) - thetas))
-                Thetaprod <- matrix(0, nrow(ThetaShort), nfact * (nfact + 1L)/2L)
-                ind <- 1L
-                for(i in seq_len(nfact)){
-                    for(j in seq_len(nfact)){
-                        if(i <= j){
-                            Thetaprod[,ind] <- thetadif[,i] * thetadif[,j]
-                            ind <- ind + 1L
-                        }
-                    }
-                }
-                vcov <- matrix(0, nfact, nfact)
-                vcov[lower.tri(vcov, TRUE)] <- colSums(Thetaprod * expLW / nc)
-                if(nfact > 1L) vcov <- vcov + t(vcov) - diag(diag(vcov))
-                if(return.acov) return(vcov)
-    	        SE <- sqrt(diag(vcov))
-            } else SE <- rep(NA, nfact)
-	        return(c(thetas, SE, 1))
-	    }
-	    EAP_classify <- function(ID, log_itemtrace, tabdata, W, nclass){
-	        if(any(is.na(scores[ID, ])))
-	            return(c(scores[ID, ], rep(NA, ncol(scores))))
-	        L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
-	        expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
-	        LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)
-	        maxLW <- max(LW)
-	        nc <- sum(exp(LW - maxLW)) * exp(maxLW)
-	        if(nc == 0){
-	            warning('Unable to compute normalization constant for classification estimates',
-	                    call.=FALSE)
-	            return(rep(NaN, nclass))
-	        }
-	        probs <- matrix(expLW / nc, ncol=nclass)
-	        colSums(probs)
-	    }
-
         if(plausible.draws > 0 && is.null(response.pattern)){
             if(plausible.type == 'MH'){
                 dots <- list(...)
                 technical <- if(!is.null(dots$technical)) dots$technical else list()
                 technical$plausible.draws <- plausible.draws
-                formulas <- try(extract.mirt(object, 'lrformulas'), TRUE)
-                if(!is(formulas, 'try-error'))
+                if(is.latent_regression(object))
                     stop('MH plausible.type currently not supported for latent regression model', call.=FALSE)
                 sv <- mod2values(object)
                 sv$est <- FALSE
@@ -167,7 +41,7 @@ setMethod(
                             method='MHRM',
                             technical=technical)
                 completely_missing <- extract.mirt(object, 'completely_missing')
-                ret <- lapply(ret, function(x) addMissing(x, whc=completely_missing))
+                ret <- lapply(ret, function(x) add_completely.missing_back(x, completely_missing))
                 if(plausible.draws == 1L) return(ret[[1L]])
                 else return(ret)
             } else if(plausible.type == 'normal'){
@@ -192,7 +66,7 @@ setMethod(
                 for(i in seq_len(plausible.draws)){
                     ret[[i]] <- matrix(NA, nrow(fs), ncol(fs))
                     for(j in seq_len(nrow(fs))) ret[[i]][j,] <- jit[[j]][i,]
-                    ret[[i]] <- addMissing(ret[[i]], whc=completely_missing)
+                    ret[[i]] <- add_completely.missing_back(ret[[i]], completely_missing)
                 }
                 if(plausible.draws == 1L) return(ret[[1L]])
                 else return(ret)
@@ -218,14 +92,28 @@ setMethod(
                 large <- suppressWarnings(mirt(response.pattern, nfact, technical=list(customK=object@Data$K),
                               large='return'))
                 newmod@Data <- list(data=response.pattern, tabdata=large$tabdata2,
-                                   tabdatalong=large$tabdata, Freq=large$Freq, ngroups=1L,
+                                   tabdatalong=large$tabdata, Freq=large$Freq, ngroups=1L, covdata=covdata,
                                    K=extract.mirt(object, 'K'), mins=rep(0L, ncol(response.pattern)))
-                ret <- fscores(newmod, rotate=rotate, Target=Target, full.scores=TRUE,
+                if(!is.null(covdata)){
+                    newmod@Data$fulldata <- list(large$tabdata)
+                    lrPars <- newmod@ParObjects$lrPars
+                    newmod@ParObjects$lrPars <-
+                        make.lrdesign(covdata, attr(object@Model$lrPars, 'formula')[[1L]],
+                                  factorNames = colnames(covdata), TOL=NA)
+                    newmod@ParObjects$lrPars@beta <- lrPars@beta
+                }
+                pis <- NULL
+                if(mixture){
+                    newmod@ParObjects$pars <- object@ParObjects$pars
+                    class(object) <- "MixtureClass"
+                    pis <- do.call(c, lapply(coef(object, simplify=TRUE), function(x) as.numeric(x$class_proportion)))
+                }
+                ret <- fscores(newmod, rotate=rotate, Target=Target, full.scores=TRUE, mixture=mixture,
                                method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
                                MI=MI, mean=gmean, cov=gcov, custom_den=custom_den, QMC=QMC,
                                custom_theta=custom_theta, plausible.draws=plausible.draws,
-                               plausible.type=plausible.type, start=start,
+                               plausible.type=plausible.type, start=start, pis=pis,
                                use_dentype_estimate=use_dentype_estimate, ...)
                 if(plausible.draws > 0) return(ret)
                 if(return.acov) return(ret)
@@ -237,7 +125,15 @@ setMethod(
                                             technical=list(customK=object@Data$K[pick])))
                 newmod@Data <- list(data=rp, tabdata=large$tabdata2, K=object@Data$K[pick],
                                     tabdatalong=large$tabdata, Freq=large$Freq, ngroups=1L,
-                                    mins=rep(0L, ncol(response.pattern))[pick])
+                                    covdata=covdata, mins=rep(0L, ncol(response.pattern))[pick])
+                if(!is.null(covdata)){
+                    newmod@Data$fulldata <- list(large$tabdata)
+                    lrPars <- newmod@ParObjects$lrPars
+                    newmod@ParObjects$lrPars <-
+                        make.lrdesign(covdata, attr(object@Model$lrPars, 'formula')[[1L]],
+                                      factorNames = colnames(covdata), TOL=NA)
+                    newmod@ParObjects$lrPars@beta <- lrPars@beta
+                }
                 if(mixture){
                     newmod@ParObjects$pars <- object@ParObjects$pars
                     class(object) <- "MixtureClass"
@@ -499,17 +395,20 @@ setMethod(
 		        colnames(scoremat) <- paste0("Class_", 1:ncol(scoremat))
             if(full.scores.SE)
                 scoremat <- cbind(scoremat, SEscoremat)
-            if(any(na.omit(converge_info_mat) != 1)){
-                attr(scoremat, 'converge_info_code') <- converge_info_mat
-                whc <- which(converge_info_mat != 1)
-                warning(paste0("The following factor score estimates failed to converge successfully:\n    ",
-                               paste0(whc, collapse=',')), call.=FALSE)
-            }
             if(method == 'classify')
                 colnames(scoremat) <- paste0("CLASS_", 1L:ncol(scoremat))
             if(full.scores && !leave_missing){
                 completely_missing <- extract.mirt(object, 'completely_missing')
-                scoremat <- addMissing(scoremat, whc=completely_missing)
+                scoremat <- add_completely.missing_back(scoremat, completely_missing)
+            }
+            if(any(na.omit(converge_info_mat) != 1)){
+                completely_missing <- extract.mirt(object, 'completely_missing')
+                converge_info_mat <- as.vector(add_completely.missing_back(matrix(converge_info_mat),
+                                                                           completely_missing))
+                attr(scoremat, 'converge_info_code') <- converge_info_mat
+                whc <- which(converge_info_mat != 1)
+                warning(paste0("The following factor score estimates failed to converge successfully:\n    ",
+                               paste0(whc, collapse=',')), call.=FALSE)
             }
             return(scoremat)
 		} else {
@@ -895,8 +794,6 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
     ret <- data.frame(Sum.Scores=Sum.Scores + sum(x@Data$min), thetas, SEthetas)
     rownames(ret) <- ret$Sum.Scores
     if(full.scores){
-        if(any(is.na(x@Data$data)))
-            stop('Full scores requires a complete dataset (no NA\'s). If possible, pass na.rm=TRUE', call.=FALSE)
         dat <- x@Data$data
         adj <- extract.mirt(x, 'mins')
         dat <- t(t(dat) - adj)
@@ -909,12 +806,13 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         rownames(ret) <- NULL
         if(!leave_missing){
             completely_missing <- extract.mirt(x, 'completely_missing')
-            ret <- addMissing(ret, whc=completely_missing)
+            ret <- add_completely.missing_back(ret, completely_missing)
         }
     } else {
         dat <- x@Data$data
         if(any(is.na(dat)))
-            stop('EAPsum scores are not meaningful when data contains missing values. If possible, pass na.rm=TRUE', call.=FALSE)
+            stop('EAPsum scores are not meaningful when data contains missing values. If possible, pass na.rm=TRUE',
+                 call.=FALSE)
         E <- L1 %*% prior * nrow(dat)
         adj <- extract.mirt(x, 'mins')
         dat <- t(t(dat) - adj)
@@ -937,10 +835,140 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         fit <- cbind(fit, t(as.data.frame(rxx)))
         rownames(fit) <- 'stats'
         attr(ret, 'fit') <- fit
+        ret$std.res <- with(ret, sqrt( (observed - expected)^2 / expected))
         if(verbose && !discrete){
             print(attr(ret, 'fit'))
             cat('\n')
         }
     }
     ret
+}
+
+#local functions for apply
+MAP <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
+                hessian, mirtCAT = FALSE, return.acov = FALSE, den_fun, max_theta, ...){
+    if(any(is.na(scores[ID, ])))
+        return(c(scores[ID, ], rep(NA, ncol(scores))))
+    if(mirtCAT){
+        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
+                            itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
+                            CUSTOM.IND=CUSTOM.IND, ID=ID, iterlim=1, stepmax=1e-20, ...))
+    } else {
+        estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars, patdata=tabdata[ID, ], den_fun=den_fun,
+                            itemloc=itemloc, gp=gp, prodlist=prodlist, max_theta=max_theta, hessian=hessian,
+                            CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
+    }
+    if(is(estimate, 'try-error'))
+        return(rep(NA, ncol(scores)*2 + 1L))
+    if(hessian && any(diag(estimate$hessian) > 0)){
+        vcov <- try(solve(estimate$hessian))
+        if(return.acov) return(vcov)
+        SEest <- try(sqrt(diag(vcov)))
+    } else SEest <- rep(NA, ncol(scores))
+    return(c(estimate$estimate, SEest, estimate$code))
+}
+
+ML <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
+               hessian, return.acov = FALSE, den_fun, max_theta, ...){
+    if(any(scores[ID, ] %in% c(-Inf, Inf, NA)))
+        return(c(scores[ID, ], rep(NA, ncol(scores) + 1L)))
+    estimate <- try(nlm(MAP.mirt,scores[ID, ],pars=pars,patdata=tabdata[ID, ], den_fun=NULL,
+                        itemloc=itemloc, gp=gp, prodlist=prodlist, ML=TRUE, max_theta=max_theta,
+                        hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, ...))
+    if(is(estimate, 'try-error'))
+        return(rep(NA, ncol(scores)*2 + 1L))
+    est <- estimate$estimate
+    if(hessian && any(diag(estimate$hessian) > 0)){
+        pick <- diag(estimate$hessian) > 0
+        if(!all(pick)){
+            vcov_small <- try(solve(estimate$hessian[pick,pick,drop=FALSE]), TRUE)
+            vcov <- matrix(0, length(pick), length(pick))
+            vcov[pick,pick] <- vcov_small
+        } else vcov <- try(solve(estimate$hessian), TRUE)
+        if(return.acov) return(vcov)
+        SEest <- try(sqrt(diag(vcov)), TRUE)
+        if(is(vcov, 'try-error') || is(SEest, 'try-error') || any(is.nan(SEest))){
+            SEest <- rep(NA, ncol(scores))
+        } else if(any(SEest > 30)){
+            est[SEest > 30] <- Inf * sign(est[SEest > 30])
+            SEest[SEest > 30] <- NA
+        }
+    } else SEest <- rep(NA, ncol(scores))
+    return(c(est, SEest, estimate$code))
+}
+
+WLE <- function(ID, scores, pars, tabdata, itemloc, gp, prodlist, CUSTOM.IND,
+                hessian, data, DERIV, return.acov = FALSE, max_theta, ...){
+    if(any(is.na(scores[ID, ])))
+        return(c(scores[ID, ], rep(NA, ncol(scores))))
+    estimate <- try(nlm(WLE.mirt, scores[ID, ], pars=pars, patdata=tabdata[ID, ],
+                        itemloc=itemloc, gp=gp, prodlist=prodlist, data=data[ID, ], max_theta=max_theta,
+                        hessian=hessian, CUSTOM.IND=CUSTOM.IND, ID=ID, DERIV=DERIV, ...))
+    if(is(estimate, 'try-error'))
+        return(rep(NA, ncol(scores)*2 + 1L))
+    if(hessian){
+        vcov <- try(solve(estimate$hessian))
+        if(return.acov) return(vcov)
+        SEest <- try(sqrt(diag(vcov)))
+    } else SEest <- rep(NA, ncol(scores))
+    return(c(estimate$estimate, SEest, estimate$code))
+}
+
+EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores, return.acov = FALSE,
+                return_zeros = FALSE){
+    if(any(is.na(scores[ID, ])))
+        return(c(scores[ID, ], rep(NA, ncol(scores))))
+    nfact <- ncol(ThetaShort)
+    L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
+    expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
+    LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)
+    maxLW <- max(LW)
+    nc <- sum(exp(LW - maxLW)) * exp(maxLW)
+    if(nc == 0){
+        if(return_zeros){
+            if(return.acov) return(matrix(NA, nfact, nfact))
+            return(numeric(nfact*2L + 1L))
+        }
+        warning(paste0('Unable to compute normalization constant for EAP estimates; ',
+                       'consider using MAP estimates instead. Returning NaNs'),
+                call.=FALSE)
+        return(c(rep(NaN, nfact*2), 0))
+    }
+    thetas <- colSums(ThetaShort * expLW / nc)
+    if(hessian){
+        thetadif <- t((t(ThetaShort) - thetas))
+        Thetaprod <- matrix(0, nrow(ThetaShort), nfact * (nfact + 1L)/2L)
+        ind <- 1L
+        for(i in seq_len(nfact)){
+            for(j in seq_len(nfact)){
+                if(i <= j){
+                    Thetaprod[,ind] <- thetadif[,i] * thetadif[,j]
+                    ind <- ind + 1L
+                }
+            }
+        }
+        vcov <- matrix(0, nfact, nfact)
+        vcov[lower.tri(vcov, TRUE)] <- colSums(Thetaprod * expLW / nc)
+        if(nfact > 1L) vcov <- vcov + t(vcov) - diag(diag(vcov))
+        if(return.acov) return(vcov)
+        SE <- sqrt(diag(vcov))
+    } else SE <- rep(NA, nfact)
+    return(c(thetas, SE, 1))
+}
+
+EAP_classify <- function(ID, log_itemtrace, tabdata, W, nclass){
+    if(any(is.na(scores[ID, ])))
+        return(c(scores[ID, ], rep(NA, ncol(scores))))
+    L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
+    expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
+    LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)
+    maxLW <- max(LW)
+    nc <- sum(exp(LW - maxLW)) * exp(maxLW)
+    if(nc == 0){
+        warning('Unable to compute normalization constant for classification estimates',
+                call.=FALSE)
+        return(rep(NaN, nclass))
+    }
+    probs <- matrix(expLW / nc, ncol=nclass)
+    colSums(probs)
 }
