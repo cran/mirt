@@ -226,6 +226,11 @@ Rotate <- function(F, rotate, Target = NULL, par.strip.text = NULL, par.settings
 	if(rotate == 'mccammon') rotF <- GPArotation::mccammon(F, ...)
 	if(rotate == 'bifactorT') rotF <- GPArotation::bifactorT(F, ...)
 	if(rotate == 'bifactorQ') rotF <- GPArotation::bifactorQ(F, ...)
+	s <- apply(rotF$loadings, 2L, function(x)
+	    sign(x[which.max(abs(x))]))
+	rotF$loadings <- t(s * t(rotF$loadings))
+	if(is.null(rotF$Phi)) rotF$Phi <- diag(ncol(rotF$loadings))
+	rotF$Phi <- diag(s) %*% rotF$Phi %*% diag(s)
 	return(unclass(rotF))
 }
 
@@ -335,9 +340,10 @@ Lambdas <- function(pars, Names){
         tmp <- pars[[i]]
         lambdas[i,] <- ExtractLambdas(tmp) /1.702
     }
-    norm <- sqrt(1 + rowSums(lambdas^2))
     dcov <- if(ncol(gcov) > 1L) diag(sqrt(diag(gcov))) else matrix(sqrt(diag(gcov)))
-    F <- as.matrix(lambdas/norm) %*% dcov
+    lambdas <- lambdas %*% dcov
+    norm <- sqrt(1 + rowSums(lambdas^2))
+    F <- as.matrix(lambdas/norm)
     F
 }
 
@@ -2557,6 +2563,7 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
 add_completely.missing_back <- function(data, completely_missing){
     if(length(completely_missing)){
         tmp <- matrix(0L, nrow(data) + length(completely_missing), ncol(data))
+        colnames(tmp) <- colnames(data)
         tmp[completely_missing, ] <- NA
         tmp[!(1:nrow(tmp) %in% completely_missing), ] <- data
         data <- tmp
@@ -2610,7 +2617,10 @@ missingMsg <- function(string)
 .mirtClusterEnv$ncores <- 1L
 .mirtClusterEnv$omp_threads <- 1L
 
-myApply <- function(X, MARGIN, FUN, ...){
+myApply <- function(X, MARGIN, FUN, progress = FALSE, ...){
+    if(progress)
+        return(t(pbapply::pbapply(X, MARGIN, FUN, ...,
+                         cl=.mirtClusterEnv$MIRTCLUSTER)))
     if(.mirtClusterEnv$ncores > 1L){
         return(t(parallel::parApply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, MARGIN=MARGIN, FUN=FUN, ...)))
     } else {
@@ -2618,7 +2628,10 @@ myApply <- function(X, MARGIN, FUN, ...){
     }
 }
 
-myLapply <- function(X, FUN, ...){
+myLapply <- function(X, FUN, progress = FALSE, ...){
+    if(progress)
+        return(t(pbapply::pblapply(X, FUN, ...,
+                                  cl=.mirtClusterEnv$MIRTCLUSTER)))
     if(.mirtClusterEnv$ncores > 1L){
         return(parallel::parLapply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, fun=FUN, ...))
     } else {
@@ -2626,7 +2639,10 @@ myLapply <- function(X, FUN, ...){
     }
 }
 
-mySapply <- function(X, FUN, ...){
+mySapply <- function(X, FUN, progress = FALSE, ...){
+    if(progress)
+        return(t(pbapply::pbsapply(X, FUN, ...,
+                                   cl=.mirtClusterEnv$MIRTCLUSTER)))
     if(.mirtClusterEnv$ncores > 1L){
         return(t(parallel::parSapply(cl=.mirtClusterEnv$MIRTCLUSTER, X=X, FUN=FUN, ...)))
     } else {

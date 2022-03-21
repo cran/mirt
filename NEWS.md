@@ -1,3 +1,23 @@
+# Changes in mirt 1.36
+
+- Progress bar added automatically (controlled via the `verbose` argument) 
+  when using several of the package's secondary functions (e.g., `fscores()`, 
+  `DIF()`, `'DRF()`, `mdirt()`, etc)
+
+- Added `itemstats()` function to give basic item information statistics
+
+- Item-EFA models now automatically flips negative signs in rotate solutions
+  (e.g., via `summary()`) according to the sign of the largest observed 
+  loading (allows easier interpretation of the resulting correlation matrix)
+
+- `response.pattern` deals with completely missing vectors now (issue #220)
+
+- `residuals()` gains a `approx.z` logical to transform LD values into 
+  approximate z-ratios
+
+- `mirt()`, `mixedmirt()`, and `multipleGroup()` now have `model = 1` to 
+  fit a unidimensional IRT model by default
+
 # Changes in mirt 1.35.1
 
 - Added `covdata` argument to `fscores()` to allow latent regression covariate information as well. 

@@ -80,9 +80,9 @@ setMethod(
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
                 cat('Estimated parameters:', extract.mirt(x, 'nestpars'), '\n')
-                cat("AIC = ", x@Fit$AIC, "\n", sep='')
-                cat("BIC = ", x@Fit$BIC, "; SABIC = ", x@Fit$SABIC, "\n", sep='')
             }
+            cat("AIC = ", x@Fit$AIC, "\n", sep='')
+            cat("BIC = ", x@Fit$BIC, "; SABIC = ", x@Fit$SABIC, "\n", sep='')
             if(!is.nan(x@Fit$p)){
                 cat("G2 (", x@Fit$df,") = ", round(x@Fit$G2,2), ", p = ", round(x@Fit$p,4), sep='')
                 cat("\nRMSEA = ", round(x@Fit$RMSEA,3), ", CFI = ", round(x@Fit$CFI,3),
@@ -523,10 +523,8 @@ setMethod(
                               HQ = object@Fit$HQ,
                               BIC = object@Fit$BIC,
                               logLik = object@Fit$logLik)
-            if(hasPriors){
-                ret <- ret[!(colnames(ret) %in% c('AIC'))]
+            if(hasPriors)
                 ret$logPost = object@Fit$logPrior + object@Fit$logLik
-            }
             ret <- as.mirt_df(ret)
             return(ret)
         }
@@ -549,24 +547,20 @@ setMethod(
             print(object2@Call)
             cat('\n')
         }
+        ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
+                          SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
+                          HQ = c(object@Fit$HQ, object2@Fit$HQ),
+                          BIC = c(object@Fit$BIC, object2@Fit$BIC),
+                          logLik = c(object@Fit$logLik, object2@Fit$logLik))
         if(any(object2@Fit$logPrior != 0 || object@Fit$logPrior != 0)){
-            ret <- data.frame(SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
-                              HQ = c(object@Fit$HQ, object2@Fit$HQ),
-                              BIC = c(object@Fit$BIC, object2@Fit$BIC),
-                              df = c(NaN, abs(df)),
-                              logLik = c(object@Fit$logLik, object2@Fit$logLik),
-                              logPost = c(object@Fit$logLik + object@Fit$logPrior,
-                                          object2@Fit$logLik + object2@Fit$logPrior))
+            ret$logPost = c(object@Fit$logLik + object@Fit$logPrior,
+                            object2@Fit$logLik + object2@Fit$logPrior)
+            ret$df <- c(NaN, abs(df))
         } else {
             X2 <- 2*object2@Fit$logLik - 2*object@Fit$logLik
-            ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
-                              SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
-                              HQ = c(object@Fit$HQ, object2@Fit$HQ),
-                              BIC = c(object@Fit$BIC, object2@Fit$BIC),
-                              logLik = c(object@Fit$logLik, object2@Fit$logLik),
-                              X2 = c(NaN, X2),
-                              df = c(NaN, abs(df)),
-                              p = c(NaN, 1 - pchisq(X2,abs(df))))
+            ret$X2 <- c(NaN, X2)
+            ret$df <- c(NaN, abs(df))
+            ret$p <- c(NaN, 1 - pchisq(X2,abs(df)))
             if(bounded)
                 ret$p[2L] <- 1 - mixX2(X2, df=abs(df), mix=mix)
         }
@@ -596,6 +590,8 @@ setMethod(
 #' @param tables logical; for LD type, return the observed, expected, and standardized residual
 #'   tables for each item combination?
 #' @param df.p logical; print the degrees of freedom and p-values?
+#' @param approx.z logical; transform \eqn{\chi^2(df)} information from LD tests into approximate
+#'   z-ratios instead using the transformation \eqn{z=\sqrt{2 * \chi^2} - \sqrt{2 * df - 1}}?
 #' @param full.scores logical; compute relevant statistics
 #'  for each subject in the original data?
 #' @param printvalue a numeric value to be specified when using the \code{res='exp'}
@@ -703,7 +699,8 @@ setMethod(
 setMethod(
     f = "residuals",
     signature = signature(object = 'SingleGroupClass'),
-    definition = function(object, type = 'LD', df.p = FALSE, full.scores = FALSE, QMC = FALSE,
+    definition = function(object, type = 'LD', df.p = FALSE, approx.z = FALSE,
+                          full.scores = FALSE, QMC = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
                           suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
                           technical = list(), ...)
@@ -799,6 +796,8 @@ setMethod(
                             tmp <- paste0(itemnames[i], '_', itemnames[j])
                             listtabs[[tmp]] <- list(Obs=tab, Exp=Etab, std_res=(tab-Etab)/sqrt(Etab))
                         }
+                        if(approx.z)
+                            res[j,i] <- sign(res[i,j]) * (sqrt(2 * res[j,i]) - sqrt(2 * df[j,i] - 1))
                     }
                 }
             }

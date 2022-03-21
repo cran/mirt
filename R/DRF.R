@@ -52,6 +52,7 @@
 #' @param par.strip.text plotting argument passed to \code{\link{lattice}}
 #' @param par.settings plotting argument passed to \code{\link{lattice}}
 #' @param ... additional arguments to be passed to \code{lattice}
+#' @param verbose logical; include additional information in the console?
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -255,14 +256,15 @@
 # DRF(simmod, draws = 500)
 #
 #' }
-DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'), param_set = NULL,
-                den.type = 'both', CI = .95, npts = 1000,
+DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
+                param_set = NULL, den.type = 'both', CI = .95, npts = 1000,
                 quadpts = NULL, theta_lim=c(-6,6), Theta_nodes = NULL,
                 plot = FALSE, DIF = FALSE, p.adjust = 'none',
                 par.strip.text = list(cex = 0.7),
                 par.settings = list(strip.background = list(col = '#9ECAE1'),
                                  strip.border = list(col = "black")),
-                auto.key = list(space = 'right', points=FALSE, lines=TRUE), ...){
+                auto.key = list(space = 'right', points=FALSE, lines=TRUE),
+                verbose = TRUE, ...){
 
     compute_ps <- function(x, xs, X2=FALSE){
         if(X2){
@@ -402,8 +404,11 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
         try(with(details, multipleGroup(data=data, model=model, group=group, itemtype=itemtype, large=large,
                                     quadpts=quadpts, TOL=TOL, pars=mod2values(mod), technical=technical)), TRUE)
         rslist <- .mirtClusterEnv$rslist
-        on.exit(.mirtClusterEnv$rslist <- .mirtClusterEnv$param_set <- NULL)
-        list_scores <- myLapply(1L:nrow(param_set), fn2, pars=pars, MGmod=mod, param_set=param_set,
+        on.exit({.mirtClusterEnv$rslist <- .mirtClusterEnv$param_set <- NULL
+            reloadPars(longpars=longpars, pars=pars, ngroups=2L, J=length(pars[[1L]])-1L)
+        })
+        list_scores <- myLapply(1L:nrow(param_set), fn2, progress=verbose,
+                                pars=pars, MGmod=mod, param_set=param_set,
                                 max_score=max_score, Theta=Theta, rslist=rslist,
                                 Theta_nodes=Theta_nodes, plot=plot, details=details,
                                 DIF=DIF, focal_items=focal_items, signs=signs, den.type=den.type)
@@ -514,6 +519,7 @@ calc_DRFs <- function(mod, Theta, DIF, plot, max_score, focal_items, details, de
 #' @param redraws number of redraws to perform when the given parameteric sample does not satisfy the
 #'   upper and lower parameter bounds. If a valid set cannot be found within this number of draws then
 #'   an error will be thrown
+#' @param verbose logical; include additional information in the console?
 #' @param ... additional arguments to be passed
 #' @return returns a draws x p matrix of plausible parameters, where each row correspeonds to a single
 #'   set
@@ -547,7 +553,7 @@ calc_DRFs <- function(mod, Theta, DIF, plot, max_score, focal_items, details, de
 #' }
 #'
 draw_parameters <- function(mod, draws, method = c('parametric', 'boostrap'),
-                            redraws = 20, ...){
+                            redraws = 20, verbose = FALSE, ...){
     fn_param <- function(ind, shortpars, longpars, lbound, ubound, est,
                          pre.ev, constrain, imputenums, MGmod, redraws, pars){
         count <- 0L
@@ -592,17 +598,19 @@ draw_parameters <- function(mod, draws, method = c('parametric', 'boostrap'),
     if(method == 'parametric'){
         if(!mod@OptimInfo$secondordertest)
             stop('ACOV matrix is not positive definite')
+        on.exit(reloadPars(longpars=longpars, pars=pars,
+                           ngroups=ngroups, J=extract.mirt(mod, 'nitems')))
         covB <- vcov(mod)
         names <- colnames(covB)
         imputenums <- sapply(strsplit(names, '\\.'), function(x) as.integer(x[2L]))
         pre.ev <- eigen(covB)
-        ret <- myLapply(1L:draws, fn_param, shortpars=shortpars, longpars=longpars, lbound=lbound,
+        ret <- myLapply(1L:draws, fn_param, progress=verbose,
+                        shortpars=shortpars, longpars=longpars, lbound=lbound,
                         ubound=ubound, pre.ev=pre.ev, constrain=constrain, est=est,
                         imputenums=imputenums, MGmod=mod, redraws=redraws, pars=pars)
         ret <- do.call(rbind, ret)
         if(any(logits))
             ret[,logits] <- antilogit(ret[,logits])
-        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=extract.mirt(mod, 'nitems'))
         return(ret)
     } else stop('bootstrap not supported yet') #TODO
 

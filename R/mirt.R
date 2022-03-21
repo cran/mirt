@@ -295,7 +295,8 @@
 #' @param model a string to be passed (or an object returned from) \code{\link{mirt.model}},
 #'   declaring how the IRT model is to be estimated (loadings, constraints, priors, etc).
 #'   For exploratory IRT models, a single numeric value indicating the number
-#'   of factors to extract is also supported
+#'   of factors to extract is also supported. Default is 1, indicating that a unidimensional
+#'   model will be fit unless otherwise specified
 #' @param itemtype type of items to be modeled, declared as a vector for each item or a single value
 #'   which will be recycled for each item. The \code{NULL} default assumes that the items follow a graded or
 #'   2PL structure, however they may be changed to the following:
@@ -630,7 +631,7 @@
 #'   \code{\link{expand.table}}, \code{\link{key2binary}}, \code{\link{mod2values}},
 #'   \code{\link{extract.item}}, \code{\link{iteminfo}}, \code{\link{testinfo}},
 #'   \code{\link{probtrace}}, \code{\link{simdata}}, \code{\link{averageMI}},
-#'   \code{\link{fixef}}, \code{\link{extract.mirt}}
+#'   \code{\link{fixef}}, \code{\link{extract.mirt}}, \code{\link{itemstats}}
 #'
 #' @references
 #'
@@ -736,6 +737,7 @@
 #'
 #' #load LSAT section 7 data and compute 1 and 2 factor models
 #' data <- expand.table(LSAT7)
+#' itemstats(data)
 #'
 #' (mod1 <- mirt(data, 1))
 #' coef(mod1)
@@ -806,6 +808,8 @@
 #'
 #' ###########
 #' #data from the 'ltm' package in numeric format
+#' itemstats(Science)
+#'
 #' pmod1 <- mirt(Science, 1)
 #' plot(pmod1)
 #' plot(pmod1, type = 'trace')
@@ -872,6 +876,7 @@
 #' data(SAT12)
 #' data <- key2binary(SAT12,
 #'   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
+#' itemstats(data)
 #'
 #' mod1 <- mirt(data, 1)
 #' extract.mirt(mod1, 'time') #time elapsed for each estimation component
@@ -903,6 +908,7 @@
 #' d <- matrix(c(1,0.5,-.5,-1), 10, 4, byrow = TRUE)
 #' c <- seq(-1, 1, length.out=10)
 #' data <- simdata(a, d + c, 2000, itemtype = rep('graded',10))
+#' itemstats(data)
 #'
 #' mod1 <- mirt(data, 1)
 #' mod2 <- mirt(data, 1, itemtype = 'grsm')
@@ -1068,6 +1074,7 @@
 #' # Find Rasch model subject to the constraint that the intercepts sum to 0
 #'
 #' dat <- expand.table(LSAT6)
+#' itemstats(dat)
 #'
 #' #free latent mean and variance terms
 #' model <- 'Theta = 1-5
@@ -1178,7 +1185,7 @@
 #' itemfit(dav, use_dentype_estimate=TRUE) # use Davidian estimated prior shape
 #'
 #' }
-mirt <- function(data, model, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
+mirt <- function(data, model = 1, itemtype = NULL, guess = 0, upper = 1, SE = FALSE,
                  covdata = NULL, formula = NULL, SE.type = 'Oakes', method = 'EM',
                  optimizer = NULL, dentype = 'Gaussian',
                  pars = NULL, constrain = NULL, parprior = NULL,

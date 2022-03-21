@@ -87,6 +87,12 @@
 #' dat <- rbind(dataset1, dataset2)
 #' group <- c(rep('D1', N), rep('D2', N))
 #'
+#' # marginal information
+#' itemstats(dat)
+#'
+#' # conditional information
+#' itemstats(dat, group=group)
+#'
 #' mod_configural <- multipleGroup(dat, 1, group = group) #completely separate analyses
 #' #limited information fit statistics
 #' M2(mod_configural)
@@ -211,6 +217,13 @@
 #' dataset3 <- simdata(a, d, N, itemtype, mu = .1, sigma = matrix(1.5))
 #' dat <- rbind(dataset1, dataset2, dataset3)
 #' group <- rep(c('D1', 'D2', 'D3'), each=N)
+#'
+#' # marginal information
+#' itemstats(dat)
+#'
+#' # conditional information
+#' itemstats(dat, group=group)
+#'
 #' model <- 'F1 = 1-15
 #'           FREE[D2, D3] = (GROUP, MEAN_1), (GROUP, COV_11)
 #'           CONSTRAINB[D2,D3] = (GROUP, MEAN_1), (GROUP, COV_11)'
@@ -363,24 +376,29 @@
 #' coef(zip, simplify=TRUE)
 #'
 #' }
-multipleGroup <- function(data, model, group, itemtype = NULL,
+multipleGroup <- function(data, model = 1, group, itemtype = NULL,
                           invariance = '', method = 'EM',
                           dentype = 'Gaussian', ...)
 {
     Call <- match.call()
     dots <- list(...)
+    if(is.character(model)) model <- mirt.model(model)
     if(!is.null(dots$formula))
         stop('latent regression models not supported for multiple group yet', call.=FALSE) #TODO
     invariance[invariance %in% c("free_mean")] <- 'free_means'
     invariance[invariance %in% c("free_vars", 'free_variance', 'free_variances')] <- 'free_var'
     constrain <- dots$constrain
-    invariance.check <- invariance %in% c('free_means', 'free_var')
+    invariance.check <- sum(invariance %in% c('free_means', 'free_var'))
+    if(any(invariance == 'intercepts')) invariance.check <- invariance.check - 1L
+    if(any(invariance == 'slopes')) invariance.check <- invariance.check - 1L
+    if(any(invariance %in% colnames(data)))
+        invariance.check <- invariance.check - 2L
     if(missing(model)) missingMsg('model')
     if(!is.null(dots$dentype))
         if(dots$dentype == "empiricalhist" && any(invariance.check))
             stop('freeing group parameters not meaningful when estimating empirical histograms',
                  call.=FALSE)
-    if(invariance.check == 2L && length(constrain) == 0){
+    if(invariance.check > 0L && length(constrain) == 0){
         warn <- TRUE
         if(is(model, 'mirt.model')){
             if(any(model$x[,1L] == 'CONSTRAINB'))

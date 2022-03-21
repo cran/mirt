@@ -81,6 +81,9 @@ setMethod(
                 response.pattern <- as.matrix(response.pattern)
             if(!is.matrix(response.pattern))
                 response.pattern <- matrix(response.pattern, 1L)
+            completely_missing <- which(rowSums(is.na(response.pattern)) == ncol(response.pattern))
+            if(any(completely_missing))
+                response.pattern <- response.pattern[-completely_missing, , drop=FALSE]
             nfact <- object@Model$nfact
             mins <- extract.mirt(object, 'mins')
             if(!all(mins == 0L))
@@ -89,6 +92,13 @@ setMethod(
             colnames(response.pattern) <- colnames(object@Data$data)
             newmod <- object
             if(nrow(response.pattern) > 1L){
+                obs_K <- apply(response.pattern, 2L,
+                               function(x) length(na.omit(unique(x))))
+                if(any(object@Data$K < obs_K))
+                    stop(c("response.pattern input contains more response categories than defined by the model. ",
+                           "The following column(s) in response.pattern have more observed values ",
+                           "than expected by the model: ",
+                           which(object@Data$K < obs_K)), call.=FALSE)
                 large <- suppressWarnings(mirt(response.pattern, nfact, technical=list(customK=object@Data$K),
                               large='return'))
                 newmod@Data <- list(data=response.pattern, tabdata=large$tabdata2,
@@ -158,6 +168,7 @@ setMethod(
             if(!all(mins == 0L) && append_response.pattern)
                 ret[,seq_len(ncol(response.pattern))] <- ret[,seq_len(ncol(response.pattern))] +
                     matrix(mins, nrow(ret), ncol(response.pattern), byrow=TRUE)
+            ret <- add_completely.missing_back(ret, completely_missing)
             return(ret)
         }
         dots <- list(...)
@@ -278,14 +289,17 @@ setMethod(
                 log_itemtrace <- log(itemtrace)
                 if(mixture) ThetaShort <- thetaStack(ThetaShort, length(pis))
                 if(method == 'classify')
-                    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP_classify, log_itemtrace=log_itemtrace,
+                    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, progress=verbose,
+                                   FUN=EAP_classify, log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, W=W, nclass=length(pis))
                 else if(method == 'EAP' && return.acov){
-                    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, log_itemtrace=log_itemtrace,
+                    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, progress=verbose,
+                                   log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, return.acov=TRUE,
                                    scores=scores, hessian=TRUE)
                 } else {
-            	    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, log_itemtrace=log_itemtrace,
+            	    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, progress=FALSE,
+            	                   log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, scores=scores,
                                    hessian=estHess && method == 'EAP', return_zeros=method != 'EAP')
                 }
@@ -302,7 +316,8 @@ setMethod(
     		if(method %in% c("EAP", 'classify')){
                 #do nothing
     		} else if(method == "MAP"){
-                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=MAP, scores=scores, pars=pars,
+                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=MAP, progress=verbose,
+                               scores=scores, pars=pars,
                                tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, den_fun=den_fun,
                                CUSTOM.IND=CUSTOM.IND, return.acov=return.acov, hessian=estHess,
                                ...)
@@ -315,7 +330,8 @@ setMethod(
                 SEscores[allmcat,] <- NA
                 scores[allzero,] <- -Inf
                 SEscores[allzero,] <- NA
-                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=ML, scores=scores, pars=pars,
+                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=ML, progress=verbose,
+                               scores=scores, pars=pars,
                                tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, den_fun=NULL,
                                CUSTOM.IND=CUSTOM.IND, return.acov=return.acov, hessian=estHess,
                                ...)
@@ -324,7 +340,8 @@ setMethod(
     		    cls <- sapply(object@ParObjects$pars, class)
     		    for(i in seq_len(length(cls)-1L))
     		        DERIV[[i]] <- selectMethod(DerivTheta, c(cls[i], 'matrix'))
-                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=WLE, scores=scores, pars=pars,
+                tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=WLE, progress=verbose,
+                               scores=scores, pars=pars,
                                tabdata=tabdata, itemloc=itemloc, gp=gp, prodlist=prodlist, DERIV=DERIV,
                                CUSTOM.IND=CUSTOM.IND, hessian=estHess, data=object@Data$tabdata, ...)
             } else {
@@ -957,8 +974,6 @@ EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores, retu
 }
 
 EAP_classify <- function(ID, log_itemtrace, tabdata, W, nclass){
-    if(any(is.na(scores[ID, ])))
-        return(c(scores[ID, ], rep(NA, ncol(scores))))
     L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])
     expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
     LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)

@@ -7,7 +7,7 @@
 mixedmirt(
   data,
   covdata = NULL,
-  model,
+  model = 1,
   fixed = ~1,
   random = NULL,
   itemtype = "Rasch",
@@ -33,8 +33,8 @@ then the observations from \code{covdata} and \code{data} will be removed row-wi
 via the \code{rowSums(is.na(covdata)) > 0}}
 
 \item{model}{an object returned from, or a string to be passed to, \code{mirt.model()}
-to declare how the IRT model is to be estimated. See \code{\link{mirt.model}} for
-more details}
+to declare how the IRT model is to be estimated. See \code{\link{mirt.model}} and
+\code{\link{mirt}} for more detail}
 
 \item{fixed}{a right sided R formula for specifying the fixed effect (aka 'explanatory')
 predictors from \code{covdata} and \code{itemdesign}. To estimate the intercepts for
@@ -158,6 +158,9 @@ data <- simdata(a,d,N, itemtype = rep('2PL',10), Theta=Theta)
 covdata <- data.frame(group, pseudoIQ)
 #use parallel computing
 mirtCluster()
+
+itemstats(data)
+
 
 #specify IRT model
 model <- 'Theta = 1-10'
@@ -295,6 +298,7 @@ d <- matrix(rnorm(10))
 Theta <- matrix(c(rnorm(n, 0), rnorm(n, 1), rnorm(n, 2)))
 covdata <- data.frame(group=rep(c('g1','g2','g3'), each=n))
 dat <- simdata(a, d, N=n*3, Theta=Theta, itemtype = '2PL')
+itemstats(dat)
 
 #had we known the latent abilities, we could have computed the regression coefs
 summary(lm(Theta ~ covdata$group))
@@ -345,6 +349,7 @@ for (i in 1:cluster)
 group = factor(rep(paste0('G',1:cluster), each = N/cluster))
 covdata <- data.frame(group)
 dat <- simdata(a,d,N, itemtype = rep('2PL',10), Theta=matrix(Theta))
+itemstats(dat)
 
 # null model
 mod1 <- mixedmirt(dat, covdata, 1, fixed = ~ 0 + items, random = ~ 1|group)
