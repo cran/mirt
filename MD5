@@ -1,4 +1,4 @@
-99fb9b0b77dbb17df62da71fb0dcf71a *DESCRIPTION
+d06ba6fcb70dc64281cd7ad0dc714b1e *DESCRIPTION
 5fa476b4b6d503fb93593f122644225e *NAMESPACE
 435ff6a01759ee4302ac10a05d0ceddd *NEWS.md
 236f5b264fe1cce117fc5b79c8428bab *R/00-classes.R
@@ -14,7 +14,7 @@ c26811eb031741ff7bb43e984c1dc9dc *R/08-SE.methods.R
 9df980492f20e49fe40320c20d75681f *R/DRF.R
 e85846992d4f3b8ba8500f24a7844a68 *R/DTF.R
 ec25668e7967de05071e7396c65b7e63 *R/Discrete-methods.R
-4b7ef600e9b9b2fa976edfc5fc925302 *R/EMstep.group.R
+99e4ade1a5a36cba4bdcdf9889d945c4 *R/EMstep.group.R
 2ad63fb713d839f36b64db226f8e22b3 *R/EMstep.utils.R
 61aad94a2acca0485ca7af15d8cd91d5 *R/M2.R
 5f0c17bc461e6c66a1a3dea265cc6bb1 *R/MDIFF.R
@@ -58,7 +58,7 @@ d6bbc2d96fc4d8e8a24ce69e371c5cac *R/extract.mirt.R
 a7b11021366162147d6268a933871a7d *R/iteminfo.R
 a7dce5699705beb4dc1eea761c725f54 *R/itemplot.R
 e6a9a8c9004e2cc39594f07df2bb99a0 *R/itemplot.internal.R
-7d10fbf40a4fbd46c21a0b6da556544b *R/itemstats.R
+33a8cb2a291a66449a7263e45daf26b3 *R/itemstats.R
 29a02d7b82bbed8b5c1f0e709dfa6645 *R/key2binary.R
 06c39ed27cf671ba5c55f8712602e024 *R/lagrange.R
 a76e4f9cda374a7c62c0deeacd8b0ca2 *R/likert2int.R
@@ -145,7 +145,7 @@ ec102f5916a0b4272f0a84941025c75f *man/itemGAM.Rd
 d3535883ef045c85dbab9596245d3991 *man/itemfit.Rd
 11c4439da9a2bbabf0a349684e2526e8 *man/iteminfo.Rd
 913c1b6a8ada7e9c6e431a7f7acdc4d9 *man/itemplot.Rd
-7a3db2e3b81a271e1ce278272e3abcc3 *man/itemstats.Rd
+92e2316755d848413d26fe9c1851a395 *man/itemstats.Rd
 f0a7ad72d50839e75aa5a820b539ff0a *man/key2binary.Rd
 b16f9f786e4e0688d2486751770683f2 *man/lagrange.Rd
 6f2ff2c69a7c1c961fc80ab47178713c *man/likert2int.Rd
