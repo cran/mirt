@@ -127,6 +127,9 @@
 #' anova(mod_scalar1, mod_scalar2) #fix mean
 #' anova(mod_fullconstrain, mod_scalar1) #fix variance
 #'
+#' # compared all at once (in order of most constrained to least)
+#' anova(mod_fullconstrain, mod_scalar2, mod_configural)
+#'
 #'
 #' #test whether first 6 slopes should be equal across groups
 #' values <- multipleGroup(dat, 1, group = group, pars = 'values')
@@ -180,8 +183,9 @@
 #' for(i in 1:ncol(dat))
 #'     estmodels[[i]] <- multipleGroup(dat, 1, group = group, verbose = FALSE,
 #'                              invariance=c('free_means', 'free_var', itemnames[-i]))
-#'
-#' (anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
+#' anova(refmodel, estmodels[[1]])
+#' (anovas <- lapply(estmodels, function(x, refmodel) anova(refmodel, x),
+#'    refmodel=refmodel))
 #'
 #' #family-wise error control
 #' p <- do.call(rbind, lapply(anovas, function(x) x[2, 'p']))
@@ -195,7 +199,8 @@
 #'                              invariance=c('free_means', 'free_var', 'intercepts',
 #'                              itemnames[-i]))
 #'
-#' (anovas <- lapply(estmodels, anova, object2=refmodel, verbose=FALSE))
+#' (anovas <- lapply(estmodels, function(x, refmodel) anova(refmodel, x),
+#'    refmodel=refmodel))
 #'
 #' #quickly test with Wald test using DIF()
 #' mod_configural2 <- multipleGroup(dat, 1, group = group, SE=TRUE)
@@ -362,7 +367,7 @@
 #'
 #' # Mixture 2PL model
 #' mod_mix2 <- multipleGroup(dat, 1, dentype = 'mixture-2', GenRandomPars = TRUE)
-#' anova(mod_mix2, mod_mix)
+#' anova(mod_mix, mod_mix2)
 #' coef(mod_mix2, simplify=TRUE)
 #' itemfit(mod_mix2)
 #'
@@ -393,7 +398,6 @@ multipleGroup <- function(data, model = 1, group, itemtype = NULL,
     if(any(invariance == 'slopes')) invariance.check <- invariance.check - 1L
     if(any(invariance %in% colnames(data)))
         invariance.check <- invariance.check - 2L
-    if(missing(model)) missingMsg('model')
     if(!is.null(dots$dentype))
         if(dots$dentype == "empiricalhist" && any(invariance.check))
             stop('freeing group parameters not meaningful when estimating empirical histograms',

@@ -38,6 +38,7 @@
 #'     dummy coded variables}
 #'   \item{fulldatalong}{analogous to \code{tabdatafull}, but for the raw input data instead of the
 #'     tabulated frequencies}
+#'   \item{EMhistory}{if saved, extract the EM iteration history}
 #'   \item{exp_resp}{expected probability of the unique response patterns}
 #'   \item{survey.weights}{if supplied, the vector of survey weights used during estimation (NULL if missing)}
 #'   \item{converged}{a logical value indicating whether the model terminated within
@@ -95,6 +96,8 @@
 #'
 #' }
 extract.mirt <- function(x, what){
+    if(what == 'DIF_coefficients')
+        return(attr(x, 'DIF_coefficients'))
     ret <- switch(what,
                   G2 = x@Fit$G2,
                   logLik = x@Fit$logLik,
@@ -144,6 +147,7 @@ extract.mirt <- function(x, what){
                   survey.weights = x@Internals$survey.weights,
                   rowID = x@Data$rowID,
                   factorNames=x@Model$factorNames,
+                  EMhistory=x@Internals$EMhistory,
                   # undocumented
                   factorNames = x@Model$factorNames,
                   parprior = x@Model$parprior,

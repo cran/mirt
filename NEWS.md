@@ -1,3 +1,28 @@
+# Changes in mirt 1.37.1
+
+- `boot.mirt()` gains a `boot.fun` argument to accept user-defined functions for 
+  extracting the associated statistics to bootstrap 
+
+- When `verbose = TRUE` in `residuals()` a set of summary statistics is reported
+  for easier flagging 
+
+- `itemfit()` arguments changed to accommodate outputting tables more
+  consistently. Now a single `return.tables` argument is used to specify
+  which tables to return
+
+- `anova()` removes support for the `verbose` flag, and instead labels 
+  the rows of the resulting output to identify the models
+
+- `X2` and `G2` classes of item-fit statistics now better deal with large 
+  missing value vectors on a per-item basis for better consistency
+
+- `technical` list gains a `storeEMhistory` flag to store the EM history
+  (requested by @netique)
+
+- `DRF()` gains best-fitting prior support (currently limited to Gaussian distributions)
+
+- Correct index subset caused by tmp row removals in MG objects (fixes #227)
+
 # Changes in mirt 1.36
 
 - Progress bar added automatically (controlled via the `verbose` argument) 

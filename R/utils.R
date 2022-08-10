@@ -976,7 +976,7 @@ buildModelSyntax <- function(model, J, groupNames, itemtype){
         for(i in 1L:model)
             cat(paste('F', i,' = 1-', (J-i+1L), "\n", sep=''), file=tmp, append = TRUE)
         model <- mirt.model(file=tmp, quiet = TRUE)
-        model$x <- rbind(model$x, oldmodel$x[oldmodel$x[,1L] != 'NEXPLORE'])
+        model$x <- rbind(model$x, oldmodel$x[oldmodel$x[,1L] != 'NEXPLORE', ])
         unlink(tmp)
     } else if((is(model, 'numeric') && length(model) == 1L)){
         if(any(itemtype == 'lca')){
@@ -1470,7 +1470,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
                 'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder', 'MCEM_draws',
                 "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain',
-                'standardize_ref')
+                'standardize_ref', "storeEMhistory")
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1515,6 +1515,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$SE.type = SE.type
     opts$verbose = verbose
     opts$SEtol = ifelse(is.null(technical$SEtol), .001, technical$SEtol)
+    opts$storeEMhistory = ifelse(is.null(technical$storeEMhistory), FALSE, technical$storeEMhistory)
     opts$grsm.block = grsm.block
     opts$rsm.block = rsm.block
     opts$calcNull = calcNull
@@ -1690,7 +1691,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     acov <- try(solve(info), TRUE)
     if(is(acov, 'try-error')){
         if(warn)
-            warning('Could not invert information matrix; model likely is not empirically identified.',
+            warning('Could not invert information matrix; model may not be empirically identified.',
                     call.=FALSE)
         ESTIMATE$fail_invert_info <- TRUE
         return(ESTIMATE)
@@ -1698,7 +1699,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     SEtmp <- diag(solve(info))
     if(any(is.na(SEtmp) | is.nan(SEtmp)) || any(SEtmp < 0)){
         if(warn)
-            warning('Could not invert information matrix; model likely is not empirically identified.',
+            warning('Could not invert information matrix; model may not be empirically identified.',
                     call.=FALSE)
         ESTIMATE$fail_invert_info <- TRUE
         return(ESTIMATE)
@@ -2305,8 +2306,9 @@ loadSplinePars <- function(pars, Theta, MG = TRUE){
 
 latentRegression_obj <- function(data, covdata, formula, dentype, method){
     if(!is.null(covdata) && !is.null(formula)){
-        if(dentype == "empiricalhist")
-            stop('Empirical histogram method not supported with covariates', call.=FALSE)
+        if(!dentype %in% c("Gaussian", 'discrete'))
+            stop('Only Guassian dentype currently supported for latent regression models',
+                 call.=FALSE)
         if(!is.data.frame(covdata))
             stop('covdata must be a data.frame object', call.=FALSE)
         if(nrow(covdata) != nrow(data))
@@ -2475,14 +2477,13 @@ removeMissing <- function(obj){
         message('Data does not contain missing values. Continuing normally')
         return(obj)
     }
-    obj@Data$group <- obj@Data$group[-pick]
-    ind1 <- 0L
     for(g in seq_len(length(obj@Data$groupNames))){
-        ind2 <- 1L:nrow(obj@Data$fulldata[[g]]) + ind1
+        whc <- obj@Data$group == obj@Data$groupNames[g]
+        ind2 <- obj@Data$rowID[whc]
         pick2 <- ind2 %in% pick
-        ind1 <- nrow(obj@Data$fulldata[[g]]) + ind1
         obj@Data$fulldata[[g]] <- obj@Data$fulldata[[g]][!pick2, , drop=FALSE]
     }
+    obj@Data$group <- obj@Data$group[-pick]
     if(is(obj, 'MultipleGroupClass')){
         for(g in seq_len(length(obj@Data$groupNames))){
             obj@ParObjects$pars[[g]]@Data$data <- dat[obj@Data$groupNames[g] == obj@Data$group,
@@ -2610,6 +2611,21 @@ makeSymMat <- function(mat){
     }
     mat
 }
+
+suppressMat <- function(res, suppress, upper = TRUE){
+    if(!is.na(suppress)){
+        if(upper){
+            pick <- abs(res[upper.tri(res)]) < suppress
+            res[upper.tri(res)][pick] <- NA
+        } else {
+            pick <- abs(res[lower.tri(res)]) < suppress
+            res[lower.tri(res)][pick] <- NA
+        }
+        res[is.na(t(res) * res)] <- NA
+    }
+    res
+}
+
 missingMsg <- function(string)
     stop(paste0('\'', string, '\' argument is missing.'), call.=FALSE)
 

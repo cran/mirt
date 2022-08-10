@@ -4,7 +4,7 @@
 #' \code{mirt} fits a maximum likelihood (or maximum a posteriori) factor analysis model
 #' to any mixture of dichotomous and polytomous data under the item response theory paradigm
 #' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm, with
-#' an EM algorithm approach outlined by Bock and Aiken (1981) using rectangular or
+#' an EM algorithm approach outlined by Bock and Aitkin (1981) using rectangular or
 #' quasi-Monte Carlo integration grids, or with the stochastic EM (i.e., the first two stages
 #' of the MH-RM algorithm). Models containing 'explanatory' person or item level predictors
 #' can only be included by using the \code{\link{mixedmirt}} function, though latent
@@ -588,6 +588,8 @@
 #'       Richardson extrapolation. Default is 1e-5}
 #'     \item{parallel}{logical; use the parallel cluster defined by \code{\link{mirtCluster}}?
 #'       Default is TRUE}
+#'      \item{storeEMhistory}{logical; store the iteration history when using the EM algorithm?
+#'      Default is FALSE. When TRUE, use \code{\link{extract.mirt}} to extract}
 #'     \item{internal_constraints}{logical; include the internal constraints when using certain
 #'       IRT models (e.g., 'grsm' itemtype). Disable this if you want to use special optimizers
 #'       such as the solnp. Default is \code{TRUE}}
@@ -1036,7 +1038,7 @@
 #' (mod.quad <- mirt(data, model.quad))
 #' summary(mod.quad)
 #' (mod.combo <- mirt(data, model.combo))
-#' anova(mod.quad, mod.combo)
+#' anova(mod.combo, mod.quad)
 #'
 #' #non-linear item and test plots
 #' plot(mod.quad)

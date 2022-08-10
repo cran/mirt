@@ -149,6 +149,8 @@ setMethod(
 #' @param suppress a numeric value indicating which (possibly rotated) factor
 #'   loadings should be suppressed. Typical values are around .3 in most
 #'   statistical software. Default is 0 for no suppression
+#' @param suppress.cor same as \code{suppress}, but for the correlation matrix
+#'   output
 #' @param verbose logical; allow information to be printed to the console?
 #' @param ... additional arguments to be passed
 #'
@@ -175,7 +177,8 @@ setMethod(
 setMethod(
     f = "summary",
     signature = 'SingleGroupClass',
-    definition = function(object, rotate = 'oblimin', Target = NULL, suppress = 0,
+    definition = function(object, rotate = 'oblimin', Target = NULL,
+                          suppress = 0, suppress.cor = 0,
                           verbose = TRUE, ...){
         if (!object@Options$exploratory || rotate == 'none') {
             F <- object@Fit$F
@@ -185,16 +188,20 @@ setMethod(
             gp <- ExtractGroupPars(object@ParObjects$pars[[object@Data$nitems + 1L]])
             Phi <- cov2cor(gp$gcov)
             colnames(h2) <- "h2"
-            rownames(Phi) <- colnames(Phi) <- names(SS) <- colnames(F)[seq_len(object@Model$nfact)]
+            rownames(Phi) <- colnames(Phi) <- names(SS) <-
+                colnames(F)[seq_len(object@Model$nfact)]
             loads <- cbind(F,h2)
             if(verbose){
                 if(object@Options$exploratory)
                     cat("\nUnrotated factor loadings: \n\n")
-                print(loads, 3)
+                print(loads, 3, na.print = " ")
                 cat("\nSS loadings: ", round(SS, 3), "\n")
                 cat("Proportion Var: ",round(SS/nrow(F), 3), "\n")
                 cat("\nFactor correlations: \n\n")
-                print(round(Phi, 3))
+                Phiprint <- Phi
+                Phiprint[abs(Phi) < suppress.cor] <- NA
+                Phiprint[upper.tri(Phiprint, diag = FALSE)] <- NA
+                print(round(Phiprint, 3), na.print = " ")
             }
             invisible(list(rotF=F,h2=h2,fcor=Phi))
         } else {
@@ -214,13 +221,17 @@ setMethod(
             if(verbose){
                 cat("\nRotation: ", rotate, "\n")
                 cat("\nRotated factor loadings: \n\n")
-                print(loads, 3)
+                print(loads, 3, na.print = " ")
                 cat("\nRotated SS loadings: ",round(SS,3), "\n")
                 cat("\nFactor correlations: \n\n")
-                print(round(Phi, 3))
+                Phiprint <- Phi
+                Phiprint[abs(Phi) < suppress.cor] <- NA
+                Phiprint[upper.tri(Phiprint, diag = FALSE)] <- NA
+                print(round(Phiprint, 3), na.print = " ")
             }
             if(any(h2 > 1))
-                warning("Solution has Heywood cases. Interpret with caution.", call.=FALSE)
+                warning("Solution has Heywood cases. Interpret with caution.",
+                        call.=FALSE)
             invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))
         }
     }
@@ -348,8 +359,10 @@ setMethod(
             } else {
                 for(i in seq_len(J+1L)){
                     allPars[[i]] <- matrix(c(object@ParObjects$pars[[i]]@par,
-                                                   object@ParObjects$pars[[i]]@par - z*object@ParObjects$pars[[i]]@SEpar,
-                                                   object@ParObjects$pars[[i]]@par + z*object@ParObjects$pars[[i]]@SEpar),
+                                                   object@ParObjects$pars[[i]]@par -
+                                                 z*object@ParObjects$pars[[i]]@SEpar,
+                                                   object@ParObjects$pars[[i]]@par +
+                                                 z*object@ParObjects$pars[[i]]@SEpar),
                                                  3, byrow = TRUE)
                     rownames(allPars[[i]]) <- c('par', SEnames)
                     colnames(allPars[[i]]) <- object@ParObjects$pars[[i]]@parnames
@@ -364,7 +377,8 @@ setMethod(
         }
         if(!rawug && !IRTpars){
             allPars <- lapply(allPars, function(x, digits){
-                x[ , colnames(x) %in% c('g', 'u')] <- antilogit(x[ , colnames(x) %in% c('g', 'u')])
+                x[ , colnames(x) %in% c('g', 'u')] <-
+                    antilogit(x[ , colnames(x) %in% c('g', 'u')])
                 x
             })
         }
@@ -382,27 +396,30 @@ setMethod(
             for(i in seq_len(nrow(items)))
                 items[i, nms[[i]]] <- items.old[[i]]
             nfact <- object@Model$nfact
-            means <- allPars$GroupPars[seq_len(nfact)]
             if(discrete){
                 allPars <- list(items=items, group.intercepts=allPars$GroupPars)
-            } else {
+            } else if(object@ParObjects$pars[[J+1L]]@dentype != "custom"){
+                means <- allPars$GroupPars[seq_len(nfact)]
                 if(object@ParObjects$pars[[J+1L]]@dentype == "Davidian"){
                     covs <- matrix(NA, nfact, nfact)
                     covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[2L]
                     covs[upper.tri(covs, FALSE)] <- covs[lower.tri(covs, FALSE)]
-                    colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[seq_len(nfact)]
+                    colnames(covs) <- rownames(covs) <- names(means) <-
+                        object@Model$factorNames[seq_len(nfact)]
                     allPars <- list(items=items, means=means, cov=covs,
                                     Davidian_phis=allPars$GroupPars[-c(1:2)])
                 } else {
                     covs <- matrix(NA, nfact, nfact)
                     if(object@ParObjects$pars[[J+1L]]@dentype == "mixture")
-                        covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-c(seq_len(nfact), length(allPars$GroupPars))]
+                        covs[lower.tri(covs, TRUE)] <-
+                            allPars$GroupPars[-c(seq_len(nfact), length(allPars$GroupPars))]
                     else covs[lower.tri(covs, TRUE)] <- allPars$GroupPars[-seq_len(nfact)]
                     covs <- makeSymMat(covs)
-                    colnames(covs) <- rownames(covs) <- names(means) <- object@Model$factorNames[seq_len(nfact)]
+                    colnames(covs) <- rownames(covs) <- names(means) <-
+                        object@Model$factorNames[seq_len(nfact)]
                     allPars <- list(items=items, means=means, cov=covs)
                 }
-            }
+            } else allPars <- list(items=items, GroupPars=allPars$GroupPars)
         }
         if(.hasSlot(object@Model$lrPars, 'beta')){
             allPars$lr.betas <- object@Model$lrPars@beta
@@ -431,17 +448,20 @@ setMethod(
 #' Bayesian Information Criterion (BIC),
 #' Sample-Size Adjusted BIC (SABIC), and Hannan-Quinn (HQ) Criterion.
 #' When given a sequence of objects, \code{anova} tests the models against one another
-#' in the order specified.
+#' in the order specified. Note that the \code{object} inputs should be ordered in terms
+#' of most constrained model to least constrained.
 #'
 #' @param object an object of class \code{SingleGroupClass},
-#'   \code{MultipleGroupClass}, or \code{MixedClass}
+#'   \code{MultipleGroupClass}, or \code{MixedClass}, reflecting the most constrained model fitted
 #' @param object2 a second model estimated from any of the mirt package estimation methods
-#' @param ... additional model objects to be sequentially compared
+#' @param ... additional less constrained model objects to be compared
+#'   sequentially to the previous model
 #' @param bounded logical; are the two models comparing a bounded parameter (e.g., comparing a single
 #'   2PL and 3PL model with 1 df)? If \code{TRUE} then a 50:50 mix of chi-squared distributions
 #'   is used to obtain the p-value
 #' @param mix proportion of chi-squared mixtures. Default is 0.5
-#' @param verbose logical; print additional information to console?
+#' @param frame (internal parameter not for standard use)
+#' @param verbose (deprecated argument)
 #'
 #' @return a \code{data.frame}/\code{mirt_df} object
 #'
@@ -463,10 +483,10 @@ setMethod(
 #' x2 <- mirt(Science, 2)
 #' anova(x, x2)
 #'
-#' # compare three models sequentially
-#' x2 <- mirt(Science, 1, 'gpcm')
-#' x3 <- mirt(Science, 1, 'nominal')
-#' anova(x, x2, x3)
+#' # compare three models sequentially (X2 not always meaningful)
+#' x3 <- mirt(Science, 1, 'gpcm')
+#' x4 <- mirt(Science, 1, 'nominal')
+#' anova(x, x2, x3, x4)
 #'
 #' # in isolation
 #' anova(x)
@@ -501,19 +521,32 @@ setMethod(
     f = "anova",
     signature = signature(object = 'SingleGroupClass'),
     definition = function(object, object2, ...,
-                          bounded = FALSE, mix = 0.5, verbose = TRUE){
+                          bounded = FALSE, mix = 0.5, frame = 1, verbose = FALSE){
+        if(frame > 1){
+            nms1 <- deparse(substitute(object, env = parent.frame(frame+1)))
+            nms2 <- deparse(substitute(object2, env = parent.frame(frame)))
+        } else {
+            nms1 <- deparse(substitute(object, env = parent.frame()))
+            nms2 <- deparse(substitute(object2, env = environment()))
+        }
         dots <- list(...)
         if(length(dots)){
+            nms3 <- if(frame > 1)
+                deparse(substitute(list(...), env = parent.frame(frame)))
+            else deparse(substitute(list(...), env = environment()))
+            nms3 <- gsub("list\\(", "", nms3)
+            nms3 <- gsub(")", "", nms3)
+            nms3 <- strsplit(nms3, ", ")[[1]]
             dots <- c(object, object2, dots)
             ret <- vector('list', length(dots)-1L)
             for(i in 1L:length(ret)){
                 ret[[i]] <- anova(dots[[i]], dots[[i+1L]], bounded=bounded,
-                                  mix=mix, verbose=FALSE)
+                                  mix=mix)
                 if(i > 1L)
                     ret[[i]] <- ret[[i]][2L, ]
             }
             ret <- do.call(rbind, ret)
-            rownames(ret) <- 1L:nrow(ret)
+            rownames(ret) <- c(nms1, nms2, nms3)
             return(ret)
         }
         if(missing(object2)){
@@ -526,27 +559,10 @@ setMethod(
             if(hasPriors)
                 ret$logPost = object@Fit$logPrior + object@Fit$logLik
             ret <- as.mirt_df(ret)
+            rownames(ret) <- nms1
             return(ret)
         }
         df <- object@Fit$df - object2@Fit$df
-        if(df < 0){
-            temp <- object
-            object <- object2
-            object2 <- temp
-        } else if(df == 0 && !any(object2@Fit$logPrior != 0 || object@Fit$logPrior != 0)){
-            if((2*object2@Fit$logLik - 2*object@Fit$logLik) < 0){
-                temp <- object
-                object <- object2
-                object2 <- temp
-            }
-        }
-        if(verbose){
-            cat('\nModel 1: ')
-            print(object@Call)
-            cat('Model 2: ')
-            print(object2@Call)
-            cat('\n')
-        }
         ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
                           SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
                           HQ = c(object@Fit$HQ, object2@Fit$HQ),
@@ -555,15 +571,18 @@ setMethod(
         if(any(object2@Fit$logPrior != 0 || object@Fit$logPrior != 0)){
             ret$logPost = c(object@Fit$logLik + object@Fit$logPrior,
                             object2@Fit$logLik + object2@Fit$logPrior)
-            ret$df <- c(NaN, abs(df))
+            ret$df <- c(NA, abs(df))
         } else {
             X2 <- 2*object2@Fit$logLik - 2*object@Fit$logLik
-            ret$X2 <- c(NaN, X2)
-            ret$df <- c(NaN, abs(df))
-            ret$p <- c(NaN, 1 - pchisq(X2,abs(df)))
+            ret$X2 <- c(NA, X2)
+            ret$df <- c(NA, df)
+            ret$p <- c(NA, 1 - pchisq(X2,abs(df)))
             if(bounded)
                 ret$p[2L] <- 1 - mixX2(X2, df=abs(df), mix=mix)
+            ret$p[ret$X2 < 0] <- NaN
+            ret$p[ret$df <= 0] <- NaN
         }
+        rownames(ret) <- c(nms1, nms2)
         ret <- as.mirt_df(ret)
         ret
     }
@@ -610,6 +629,8 @@ setMethod(
 #' @param suppress a numeric value indicating which parameter local dependency combinations
 #'   to flag as being too high. Absolute values for the standardized estimates greater than
 #'   this value will be returned, while all values less than this value will be set to NA
+#' @param upper logical; which portion of the matrix (upper versus lower triangle)
+#'   should the \code{suppress} argument be applied to?
 #' @param technical list of technical arguments when models are re-estimated (see \code{\link{mirt}}
 #'   for details)
 #' @param ... additional arguments to be passed to \code{fscores()}
@@ -702,8 +723,8 @@ setMethod(
     definition = function(object, type = 'LD', df.p = FALSE, approx.z = FALSE,
                           full.scores = FALSE, QMC = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
-                          suppress = 1, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
-                          technical = list(), ...)
+                          suppress = NA, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
+                          upper = TRUE, technical = list(), ...)
     {
         dots <- list(...)
         if(.hasSlot(object@Model$lrPars, 'beta'))
@@ -810,12 +831,14 @@ setMethod(
                     cat("\n")
                 }
             }
-            if(verbose) cat("LD matrix (lower triangle) and standardized values:\n\n")
-            class(res) <- c('mirt_matrix', 'matrix')
-            if(suppress < 1){
-                pick <- abs(res[upper.tri(res)]) < suppress
-                res[lower.tri(res)] <- res[upper.tri(res)][pick] <- NA
+            if(verbose){
+                cat("LD matrix (lower triangle) and standardized values.\n")
+                cat("\nUpper triangle summary:\n")
+                print(round(summary(res[upper.tri(res)]), 3))
+                cat("\n")
             }
+            res <- suppressMat(res, suppress=suppress, upper=upper)
+            class(res) <- c('mirt_matrix', 'matrix')
             if(verbose) print(res, ...)
             if(df.p){
                 ret <- list(df, res)
@@ -829,7 +852,6 @@ setMethod(
                              sqrt(object@Internals$Pl * nrow(object@Data$data))
             expected <- N * object@Internals$Pl
             tabdata <- object@Data$tabdata
-            rownames(tabdata) <- NULL
             ISNA <- is.na(rowSums(tabdata))
             expected[ISNA] <- res[ISNA] <- NA
             tabdata <- data.frame(tabdata,object@Data$Freq[[1L]],expected,res)
@@ -854,6 +876,7 @@ setMethod(
                     tabdata <- tabdata[abs(tabdata[ ,ncol(tabdata)]) > printvalue, ]
                 }
                 tabdata <- as.mirt_df(tabdata)
+                rownames(tabdata) <- NULL
                 return(tabdata)
             }
         } else if(type == 'expfull'){
@@ -916,13 +939,14 @@ setMethod(
                     }
                 }
             }
-            if(verbose) cat("Q3 matrix:\n\n")
-            if(suppress < 1){
-                pick <- abs(res[upper.tri(res)]) < suppress
-                res[lower.tri(res)] <- res[upper.tri(res)][pick] <- NA
+            if(verbose){
+                cat("Q3 summary statistics:\n")
+                print(round(summary(res[upper.tri(res)]), 3))
+                cat("\n")
             }
+            res <- suppressMat(res, suppress=suppress, upper=upper)
             class(res) <- c('mirt_matrix', 'matrix')
-            if(verbose) print(res, ...)
+            if(verbose) print(res, ..., na.print = " ")
             return(invisible(res))
         } else if(type == 'JSI'){
             nfact <- extract.mirt(object, 'nfact')
@@ -948,8 +972,12 @@ setMethod(
             }
             if(fold) retmat <- retmat + t(retmat)
             class(retmat) <- c('mirt_matrix', 'matrix')
+            if(verbose){
+                cat("JSI summary statistics:\n")
+                print(round(summary(na.omit(as.vector(retmat))), 3))
+                cat("\n")
+            }
             retmat
-
         } else {
             stop('specified type does not exist', call.=FALSE)
         }
@@ -975,7 +1003,8 @@ setMethod(
 #'     \item{\code{'itemscore'}}{item scoring traceline plots}
 #'     \item{\code{'score'}}{expected total score surface}
 #'     \item{\code{'scorecontour'}}{expected total score contour plot}
-#'     \item{\code{'EAPsum'}}{compares sum-scores to the expected values based on the EAP for sum-scores method (see \code{\link{fscores}})}
+#'     \item{\code{'EAPsum'}}{compares sum-scores to the expected values based
+#'       on the EAP for sum-scores method (see \code{\link{fscores}})}
 #'   }
 #'
 #'   Note that if \code{dentype = 'empiricalhist'} was used in estimation then
@@ -988,8 +1017,8 @@ setMethod(
 #'   and provide information pertaining only to the second response option?
 #' @param degrees numeric value ranging from 0 to 90 used in \code{plot} to compute angle
 #'   for information-based plots with respect to the first dimension.
-#'   If a vector is used then a bubble plot is created with the summed information across the angles specified
-#'   (e.g., \code{degrees = seq(0, 90, by=10)})
+#'   If a vector is used then a bubble plot is created with the summed information
+#'   across the angles specified (e.g., \code{degrees = seq(0, 90, by=10)})
 #' @param theta_lim lower and upper limits of the latent trait (theta) to be evaluated, and is
 #'   used in conjunction with \code{npts}
 #' @param npts number of quadrature points to be used for plotting features.

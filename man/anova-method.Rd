@@ -10,15 +10,24 @@
 \alias{anova,MixtureClass-method}
 \title{Compare nested models with likelihood-based statistics}
 \usage{
-\S4method{anova}{SingleGroupClass}(object, object2, ..., bounded = FALSE, mix = 0.5, verbose = TRUE)
+\S4method{anova}{SingleGroupClass}(
+  object,
+  object2,
+  ...,
+  bounded = FALSE,
+  mix = 0.5,
+  frame = 1,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{object}{an object of class \code{SingleGroupClass},
-\code{MultipleGroupClass}, or \code{MixedClass}}
+\code{MultipleGroupClass}, or \code{MixedClass}, reflecting the most constrained model fitted}
 
 \item{object2}{a second model estimated from any of the mirt package estimation methods}
 
-\item{...}{additional model objects to be sequentially compared}
+\item{...}{additional less constrained model objects to be compared
+sequentially to the previous model}
 
 \item{bounded}{logical; are the two models comparing a bounded parameter (e.g., comparing a single
 2PL and 3PL model with 1 df)? If \code{TRUE} then a 50:50 mix of chi-squared distributions
@@ -26,7 +35,9 @@ is used to obtain the p-value}
 
 \item{mix}{proportion of chi-squared mixtures. Default is 0.5}
 
-\item{verbose}{logical; print additional information to console?}
+\item{frame}{(internal parameter not for standard use)}
+
+\item{verbose}{(deprecated argument)}
 }
 \value{
 a \code{data.frame}/\code{mirt_df} object
@@ -36,7 +47,8 @@ Compare nested models using likelihood ratio test (X2), Akaike Information Crite
 Bayesian Information Criterion (BIC),
 Sample-Size Adjusted BIC (SABIC), and Hannan-Quinn (HQ) Criterion.
 When given a sequence of objects, \code{anova} tests the models against one another
-in the order specified.
+in the order specified. Note that the \code{object} inputs should be ordered in terms
+of most constrained model to least constrained.
 }
 \examples{
 
@@ -45,10 +57,10 @@ x <- mirt(Science, 1)
 x2 <- mirt(Science, 2)
 anova(x, x2)
 
-# compare three models sequentially
-x2 <- mirt(Science, 1, 'gpcm')
-x3 <- mirt(Science, 1, 'nominal')
-anova(x, x2, x3)
+# compare three models sequentially (X2 not always meaningful)
+x3 <- mirt(Science, 1, 'gpcm')
+x4 <- mirt(Science, 1, 'nominal')
+anova(x, x2, x3, x4)
 
 # in isolation
 anova(x)
