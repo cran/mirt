@@ -65,7 +65,7 @@ itemfit(
   \item \code{'infit'} : Compute the infit and outfit statistics
 }
 
-Note that 'infit', 'S_X2', and 'Zh' cannot be computed when there are missing response data
+Note that 'S_X2' and 'Zh' cannot be computed when there are missing response data
 (i.e., will require multiple-imputation/row-removal techniques).}
 
 \item{which.items}{an integer vector indicating which items to test for fit.
@@ -200,7 +200,7 @@ itemfit(x, group.bins=15, empirical.plot = 21, method = 'ML')
 # PV and X2* statistics (parametric bootstrap stats not run to save time)
 itemfit(x, 'PV_Q1')
 
-# mirtCluster() # improve speed of bootstrap samples by running in parallel
+if(interactive()) mirtCluster() # improve speed of bootstrap samples by running in parallel
 # itemfit(x, 'PV_Q1*')
 # itemfit(x, 'X2*') # Stone's 1993 statistic
 # itemfit(x, 'X2*_df') # Stone's 2000 scaled statistic with df estimate

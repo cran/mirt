@@ -227,11 +227,11 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
     tab_focal <- tab_ref <- numeric(length(tab_scores))
     II <- tab_scores > Jmin
     tab1 <- table(focal_match_scores)
-    match <- match(names(II), names(tab1), nomatch=0)
+    match <- names(II) %in% names(tab1)
     II[match] <- tab1 > Jmin
     tab_focal[match] <- tab1
     tab2 <- table(ref_match_scores)
-    match <- match(names(II), names(tab2), nomatch=0)
+    match <- names(II) %in% names(tab2)
     II[match] <- II[match] & tab2 > Jmin
     tab_ref[match] <- tab2
     II <- II & scores != min(scores) & scores != max(scores)
@@ -264,7 +264,7 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
     if(pk_focal){
         tmp <- table(rowSums(focal_dat[ ,match_set, drop=FALSE]))
         tmp <- tmp / sum(tmp)
-        match <- match(names(II), names(tmp), nomatch=0)
+        match <- names(II) %in% names(tmp)
         pkstar[] <- 0
         pkstar[match] <- tmp
     }
@@ -374,7 +374,7 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
                 if(ret$pkstar[i] == 0) ret[i, ] <- NA
         if(plot == "observed")
             return(lattice::xyplot(Ystar ~ total_score, data=ret, groups = group, xlab='Matched subtest',
-                                   ylab = 'Scaled focal subtest', auto.key=list(space='right'), ...))
+                                   ylab = 'Scaled focal subtest', auto.key=list(space='right'), type = 'b', ...))
         if(plot == "weights")
             return(lattice::xyplot(pkstar~total_score, data=subset(ret, group=='focal'),
                                    xlab='Matched subtest', ylab = 'Proportion', type = 'b', ...))

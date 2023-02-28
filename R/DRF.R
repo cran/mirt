@@ -126,7 +126,7 @@
 #' DRF(mod, DIF=TRUE, plot = TRUE)
 #' DRF(mod, DIF=TRUE, focal_items = 10:15, plot = TRUE)
 #'
-#' mirtCluster()
+#' if(interactive()) mirtCluster()
 #' DRF(mod, draws = 500)
 #' DRF(mod, draws = 500, best_fitting=TRUE)
 #' DRF(mod, draws = 500, plot=TRUE)
@@ -352,6 +352,7 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
     }
 
     if(missing(mod)) missingMsg('mod')
+    stopifnot(length(p.adjust) == 1L)
     stopifnot(den.type %in% c('marginal', 'focal', 'reference'))
     stopifnot(is.logical(plot))
     if(DIF && !is.null(Theta_nodes))
@@ -417,6 +418,8 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                     group = extract.mirt(mod, 'group'),
                     constrain = extract.mirt(mod, 'constrain'),
                     itemtype = extract.mirt(mod, 'itemtype'),
+                    customItems = extract.mirt(mod, 'customItems'),
+                    customGroup = extract.mirt(mod, 'customGroup'),
                     technical = list(storeEtable=TRUE, theta_lim=theta_lim, omp=FALSE),
                     quadpts=quadpts, large=large, TOL = NaN)
     if(plot) Theta_nodes <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=1000))
@@ -433,7 +436,10 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                      mod@ParObjects$pars[[2L]]@ParObjects$pars)
         .mirtClusterEnv$param_set <- param_set
         try(with(details, multipleGroup(data=data, model=model, group=group, itemtype=itemtype, large=large,
-                                    quadpts=quadpts, TOL=TOL, pars=mod2values(mod), technical=technical)), TRUE)
+                                    quadpts=quadpts, TOL=TOL,
+                                    customItems = extract.mirt(mod, 'customItems'),
+                                    customGroup = extract.mirt(mod, 'customGroup'),
+                                    pars=mod2values(mod), technical=technical)), TRUE)
         rslist <- .mirtClusterEnv$rslist
         on.exit({.mirtClusterEnv$rslist <- .mirtClusterEnv$param_set <- NULL
             reloadPars(longpars=longpars, pars=pars, ngroups=2L, J=length(pars[[1L]])-1L)
@@ -532,6 +538,8 @@ calc_DRFs <- function(mod, Theta, DIF, plot, max_score, focal_items, details, de
             mod2 <- with(details, multipleGroup(data=data, model=model, group=group,
                                                 itemtype=itemtype, large=large,
                                                 constrain=constrain, quadpts=quadpts, TOL=TOL,
+                                                customItems = customItems,
+                                                customGroup = customGroup,
                                                 pars=mod2values(mod), technical=technical))
             r1 <- rowSums(mod2@Internals$Etable[[1L]]$r1)
             r2 <- rowSums(mod2@Internals$Etable[[2L]]$r1)

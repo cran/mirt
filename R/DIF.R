@@ -1,7 +1,7 @@
 #' Differential item functioning statistics
 #'
 #' This function runs the Wald and likelihood-ratio approaches for testing differential
-#' item functioning (DIF). This is primarily a convenience wrapper to the
+#' item functioning (DIF) with two or more groups. This is primarily a convenience wrapper to the
 #' \code{\link{multipleGroup}} function for performing standard DIF procedures. Independent
 #' models can be estimated in parallel by defining a parallel object with \code{\link{mirtCluster}},
 #' which will help to decrease the runtime. For best results, the baseline model should contain
@@ -26,6 +26,11 @@
 #'   this vector. For example, if items 1 and 2 are anchors in a 10 item test, then
 #'   \code{items2test = 3:10} would work for testing the remaining items (important to remember
 #'   when using sequential schemes)
+#' @param groups2test a character vector indicating which groups to use in the DIF testing
+#'   investigations. Default is \code{'all'}, which uses all group information to perform
+#'   joint hypothesis tests of DIF (for a two group setup these result in pair-wise tests).
+#'   For example, if the group names were 'g1', 'g2' and 'g3', and DIF was only to be investigated
+#'   between group 'g1' and 'g3' then pass \code{groups2test = c('g1', 'g3')}
 #' @param return_models logical; return estimated model objects for further analysis?
 #'   Default is FALSE
 #' @param return_seq_model logical; on the last iteration of the sequential schemes, return
@@ -113,7 +118,7 @@
 #'
 #' #### no anchors, all items tested for DIF by adding item constrains one item at a time.
 #' # define a parallel cluster (optional) to help speed up internal functions
-#' mirtCluster()
+#' if(interactive()) mirtCluster()
 #'
 #' # Information matrix with Oakes' identity (not controlling for latent group differences)
 #' # NOTE: Without properly equating the groups the following example code is not testing for DIF,
@@ -175,13 +180,15 @@
 #' plot(updated_mod, type='trace')
 #'
 #' }
-DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(MGmodel, 'nitems'),
-                seq_stat = 'SABIC', Wald = FALSE, p.adjust = 'none', return_models = FALSE,
+DIF <- function(MGmodel, which.par, scheme = 'add',
+                items2test = 1:extract.mirt(MGmodel, 'nitems'),
+                groups2test = 'all', seq_stat = 'SABIC', Wald = FALSE,
+                p.adjust = 'none', return_models = FALSE,
                 return_seq_model = FALSE, max_run = Inf, plotdif = FALSE, type = 'trace',
                 simplify = TRUE, verbose = TRUE, ...){
 
     loop_test <- function(item, model, which.par, values, Wald, itemnames, invariance, drop,
-                          return_models, technical = list(), ...)
+                          return_models, groups2test, large, technical = list(), ...)
     {
         constrain <- model@Model$constrain
         mirt_model <- model@Model$model
@@ -189,10 +196,13 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             mirt_model$x <- mirt_model$x[mirt_model$x[,"Type"] != 'CONSTRAINB',
                                          , drop=FALSE]
         technical$omp <- FALSE
+        whcgroup <- which(extract.mirt(model, 'groupNames') %in% groups2test)
         parnum <- list()
-        for(i in seq_len(length(which.par)))
-            parnum[[i]] <- values$parnum[values$name == which.par[i] &
+        for(i in seq_len(length(which.par))){
+            tmp <- values$parnum[values$name == which.par[i] &
                                              values$item == itemnames[item]]
+            parnum[[i]] <- tmp[whcgroup]
+        }
         for(i in length(parnum):1L)
             if(!length(parnum[[i]])) parnum[[i]] <- NULL
         if(!length(parnum))
@@ -202,10 +212,16 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
         if(Wald){
             wv <- wald(model)
             infoname <- names(wv)
-            L <- matrix(0, length(parnum), length(infoname))
+            each_set <- sapply(parnum, length) - 1L
+            L <- matrix(0, sum(each_set), length(infoname))
+            ind <- 1L
             for(i in seq_len(length(parnum))){
-                L[i, paste0(which.par[i], '.', parnum[[i]][1L]) == infoname] <- 1
-                L[i, paste0(which.par[i], '.', parnum[[i]][2L]) == infoname] <- -1
+                for(j in 2L:length(parnum[[i]])){
+                    # FIXME this won't work with more complex constraints (e.g., a1.15.51)
+                    L[ind, paste0(which.par[i], '.', parnum[[i]][1L]) == infoname] <- 1
+                    L[ind, paste0(which.par[i], '.', parnum[[i]][j]) == infoname] <- -1
+                    ind <- ind + 1L
+                }
             }
             res <- wald(model, L)
             return(res)
@@ -225,31 +241,39 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
         }
         newmodel <- multipleGroup(model@Data$data, mirt_model, group=model@Data$group,
                                   invariance = invariance, constrain=constrain, pars=sv,
+                                  customItems = extract.mirt(model, 'customItems'),
+                                  customGroup = extract.mirt(model, 'customGroup'), large=large,
                                   itemtype = model@Model$itemtype, verbose=FALSE, technical=technical,
                                   ...)
         aov <- if(drop) anova(model, newmodel) else anova(newmodel, model)
         attr(aov, 'parnum') <- parnum
         attr(aov, 'converged') <- extract.mirt(newmodel, 'converged')
         cfs <- coef(newmodel)
-        attr(aov, 'coefs') <- rbind(cfs[[1]][[item]], cfs[[2]][[item]])
+        attr(aov, 'coefs') <- do.call(rbind, lapply(cfs, function(x) x[[item]]))
         rownames(attr(aov, 'coefs')) <- names(cfs)
         if(return_models) aov <- newmodel
         return(aov)
     }
 
     if(missing(MGmodel)) missingMsg('MGmodel')
+    if(Wald) verbose <- FALSE
+    if(length(groups2test) == 1L && groups2test == 'all'){
+        groups2test <- extract.mirt(MGmodel, 'groupNames')
+    }
+    stopifnot(all(groups2test %in% extract.mirt(MGmodel, 'groupNames')))
     if(missing(which.par)) missingMsg('which.par')
+    stopifnot(length(p.adjust) == 1L)
     if(!is(MGmodel, 'MultipleGroupClass'))
         stop('Input model must be fitted by multipleGroup()', call.=FALSE)
     aov <- anova(MGmodel)
     has_priors <- !is.null(aov$logPost)
     if(has_priors && is.numeric(seq_stat))
-        stop('p-value seq_stat for models fitted with Bayesian priors in not meaningful. Please select alternative',
-             call.=FALSE)
+        stop(c('p-value seq_stat for models fitted with Bayesian priors',
+               ' is not meaningful. Please select alternative'), call.=FALSE)
 
     if(!any(sapply(MGmodel@ParObjects$pars, function(x, pick) x@ParObjects$pars[[pick]]@est,
                    pick = MGmodel@Data$nitems + 1L)))
-        message(paste('No hyper-parameters were estimated in the DIF model. For effective',
+        message(paste('NOTE: No hyper-parameters were estimated in the DIF model. \n      For effective',
                 'DIF testing, freeing the focal group hyper-parameters is recommended.'))
     bfactorlist <- MGmodel@Internals$bfactor
     if(!is.null(bfactorlist$Priorbetween[[1L]]))
@@ -276,17 +300,20 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
     } else if(!any(seq_stat %in% c('p', 'AIC', 'SABIC', 'BIC', 'DIC', 'HQ'))){
         stop('Invalid seq_stat input', call.=FALSE)
     }
-    if(is.character(items2test)) items2test <- which(items2test %in% itemnames)
+    if(is.character(items2test))
+        items2test <- which(itemnames %in% items2test)
     invariance <- MGmodel@Model$invariance
     values <- mod2values(MGmodel)
     drop <- scheme == 'drop' || scheme == 'drop_sequential'
     invariance <- MGmodel@Model$invariance[MGmodel@Model$invariance %in%
                                          c('free_means', 'free_var')]
     if(!length(invariance)) invariance <- ''
-    res <- myLapply(X=items2test, FUN=loop_test, progress=verbose,
+    large <- multipleGroup(extract.mirt(MGmodel, 'data'), 1,
+                           group=extract.mirt(MGmodel, 'group'), large='return')
+    res <- myLapply(X=items2test, FUN=loop_test, progress=verbose, groups2test=groups2test,
                     model=MGmodel, which.par=which.par, values=values,
                     Wald=Wald, drop=drop, itemnames=itemnames, invariance=invariance,
-                    return_models=return_models, ...)
+                    return_models=return_models, large=large, ...)
     names(res) <- itemnames[items2test]
     if(scheme %in% c('add_sequential', 'drop_sequential')){
         lastkeep <- rep(TRUE, length(res))
@@ -352,12 +379,15 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             updatedModel <- multipleGroup(MGmodel@Data$data, MGmodel@Model$model,
                                           group=MGmodel@Data$group, itemtype=MGmodel@Model$itemtype,
                                           invariance = invariance, constrain=constrain,
+                                          customItems = extract.mirt(MGmodel, 'customItems'),
+                                          customGroup = extract.mirt(MGmodel, 'customGroup'),
                                           verbose = FALSE, ...)
             pick <- !keep
             if(drop) pick <- !pick
             tmp <- myLapply(X=items2test[pick], FUN=loop_test, progress=verbose, model=updatedModel,
                             which.par=which.par, values=values, Wald=Wald, drop=drop,
-                            itemnames=itemnames, invariance=invariance, return_models=FALSE, ...)
+                            itemnames=itemnames, invariance=invariance, return_models=FALSE,
+                            groups2test=groups2test, large=large, ...)
             names(tmp) <- itemnames[items2test][pick]
             for(i in names(tmp))
                 res[[i]] <- tmp[[i]]
@@ -373,7 +403,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add', items2test = 1:extract.mirt(
             res <- myLapply(X=items2test[pick], FUN=loop_test, progress=verbose, model=updatedModel,
                             which.par=which.par, values=values, Wald=Wald, drop=FALSE,
                             itemnames=itemnames, invariance=invariance, return_models=return_models,
-                            ...)
+                            groups2test=groups2test, large=large, ...)
             names(res) <- itemnames[items2test][pick]
         }
     }

@@ -65,12 +65,14 @@ Objects which can be extracted from mirt objects include:
   \item{constrain}{a list of item parameter constraints to indicate which item parameters were equal
     during estimation}
   \item{Prior}{prior density distribution for the latent traits}
+  \item{thetaPosterior}{posterior distribution for latent traits when using EM algorithm}
   \item{key}{if supplied, the data scoring key}
   \item{nfact}{number of latent traits/factors}
   \item{nitems}{number of items}
   \item{ngroups}{number of groups}
   \item{groupNames}{character vector of unique group names}
   \item{group}{a character vector indicating the group membership}
+  \item{invariance}{a character vector indicating \code{invariance} input from \code{\link{multipleGroup}}}
   \item{secondordertest}{a logical indicating whether the model passed the second-order test
     based on the Hessian matrix. Indicates whether model is a potential local maximum solution}
   \item{SEMconv}{logical; check whether the supplemented EM information matrix converged. Will be \code{NA}

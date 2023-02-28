@@ -74,6 +74,7 @@
     \item{\code{'itemscore'}}{item scoring traceline plots}
     \item{\code{'score'}}{expected total score surface}
     \item{\code{'scorecontour'}}{expected total score contour plot}
+    \item{\code{'posteriorTheta'}}{posterior for the latent trait distribution}
     \item{\code{'EAPsum'}}{compares sum-scores to the expected values based
       on the EAP for sum-scores method (see \code{\link{fscores}})}
   }
@@ -150,6 +151,7 @@ plot(x, type = 'infotrace')
 plot(x, type = 'infotrace', facet_items = FALSE)
 plot(x, type = 'infoSE')
 plot(x, type = 'rxx')
+plot(x, type = 'posteriorTheta')
 
 # confidence interval plots when information matrix computed
 plot(x)
@@ -162,6 +164,12 @@ plot(x, type='rxx', MI=100)
 library(directlabels)
 plt <- plot(x, type = 'trace')
 direct.label(plt, 'top.points')
+
+# additional modifications can be made via update().
+# See ?update.trellis for further documentation
+plt
+update(plt, ylab = expression(Prob(theta)),
+            main = "Item Traceline Functions") # ylab/main changed
 
 set.seed(1234)
 group <- sample(c('g1','g2'), nrow(Science), TRUE)

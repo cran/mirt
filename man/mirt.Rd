@@ -20,7 +20,6 @@ mirt(
   dentype = "Gaussian",
   pars = NULL,
   constrain = NULL,
-  parprior = NULL,
   calcNull = FALSE,
   draws = 5000,
   survey.weights = NULL,
@@ -222,20 +221,6 @@ vectors signifying which parameters to constrain. For example, to set parameters
 equal, and also set parameters 2, 6, and 10 equal use
 \code{constrain = list(c(1,5), c(2,6,10))}. Constraints can also be specified using the
 \code{\link{mirt.model}} syntax (recommended)}
-
-\item{parprior}{a list of user declared prior item probabilities. To see how to define the
-parameters correctly use \code{pars = 'values'} initially to see how the parameters are
-labeled. Can define either normal (e.g., intercepts, lower/guessing and upper bounds),
-log-normal (e.g., for univariate slopes), or beta prior probabilities.
-To specify a prior the form is c('priortype', ...), where normal priors
-are \code{parprior = list(c(parnumbers, 'norm', mean, sd))},
-\code{parprior = list(c(parnumbers, 'lnorm', log_mean, log_sd))} for log-normal, and
-\code{parprior = list(c(parnumbers, 'beta', alpha, beta))} for beta, and
-\code{parprior = list(c(parnumbers, 'expbeta', alpha, beta))} for the beta distribution
-after applying the function \code{\link{plogis}} to the input value
-(note, this is specifically for applying a beta
-prior to the lower/upper-bound parameters in 3/4PL models). Priors can also be
-specified using \code{\link{mirt.model}} syntax (recommended)}
 
 \item{calcNull}{logical; calculate the Null model for additional fit statistics (e.g., TLI)?
 Only applicable if the data contains no NA's and the data is not overly sparse}
@@ -626,13 +611,13 @@ number of categories (using \eqn{k} for specific category instances).
 
      E.g., for a K = 4 category response model,
 
-     \deqn{P(x = 0 | \theta, \psi) = exp(1) / G}
-     \deqn{P(x = 1 | \theta, \psi) = exp(1 + a(\theta - b1) + c) / G}
-     \deqn{P(x = 2 | \theta, \psi) = exp(1 + a(2\theta - b1 - b2) + 2c) / G}
-     \deqn{P(x = 3 | \theta, \psi) = exp(1 + a(3\theta - b1 - b2 - b3) + 3c) / G}
+     \deqn{P(x = 0 | \theta, \psi) = exp(0) / G}
+     \deqn{P(x = 1 | \theta, \psi) = exp(a(\theta - b1) + c) / G}
+     \deqn{P(x = 2 | \theta, \psi) = exp(a(2\theta - b1 - b2) + 2c) / G}
+     \deqn{P(x = 3 | \theta, \psi) = exp(a(3\theta - b1 - b2 - b3) + 3c) / G}
      where
-     \deqn{G = exp(1) + exp(1 + a(\theta - b1) + c) + exp(1 + a(2\theta - b1 - b2) + 2c) +
-       exp(1 + a(3\theta - b1 - b2 - b3) + 3c)}
+     \deqn{G = exp(0) + exp(a(\theta - b1) + c) + exp(a(2\theta - b1 - b2) + 2c) +
+       exp(a(3\theta - b1 - b2 - b3) + 3c)}
      Here \eqn{a} is the slope parameter, the \eqn{b} parameters are the threshold
      values for each adjacent category, and \eqn{c} is the so-called difficulty parameter when
      a rating scale model is fitted (otherwise, \eqn{c = 0} and it drops out of the computations).
@@ -983,7 +968,7 @@ model.1 <- '
   COV = F1*F2'
 
 #compute model, and use parallel computation of the log-likelihood
-mirtCluster()
+if(interactive()) mirtCluster()
 mod1 <- mirt(dataset, model.1, method = 'MHRM')
 coef(mod1)
 summary(mod1)

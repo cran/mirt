@@ -1016,6 +1016,22 @@ buildModelSyntax <- function(model, J, groupNames, itemtype){
     model
 }
 
+resetPriorConstrain <- function(pars, constrain){
+    nitems <- length(pars[[1]])
+    if(length(constrain)){
+        for(g in seq_len(length(pars))){
+            for(i in seq_len(nitems)){
+                for(ci in seq_len(length(constrain))){
+                    pick <- pars[[g]][[i]]@parnum %in% constrain[[ci]][-1L]
+                    pars[[g]][[i]]@prior.type[pick] <- 0L
+                    pars[[g]][[i]]@any.prior <- any(pars[[g]][[i]]@prior.type > 0L)
+                }
+            }
+        }
+    }
+    pars
+}
+
 ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG = FALSE){
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
@@ -1120,7 +1136,7 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
     pars$ubound[pars$name %in% c('g', 'u')] <- logit(pars$ubound[pars$name %in% c('g', 'u')])
     if(PrepList[[1L]]$nfact > 1L){
         mat <- matrix(pars$est[pars$name %in% paste0('a', seq_len(PrepList[[1L]]$nfact))],
-                      nrow = length(PrepList[[1L]]$K), ncol = PrepList[[1L]]$nfact, byrow=TRUE)
+                      ncol = PrepList[[1L]]$nfact, byrow=TRUE)
         PrepList[[1L]]$exploratory <- all(sort(colSums(!mat)) == seq(0L, PrepList[[1L]]$nfact - 1L))
     }
     ind <- 1L
@@ -2318,13 +2334,13 @@ latentRegression_obj <- function(data, covdata, formula, dentype, method){
         tmp <- apply(covdata, 1, function(x) sum(is.na(x)) > 0)
         if(any(tmp)){
             message('removing rows with NAs in covdata')
-            covdata <- covdata[-tmp, ]
-            data <- data[-tmp, ]
+            covdata <- covdata[!tmp, ]
+            data <- data[!tmp, ]
         }
         completely_missing <- which(rowSums(is.na(data)) == ncol(data))
         if(length(completely_missing))
             covdata <- covdata[-completely_missing, , drop=FALSE]
-        latent.regression <- list(df=covdata, formula=formula, EM=TRUE)
+        latent.regression <- list(df=covdata, formula=formula, data=data, EM=TRUE)
     } else latent.regression <- NULL
     latent.regression
 }
@@ -2597,6 +2613,11 @@ respSample <- function(P) .Call("respSample", P)
 
 as.mirt_df <- function(df){
     class(df) <- c('mirt_df', class(df))
+    df
+}
+
+as.mirt_matrix <- function(df){
+    class(df) <- c('mirt_matrix', class(df))
     df
 }
 

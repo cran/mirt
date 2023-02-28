@@ -1,3 +1,41 @@
+# Changes in mirt 1.38.1
+
+- infit and outfit statistics can now be computed in `itemfit()` when missing 
+  data are present (requested by Hanif on the mirt-package forum: 
+  https://groups.google.com/g/mirt-package/c/_mA3YbMmbzM/m/CydOl-F4BQAJ?utm_medium=email&utm_source=footer)
+
+- `coef(..., IRTpars=TRUE)` is now applied to multidimensional IRT models, 
+  provided that the item contains simple structure (suggested by Sverre Ofstad)
+
+- Fixed `match()` bug in `SIBTEST()` when total score is missing
+  (reported by Ziying Li)
+
+- `fscores(..., method ='EAPsum')` now supports returning the ACOV matrices, 
+  matching the behaviour of the other estimators
+
+- Store previously defined `customItems` and `customGroup` lists for use in
+  secondary functions (e.g., `DIF()`, `boot.mirt()`, etc). 
+  Reported by Nataly Beribisky
+
+- Combining priors with equality constraints no longer uses multiple prior 
+  definitions in the likelihood computations. Hence, constrained parameters
+  are now treated as though they are a single parameter with only one prior 
+  distribution (reported by Matthias von Davier in the context of 
+  multiple-group models with between group item priors)
+
+- Added a `groups2test` argument to `DIF()` to isolate individual grouping
+  variable specification when using more than 2 groups
+
+- Implicit argument 'invariance' stored in multiple-group objects
+  now automatically used in `boot.mirt()` (previously had to be 
+  manually passed)
+  
+- Bugfix when using `items2test` in DIF when input is a character vector
+  (reported by @jbuncher)
+  
+- Bug fixes for multiple-group DIF testing with `DIF()` when using more 
+  than two groups (reported by Ruben Neda and Davin Díaz García)
+
 # Changes in mirt 1.37.1
 
 - `boot.mirt()` gains a `boot.fun` argument to accept user-defined functions for 

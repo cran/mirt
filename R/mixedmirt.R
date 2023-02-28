@@ -127,11 +127,11 @@
 #' group <- factor(rep(c('G1','G2','G3'), each = N/3))
 #' data <- simdata(a,d,N, itemtype = rep('2PL',10), Theta=Theta)
 #' covdata <- data.frame(group, pseudoIQ)
-#' #use parallel computing
-#' mirtCluster()
 #'
 #' itemstats(data)
 #'
+#' #use parallel computing
+#' if(interactive()) mirtCluster()
 #'
 #' #specify IRT model
 #' model <- 'Theta = 1-10'
@@ -446,7 +446,7 @@ mixedmirt <- function(data, covdata = NULL, model = 1, fixed = ~ 1, random = NUL
                                        N=nrow(covdata), LR=TRUE)
     } else lr.random <-
     if(is.null(constrain)) constrain <- list()
-    if((lr.fixed != ~ 1) || length(lr.random) > 0L){
+    if(is.list(lr.fixed) || (lr.fixed != ~ 1) || length(lr.random) > 0L){
         latent.regression <- list(df=covdata, formula=lr.fixed,
                                   EM=FALSE, lr.random=lr.random)
     } else latent.regression <- NULL

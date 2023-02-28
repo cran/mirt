@@ -464,6 +464,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                  nLambdas=nLambdas, J=nitems, ngroups=Data$ngroups, PrepList=PrepList,
                                  method=opts$method, itemnames=PrepList[[1L]]$itemnames, model=model,
                                  groupNames=Data$groupNames)
+    pars <- resetPriorConstrain(pars=pars, constrain=constrain)
     startlongpars <- c()
     if(opts$NULL.MODEL){
         constrain <- list()
@@ -918,6 +919,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
         ESTIMATE$cycles <- tmp$cycles
         ESTIMATE$Prior <- tmp$Prior
+        ESTIMATE$Etable <- tmp$Etable
         rm(tmp)
     }
     opts$times$end.time.SE <- proc.time()[3L]
@@ -1070,7 +1072,16 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Internals <- list(collectLL=ESTIMATE$collectLL, Prior=ESTIMATE$Prior, Pl=Pl,
                       shortpars=as.numeric(ESTIMATE$shortpars), key=key,
                       bfactor=list(), CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                      survey.weights=survey.weights)
+                      survey.weights=survey.weights,
+                      customGroup=customGroup, customItems=customItems)
+    if(opts$method == 'EM'){
+        tmp <- lapply(ESTIMATE$Etable, function(tab)
+            data.frame(Theta, posterior=rowSums(tab$r1)))
+        if(length(tmp)){
+            names(tmp) <- Data$groupNames
+            Internals$thetaPosterior <- tmp
+        }
+    }
     if(opts$storeEtable)
         Internals$Etable <- ESTIMATE$Etable
     if(opts$storeEMhistory)
