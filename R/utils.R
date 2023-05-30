@@ -2262,7 +2262,7 @@ MGC2SC <- function(x, which){
     tmp <- x@ParObjects$pars[[which]]
     tmp@Model$lrPars <- x@ParObjects$lrPars
     ind <- 1L
-    for(i in seq_len(x@Data$nitems)){
+    for(i in seq_len(x@Data$nitems + 1L)){
         tmp@ParObjects$pars[[i]]@parnum[] <- seq(ind, ind + length(tmp@ParObjects$pars[[i]]@parnum) - 1L)
         ind <- ind + length(tmp@ParObjects$pars[[i]]@parnum)
     }
@@ -2270,6 +2270,8 @@ MGC2SC <- function(x, which){
     tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupName[which], , drop=FALSE]
     tmp@Data$Freq[[1L]] <- tmp@Data$Freq[[which]]
     tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[which]]
+    tmp@Data$ngroups <- 1L
+    tmp@Model$model <- x@Model$model
     tmp
 }
 
@@ -2575,6 +2577,21 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
     for (j in 1:p) r[, j] <- min[j] + dU[j] * sHalton(n.max,
                                                       n.min, base = pr[j], leap = leap)
     r
+}
+
+CA <- function(dat, guess_correction = rep(0, ncol(dat))){
+    n <- ncol(dat)
+    C <- cov(dat)
+    d <- diag(C)
+    dich <- apply(dat, 2, function(x) length(unique(x)) == 2L)
+    for(i in seq_len(ncol(dat))){
+        if(dich[i] & guess_correction[i] > 0){
+            U <- mean(dat[,i]) - min(dat[,i])
+            v <- max((U - guess_correction[i]) / (1 - guess_correction[i]), 0)
+            d[i] <- v * (1 - v)
+        }
+    }
+    (n/(n - 1)) * (1 - sum(d)/sum(C))
 }
 
 add_completely.missing_back <- function(data, completely_missing){

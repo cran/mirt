@@ -39,6 +39,8 @@
 #' @param simplify logical; simplify the output by returning a data.frame object with
 #'   the differences between AIC, BIC, etc, as well as the chi-squared test (X2) and associated
 #'   df and p-values
+#' @param pairwise logical; perform pairwise tests between groups when the number of groups
+#'   is greater than 2? Useful as quickly specified post-hoc tests
 #' @param scheme type of DIF analysis to perform, either by adding or dropping constraints across
 #'   groups. These can be:
 #' \describe{
@@ -76,7 +78,7 @@
 #'   another good option is 'infotrace'. For ease of viewing, the \code{facet_item} argument to
 #'   mirt's \code{plot()} function is set to \code{TRUE}
 #' @param p.adjust string to be passed to the \code{\link{p.adjust}} function to adjust p-values.
-#'   Adjustments are located in the \code{adj_pvals} element in the returned list
+#'   Adjustments are located in the \code{adj_p} element in the returned list
 #' @param verbose logical print extra information to the console?
 #' @param ... additional arguments to be passed to \code{\link{multipleGroup}} and \code{plot}
 #'
@@ -179,11 +181,50 @@
 #'                return_seq_model=TRUE)
 #' plot(updated_mod, type='trace')
 #'
+#'
+#' ###################################
+#' # Multi-group example
+#'
+#' a1 <- a2 <- a3 <- matrix(abs(rnorm(15,1,.3)), ncol=1)
+#' d1 <- d2 <- d3 <- matrix(rnorm(15,0,.7),ncol=1)
+#' a2[1:2, ] <- a1[1:2, ]/3
+#' d3[c(1,3), ] <- d2[c(1,3), ]/4
+#' head(data.frame(a.group1 = a1, a.group2 = a2, a.group3 = a3,
+#'                 d.group1 = d1, d.group2 = d2, d.group3 = d3))
+#' itemtype <- rep('2PL', nrow(a1))
+#' N <- 1000
+#' dataset1 <- simdata(a1, d1, N, itemtype)
+#' dataset2 <- simdata(a2, d2, N, itemtype, mu = .1, sigma = matrix(1.5))
+#' dataset3 <- simdata(a3, d3, N, itemtype, mu = .2)
+#' dat <- rbind(dataset1, dataset2, dataset3)
+#' group <- gl(3, N, labels = c('g1', 'g2', 'g3'))
+#'
+#' # equate the groups by assuming the last 5 items have no DIF
+#' itemnames <- colnames(dat)
+#' model <- multipleGroup(dat, group=group, SE=TRUE,
+#'    invariance = c(itemnames[11:ncol(dat)], 'free_means', 'free_var'))
+#' coef(model, simplify=TRUE)
+#'
+#' # omnibus tests
+#' dif <- DIF(model, which.par = c('a1', 'd'), items2test=1:9)
+#' dif
+#'
+#' # pairwise post-hoc tests for items flagged via omnibus tests
+#' dif.posthoc <- DIF(model, which.par = c('a1', 'd'), items2test=1:2,
+#'                    pairwise = TRUE)
+#' dif.posthoc
+#'
+#' # further probing for df = 1 tests, this time with Wald tests
+#' DIF(model, which.par = c('a1'), items2test=1:2, pairwise = TRUE,
+#'     Wald=TRUE)
+#' DIF(model, which.par = c('d'), items2test=1:2, pairwise = TRUE,
+#'     Wald=TRUE)
+#'
 #' }
 DIF <- function(MGmodel, which.par, scheme = 'add',
                 items2test = 1:extract.mirt(MGmodel, 'nitems'),
                 groups2test = 'all', seq_stat = 'SABIC', Wald = FALSE,
-                p.adjust = 'none', return_models = FALSE,
+                p.adjust = 'none', pairwise = FALSE, return_models = FALSE,
                 return_seq_model = FALSE, max_run = Inf, plotdif = FALSE, type = 'trace',
                 simplify = TRUE, verbose = TRUE, ...){
 
@@ -255,11 +296,45 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
         return(aov)
     }
 
-    if(missing(MGmodel)) missingMsg('MGmodel')
-    if(Wald) verbose <- FALSE
-    if(length(groups2test) == 1L && groups2test == 'all'){
-        groups2test <- extract.mirt(MGmodel, 'groupNames')
+    if(pairwise){
+        if(length(groups2test) == 1L && groups2test == 'all')
+            groups2test <- extract.mirt(MGmodel, 'groupNames')
+        ngroups <- length(groups2test)
+        compare <- vector('list', ngroups*(ngroups-1L)/2L)
+        ind <- 1L
+        for(i in 1L:ngroups){
+            for(j in 1L:ngroups){
+                if(i < j){
+                    compare[[ind]] <- DIF(MGmodel=MGmodel, which.par=which.par,
+                                          groups2test = groups2test[c(i,j)],
+                                          scheme=scheme, items2test=items2test,
+                                          seq_stat=seq_stat, Wald=Wald, p.adjust=p.adjust,
+                                          pairwise=FALSE, return_models=return_models,
+                                          return_seq_model=return_seq_model, max_run=max_run,
+                                          plotdif=FALSE, type=type, simplify=simplify,
+                                          verbose=verbose, ...)
+                    ind <- ind + 1L
+                }
+            }
+        }
+        if(simplify && is(compare[[1L]], 'mirt_df')){
+            row_names <- rownames(compare[[1L]])
+            compare <- data.frame(item=row_names, do.call(rbind, compare))
+            rownames(compare) <- NULL
+            compare <- as.mirt_df(compare)
+        }
+        else names(compare) <- sapply(compare, function(x) x$groups[1L])
+        return(compare)
     }
+    if(missing(MGmodel)) missingMsg('MGmodel')
+    cfs <- coef(MGmodel, simplify=TRUE)[[1]]$items
+    oparnames <- colnames(cfs)
+    if(!all(which.par %in% oparnames))
+        stop('which.par contains parameter names that were not in the fitted model',
+             call.=FALSE)
+    if(Wald) verbose <- FALSE
+    if(length(groups2test) == 1L && groups2test == 'all')
+        groups2test <- extract.mirt(MGmodel, 'groupNames')
     stopifnot(all(groups2test %in% extract.mirt(MGmodel, 'groupNames')))
     if(missing(which.par)) missingMsg('which.par')
     stopifnot(length(p.adjust) == 1L)
@@ -423,7 +498,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
             }, stat = 'p'))
         }
         ps <- p.adjust(ps, p.adjust)
-        res$adj_pvals <- ps
+        res$adj_p <- ps
     }
     if(plotdif && any(scheme %in% c('add', 'add_sequential'))){
         if(seq_stat != 'p'){
@@ -433,7 +508,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
             }, stat = seq_stat))
             keep <- statdiff <= 0
         } else {
-            statdiff <- res$adj_pvals
+            statdiff <- res$adj_p
             if(is.null(statdiff)){
                 if(Wald){
                     statdiff <- do.call(c, lapply(res, function(x) x$p))
@@ -459,16 +534,17 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
         }
     }
     pick <- names(res)
-    pick <- pick[pick != 'adj_pvals']
+    pick <- pick[pick != 'adj_p']
     if(Wald && !return_models){
-        adj_pvals <- res$adj_pvals
+        adj_p <- res$adj_p
         res <- do.call(rbind, res[pick])
-        res$adj_pvals <- adj_pvals
+        res$adj_p <- adj_p
+        res <- data.frame(groups=paste0(groups2test,collapse=','), res)
         res <- as.mirt_df(res)
         return(res)
     }
     if(simplify && !return_models){
-        adj_pvals <- res$adj_pvals
+        adj_p <- res$adj_p
         DIF_coefs <- lapply(res, function(x) attr(x, 'coefs'))
         out <- lapply(res[pick], function(x){
              r <- x[2L, ] - x[1L, ]
@@ -478,8 +554,9 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
              r$logLik <- NULL
              r
          })
-         res <- cbind(converged, do.call(rbind, out))
-         if(!has_priors) res$adj_pvals <- adj_pvals
+         res <- data.frame(groups=paste0(groups2test,collapse=','),
+                           converged, do.call(rbind, out))
+         if(!has_priors) res$adj_p <- adj_p
          res <- as.mirt_df(res)
          attr(res, 'DIF_coefficients') <- DIF_coefs
     }

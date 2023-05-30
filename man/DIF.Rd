@@ -13,6 +13,7 @@ DIF(
   seq_stat = "SABIC",
   Wald = FALSE,
   p.adjust = "none",
+  pairwise = FALSE,
   return_models = FALSE,
   return_seq_model = FALSE,
   max_run = Inf,
@@ -76,7 +77,10 @@ or p > .05 in the drop scheme), along with the specified \code{p.adjust} input}
 \item{Wald}{logical; perform Wald tests for DIF instead of likelihood ratio test?}
 
 \item{p.adjust}{string to be passed to the \code{\link{p.adjust}} function to adjust p-values.
-Adjustments are located in the \code{adj_pvals} element in the returned list}
+Adjustments are located in the \code{adj_p} element in the returned list}
+
+\item{pairwise}{logical; perform pairwise tests between groups when the number of groups
+is greater than 2? Useful as quickly specified post-hoc tests}
 
 \item{return_models}{logical; return estimated model objects for further analysis?
 Default is FALSE}
@@ -205,6 +209,45 @@ stepdown
 updated_mod <- DIF(model, c('a1', 'd'), scheme = 'add_sequential',
                return_seq_model=TRUE)
 plot(updated_mod, type='trace')
+
+
+###################################
+# Multi-group example
+
+a1 <- a2 <- a3 <- matrix(abs(rnorm(15,1,.3)), ncol=1)
+d1 <- d2 <- d3 <- matrix(rnorm(15,0,.7),ncol=1)
+a2[1:2, ] <- a1[1:2, ]/3
+d3[c(1,3), ] <- d2[c(1,3), ]/4
+head(data.frame(a.group1 = a1, a.group2 = a2, a.group3 = a3,
+                d.group1 = d1, d.group2 = d2, d.group3 = d3))
+itemtype <- rep('2PL', nrow(a1))
+N <- 1000
+dataset1 <- simdata(a1, d1, N, itemtype)
+dataset2 <- simdata(a2, d2, N, itemtype, mu = .1, sigma = matrix(1.5))
+dataset3 <- simdata(a3, d3, N, itemtype, mu = .2)
+dat <- rbind(dataset1, dataset2, dataset3)
+group <- gl(3, N, labels = c('g1', 'g2', 'g3'))
+
+# equate the groups by assuming the last 5 items have no DIF
+itemnames <- colnames(dat)
+model <- multipleGroup(dat, group=group, SE=TRUE,
+   invariance = c(itemnames[11:ncol(dat)], 'free_means', 'free_var'))
+coef(model, simplify=TRUE)
+
+# omnibus tests
+dif <- DIF(model, which.par = c('a1', 'd'), items2test=1:9)
+dif
+
+# pairwise post-hoc tests for items flagged via omnibus tests
+dif.posthoc <- DIF(model, which.par = c('a1', 'd'), items2test=1:2,
+                   pairwise = TRUE)
+dif.posthoc
+
+# further probing for df = 1 tests, this time with Wald tests
+DIF(model, which.par = c('a1'), items2test=1:2, pairwise = TRUE,
+    Wald=TRUE)
+DIF(model, which.par = c('d'), items2test=1:2, pairwise = TRUE,
+    Wald=TRUE)
 
 }
 }
