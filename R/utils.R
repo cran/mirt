@@ -418,6 +418,10 @@ bfactor2mod <- function(model, J){
     return(model)
 }
 
+Theta_meanSigma_shift <- function(Theta, mean, sigma){
+    t(t(Theta) + mean) %*% chol(sigma)
+}
+
 updateTheta <- function(npts, nfact, pars, QMC = FALSE){
     ngroups <- length(pars)
     pick <- length(pars[[1L]])
@@ -429,7 +433,7 @@ updateTheta <- function(npts, nfact, pars, QMC = FALSE){
         } else {
             MC_quad(npts=npts, nfact=nfact, lim = c(0,1))
         }
-        Theta[[g]] <- t(t(theta) + gp$gmeans) %*% t(chol(gp$gcov))
+        Theta[[g]] <- Theta_meanSigma_shift(theta, gp$gmeans, gp$gcov)
     }
     Theta
 }
@@ -1016,7 +1020,7 @@ buildModelSyntax <- function(model, J, groupNames, itemtype){
     model
 }
 
-resetPriorConstrain <- function(pars, constrain){
+resetPriorConstrain <- function(pars, constrain, nconstrain){
     nitems <- length(pars[[1]])
     if(length(constrain)){
         for(g in seq_len(length(pars))){
@@ -1036,6 +1040,7 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
+    gnames_count <- integer(length(PrepList))
     for(g in seq_len(length(PrepList))){
         tmpgroup <- PrepList[[g]]$pars
         for(i in seq_len(length(tmpgroup))){
@@ -1051,6 +1056,7 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
             tmp <- sapply(as.character(tmpgroup[[i]]@prior.type),
                                  function(x) switch(x, '1'='norm', '2'='lnorm',
                                                     '3'='beta', '4'='expbeta', 'none'))
+            gnames_count[g] <- gnames_count[g] + length(tmp)
             prior.type <- c(prior.type, tmp)
             prior_1 <- c(prior_1, tmpgroup[[i]]@prior_1)
             prior_2 <- c(prior_2, tmpgroup[[i]]@prior_2)
@@ -1072,6 +1078,7 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
         prior_2 <- c(prior_2, random[[i]]@prior_2)
         class <- c(class, rep('RandomPars', length(random[[i]]@parnum)))
         item <- c(item, rep('RANDOM', length(random[[i]]@parnum)))
+        gnames_count[g] <- gnames_count[g] + length(tmp) # TODO this assumes one group
     }
     if(length(lrPars)){
         parname <- c(parname, lrPars@parnames)
@@ -1088,6 +1095,7 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
         prior_2 <- c(prior_2, lrPars@prior_2)
         class <- c(class, rep('lrPars', length(lrPars@parnum)))
         item <- c(item, rep('BETA', length(lrPars@parnum)))
+        gnames_count[g] <- gnames_count[g] + length(tmp)
     }
     for(i in seq_len(length(lr.random))){
         parname <- c(parname, lr.random[[i]]@parnames)
@@ -1104,8 +1112,9 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
         prior_2 <- c(prior_2, lr.random[[i]]@prior_2)
         class <- c(class, rep('LRRandomPars', length(lr.random[[i]]@parnum)))
         item <- c(item, rep('LRRANDOM', length(lr.random[[i]]@parnum)))
+        gnames_count[g] <- gnames_count[g] + length(tmp)
     }
-    gnames <- rep(names(PrepList), each = length(est)/length(PrepList))
+    gnames <- rep(names(PrepList), times = gnames_count)
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
     lbound[parname %in% c('g', 'u')] <- antilogit(lbound[parname %in% c('g', 'u')])
     ubound[parname %in% c('g', 'u')] <- antilogit(ubound[parname %in% c('g', 'u')])
@@ -1428,7 +1437,7 @@ sparseLmat <- function(L, constrain, nconstrain){
         cexp <- expand.grid(nconstrain[[i]], nconstrain[[i]])
         cexp <- cexp[cexp[,1] != cexp[,2], ]
         full_loc <- rbind(full_loc, as.matrix(cexp))
-        vals <- c(vals, c(1,-1))
+        vals <- c(vals, c(-2,-2))
     }
 
     ret <- Matrix::sparseMatrix(i = full_loc[,1], j = full_loc[,2], x=vals,
@@ -1458,8 +1467,7 @@ makeLmats <- function(pars, constrain, random = list(), lrPars = list(), lr.rand
     if(!is.null(nconstrain)){
         for(i in seq_len(length(nconstrain))){
             stopifnot(length(nconstrain[[i]]) == 2L)
-            for(j in 2L:length(nconstrain[[i]]))
-                redun_constr[nconstrain[[i]][j]] <- TRUE
+            redun_constr[nconstrain[[i]][2L]] <- TRUE
         }
     }
     L <- sparseLmat(LL, constrain=constrain, nconstrain=nconstrain)
@@ -2262,7 +2270,7 @@ MGC2SC <- function(x, which){
     tmp <- x@ParObjects$pars[[which]]
     tmp@Model$lrPars <- x@ParObjects$lrPars
     ind <- 1L
-    for(i in seq_len(x@Data$nitems + 1L)){
+    for(i in seq_len(x@Data$nitems) + 1L){
         tmp@ParObjects$pars[[i]]@parnum[] <- seq(ind, ind + length(tmp@ParObjects$pars[[i]]@parnum) - 1L)
         ind <- ind + length(tmp@ParObjects$pars[[i]]@parnum)
     }

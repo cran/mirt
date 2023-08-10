@@ -63,6 +63,36 @@ NULL
 #' }
 NULL
 
+#' Social Life Feelings Data
+#'
+#' A 5-item data set analyzed by Bartholomew (1998). Data contains
+#' dichotomous responses (endorsement vs non-endorsement) from 1490 German
+#' respondents to five statements on perceptions of social life.
+#'
+#' @name SLF
+#' @docType data
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @references
+#' Bartholomew, D., J. (1998). Scaling unobservable constructs in social science. Journal of the Royal
+#' Statistical Society - Series C, 47, 1-13.
+#' @keywords data
+#' @examples
+#'
+#' \dontrun{
+#' # tabular format
+#' data(SLF)
+#' SLF
+#'
+#' # full dataset
+#' full <- expand.table(SLF)
+#' itemstats(full)
+#'
+#' mod <- mirt(full)
+#' plot(mod, type = 'trace')
+#'
+#' }
+NULL
+
 #' Description of SAT12 data
 #'
 #' Data obtained from the TESTFACT (Woods et al., 2003) manual, with 32 response pattern
@@ -92,21 +122,21 @@ NULL
 #'
 #' itemstats(SAT12, use_ts = FALSE)
 #'
-#' #score the data (missing scored as 0)
+#' # score the data (missing scored as 0)
 #' head(SAT12)
 #' dat <- key2binary(SAT12,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #' head(dat)
 #' itemstats(dat)
 #'
-#' #score the data, missing (value of 8) treated as NA
+#' # score the data, missing (value of 8) treated as NA
 #' SAT12missing <- SAT12
 #' SAT12missing[SAT12missing == 8] <- NA
 #' dat <- key2binary(SAT12missing,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 #' head(dat)
 #'
-#' #potentially better scoring for item 32 (based on nominal model finding)
+#' # potentially better scoring for item 32 (based on nominal model finding)
 #' dat <- key2binary(SAT12,
 #'     key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,3))
 #' }
@@ -174,7 +204,7 @@ NULL
 #' itemfit(mod)
 #' coef(mod, simplify=TRUE)
 #'
-#' #equivalentely, but with a different parameterization
+#' # equivalentely, but with a different parameterization
 #' mod2 <- mirt(dat, 1, itemtype = 'Rasch')
 #' anova(mod, mod2) #equal
 #' M2(mod2)
@@ -236,7 +266,7 @@ NULL
 #'
 #' mod <- mirt(dat, 1, 'nominal')
 #'
-#' #reproduce table 3 in Bock (1997)
+#' # reproduce table 3 in Bock (1997)
 #' fs <- round(fscores(mod, verbose = FALSE, full.scores = FALSE)[,c('F1','SE_F1')],2)
 #' fttd <- residuals(mod, type = 'exp')
 #' table <- data.frame(fttd[,-ncol(fttd)], fs)

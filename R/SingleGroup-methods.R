@@ -336,16 +336,20 @@ setMethod(
                 apars <- lapply(object@ParObjects$pars[-(extract.mirt(object, 'nitems') + 1L)],
                                 function(x) x@par[1L:object@Model$nfact])
                 is_ss <- sapply(apars, function(x) sum(x != 0) == 1L)
-                if(!any(is_ss))
-                    stop(c('traditional parameterization is only available for unidimensional ',
-                           'models or models with simple structure patterns'), call.=FALSE)
+                if(!any(is_ss)){
+                    warning(c('Traditional parameterization only available for unidimensional ',
+                           'models or models with simple structure patterns (neither found)'), call.=FALSE)
+                    IRTpars <- FALSE
+                }
             }
-            vcov <- vcov(object)
-            for(i in 1L:J){
-                if(class(object@ParObjects$pars[[i]]) %in% c('gpcmIRT')) next
-                object@ParObjects$pars[[i]] <- mirt2traditional(object@ParObjects$pars[[i]],
-                                                                vcov=vcov, nfact=object@Model$nfact)
+            if(IRTpars){
+                vcov <- vcov(object)
+                for(i in 1L:J){
+                    if(class(object@ParObjects$pars[[i]]) %in% c('gpcmIRT')) next
+                    object@ParObjects$pars[[i]] <- mirt2traditional(object@ParObjects$pars[[i]],
+                                                                    vcov=vcov, nfact=object@Model$nfact)
 
+                }
             }
         }
         allPars <- list()
@@ -628,6 +632,8 @@ setMethod(
 #'   If supplied, arguments typically passed to \code{fscores()} will be ignored and these values will
 #'   be used instead
 #' @param theta_lim range for the integration grid
+#' @param p.adjust method to use for adjusting all p-values (see \code{\link{p.adjust}}
+#'   for available options). Default is \code{'none'}
 #' @param fold logical; apply the sum 'folding' described by Edwards et al. (2018) for the JSI statistic?
 #' @param quadpts number of quadrature nodes to use. The default is extracted from model (if available)
 #'   or generated automatically if not available
@@ -671,6 +677,7 @@ setMethod(
 #' residuals(x, type = 'exp')
 #' residuals(x, suppress = .15)
 #' residuals(x, df.p = TRUE)
+#' residuals(x, df.p = TRUE, p.adjust = 'fdr') # apply FWE control
 #'
 #' # Pearson's X2 estimate for goodness-of-fit
 #' full_table <- residuals(x, type = 'expfull')
@@ -727,7 +734,8 @@ setMethod(
 setMethod(
     f = "residuals",
     signature = signature(object = 'SingleGroupClass'),
-    definition = function(object, type = 'LD', df.p = FALSE, approx.z = FALSE,
+    definition = function(object, type = 'LD', p.adjust = 'none',
+                          df.p = FALSE, approx.z = FALSE,
                           full.scores = FALSE, QMC = FALSE,
                           printvalue = NULL, tables = FALSE, verbose = TRUE, Theta = NULL,
                           suppress = NA, theta_lim = c(-6, 6), quadpts = NULL, fold = TRUE,
@@ -783,6 +791,7 @@ setMethod(
             if(!discrete){
                 groupPars <- ExtractGroupPars(object@ParObjects$pars[[object@Data$nitems + 1L]])
                 if(QMC){
+                    Theta <- Theta_meanSigma_shift(Theta, groupPars$gmeans, groupPars$gcov)
                     prior <- rep(1/nrow(Theta), nrow(Theta))
                 } else {
                     prior <- mirt_dmvnorm(Theta,groupPars$gmeans, groupPars$gcov)
@@ -829,6 +838,8 @@ setMethod(
                     }
                 }
             }
+            if(df.p)
+                df[upper.tri(df)] <- p.adjust(df[upper.tri(df)], method=p.adjust)
             if(tables) return(listtabs)
             if(df.p){
                 class(df) <- c('mirt_matrix', 'matrix')
@@ -1136,6 +1147,8 @@ setMethod(
         nfact <- x@Model$nfact
         if(nfact > 3) stop("Can't plot high dimensional solutions.", call.=FALSE)
         J <- x@Data$nitems
+        if(x@ParObjects$pars[[J + 1L]]@dentype == 'custom')
+            theta_lim <- x@Internals$theta_lim
         theta <- seq(theta_lim[1L],theta_lim[2L],length.out=npts/(nfact^2))
         ThetaFull <- Theta <- thetaComb(theta, nfact)
         prodlist <- attr(x@ParObjects$pars, 'prodlist')
@@ -1685,6 +1698,38 @@ mirt2traditional <- function(x, vcov, nfact){
         par[nfact + 2L] <- plogis(par[nfact + 2L])
         par[nfact + 3L] <- plogis(par[nfact + 3L])
         names(par) <- c(a.nms, 'b', 'g', 'u')
+    } else if(cls == 'fivePL'){
+        fns <- vector('list', nfact + 4L)
+        fns[[nfact+1L]] <- function(par, index, opar){
+            if(index == (nfact + 1L)){
+                opar[c(which.a, nfact + 1L)] <- par
+                ret <- -opar[nfact + 1L]/opar[which.a]
+            }
+            ret
+        }
+        fns[[nfact+2L]] <- function(par, index, opar){
+            if(index == nfact + 2L)
+                ret <- plogis(par)
+            ret
+        }
+        fns[[nfact+3L]] <- function(par, index, opar){
+            if(index == nfact + 3L)
+                ret <- plogis(par)
+            ret
+        }
+        fns[[nfact+4L]] <- function(par, index, opar){
+            if(index == nfact + 4L)
+                ret <- exp(par)
+            ret
+        }
+        delta_index <- c(as.list(rep(NA, nfact)),
+                         list(c(which.a, nfact + 1L),
+                              nfact + 2L, nfact+3L, nfact+4L))
+        par[nfact + 1L] <- -par[nfact + 1L]/par[which.a]
+        par[nfact + 2L] <- plogis(par[nfact + 2L])
+        par[nfact + 3L] <- plogis(par[nfact + 3L])
+        par[nfact + 4L] <- exp(par[nfact + 4L])
+        names(par) <- c(a.nms, 'b', 'g', 'u', 'S')
     } else if(cls == 'graded'){
         fns <- vector('list', ncat + nfact-1L)
         for(i in 2L:ncat - 1L){
@@ -1767,7 +1812,7 @@ mirt2traditional <- function(x, vcov, nfact){
         ds <- par[(ncat+2):length(par)]
         ds <- ds - mean(ds)
         par <- c(as, ds)
-        names(par) <- c(a.nms, paste0('c', 1:ncat))
+        names(par) <- c(paste0('a', 1:ncat), paste0('c', 1:ncat))
         x@est <- rep(TRUE, ncat*2)
         x@SEpar <- rep(as.numeric(NA), ncat*2)
     } else if(cls == 'nestlogit'){

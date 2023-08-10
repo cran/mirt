@@ -14,7 +14,7 @@
 #' distribution version of the Crossing-SIBTEST (CSIBTEST) statistic described by
 #' Chalmers (2018) and the permutation method described by Li and Stout (1996). This
 #' function also supports the multi-group generalizations (GSIBTEST and GCSIBTEST)
-#' proposed by Chalmers and Zheng (in press), where users may specify alternative
+#' proposed by Chalmers and Zheng (2023), where users may specify alternative
 #' contrast matrices to evaluate specific comparisons between groups as well as
 #' perform joint hypothesis tests.
 #'
@@ -247,7 +247,7 @@ SIBTEST <- function(dat, group, suspect_set, match_set, focal_name = unique(grou
                     DIF = FALSE, p.adjust.method = 'none', permute = 1000, pk_focal = FALSE,
                     correction = TRUE, remove_cross = FALSE, details = FALSE, plot = 'none', ...){
 
-    find_intersection <- function(diff, weight, use, scores, remove_cross,
+    find_intersection <- function(diff, weight = NULL, use, scores, remove_cross,
                                   tab_match = NULL, C = NULL){
         if(is.matrix(diff)){
             Ystar <- diff

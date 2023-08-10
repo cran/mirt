@@ -507,6 +507,9 @@ itemfit <- function(x, fit_stats = 'S_X2',
     dots <- list(...)
     discrete <- dots$discrete
     discrete <- ifelse(is.null(discrete), FALSE, discrete)
+    if(x@Model$nfact > 3L && is.null(dots$QMC) && !discrete)
+        warning('High-dimensional models should use quasi-Monte Carlo integration. Pass QMC=TRUE',
+                call.=FALSE)
     mixture <- is(x, 'MixtureClass')
     if(mixture && !all(fit_stats == 'S_X2'))
         stop("Only S_X2 fit statistic supported for mixture models")
@@ -798,8 +801,10 @@ itemfit <- function(x, fit_stats = 'S_X2',
         if(!mixture && x@ParObjects$pars[[extract.mirt(x, 'nitems')+1L]]@dentype == 'custom'){
             den_fun <- function(Theta, ...){
                 obj <- x@ParObjects$pars[[extract.mirt(x, 'nitems')+1L]]
-                obj@den(obj, Theta=Theta)
+                as.vector(obj@den(obj, Theta=Theta))
             }
+            if(is.null(dots$theta_lim) && !is.null(x@Internals$theta_lim))
+                theta_lim <- x@Internals$theta_lim
         } else den_fun <- mirt_dmvnorm
         E <- EAPsum(x, S_X2 = TRUE, gp = gp, CUSTOM.IND=x@Internals$CUSTOM.IND, den_fun=mirt_dmvnorm,
                     quadpts=quadpts, theta_lim=theta_lim, discrete=discrete, QMC=QMC, mixture=mixture,

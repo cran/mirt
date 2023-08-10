@@ -104,7 +104,7 @@
 #' @export mdirt
 #' @examples
 #'
-#' #LSAT6 dataset
+#' # LSAT6 dataset
 #' dat <- expand.table(LSAT6)
 #'
 #' # fit with 2-3 latent classes
@@ -249,7 +249,7 @@
 #' M2(CRUM)
 #'
 #' #------------------
-#' #multidimensional latent class model
+#' # multidimensional latent class model
 #'
 #' dat <- key2binary(SAT12,
 #'      key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
@@ -336,7 +336,7 @@ mdirt <- function(data, model, customTheta = NULL, structure = NULL, item.Q = NU
     if((is(model, 'mirt.model') || is.character(model)) && is.null(technical$customTheta))
         stop('customTheta input required when using a mirt.model type input')
     technical$omp <- FALSE
-    mods <- myLapply(1:nruns, function(x, ...) return(ESTIMATION(...)), progress=verbose,
+    mods <- myLapply(1:nruns, function(x, ...) return(ESTIMATION(...)), progress=verbose && nruns > 1L,
                      method=method, latent.regression=latent.regression, structure=structure,
                      data=data, model=model, group=group, itemtype=itemtype, optimizer=optimizer,
                      technical=technical, calcNull=FALSE, GenRandomPars=GenRandomPars, item.Q=item.Q,

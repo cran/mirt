@@ -18,8 +18,10 @@ setMethod(
             if(object@ParObjects$pars[[extract.mirt(object, 'nitems')+1L]]@dentype == 'custom'){
                 den_fun <- function(Theta, ...){
                     obj <- object@ParObjects$pars[[extract.mirt(object, 'nitems')+1L]]
-                    obj@den(obj, Theta=Theta)
+                    as.vector(obj@den(obj, Theta=Theta))
                 }
+                if(!is.null(object@Internals$theta_lim))
+                    theta_lim <- object@Internals$theta_lim
             }
         }
         if(!is.null(custom_den)) den_fun <- custom_den
@@ -275,7 +277,8 @@ setMethod(
                 } else {
                     if(is.null(custom_theta)){
                         ThetaShort <- Theta <- if(QMC){
-                            QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+                            tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+                            Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
                         } else thetaComb(theta,nfact)
                     } else {
                         if(ncol(custom_theta) != object@Model$nfact)
@@ -309,7 +312,7 @@ setMethod(
                                    scores=scores, classify=discrete, hessian=TRUE)
                 } else {
             	    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, progress=FALSE,
-            	                   log_itemtrace=log_itemtrace, classify=discrete,
+            	                   log_itemtrace=log_itemtrace, classify=discrete & !mixture,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, scores=scores,
                                    hessian=estHess && method == 'EAP', return_zeros=method != 'EAP')
                 }
@@ -761,7 +764,8 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
     } else {
         nfact <- x@Model$nfact
         ThetaShort <- Theta <- if(QMC){
-            QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+            tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+            Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
         } else {
             theta <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
             thetaComb(theta,nfact)

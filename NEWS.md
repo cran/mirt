@@ -1,3 +1,40 @@
+# Changes in mirt 1.40
+
+- `technical` list gains a `nconstrain` argument for specifying equality 
+  constraints with negative relationships (e.g., `a12 = -a21`). Requested by 
+  Berend Terluin
+
+- Added unipolar log‑logistic model (Lucke, 2015)  itemtype, specified 
+  as `itemtype = 'ULL'`. Note that this automatically changes a number of 
+  internal defaults, such as using a log-normal(0,1) density for the latent
+  traits, and where the `theta_lim` is specified to be positive
+
+- Added complementary log‑log model (Shim, Bonifay, and Wiedermann, 2022) 
+  itemtype, specified as `itemtype = 'CLL'`
+
+- Added `itemtype = '5PL'` model for unidimensional dichotomous data to included 
+  asymmetric response functions. Example in `help(mirt)` also demonstrates 
+  asymmetric 2PL model as the 5PL itself is very unstable and requires 
+  strong priors
+
+- Methods using Quasi-Monte Carlo integration post-convergence were 
+  not respecting correlated latent variable structures 
+  (reported by George Kephart when using `M2()`)
+
+- Bugfix for `fscores()` when supplying mixture models 
+  that was introduced by changing previous classification default for 
+  latent class models (reported by Karel Veldkamp)
+  
+- `residuals()` gains a `p.adjust` argument for FWE control
+
+- `DRF()` gains a `DIF.cat` argument to compute statistics on a per-category
+  basis when studying polytomous items
+  
+- `expected.test()` gains a `probs.only` logical to return probability 
+  functions for each category (only used when `individual = TRUE`)
+  
+- Small bug fixes in C++ code that resulted in memory leaks
+
 # Changes in mirt 1.39
 
 - For models fit using `mdirt()` the `fscores()` EAP and EAPsum methods now 
