@@ -1,5 +1,5 @@
 Package: mirt
-Version: 1.40
+Version: 1.41
 Type: Package
 Title: Multidimensional Item Response Theory
 Authors@R: c( person("Phil", family="Chalmers", email =
@@ -15,18 +15,17 @@ Authors@R: c( person("Phil", family="Chalmers", email =
     person("David", family="King", role=c('ctb')),
     person("Chen-Wei", family="Liu", role=c('ctb')),
     person("Ogreden", family="Oguzhan", role=c('ctb')))
-Description: Analysis of dichotomous and polytomous response data using
-    unidimensional and multidimensional latent trait models under the Item
+Description: Analysis of discrete response data using
+    unidimensional and multidimensional item analysis models under the Item
     Response Theory paradigm (Chalmers (2012) <doi:10.18637/jss.v048.i06>). 
-    Exploratory and confirmatory models can be estimated with quadrature (EM) 
-    or stochastic (MHRM) methods. Confirmatory
-    bi-factor and two-tier analyses are available for modeling item testlets.
-    Multiple group analysis and mixed effects designs also are available for
-    detecting differential item and test functioning as well as modeling
-    item and person covariates. Finally, latent class models such as the DINA,
-    DINO, multidimensional latent class, and several other discrete latent
-    variable models, including mixture and zero-inflated response models, 
-    are supported.
+    Exploratory and confirmatory item factor analysis models
+	are estimated with quadrature (EM) or stochastic (MHRM) methods. Confirmatory
+    bi-factor and two-tier models are available for modeling item testlets using
+	dimension reduction EM algorithms, while multiple group analyses and 
+	mixed effects designs are included for detecting differential item, bundle, 
+	and test functioning, and for modeling item and person covariates. 
+	Finally, latent class models such as the DINA, DINO, multidimensional latent class, 
+	mixture, and zero-inflated response models are supported.
 VignetteBuilder: knitr
 Depends: stats, R (>= 3.6.0), stats4, lattice, methods
 Imports: GPArotation, gridExtra, Matrix (>= 1.5-0), Rcpp, mgcv, vegan,
@@ -46,7 +45,7 @@ URL: https://github.com/philchalmers/mirt,
 BugReports: https://github.com/philchalmers/mirt/issues?state=open
 RoxygenNote: 7.2.3
 NeedsCompilation: yes
-Packaged: 2023-08-09 17:14:42 UTC; phil
+Packaged: 2023-10-17 14:31:29 UTC; phil
 Author: Phil Chalmers [aut, cre] (<https://orcid.org/0000-0001-5332-2810>),
   Joshua Pritikin [ctb],
   Alexander Robitzsch [ctb],
@@ -58,4 +57,4 @@ Author: Phil Chalmers [aut, cre] (<https://orcid.org/0000-0001-5332-2810>),
   David King [ctb],
   Chen-Wei Liu [ctb],
   Ogreden Oguzhan [ctb]
-Date/Publication: 2023-08-10 15:40:07 UTC
+Date/Publication: 2023-10-17 15:50:03 UTC

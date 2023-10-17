@@ -442,6 +442,8 @@ updatePrior <- function(pars, gTheta, list, ngroups, nfact, J,
                         dentype, sitems, cycles, rlist, lrPars = list(), full=FALSE,
                         MC = FALSE){
     prior <- Prior <- Priorbetween <- vector('list', ngroups)
+    if(dentype == 'mixture')
+        pis <- ExtractMixtures(pars)
     if(dentype == 'custom'){
         for(g in seq_len(ngroups)){
             gp <- pars[[g]][[J+1L]]
@@ -529,7 +531,6 @@ updatePrior <- function(pars, gTheta, list, ngroups, nfact, J,
         }
     }
     if(dentype == 'mixture'){
-        pis <- ExtractMixtures(pars)
         for(g in seq_len(ngroups))
             Prior[[g]] <- pis[g] * Prior[[g]]
     }
@@ -1325,7 +1326,8 @@ ItemInfo2 <- function(x, Theta, total.info = TRUE, MD = FALSE, DERIV = NULL, P =
             info <- info + outer(as.numeric(dx$grad[[i]]), as.numeric(dx$grad[[i]])) / P[ ,i]
     } else {
         grad <- do.call(cbind, dx$grad)
-        info <- grad^2 / P
+        hess <- do.call(cbind, dx$hess)
+        info <- grad^2 / P - hess
         if(total.info) info <- rowSums(info)
     }
     return(info)
@@ -2283,15 +2285,13 @@ MGC2SC <- function(x, which){
     tmp
 }
 
-computeNullModel <- function(data, itemtype, key, group=NULL){
-    if(is.null(itemtype)) itemtype <- rep('graded', ncol(data))
-    itemtype[itemtype == 'Rasch'] <- 'gpcm'
-    if(!is.null(group)){
-        null.mod <- multipleGroup(data, 1L, itemtype=itemtype, group=group, verbose=FALSE,
-                                  key=key, quadpts=3, technical=list(NULL.MODEL=TRUE))
+computeNullModel <- function(data, key, group=NULL){
+    if(!is.null(group) && !all(group == 'all')){
+        null.mod <- suppressMessages(multipleGroup(data, 1L, group=group, verbose=FALSE,
+                                  key=key, quadpts=3, technical=list(NULL.MODEL=TRUE)))
     } else {
-        null.mod <- mirt(data, 1L, itemtype=itemtype, verbose=FALSE, key=key, quadpts=3,
-                         technical=list(NULL.MODEL=TRUE))
+        null.mod <- suppressMessages(mirt(data, 1L, verbose=FALSE,
+                                          key=key, quadpts=3, technical=list(NULL.MODEL=TRUE)))
     }
     null.mod
 }
@@ -2506,7 +2506,7 @@ removeMissing <- function(obj){
     for(g in seq_len(length(obj@Data$groupNames))){
         whc <- obj@Data$group == obj@Data$groupNames[g]
         ind2 <- obj@Data$rowID[whc]
-        pick2 <- ind2 %in% pick
+        pick2 <- ind2 %in% names(pick)
         obj@Data$fulldata[[g]] <- obj@Data$fulldata[[g]][!pick2, , drop=FALSE]
     }
     obj@Data$group <- obj@Data$group[-pick]

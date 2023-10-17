@@ -1,3 +1,22 @@
+# Changes in mirt 1.41
+
+- Fix for `DIF()` when sparse data included with mixed item formats (reported by
+  Heather Leigh Kayton)
+
+- When computing category-level information curves include the negative Hessian
+  in computations (reported by Milica Kabic)
+
+- Allow missing data patterns in `personfit()`, as well as a new option 
+  to return all raw item by person residuals (requested by George Karabatsos)
+
+- Fix Zero-inflated model example in `multipleGroup()`, which required the 
+  discontinuous trait location to be populated explicitly with a
+  `customTheta` syntax (reported by Brooke Magnus)
+
+- Empirical reliability estimates in `fscores()` and `empirical_rxx()` 
+  include option to use the true score variance as an estimate of 
+  the observed score variance (suggested by Hynek Cigler)
+
 # Changes in mirt 1.40
 
 - `technical` list gains a `nconstrain` argument for specifying equality 

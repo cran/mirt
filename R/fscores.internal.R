@@ -459,7 +459,10 @@ setMethod(
                 }
                 T <- na.omit(T)
                 E <- na.omit(E)
-                reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))
+                if(dots$T_as_X)
+                    reliability <- 1 - colMeans(E^2) / (diag(var(T)))
+                else
+                    reliability <- diag(var(T)) / (diag(var(T)) + colMeans(E^2))
                 names(reliability) <- colnames(scores)
                 if(returnER) return(reliability)
     			if(verbose && !discrete){
@@ -629,7 +632,7 @@ MAP.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID
 }
 
 WLE.mirt <- function(Theta, pars, patdata, itemloc, gp, prodlist, CUSTOM.IND, ID, data, DERIV,
-                     item_weights, max_theta)
+                     item_weights, max_theta, T_as_X)
 {
     if(any(abs(Theta) > max_theta)) return(1e10)
     Theta <- matrix(Theta, nrow=1L)

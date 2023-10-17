@@ -18,6 +18,7 @@ fscores(
   quadpts = NULL,
   item_weights = rep(1, extract.mirt(object, "nitems")),
   returnER = FALSE,
+  T_as_X = FALSE,
   return.acov = FALSE,
   mean = NULL,
   cov = NULL,
@@ -90,7 +91,7 @@ samples from the posterior (silently passes object to \code{\link{mirt}}, theref
 one will be created which decreases as the number of dimensions increases
 (and therefore for estimates such as EAP, will be less accurate). This is determined from
 the switch statement
-\code{quadpts <- switch(as.character(nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)}}
+\code{quadpts <- switch(as.character(nfact), '1'=121, '2'=61, '3'=31, '4'=19, '5'=11, '6'=7, 5)}}
 
 \item{item_weights}{a user-defined weight vector used in the likelihood expressions
 to add more/less weight for a given observed response. Default is a vector of 1's,
@@ -98,6 +99,10 @@ indicating that all the items receive the same weight}
 
 \item{returnER}{logical; return empirical reliability (also known as marginal reliability)
 estimates as a numeric values?}
+
+\item{T_as_X}{logical; should the observed variance be equal to
+\code{var(X) = var(T) + E(E^2)} or \code{var(X) = var(T)} when computing
+empirical reliability estimates? Default (\code{FALSE}) uses the former}
 
 \item{return.acov}{logical; return a list containing covariance matrices instead of factors
 scores? \code{impute = TRUE} not supported with this option}

@@ -402,8 +402,10 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             opts$technical$customTheta <- diag(PrepList[[1L]]$nfact)
     }
     RETURNVALUES <- FALSE
+    SUPPLIED_STARTS <- FALSE
     if(!is.null(pars)){
         if(is(pars, 'data.frame')){
+            SUPPLIED_STARTS <- TRUE
             PrepList <- UpdatePrepList(PrepList, pars, random=mixed.design$random,
                                        lrPars=lrPars, lr.random=latent.regression$lr.random,
                                        MG = TRUE)
@@ -413,7 +415,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             attr(PrepList, 'random') <- NULL
             attr(PrepList, 'lr.random') <- NULL
         }
-        if(!is.null(attr(pars, 'values')) || (is.character(pars) && pars == 'values'))
+        if(!is.null(attr(pars, 'values')) || (is.character(pars)))
             RETURNVALUES <- TRUE
     }
     pars <- vector('list', Data$ngroups)
@@ -459,7 +461,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             }
         }
     }
-    if(opts$dentype == 'mixture'){
+    if(opts$dentype == 'mixture' && !SUPPLIED_STARTS){
         tmp <- length(pars[[1L]][[nitems + 1L]]@par)
         pars[[1L]][[nitems + 1L]]@est[tmp] <- FALSE
         for(g in 1L:Data$ngroups)
@@ -493,7 +495,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         r <- Data$Freq[[g]]
         rr <- rr + r
     }
-    df <- Data$ngroups * (prod(PrepList[[1L]]$K) - 1)
+    df <- if(opts$dentype == 'mixture') prod(PrepList[[1L]]$K) - 1
+        else Data$ngroups * (prod(PrepList[[1L]]$K) - 1)
     if(df > 1e10) df <- 1e10
     nestpars <- nconstr <- 0L
     for(g in seq_len(Data$ngroups))
@@ -1020,7 +1023,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         warning(c('Full table of responses is very sparse. ',
                 'Goodness-of-fit statistics may be very inaccurate'), call.=FALSE)
     if(!opts$NULL.MODEL && opts$method != 'MIXED' && opts$calcNull && nmissingtabdata == 0L){
-        null.mod <- try(unclass(computeNullModel(data=data, itemtype=itemtype, key=key,
+        null.mod <- try(unclass(computeNullModel(data=data, key=key,
                                                  group=if(length(pars) > 1L) group else NULL)))
         if(is(null.mod, 'try-error')){
             if(opts$warn)

@@ -67,7 +67,7 @@
 #'   one will be created which decreases as the number of dimensions increases
 #'   (and therefore for estimates such as EAP, will be less accurate). This is determined from
 #'   the switch statement
-#'   \code{quadpts <- switch(as.character(nfact), '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)}
+#'   \code{quadpts <- switch(as.character(nfact), '1'=121, '2'=61, '3'=31, '4'=19, '5'=11, '6'=7, 5)}
 #' @param theta_lim lower and upper range to evaluate latent trait integral for each dimension. If
 #'   omitted, a range will be generated automatically based on the number of dimensions
 #' @param max_theta the maximum/minimum value any given factor score estimate will achieve using
@@ -93,6 +93,9 @@
 #'   to ensure that the sum-scores correspond to the same composite score
 #' @param returnER logical; return empirical reliability (also known as marginal reliability)
 #'   estimates as a numeric values?
+#' @param T_as_X logical; should the observed variance be equal to
+#'   \code{var(X) = var(T) + E(E^2)} or \code{var(X) = var(T)} when computing
+#'   empirical reliability estimates? Default (\code{FALSE}) uses the former
 #' @param return.acov logical; return a list containing covariance matrices instead of factors
 #'   scores? \code{impute = TRUE} not supported with this option
 #' @param start a matrix of starting values to use for iterative estimation methods. Default
@@ -241,7 +244,8 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                     response.pattern = NULL, append_response.pattern = FALSE, na.rm = FALSE,
                     plausible.draws = 0, plausible.type = 'normal', quadpts = NULL,
                     item_weights = rep(1, extract.mirt(object, 'nitems')),
-                    returnER = FALSE, return.acov = FALSE, mean = NULL, cov = NULL, covdata = NULL,
+                    returnER = FALSE, T_as_X = FALSE,
+                    return.acov = FALSE, mean = NULL, cov = NULL, covdata = NULL,
                     verbose = TRUE, full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
                     use_dentype_estimate=FALSE, QMC = FALSE, custom_den = NULL,
                     custom_theta = NULL, min_expected = 1, max_theta = 20, start = NULL, ...)
@@ -250,7 +254,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
         if(QMC && is.null(quadpts)) quadpts <- 5000
         if(is.null(quadpts))
             quadpts <- switch(as.character(object@Model$nfact),
-                              '1'=61, '2'=31, '3'=15, '4'=9, '5'=7, 3)
+                              '1'=121, '2'=61, '3'=31, '4'=19, '5'=11, '6'=7, 5)
     } else quadpts <- 1
     if(method == 'plausible'){
         plausible.draws <- 1
@@ -291,7 +295,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                             quadpts=quadpts, response.pattern=response.pattern, QMC=QMC,
                             verbose=verbose, returnER=returnER, gmean=mean, gcov=cov,
                             theta_lim=theta_lim, MI=MI, covdata=covdata,
-                            item_weights=item_weights,
+                            item_weights=item_weights, T_as_X=T_as_X,
                             full.scores.SE=full.scores.SE, return.acov=return.acov,
                             plausible.draws = plausible.draws, custom_den=custom_den,
                             custom_theta=custom_theta, Target=Target, min_expected=min_expected,
