@@ -36,11 +36,11 @@ EML2 <- function(x, Theta, pars, tabdata, freq, itemloc, CUSTOM.IND, bfactor_inf
         Priorbetween <- pb / sum(pb)
         prior <- t(t(pp) / colSums(pp))
         rlist <- Estep.bfactor(pars=pars, tabdata=tabdata, freq=freq,
-                               Theta=Theta, prior=prior,
+                               Theta=Theta, prior=prior, wmiss=rep(1, nrow(tabdata)),
                                Priorbetween=Priorbetween, specific=bfactor_info$specific,
                                sitems=sitems, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND, omp_threads=1L)
     } else {
-        rlist <- Estep.mirt(pars=pars, tabdata=tabdata, freq=freq,
+        rlist <- Estep.mirt(pars=pars, tabdata=tabdata, freq=freq, wmiss=rep(1, nrow(tabdata)),
                             Theta=Theta, prior=prior, itemloc=itemloc,
                             CUSTOM.IND=CUSTOM.IND, full=FALSE, omp_threads=1L)
     }
@@ -135,6 +135,25 @@ symbolicHessian_par <- function(x, Theta, dp1 = NULL, dp2 = NULL, P = NULL){
         }
     }
     H
+}
+
+Deriv.mix <- function(x, estHess=FALSE){
+    phi2psi <- function(par){
+        E <- exp(par)
+        E / sum(E)
+    }
+    LL <- function(par, x){
+        phi <- x$par
+        phi[x$est] <- par
+        psi <- phi2psi(phi)
+        dmultinom(x$dat, prob=psi, log=TRUE)
+    }
+    ret <- list(grad=numeric(length(x$par)),
+                hess=matrix(0, length(x$par), length(x$par)))
+    ret$grad[x$est] <- numerical_deriv(par=x$par[x$est], f=LL, x=x)
+    if(estHess && any(x$est))
+        ret$hess[x$est, x$est] <- numerical_deriv(par=x$par[x$est], f=LL, x=x, gradient=FALSE)
+    ret
 }
 
 # ----------------------------------------------------------------

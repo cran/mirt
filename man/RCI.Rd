@@ -4,10 +4,25 @@
 \alias{RCI}
 \title{Model-based Reliable Change Index}
 \usage{
-RCI(mod, predat, postdat, cutoffs = NULL, ...)
+RCI(
+  mod_pre,
+  predat,
+  postdat,
+  mod_post = mod_pre,
+  cutoffs = NULL,
+  rxx.method = "pooled",
+  rxx.pre = NULL,
+  rxx.post = NULL,
+  SD.pre = NULL,
+  SD.post = NULL,
+  Fisher = FALSE,
+  ...
+)
 }
 \arguments{
-\item{mod}{single-group model fitted by \code{\link{mirt}}}
+\item{mod_pre}{single-group model fitted by \code{\link{mirt}}. If not supplied the
+information will be extracted from the data input objects to compute the classical
+test theory version of the RCI statistics}
 
 \item{predat}{a vector (if one individual) or matrix/data.frame
 of response data to be scored, where each individuals' responses are
@@ -16,15 +31,36 @@ included in exactly one row}
 \item{postdat}{same as \code{predat}, but with respect to the post/follow-up
 measurement}
 
+\item{mod_post}{(optional) IRT model for post-test if different from pre-test;
+otherwise, the pre-test model will be used}
+
 \item{cutoffs}{optional vector of length 2 indicating the type of cut-offs to
 report (e.g., \code{c(-1.96, 1.96)} reflects the 95 percent z-score type cut-off)}
+
+\item{rxx.method}{which method to use for pooling the reliability
+information. Currently supports \code{'pooled'} to pool the pre-post
+reliability estimates (default) or \code{'pre'} for using just the pre-test}
+
+\item{rxx.pre}{CTT reliability of pretest. If not supplied will be computed using coefficient
+alpha from \code{predat}}
+
+\item{rxx.post}{same as \code{rxx.pre}, but for post-test data}
+
+\item{SD.pre}{standard deviation of pretest. If not supplied will be computed from \code{predat}}
+
+\item{SD.post}{same as \code{SD.pre}, but for the post-test data}
+
+\item{Fisher}{logical; use the Fisher/expected information function to compute the
+SE terms? If \code{FALSE} the SE information will be extracted from the select
+\code{\link{fscores}} method (default). Only applicable for unidimensional models}
 
 \item{...}{additional arguments passed to \code{\link{fscores}}}
 }
 \description{
 Computes an IRT version of the "reliable change index" (RCI) proposed by
 Jacobson and Traux (1991) but modified to use IRT information about scores
-and measurement error. Main benefit of the IRT approach is the inclusion
+and measurement error (see Jabrayilov, Emons, and Sijtsma (2016).
+Main benefit of the IRT approach is the inclusion
 of response pattern information in the pre/post data score estimates, as well
 as conditional standard error of measurement information.
 }
@@ -32,20 +68,50 @@ as conditional standard error of measurement information.
 
 \dontrun{
 
-mod <- mirt(Science, 1)
+# simulate some data
+N <- 1000
+J <- 20     # number of items
+a <- matrix(rlnorm(J,.2,.3))
+d <- rnorm(J)
+
+theta <- matrix(rnorm(N))
+dat_pre <- simdata(a, d, itemtype = '2PL', Theta = theta)
+
+# first 3 cases decrease by 1/2
+theta2 <- theta - c(1/2, 1/2, 1/2, numeric(N-3))
+dat_post <- simdata(a, d, itemtype = '2PL', Theta = theta2)
+
+mod <- mirt(dat_pre)
+
+# all changes using fitted model from pre data
+RCI(mod, predat=dat_pre, postdat=dat_post)
 
 # single response pattern change using EAP information
-RCI(mod, predat = c(1,2,3,2), postdat = c(1,2,2,1))
+RCI(mod, predat=dat_pre[1,], postdat=dat_post[1,])
 
-# WLE estimator
-RCI(mod, predat = c(1,2,3,2), postdat = c(1,2,2,1), method = 'WLE')
+# WLE estimator with Fisher information for SE (see Jabrayilov et al. 2016)
+RCI(mod, predat = dat_pre[1,], postdat = dat_post[1,],
+    method = 'WLE', Fisher = TRUE)
 
 # multiple respondents
-RCI(mod, predat = Science[1:5,], postdat = Science[2:6,])
+RCI(mod, predat = dat_pre[1:6,], postdat = dat_post[1:6,])
 
 # include large-sample z-type cutoffs
-RCI(mod, predat = Science[1:5,], postdat = Science[2:6,],
+RCI(mod, predat = dat_pre[1:6,], postdat = dat_post[1:6,],
     cutoffs = c(-1.96, 1.96))
+
+######
+# CTT version by omitting IRT model (easiest to use complete dataset)
+RCI(predat = dat_pre, postdat = dat_post)
+
+# CTT version with pre-computed information
+RCI(predat = dat_pre[1:6,], postdat = dat_post[1:6,],
+    rxx.pre=.6, rxx.post=.6, SD.pre=2, SD.post=3,
+    cutoffs = c(-1.96, 1.96))
+
+# just pre-test rxx
+RCI(predat = dat_pre[1:6,], postdat = dat_post[1:6,],
+    rxx.pre=.6, SD.pre=2, rxx.method = 'pre')
 
 ############################
 # Example where individuals take completely different item set pre-post
@@ -54,7 +120,7 @@ RCI(mod, predat = Science[1:5,], postdat = Science[2:6,],
 dat <- key2binary(SAT12,
   key = c(1,4,5,2,3,1,2,1,3,1,2,4,2,1,5,3,4,4,1,4,3,3,4,1,3,5,1,3,1,5,4,5))
 
-mod <- mirt(dat, 1)
+mod <- mirt(dat)
 
 # with N=5 individuals under investigation
 predat <- postdat <- dat[1:5,]
@@ -76,6 +142,10 @@ Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-
 Jacobson, N. S., & Truax, P. (1991). Clinical significance: A statistical approach
 to defining meaningful change in psychotherapy research. Journal
 of Consulting and Clinical Psychology, 59, 12-19.
+
+Jabrayilov, R. , Emons, W. H. M., & Sijtsma, K. (2016). Comparison of
+Classical Test Theory and Item Response Theory in Individual Change Assessment.
+\emph{Applied Psychological Measurement, 40} (8), 559-572.
 }
 \author{
 Phil Chalmers \email{rphilip.chalmers@gmail.com}

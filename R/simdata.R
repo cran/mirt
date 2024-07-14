@@ -462,6 +462,12 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	data <- matrix(0, N, nitems)
     a[is.na(a)] <- 0
     itemobjects <- vector('list', nitems)
+    pick <- itemtype == 'graded' & K == 2L
+    if(any(pick)){
+        upper[pick] <- 999
+        guess[pick] <- -999
+        itemtype[pick] <- 'dich'
+    }
 	for(i in 1L:nitems){
 	    if(itemtype[i] == 'nestlogit'){
 	        par <- na.omit(c(a[i, ],d[i,1], guess[i], upper[i], nominal[i,-1L],d[i,-1L]))
@@ -495,7 +501,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	    if(itemtype[i] == 'ggum'){
 	        if(length(na.omit(a[i,])) != length(na.omit(d[i,])))
 	            stop('ggums must have the same number of a and d values per item', call.=FALSE)
-	        par <- c(na.omit(a[i, ]), -d[i,], t[i,])
+	        par <- c(na.omit(a[i, ]), d[i,], t[i,])
 	        obj <- new(itemtype[i], par=par, nfact=nfact, ncat=K[i])
 	    }
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit', 'ggum')))

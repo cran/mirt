@@ -41,7 +41,8 @@
 #'
 #' @aliases mixedmirt
 #' @param data a \code{matrix} or \code{data.frame} that consists of
-#'   numerically ordered data, with missing data coded as \code{NA}
+#'   numerically ordered data, organized in the form of integers,
+#'    with missing data coded as \code{NA}
 #' @param covdata a \code{data.frame} that consists of the \code{nrow(data)} by \code{K}
 #'   'person level' fixed and random predictors. If missing data are present in this object
 #'   then the observations from \code{covdata} and \code{data} will be removed row-wise
@@ -372,12 +373,12 @@ mixedmirt <- function(data, covdata = NULL, model = 1, fixed = ~ 1, random = NUL
     if(length(itemtype) == 1L) itemtype <- rep(itemtype, ncol(data))
     if(any(itemtype %in% c('spline', 'ideal'))){
         if(fixed != ~ -1){
-            message(paste0('Warning: Unsupported itemtype detected for modeling intercepts.\n',
+            warning(paste0('Unsupported itemtype detected for modeling intercepts.\n',
                     'fixed = ~ -1 used by default to remove intercept'))
             fixed <- ~ -1
         }
         if(!is.null(random)){
-            message('Warning: random set to NULL due to unsupported itemtypes')
+            warning('random set to NULL due to unsupported itemtypes')
             random <- NULL
         }
     }

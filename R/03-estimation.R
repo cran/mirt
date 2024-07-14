@@ -440,7 +440,23 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     dummymat <- matrix(FALSE, pars[[1L]][[nitems + 1L]]@nfact, pars[[1L]][[nitems + 1L]]@nfact)
-    if(any('free_var' %in% invariance)){ #Free factor vars (vars 1 for ref)
+    if(any('free_means' %in% invariance)){ #Free means
+        if(all(sapply(PrepList[[1]]$pars, function(x) class(x)) %in%
+               c(ordinal_itemtypes(), 'GroupPars'))){
+            TS <- rowMeans(Data$data, na.rm=TRUE)
+            gmus <- tapply(TS, Data$group, mean, na.rm=TRUE)
+            gsd <- sd(TS[Data$group == Data$groupNames[1L]], na.rm=TRUE)
+            gmuscaled <- (gmus - gmus[Data$groupNames[1L]]) / gsd
+            if(all(is.finite(gmuscaled))){
+                for(i in 1L:Data$ngroups){
+                    tmp <- pars[[i]][[Data$nitems+1L]]
+                    tmp@par[tmp@est & grepl('MEAN_', names(tmp@est))] <- gmuscaled[i]
+                    pars[[i]][[Data$nitems+1L]] <- tmp
+                }
+            }
+        }
+    }
+    if(any(c('free_var', 'free_vars') %in% invariance)){ #Free factor vars (vars 1 for ref)
         if(opts$dentype == 'bfactor'){
             tmp <- dummymat[1L:(nfact-nspec),1L:(nfact-nspec), drop=FALSE]
             diag(tmp) <- TRUE
@@ -584,6 +600,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     SEMconv <- NA
+    Data$wmiss <- if(length(lrPars)) with(Data, 1/rowMeans(!is.na(data)) / nitems)
+        else with(Data, 1/rowMeans(!is.na(tabdata)) / nitems)
     opts$times$end.time.Data <- proc.time()[3L]
 
     #EM estimation
@@ -839,8 +857,8 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             is.latent <- lengthsplit > 2L
             if(!dontrun){
                 if(ESTIMATE$cycles <= 10L)
-                    if(opts$message)
-                        message('Very few EM cycles performed. Consider decreasing TOL further to
+                    if(opts$warn)
+                        warning('Very few EM cycles performed. Consider decreasing TOL further to
                             increase EM iteration count or starting farther away from ML estimates by
                             passing the \'GenRandomPars = TRUE\' argument')
                 estmat <- matrix(FALSE, length(ESTIMATE$correction), length(ESTIMATE$correction))
@@ -1078,7 +1096,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 vcov[!isna, !isna] <- vcov2
                 if(!is(vcov2, 'try-error')){
                     OptimInfo$condnum <- kappa(info, exact=TRUE)
-                    OptimInfo$secondordertest <- all(eigen(info)$values > 0)
+                    OptimInfo$secondordertest <- secondOrderTest(info)
                     } else OptimInfo$secondordertest <- FALSE
             } else {
                 OptimInfo$secondordertest <- FALSE

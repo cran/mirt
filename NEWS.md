@@ -1,3 +1,33 @@
+# Changes in mirt 1.42
+
+- The `model` argument in `bfactor()` can now be specified using the `mirt.model()`
+  syntax to include more cognitively friendly tracking of item names and
+  respective locations (requested by Afshin Khosravi)
+
+- Add `reverse.score()` function for reverse scoring specific items within
+  a `matrix` or `data.frame` 
+
+- Fixed issue related to missing data patterns that resulted in bias 
+  when estimating the hyper-parameters in single and multi-group models 
+  (reported by Paul Jewsbury)
+
+- `mirt.model()` syntax gains a negation operator for omitting specific 
+  observed/latent groups from specifications. For example, the following will
+  omit "Group3" identifies from between groups equality constraint definitions
+  `CONSTRAINB[-Group3] = ...`
+
+- `RMSD_DIF()` now supports datasets that follow vertical scaling structures
+  (i.e., when groups answer some items but not others). 
+  Requested by Alexandre Jaloto
+
+- `M2()` functions now compute null model and SRMR fall all models whenever
+  possible, including the latent class variance (reported by Hynek Cigler)
+  
+- VCOV memory leak bugfix for mixture models (see Github issue #247)
+
+- Standardized residuals for point estimates now returned in `personfit()` 
+  when passing `return.resids=TRUE` (requested by Raymond Hernandez)
+
 # Changes in mirt 1.41
 
 - Fix for `DIF()` when sparse data included with mixed item formats (reported by

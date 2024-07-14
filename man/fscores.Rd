@@ -193,15 +193,35 @@ the \code{mirtCAT} package and the associated JSS paper (Chalmers, 2016).
 }
 \examples{
 
-mod <- mirt(Science, 1)
+mod <- mirt(Science)
 tabscores <- fscores(mod, full.scores = FALSE)
 head(tabscores)
+
+# convert scores into expected total score information with 95\% CIs
+E.total <- expected.test(mod, Theta=tabscores[,'F1'])
+E.total_2.5 <- expected.test(mod, Theta=tabscores[,'F1'] +
+                                       tabscores[,'SE_F1'] * qnorm(.05/2))
+E.total_97.5 <- expected.test(mod, Theta=tabscores[,'F1'] +
+                                       tabscores[,'SE_F1'] * qnorm(1-.05/2))
+
+data.frame(Total_score=rowSums(tabscores[,1:4]),
+           E.total, E.total_2.5, E.total_97.5) |> head()
 
 \dontrun{
 fullscores <- fscores(mod)
 fullscores_with_SE <- fscores(mod, full.scores.SE=TRUE)
 head(fullscores)
 head(fullscores_with_SE)
+
+# convert scores into expected total score information with 95\% CIs
+E.total <- expected.test(mod, Theta=fullscores[,'F1'])
+E.total_2.5 <- expected.test(mod, Theta=fullscores_with_SE[,'F1'] +
+                                 fullscores_with_SE[,'SE_F1'] * qnorm(.05/2))
+E.total_97.5 <- expected.test(mod, Theta=fullscores_with_SE[,'F1'] +
+                               fullscores_with_SE[,'SE_F1'] * qnorm(1-.05/2))
+
+data.frame(Total_score=rowSums(Science),
+           E.total, E.total_2.5, E.total_97.5) |> head()
 
 # change method argument to use MAP estimates
 fullscores <- fscores(mod, method='MAP')
@@ -243,9 +263,15 @@ head(fs)
 pv <- fscores(mod, plausible.draws = 5)
 lapply(pv, function(x) c(mean=mean(x), var=var(x), min=min(x), max=max(x)))
 
-## define a custom_den function. EAP with a uniform prior between -3 and 3
+## define a custom_den function (*must* return a numeric vector).
+#  EAP with a uniform prior between -3 and 3
 fun <- function(Theta, ...) as.numeric(dunif(Theta, min = -3, max = 3))
 head(fscores(mod, custom_den = fun))
+
+# compare EAP estimators with same modified prior
+fun <- function(Theta, ...) as.numeric(dnorm(Theta, mean=.5))
+head(fscores(mod, custom_den = fun))
+head(fscores(mod, method = 'EAP', mean=.5))
 
 # custom MAP prior: standard truncated normal between 5 and -2
 library(msm)

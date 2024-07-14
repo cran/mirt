@@ -13,7 +13,6 @@
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
-#' @docType methods
 #' @rdname print-method
 #' @examples
 #'
@@ -104,7 +103,6 @@ setMethod(
 #' @aliases show,SingleGroupClass-method
 #'   show,MultipleGroupClass-method show,MixedClass-method show,DiscreteClass-method
 #'   show,MixtureClass-method
-#' @docType methods
 #' @rdname show-method
 #' @references
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
@@ -158,7 +156,6 @@ setMethod(
 #' @aliases summary,SingleGroupClass-method
 #'   summary,MultipleGroupClass-method summary,MixedClass-method summary,DiscreteClass-method
 #'   summary,MixtureClass-method
-#' @docType methods
 #' @export
 #' @rdname summary-method
 #' @references
@@ -272,7 +269,6 @@ setMethod(
 #' @aliases coef,SingleGroupClass-method
 #'   coef,MultipleGroupClass-method coef,MixedClass-method coef,DiscreteClass-method
 #'   coef,MixtureClass-method
-#' @docType methods
 #' @rdname coef-method
 #' @references
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
@@ -348,7 +344,6 @@ setMethod(
                     if(class(object@ParObjects$pars[[i]]) %in% c('gpcmIRT')) next
                     object@ParObjects$pars[[i]] <- mirt2traditional(object@ParObjects$pars[[i]],
                                                                     vcov=vcov, nfact=object@Model$nfact)
-
                 }
             }
         }
@@ -485,7 +480,6 @@ setMethod(
 #'   anova,MultipleGroupClass-method anova,MixedClass-method anova,DiscreteClass-method
 #'   anova,MixtureClass-method
 #' @export
-#' @docType methods
 #' @rdname anova-method
 #' @examples
 #'
@@ -640,8 +634,9 @@ setMethod(
 #' @param QMC logical; use quasi-Monte Carlo integration? If \code{quadpts} is omitted the
 #'   default number of nodes is 5000
 #' @param suppress a numeric value indicating which parameter local dependency combinations
-#'   to flag as being too high. Absolute values for the standardized estimates greater than
-#'   this value will be returned, while all values less than this value will be set to NA
+#'   to flag as being too high (for LD, LDG2, and Q3 the standardize correlations are used; for
+#'   JSI, the z-ratios are used). Absolute values for the standardized estimates greater than
+#'   this value will be returned, while all values less than this value will be set to missing
 #' @param upper logical; which portion of the matrix (upper versus lower triangle)
 #'   should the \code{suppress} argument be applied to?
 #' @param technical list of technical arguments when models are re-estimated (see \code{\link{mirt}}
@@ -651,7 +646,6 @@ setMethod(
 #' @name residuals-method
 #' @aliases residuals,SingleGroupClass-method residuals,MixtureClass-method
 #'   residuals,MultipleGroupClass-method residuals,DiscreteClass-method
-#' @docType methods
 #' @rdname residuals-method
 #' @references
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
@@ -760,6 +754,8 @@ setMethod(
             if(!is.matrix(Theta)) Theta <- matrix(Theta)
             if(nrow(Theta) > nrow(data))
                 Theta <- Theta[-extract.mirt(object, 'completely_missing'), , drop=FALSE]
+            stopifnot("Theta does not have the correct number of rows" =
+                          nrow(Theta) == nrow(object@Data$data))
         }
         if(!discrete){
             if(is.null(quadpts)){
@@ -814,7 +810,7 @@ setMethod(
                         for(k in seq_len(K[i]))
                             for(m in seq_len(K[j]))
                                 Etab[k,m] <- NN * sum(P1[,k] * P2[,m] * prior)
-                        s <- try(gamma.cor(tab) - gamma.cor(Etab), TRUE)
+                        s <- try(gamma_cor(tab) - gamma_cor(Etab), TRUE)
                         if(is.nan(s) || is(s, 'try-error')){
                             res[i,j] <- res[j,i] <- NaN
                             next
@@ -845,7 +841,7 @@ setMethod(
                 class(df) <- c('mirt_matrix', 'matrix')
                 if(verbose){
                     cat("Degrees of freedom (lower triangle) and p-values:\n\n")
-                    print(df, ...)
+                    print(df, ..., na.print = " ")
                     cat("\n")
                 }
             }
@@ -857,7 +853,7 @@ setMethod(
             }
             res <- suppressMat(res, suppress=suppress, upper=upper)
             class(res) <- c('mirt_matrix', 'matrix')
-            if(verbose) print(res, ...)
+            if(verbose) print(res, ..., na.print = " ")
             if(df.p){
                 ret <- list(df, res)
                 names(ret) <- c('df.p', type)
@@ -912,8 +908,7 @@ setMethod(
             nfact <- extract.mirt(object, 'nfact')
             tmpdat <- matrix(0, nrow=2, ncol=nitems)
             colnames(tmpdat) <- colnames(tabdata)
-            large <- mirt(tmpdat, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large='return',
-                                      technical = list(customK=K))
+            large <- mirt(tmpdat, nfact, itemtype=itemtype, pars=sv, TOL=NaN, large='return')
             large$tabdata <- poly2dich(tabdata)
             large$Freq$all <- rep(1L, nrow(tabdata))
             large$tabdata2 <- matrix(1L)
@@ -989,13 +984,15 @@ setMethod(
                 retmat[i, pick] <- zs
             }
             if(fold) retmat <- retmat + t(retmat)
+            retmat <- suppressMat(retmat, suppress=suppress, upper=upper)
             class(retmat) <- c('mirt_matrix', 'matrix')
             if(verbose){
                 cat("JSI summary statistics:\n")
                 print(round(summary(na.omit(as.vector(retmat))), 3))
                 cat("\n")
+                print(retmat, ..., na.print = " ")
             }
-            retmat
+            return(invisible(retmat))
         } else {
             stop('specified type does not exist', call.=FALSE)
         }
@@ -1054,9 +1051,9 @@ setMethod(
 #'   placed in one plot for each group
 #' @param profile logical; provide a profile plot of response probabilities (objects returned from
 #'   \code{\link{mdirt}} only)
-#' @param auto.key plotting argument passed to \code{\link{lattice}}
-#' @param par.strip.text plotting argument passed to \code{\link{lattice}}
-#' @param par.settings plotting argument passed to \code{\link{lattice}}
+#' @param auto.key plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.strip.text plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.settings plotting argument passed to \code{\link[lattice]{lattice}}
 #' @param ehist.cut a probability value indicating a threshold for excluding cases in empirical
 #'   histogram plots. Values larger than the default will include more points in the tails of the
 #'   plot, potentially squishing the 'meat' of the plot to take up less area than visually desired
@@ -1075,7 +1072,6 @@ setMethod(
 #' @aliases plot,SingleGroupClass-method
 #'   plot,MultipleGroupClass-method plot,SingleGroupClass,missing-method
 #'   plot,DiscreteClass,missing-method plot,MixtureClass,missing-method
-#' @docType methods
 #' @rdname plot-method
 #' @examples
 #'
@@ -1903,7 +1899,8 @@ mirt2traditional <- function(x, vcov, nfact){
 #' This is a helper function for users who have previously available traditional/classical
 #' IRT parameters and want to know the equivalent slope-intercept translation used in \code{mirt}.
 #' Note that this function assumes that the supplied models are unidimensional by definition (i.e.,
-#' will have only one slope/discrimination). If there is no supported slope-intercept transformation
+#' will have only one slope/discrimination) and in the logistic metric (i.e., logistic-ogive
+#' scaling coefficient D=1). If there is no supported slope-intercept transformation
 #' available then the original vector of parameters will be returned by default.
 #'
 #' Supported class transformations for the \code{cls} input are:
@@ -1924,7 +1921,7 @@ mirt2traditional <- function(x, vcov, nfact){
 #'     }
 #' }
 #'
-#' @param x a vector of parameters to tranform
+#' @param x a vector of parameters to transform
 #' @param cls the class or itemtype of the supplied model
 #' @param ncat the number of categories implied by the IRT model
 #'
@@ -2014,7 +2011,6 @@ traditional2mirt <- function(x, cls, ncat){
 #' @export
 #' @aliases vcov,SingleGroupClass-method vcov,MixtureClass-method
 #'   vcov,MultipleGroupClass-method vcov,MixedClass-method vcov,DiscreteClass-method
-#' @docType methods
 #' @rdname vcov-method
 #' @examples
 #'
@@ -2041,7 +2037,6 @@ setMethod(
 #' @name logLik-method
 #' @aliases logLik,SingleGroupClass-method logLik,MixtureClass-method
 #'   logLik,MultipleGroupClass-method logLik,MixedClass-method logLik,DiscreteClass-method
-#' @docType methods
 #' @references
 #' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.

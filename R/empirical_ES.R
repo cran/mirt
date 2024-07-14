@@ -70,9 +70,9 @@
 #' @param plot logical; plot expected scores of items/test where expected scores are computed
 #'  using focal group thetas and both focal and reference group item parameters
 #' @param type type of objects to draw in \code{lattice}; default plots both points and lines
-#' @param par.strip.text plotting argument passed to \code{\link{lattice}}
-#' @param par.settings plotting argument passed to \code{\link{lattice}}
-#' @param ... additional arguments to be passed to \code{\link{fscores}} and \code{\link{xyplot}}
+#' @param par.strip.text plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.settings plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param ... additional arguments to be passed to \code{\link{fscores}} and \code{\link[lattice]{xyplot}}
 #'
 #' @author Adam Meade, with contributions by Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -143,8 +143,8 @@ empirical_ES <- function(mod, Theta.focal = NULL,
                                                list(col = '#9ECAE1'),
                                              strip.border =
                                                list(col = "black")), ...){
-    stopifnot(extract.mirt(mod, 'nfact') == 1L)
-    stopifnot(extract.mirt(mod, 'ngroups') == 2L)
+    stopifnot("Only unidimensional models supported" = extract.mirt(mod, 'nfact') == 1L)
+    stopifnot("Only two groups supported" = extract.mirt(mod, 'ngroups') == 2L)
     ref.group <- 1
     ref <- extract.group(mod, ref.group)
     focal <- extract.group(mod, ifelse(ref.group == 1, 2, 1))
@@ -155,6 +155,7 @@ empirical_ES <- function(mod, Theta.focal = NULL,
                          leave_missing=TRUE, ...)
         Theta.focal <- Theta[focal_select, , drop = FALSE]
     } else Theta.focal <- as.matrix(Theta.focal)
+    stopifnot("Theta must be a matrix" = is.matrix(Theta.focal))
     if(sum(focal_select) != nrow(Theta.focal))
         stop('Theta elements do not match the number of individuals in the focal group')
 

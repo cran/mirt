@@ -38,7 +38,8 @@
 #'
 #' @aliases bfactor
 #' @param data a \code{matrix} or \code{data.frame} that consists of
-#'   numerically ordered data, with missing data coded as \code{NA}
+#'   numerically ordered data, organized in the form of integers,
+#'   with missing data coded as \code{NA}
 #' @param model a numeric vector specifying which factor loads on which
 #'   item. For example, if for a 4 item test with two specific factors, the first
 #'   specific factor loads on the first two items and the second specific factor
@@ -47,6 +48,10 @@
 #'   be used as place-holders. These numbers will be translated into a format suitable for
 #'   \code{mirt.model()}, combined with the definition in \code{model2}, with the letter 'S'
 #'   added to the respective factor number
+#'
+#'   Alternatively, input can be specified using the \code{\link{mirt.model}} syntax with the
+#'   restriction that each item must load on exactly one specific factor (or no specific factors,
+#'   if it is only predicted by the general factor specified in \code{model2})
 #' @param model2 a two-tier model specification object defined by \code{mirt.model()} or
 #'   a string to be passed to \code{\link{mirt.model}}. By default
 #'   the model will fit a unidimensional model in the second-tier, and therefore be equivalent to
@@ -99,6 +104,22 @@
 #' summary(mod1)
 #' itemplot(mod1, 18, drop.zeros = TRUE) #drop the zero slopes to allow plotting
 #'
+#' # alternative model definition via ?mirt.model syntax
+#' specific2 <- "S1 = 7,9,10,11,13,15,17,18,21,22,24,27,31
+#'               S2 = 1,3,6,8,16,29,32
+#'               S3 = 2,4,5,12,14,19,20,23,25,26,28,30"
+#' mod2 <- bfactor(data, specific2)
+#' anova(mod1, mod2) # same
+#'
+#' # also equivalent using item names instead (not run)
+#' specific3 <- "S1 = Item.7, Item.9, Item.10, Item.11, Item.13, Item.15,
+#'                 Item.17, Item.18, Item.21, Item.22, Item.24, Item.27, Item.31
+#'               S2 = Item.1, Item.3, Item.6, Item.8, Item.16, Item.29, Item.32
+#'               S3 = Item.2, Item.4, Item.5, Item.12, Item.14, Item.19,
+#'                 Item.20, Item.23, Item.25, Item.26, Item.28, Item.30"
+#' # mod3 <- bfactor(data, specific3)
+#' # anova(mod1, mod2, mod3)  # all same
+#'
 #' ### Try with fixed guessing parameters added
 #' guess <- rep(.1,32)
 #' mod2 <- bfactor(data, specific, guess = guess)
@@ -110,11 +131,12 @@
 #' mod3 <- bfactor(data, specific)
 #' anova(mod3, mod1)
 #'
-#' # same, but declared manually (not run)
-#' #sv <- mod2values(mod1)
-#' #sv$value[220] <- 0 #parameter 220 is the 32 items specific slope
-#' #sv$est[220] <- FALSE
-#' #mod3 <- bfactor(data, specific, pars = sv) #with excellent starting values
+#' # same, but with syntax (not run)
+#' specific3 <- "S1 = 7,9,10,11,13,15,17,18,21,22,24,27,31
+#'               S2 = 1,3,6,8,16,29
+#'               S3 = 2,4,5,12,14,19,20,23,25,26,28,30"
+#' # mod3b <- bfactor(data, specific3)
+#' # anova(mod3b)
 #'
 #'
 #' #########
@@ -156,12 +178,14 @@
 #' items[5:10] <- 'graded'
 #'
 #' sigma <- diag(3)
-#' dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
+#' dataset <- simdata(a,d,5000,itemtype=items,sigma=sigma)
 #' itemstats(dataset)
 #'
-#' specific <- c(rep(1,7),rep(2,7))
+#' specific <- "S1 = 1-7
+#'              S2 = 8-14"
 #' simmod <- bfactor(dataset, specific)
-#' coef(simmod)
+#' coef(simmod, simplify=TRUE)
+#'
 #'
 #' #########
 #' # General testlet response model (Wainer, 2007)
@@ -182,7 +206,9 @@
 #' itemstats(dataset)
 #'
 #' # estimate by applying constraints and freeing the latent variances
-#' specific <- c(rep(1,4),rep(2,4), rep(3,4))
+#' specific <- "S1 = 1-4
+#'              S2 = 5-8
+#'              S3 = 9-12"
 #' model <- "G = 1-12
 #'           CONSTRAIN = (1, a1, a2), (2, a1, a2), (3, a1, a2), (4, a1, a2),
 #'             (5, a1, a3), (6, a1, a3), (7, a1, a3), (8, a1, a3),
@@ -236,7 +262,9 @@
 #' dataset <- simdata(a,d,2000,itemtype=items,sigma=sigma)
 #' itemstats(dataset)
 #'
-#' specific <- c(rep(1,5),rep(2,6),rep(3,5))
+#' specific <- "S1 = 1-5
+#'              S2 = 6-11
+#'              S3 = 12-16"
 #' model <- '
 #'     G1 = 1-8
 #'     G2 = 9-16
@@ -264,6 +292,19 @@ bfactor <- function(data, model, model2 = paste0('G = 1-', ncol(data)),
     if(!is.null(dots$formula))
         stop('bfactor does not currently support latent regression models', call.=FALSE) #TODO
     if(missing(model)) missingMsg('model')
+    if(is.character(model))
+        model <- mirt.model(model, itemnames=colnames(data))
+    if(is(model, 'mirt.model')){
+        tmp <- rep(NA, ncol(data))
+        toparse <- model$x
+        toparse <- toparse[!(toparse[,1] %in% mirt.model_keywords()), 2]
+        toparse <- replace_dash(toparse)
+        loads <- lapply(toparse, \(x) as.integer(strsplit(x, split=',')[[1L]]))
+        stopifnot("bifactor model specific loadings not unique; please fix" =
+                      all(table(do.call(c, loads)) == 1L))
+        for(i in 1L:length(loads)) tmp[loads[[i]]] <- i
+        model <- tmp
+    }
     if(!is.numeric(model))
         stop('model must be a numeric vector', call.=FALSE)
     if(is.numeric(model))

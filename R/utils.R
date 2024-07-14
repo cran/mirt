@@ -51,6 +51,62 @@ thetaStack <- function(theta, nclass){
     as.matrix(do.call(rbind, thetalist))
 }
 
+#' Second-order test of convergence
+#'
+#' Test whether terminated estimation criteria for a given model passes
+#' the second order test by checking the positive definiteness of the resulting
+#' Hessian matrix. This function, which accepts the symmetric Hessian/information
+#' matrix as the input, returns \code{TRUE} if the matrix is positive definite
+#' and \code{FALSE} otherwise.
+#'
+#' @param mat symmetric matrix to test for positive definiteness (typically the Hessian at the
+#'   highest point of model estimator, such as MLE or MAP)
+#' @param ... arguments passed to either \code{\link{eigen}}, \code{\link{chol}}, or
+#'   \code{'det'} for the positiveness of the eigen values, positiveness of leading minors
+#'   via the Cholesky decomposition, or evaluation of whether the determinant
+#'   is greater than 0
+#' @param method method to use to test positive definiteness. Default is \code{'eigen'}
+#'
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#' @return a matrix with all possible combinations
+#' @references
+#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
+#' \doi{10.18637/jss.v048.i06}
+#' @export
+#' @examples
+#'
+#' \dontrun{
+#'
+#' # PD matrix
+#' mod <- mirt(Science, 1, SE=TRUE)
+#' info <- solve(vcov(mod))   ## observed information
+#' secondOrderTest(info)
+#' secondOrderTest(info, method = 'chol')
+#' secondOrderTest(info, method = 'det')
+#'
+#' # non-PD matrix
+#' mat <- matrix(c(1,0,0,0,1,1,0,1,1), ncol=3)
+#' mat
+#' secondOrderTest(mat)
+#' secondOrderTest(mat, method = 'chol')
+#' secondOrderTest(mat, method = 'det')
+#'
+#' }
+secondOrderTest <- function(mat, ..., method = 'eigen'){
+    if(method == 'eigen'){
+        evs <- eigen(mat, ...)$value
+        ret <- all(!sapply(evs, function(x) isTRUE(all.equal(x, 0))) & evs > 0)
+    } else if(method == 'chol'){
+        chl <- try(chol(mat, ...), silent = TRUE)
+        ret <- if(is(chl, "try-error")) FALSE else TRUE
+    } else if(method == 'det'){
+        dt <- det(mat, ...)
+        ret <- !isTRUE(all.equal(dt, 0)) && dt > 0
+    }
+    ret
+}
+
 # Product terms
 prodterms <- function(theta0, prodlist)
 {
@@ -235,7 +291,7 @@ Rotate <- function(F, rotate, Target = NULL, par.strip.text = NULL, par.settings
 }
 
 # Gamma correlation, mainly for obtaining a sign
-gamma.cor <- function(x)
+gamma_cor <- function(x)
 {
 	concordant <- function(x){
 			mat.lr <- function(r, c, r.x, c.x){
@@ -537,12 +593,30 @@ updatePrior <- function(pars, gTheta, list, ngroups, nfact, J,
     return(list(prior=prior, Prior=Prior, Priorbetween=Priorbetween))
 }
 
+fill_neg_groups_with_complement <- function(OptionalGroups, groupNames){
+    has_neg <- grepl("^-", OptionalGroups)
+    if(!any(has_neg)) return(OptionalGroups)
+    for(i in seq_len(length(has_neg))){
+        if(has_neg[i]){
+            split <- strsplit(OptionalGroups[i], ',')[[1L]]
+            if(!all(grepl("^-", split)))
+                stop('Use of negation group syntax (-) cannot be mixed with non-negated syntax',
+                     call.=FALSE)
+            split <- gsub("^-", "", split)
+            OptionalGroups[i] <- paste0(setdiff(groupNames, split), collapse=',')
+        }
+    }
+    OptionalGroups
+}
+
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
                             method, itemnames, model, groupNames)
 {
     if(!is.numeric(model)){
         groupNames <- as.character(groupNames)
         names(pars) <- groupNames
+        model$x[,'OptionalGroups'] <-
+            fill_neg_groups_with_complement(model$x[,'OptionalGroups'], groupNames)
         for(row in 1L:nrow(model$x)){
             groupsPicked <- strsplit(model$x[row,'OptionalGroups'], split=',')[[1L]]
             groupsPicked <- which(groupNames %in% groupsPicked)
@@ -1816,13 +1890,13 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
             stop('List of fixed effect names do not match factor names', call.=FALSE)
         estnames <- X <- vector('list', length(formula))
         for(i in 1L:length(formula)){
-            X[[i]] <- model.matrix(formula[[i]], df)
+            X[[i]] <- model.matrix(as.formula(formula[[i]]), df)
             estnames[[i]] <- colnames(X[[i]])
         }
         X <- do.call(cbind, X)
         X <- X[,unique(colnames(X))]
     } else {
-        X <- model.matrix(formula, df)
+        X <- model.matrix(as.formula(formula), df)
     }
     tXX <- t(X) %*% X
     qr_XX <- qr(0)
@@ -2032,7 +2106,7 @@ BL.LL <- function(p, est, longpars, pars, ngroups, J, Theta, PrepList, specific,
     LL <- 0
     for(g in seq_len(ngroups)){
         expected <- Estep.mirt(pars=pars2[[g]],
-                               tabdata=Data$tabdatalong,
+                               tabdata=Data$tabdatalong, wmiss=Data$wmiss,
                                freq=if(full) rep(1L, nrow(Prior[[1L]])) else Data$Freq[[g]],
                                Theta=Theta, prior=Prior[[g]], itemloc=itemloc,
                                CUSTOM.IND=CUSTOM.IND, full=full, Etable=FALSE, omp_threads=omp_threads)$expected
@@ -2277,7 +2351,9 @@ MGC2SC <- function(x, which){
         ind <- ind + length(tmp@ParObjects$pars[[i]]@parnum)
     }
     tmp@Data <- x@Data
+    tmp@Data$completely_missing <- integer(0L)
     tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupName[which], , drop=FALSE]
+    tmp@Data$rowID <- 1L:nrow(tmp@Data$data)
     tmp@Data$Freq[[1L]] <- tmp@Data$Freq[[which]]
     tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[which]]
     tmp@Data$ngroups <- 1L
@@ -2611,6 +2687,25 @@ add_completely.missing_back <- function(data, completely_missing){
         data <- tmp
     }
     data
+}
+
+replace_dash <- function(syntax){
+    for(i in 1L:length(syntax)){
+        tmp <- syntax[i]
+        if(any(regexpr(",",tmp)))
+            tmp <- strsplit(tmp,",")[[1L]]
+        popout <- c()
+        for(j in seq_len(length(tmp))){
+            if(regexpr("-",tmp[j]) > 1L){
+                popout <- c(popout,j)
+                tmp2 <- as.numeric(strsplit(tmp[j],"-")[[1L]])
+                tmp2 <- as.character(tmp2[1L]:tmp2[2L])
+                tmp <- c(tmp[-j],tmp2)
+            }
+        }
+        syntax[i] <- paste0(tmp, collapse=',')
+    }
+    syntax
 }
 
 hasConverged <- function(p0, p1, TOL){

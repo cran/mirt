@@ -3,7 +3,7 @@
 #' Initializes the proper S4 class and methods necessary for \code{\link{mirt}}
 #' functions to use in estimation. To use the defined objects pass to the
 #' \code{mirt(..., customItems = list())} command, and
-#' ensure that the classes are properly labeled and unique in the list.
+#' ensure that the classes are properly labelled and unique in the list.
 #' Additionally, the input \code{mirt(..., customItemsData = list())} can
 #' also be included to specify additional item-level information to better
 #' recycle custom-item definitions (e.g., for supplying varying
@@ -199,7 +199,6 @@ createItem <- function(name, par, est, P, gr=NULL, hss = NULL, gen = NULL,
     if(bytecompile) P <- compiler::cmpfun(P)
     dps <- dps2 <- function() NULL
     if(derivType == 'symbolic' || derivType.hss == 'symbolic'){
-        browser()
         tmppars <- 1L:length(par)
         names(tmppars) <- rep("par", length(par))
         dps <- Deriv::Deriv(P, tmppars)

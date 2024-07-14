@@ -128,7 +128,7 @@ setMethod(
                     pis <- do.call(c, lapply(coef(object, simplify=TRUE), function(x) as.numeric(x$class_proportion)))
                 }
                 ret <- fscores(newmod, rotate=rotate, Target=Target, full.scores=TRUE, mixture=mixture,
-                               method=method, quadpts=quadpts, verbose=FALSE, full.scores.SE=TRUE,
+                               method=method, quadpts=quadpts, verbose=verbose, full.scores.SE=TRUE,
                                response.pattern=NULL, return.acov=return.acov, theta_lim=theta_lim,
                                MI=MI, mean=gmean, cov=gcov, custom_den=custom_den, QMC=QMC,
                                custom_theta=custom_theta, plausible.draws=plausible.draws,
@@ -530,7 +530,8 @@ setMethod(
     definition = function(object, rotate, full.scores = FALSE, method = "EAP",
                           quadpts = NULL, response.pattern = NULL, theta_lim, MI,
                           returnER = FALSE, verbose = TRUE, gmean, gcov,
-                          full.scores.SE, return.acov = FALSE, QMC, plausible.draws, ...)
+                          full.scores.SE, return.acov = FALSE, QMC, plausible.draws,
+                          leave_missing = FALSE, ...)
     {
         pars <- object@ParObjects$pars
         ngroups <- length(pars)
@@ -542,7 +543,8 @@ setMethod(
             ret[[g]] <- fscores(tmp_obj, rotate = rotate, full.scores=full.scores, method=method,
                            quadpts=quadpts, returnER=returnER, verbose=verbose, theta_lim=theta_lim,
                            mean=gmean[[g]], cov=gcov[[g]], MI=MI, plausible.draws=plausible.draws,
-                           full.scores.SE=full.scores.SE, return.acov=return.acov, QMC=QMC, ...)
+                           full.scores.SE=full.scores.SE, return.acov=return.acov, QMC=QMC,
+                           leave_missing=TRUE, ...)
             if(plausible.draws == 1L) ret[[g]] <- list(ret[[g]])
         }
         names(ret) <- object@Data$groupNames
@@ -585,6 +587,9 @@ setMethod(
             }
             ret <- out
             rownames(ret) <- rownames(object@Data$data)
+            if(!leave_missing)
+                ret <- add_completely.missing_back(ret,
+                                    extract.mirt(object, 'completely_missing'))
         }
         if(is.data.frame(ret))
             ret <- as.matrix(ret)

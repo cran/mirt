@@ -59,7 +59,7 @@ test_that('dich', {
     svalues[22, 'value'] <- 2
     modm5 <- mirt(data, 1, pars = svalues, verbose=FALSE)
     expect_is(modm5, 'SingleGroupClass')
-    expect_message(modm7 <- mirt(data, 1, '4PL', verbose=FALSE, parprior = list(c(3,7,11,15,19,'norm', -1.7, .1),
+    expect_warning(modm7 <- mirt(data, 1, '4PL', verbose=FALSE, parprior = list(c(3,7,11,15,19,'norm', -1.7, .1),
                                                                  c(4,8,12,16,20,'norm', 1.7, .1))),
                    "EM cycles terminated after 500 iterations.")
     expect_equal(extract.mirt(modm7, 'df'), 11)
@@ -146,7 +146,7 @@ test_that('dich', {
     expect_true(mirt:::closeEnough(fitm1$df.M2 - 5, -1e-4, 1e-4))
     fitm2 <- M2(modm3)
     expect_is(fitm2, 'data.frame')
-    expect_true(mirt:::closeEnough(fitm2$M2 - 5.291576, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fitm2$M2 - 5.291576, -1e-2, 1e-2))
     expect_true(mirt:::closeEnough(fitm2$df.M2 - 9, -1e-4, 1e-4))
 
     data <- expand.table(LSAT7)
@@ -175,5 +175,23 @@ test_that('dich', {
     expect_equal(out1$M2, 11.76977, tolerance=1e-4)
     expect_equal(out2$S_X2[1], 4.8448539, tolerance=1e-4)
     expect_equal(out3$expected[1], 9.931098, tolerance=1e-4)
+
+    # missing data
+    set.seed(1234)
+    pick <- sample(1:5000, 500)
+    dat <- as.matrix(expand.table(LSAT7))
+    dat[pick] <- NA
+    mod <- mirt(dat, itemtype='Rasch', verbose=FALSE)
+    syntax <- "F = 1-5
+               START = (1, d, 0.0), (1, a1, 1.0)
+               FIXED = (1, d), (1, a1)
+               FREE = (GROUP, MEAN_1)"
+    mod2 <-  mirt(dat, syntax,
+                  itemtype='Rasch', verbose=FALSE)
+    syntax <- 'F = 1-5
+               CONSTRAIN = (1-5, a1)'
+    mod3 <- mirt(dat, syntax, verbose=FALSE)
+    expect_equal(2*logLik(mod) - logLik(mod2) - logLik(mod3),
+                 0, 1e-2)
 })
 

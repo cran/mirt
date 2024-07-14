@@ -89,16 +89,16 @@
 #' @param boot number of parametric bootstrap samples to create for PV_Q1* and X2*
 #' @param boot_dfapprox number of parametric bootstrap samples to create for the X2*_df statistic
 #'   to approximate the scaling factor for X2* as well as the scaled degrees of freedom estimates
-#' @param ETrange rangone of integration nodes for Stone's X2* statistic
+#' @param ETrange range of integration nodes for Stone's X2* statistic
 #' @param ETpoints number of integration nodes to use for Stone's X2* statistic
 # @param impute a number indicating how many imputations to perform (passed to
 #   \code{\link{imputeMissing}}) when there are missing data present.
 #   Will return a data.frame object with the mean estimates
 #   of the stats and their imputed standard deviations
-#' @param par.strip.text plotting argument passed to \code{\link{lattice}}
-#' @param par.settings plotting argument passed to \code{\link{lattice}}
-#' @param auto.key plotting argument passed to \code{\link{lattice}}
-#' @param ... additional arguments to be passed to \code{fscores()} and \code{\link{lattice}}
+#' @param par.strip.text plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.settings plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param auto.key plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param ... additional arguments to be passed to \code{fscores()} and \code{\link[lattice]{lattice}}
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @keywords item fit
 #' @export itemfit
@@ -428,6 +428,9 @@ itemfit <- function(x, fit_stats = 'S_X2',
     }
 
     if(missing(x)) missingMsg('x')
+    if(!is.null(empirical.plot))
+        stopifnot("Model must be unidimensional to use empirical.plot option"=
+                      extract.mirt(x, 'nfact') == 1L)
     stopifnot(length(p.adjust) == 1L)
     if(return.tables){
         stopifnot(length(fit_stats) == 1L)
@@ -461,7 +464,9 @@ itemfit <- function(x, fit_stats = 'S_X2',
     }
     J <- ncol(x@Data$data)
     if(na.rm) x <- removeMissing(x)
-    if(na.rm) message('Sample size after row-wise response data removal: ', nrow(extract.mirt(x, 'data')))
+    if(na.rm) message('Sample size after row-wise response data removal: ',
+                      nrow(extract.mirt(x, 'data')))
+    if(nrow(extract.mirt(x, 'data')) == 0L) stop('No data!', call.=FALSE)
     if(any(is.na(x@Data$data)) && (Zh || S_X2) && impute == 0)
         stop('Only X2, G2, PV_Q1, PV_Q1*, infit, X2*, and X2*_df can be computed with missing data.
              Pass na.rm=TRUE to remove missing data row-wise', call.=FALSE)
@@ -469,6 +474,8 @@ itemfit <- function(x, fit_stats = 'S_X2',
         if(!is.matrix(Theta)) Theta <- matrix(Theta)
         if(nrow(Theta) > nrow(x@Data$data))
             Theta <- Theta[-extract.mirt(x, 'completely_missing'), , drop=FALSE]
+        stopifnot("Theta does not have the correct number of rows" =
+                      nrow(Theta) == nrow(x@Data$data))
     }
 
     if(is(x, 'MultipleGroupClass') || is(x, 'DiscreteClass')){
@@ -567,12 +574,13 @@ itemfit <- function(x, fit_stats = 'S_X2',
             pf$resid[dat_is_na] <- 0
             pf$C[dat_is_na] <- 0
             z2 <- pf$resid^2 / pf$W
-            outfit <- colSums(z2) / N
-            q.outfit <- sqrt(colSums((pf$C / pf$W^2) / N^2) - 1 / N)
+            outfit <- colSums(z2, na.rm = TRUE) / N
+            q.outfit <- sqrt(colSums((pf$C / pf$W^2) / N^2, na.rm=TRUE) - 1 / N)
             q.outfit[q.outfit > 1.4142] <- 1.4142
             z.outfit <- (outfit^(1/3) - 1) * (3/q.outfit) + (q.outfit/3)
-            infit <- colSums(pf$W * z2) / colSums(pf$W)
-            q.infit <- sqrt(colSums(pf$C - pf$W^2) / colSums(pf$W)^2)
+            infit <- colSums(pf$W * z2, na.rm=TRUE) / colSums(pf$W, na.rm=TRUE)
+            q.infit <- sqrt(colSums(pf$C - pf$W^2, na.rm=TRUE) /
+                                colSums(pf$W, na.rm=TRUE)^2)
             q.infit[q.infit > 1.4142] <- 1.4142
             z.infit <- (infit^(1/3) - 1) * (3/q.infit) + (q.infit/3)
             ret$outfit <- outfit[which.items]

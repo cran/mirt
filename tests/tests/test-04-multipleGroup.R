@@ -23,7 +23,7 @@ test_that('one factor', {
                                group = group, verbose = FALSE, method = 'EM')
     cfs <- as.numeric(na.omit(do.call(rbind, coef(mod_Rasch, printSE=TRUE, as.data.frame=TRUE))))
     expect_equal(cfs, c(0.5116698,-0.6522073,-0.1905068,0.8651635,0.1235676,0.7636483,0.919669,-0.3367473,-1.0904,-1.166159,1.242589,-0.2147728,0.4069149,0.4466409,-0.06474946,0.9783792,0.5880477,-0.4385498,-0.2643517,1.060335,0.2625935,0.7648064,0.9712697,-0.3590464,-0.9936327,-1.248645,1.270672,-0.09205005,0.4425358,0.4746364,-0.03480865,1.496147,0.07893867,0.0792895,0.07720629,0.08119347,0.07785767,0.0798737,0.08224574,0.07738347,0.08298824,0.08428115,0.08508337,0.07769511,0.07803545,0.07844748,0.07726093,0.0671328,0.08577857,0.08527442,0.08357395,0.08807036,0.08421204,0.0865046,0.08779314,0.08364731,0.08749941,0.0896606,0.09115384,0.08363036,0.08487376,0.08502025,0.0834237,0.1013833),
-                 tolerance = 1e-4)
+                 tolerance = 1e-2)
     expect_equal(logLik(mod_Rasch), -18007.78, tolerance = 1e-4)
     EAP <- fscores(mod_Rasch, full.scores=TRUE)
     expect_equal(cor(EAP, rowSums(dat))[1], .99, tolerance = 1e-2)
@@ -111,7 +111,7 @@ test_that('one factor', {
     expect_equal(as.numeric(fit2[[1]][1L,-1L]), c(2.733099, 7.851266, 11.000000, 0, 0.726562),
                  tolerance = 1e-4)
     fit3 <- M2(mod_scalar2)
-    expect_true(mirt:::closeEnough(fit3$M2 - 165.1392, -1e-4, 1e-4))
+    expect_true(mirt:::closeEnough(fit3$M2 - 165.1392, -1e-2, 1e-2))
     expect_equal(fit3$SRMSR.D1, 0.02754769, tolerance = 1e-4)
     expect_equal(fit3$TLI, 1.00559, tolerance = 1e-2)
     expect_true(mirt:::closeEnough(fit3$df - 208, -1e-4, 1e-4))
@@ -122,7 +122,8 @@ test_that('one factor', {
     mod <- multipleGroup(dat, 1, group, invariance = c('slopes', 'intercepts', 'free_means',
                                                        'free_var'), verbose=FALSE)
     cfs <- coef(mod, simplify=TRUE)
-    expect_equal(as.vector(cfs$D1$items[1:3,1:2]), c(1.139968,1.192491,1.093887,0.5647073,-0.5384472,-0.2615739),
+    expect_equal(as.vector(cfs$D1$items[1:3,1:2]), c(c(1.13997217,1.192487309,1.09388710,0.56470914,-0.538445,-0.26157010)
+),
                  tolerance=1e-4)
     expect_equal(as.vector(fscores(mod)[1:3,]), c(0.7325525, 0.9279133, 0.5071795), tolerance=1e-4)
     expect_is(plot(mod, type = 'trace'), 'trellis')
@@ -206,4 +207,15 @@ test_that('one factor', {
     expect_is(fs1, 'list')
     expect_equal(fs1[[1L]][1:6, 'F3'],
                  c(-0.36817499, -0.45410998, -0.19616041,  0.07609491,  0.33779790, -0.44366024), tolerance = 1e-2)
+
+    mod_scalar <- multipleGroup(dat, MGmodelg2, group = group,
+                                invariance=c(colnames(dat), 'free_means', 'free_var'),
+                                verbose = FALSE, method='QMCEM', TOL=.01)
+    expect_equal(logLik(mod_scalar), -18296.06, tolerance = 1e-2)
+    cfs <- coef(mod_scalar, simplify=TRUE)
+    gmeans <- sapply(cfs, \(x) x$means) |> t()
+    expect_equal(unname(gmeans[2,]), c(-0.1730826, -0.5265039, -0.2807707), tolerance = 1e-2)
+    so <- summary(mod_scalar, verbose=FALSE)
+    expect_equal(so[[2]]$fcor[c(2,3,6)], c(0.3191958, 0.7896032, 0.1829613), tolerance = 1e-2)
+
 })

@@ -35,10 +35,10 @@
 #' @param shiny logical; run interactive display for item plots using the \code{shiny} interface.
 #'   This primarily is an instructive tool for demonstrating how item response curves
 #'   behave when adjusting their parameters
-#' @param auto.key plotting argument passed to \code{\link{lattice}}
-#' @param par.strip.text plotting argument passed to \code{\link{lattice}}
-#' @param par.settings plotting argument passed to \code{\link{lattice}}
-#' @param ... additional arguments to be passed to \code{\link{lattice}} and \code{coef()}
+#' @param auto.key plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.strip.text plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param par.settings plotting argument passed to \code{\link[lattice]{lattice}}
+#' @param ... additional arguments to be passed to \code{\link[lattice]{lattice}} and \code{coef()}
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
@@ -105,19 +105,18 @@
 #'     }
 #'
 itemplot <- function(object, item, type = 'trace', degrees = 45, CE = FALSE, CEalpha = .05,
-                     CEdraws = 1000, drop.zeros = FALSE, theta_lim = NULL, shiny = FALSE,
+                     CEdraws = 1000, drop.zeros = FALSE, theta_lim = c(-6,6), shiny = FALSE,
                      rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                      par.strip.text = list(cex = 0.7), npts = 200,
                      par.settings = list(strip.background = list(col = '#9ECAE1'),
                                          strip.border = list(col = "black")),
                      auto.key = list(space = 'right', points=FALSE, lines=TRUE), ...){
-    if(!missing(object) && is.null(theta_lim) && !is.list(object)){
+    if(!missing(object) && !is.list(object)){
         tmp <- if(is(object, 'MultipleGroupClass') || is(object, 'MixtureClass'))
             object@ParObjects$pars[[1L]]@ParObjects$pars else object@ParObjects$pars
         if(tmp[[extract.mirt(object, 'nitems')+1L]]@dentype == 'custom')
             theta_lim <- object@Internals$theta_lim
-        else theta_lim <- c(-6,6)
-    } else theta_lim <- c(-6,6)
+    }
     if(shiny){
         if(requireNamespace("shiny", quietly = TRUE)){
             shiny::runApp(shinyItemplot(), ...)

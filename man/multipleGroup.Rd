@@ -17,7 +17,8 @@ multipleGroup(
 }
 \arguments{
 \item{data}{a \code{matrix} or \code{data.frame} that consists of
-numerically ordered data, with missing data coded as \code{NA}}
+numerically ordered data, organized in the form of integers,
+ with missing data coded as \code{NA}}
 
 \item{model}{string to be passed to, or a model object returned from, \code{\link{mirt.model}}
 declaring how the global model is to be estimated (useful to apply constraints here)}
@@ -124,7 +125,8 @@ mod_fullconstrain <- multipleGroup(dat, 1, group = group,
                              invariance=c('slopes', 'intercepts'))
 extract.mirt(mod_fullconstrain, 'time') #time of estimation components
 
-# optionally use Newton-Raphson for (generally) faster convergence in the M-step's
+# optionally use Newton-Raphson for (generally) faster convergence in the
+#  M-step's, though occasionally less stable
 mod_fullconstrain <- multipleGroup(dat, 1, group = group, optimizer = 'NR',
                              invariance=c('slopes', 'intercepts'))
 extract.mirt(mod_fullconstrain, 'time') #time of estimation components
@@ -253,6 +255,54 @@ model <- 'F1 = 1-15
 mod <- multipleGroup(dat, model, group = group, invariance = colnames(dat))
 coef(mod, simplify=TRUE)
 
+#############
+# Testing main effects in multiple independent grouping variables
+set.seed(1234)
+a <- matrix(abs(rnorm(15,1,.3)), ncol=1)
+d <- matrix(rnorm(15,0,.7),ncol=1)
+itemtype <- rep('2PL', nrow(a))
+N <- 500
+
+# generated data have interaction effect for latent means, as well as a
+# main effect across D but no main effect across G
+d11 <- simdata(a, d, N, itemtype, mu = 0)
+d12 <- simdata(a, d, N, itemtype, mu = 0)
+d13 <- simdata(a, d, N, itemtype, mu = 0)
+d21 <- simdata(a, d, N, itemtype, mu = 1/2)
+d22 <- simdata(a, d, N, itemtype, mu = 1/2)
+d23 <- simdata(a, d, N, itemtype, mu = -1)
+dat <- do.call(rbind, list(d11, d12, d13, d21, d22, d23))
+group <- rep(c('G1.D1', 'G1.D2', 'G1.D3', 'G2.D1', 'G2.D2', 'G2.D3'), each=N)
+table(group)
+
+# in practice, group would be organized in a data.frame as follows
+df <- data.frame(group)
+dfw <- tidyr::separate_wider_delim(df, group, delim='.', names = c('G', 'D'))
+head(dfw)
+
+# for use with multipleGroup() combine into a single long group
+group <- with(dfw, factor(G):factor(D))
+
+# conditional information
+itemstats(dat, group=group)
+
+mod <- multipleGroup(dat, group = group, SE=TRUE,
+                     invariance = c(colnames(dat), 'free_mean', 'free_var'))
+coef(mod, simplify=TRUE)
+sapply(coef(mod, simplify=TRUE), \(x) unname(x$means)) # mean estimates
+wald(mod) # view parameter names for later testing
+
+# test for main effect over G group (manually compute marginal mean)
+wald(mod, "0 + MEAN_1.123 + MEAN_1.185 = MEAN_1.247 + MEAN_1.309 + MEAN_1.371")
+
+# test for main effect over D group  (manually compute marginal means)
+wald(mod, c("0 + MEAN_1.247 = MEAN_1.123 + MEAN_1.309",
+            "0 + MEAN_1.247 = MEAN_1.185 + MEAN_1.371"))
+
+# post-hoc tests (better practice would include p.adjust() )
+wald(mod, "0 + MEAN_1.247 = MEAN_1.123 + MEAN_1.309") # D1 vs D2
+wald(mod, "0 + MEAN_1.247 = MEAN_1.185 + MEAN_1.371") # D1 vs D3
+wald(mod, "MEAN_1.123 + MEAN_1.309 = MEAN_1.185 + MEAN_1.371") # D2 vs D3
 
 
 #############
@@ -393,7 +443,7 @@ mod <- mirt(dat)
 anova(mod, mod_mix2)
 
 ########################################
-# Zero-inflated 2PL IRT model
+# Zero-inflated 2PL IRT model (Wall, Park, and Moustaki, 2015)
 
 n <- 1000
 nitems <- 20
@@ -422,12 +472,87 @@ technical <- list(customTheta = matrix(c(-100, seq(-6,6,length.out=61))))
 zi2PL.fit <- multipleGroup(data, zi2PL, dentype = 'mixture-2', technical=technical)
 coef(zi2PL.fit, simplify=TRUE)
 
+# classification estimates
+pi_hat <- fscores(zi2PL.fit, method = 'classify')
+head(pi_hat)
+tail(pi_hat)
+
+# EAP estimates (not useful for zip class)
+fs <- fscores(zi2PL.fit)
+head(fs)
+tail(fs)
+
+########################################
+# Zero-inflated graded response model (Magnus and Garnier-Villarreal, 2022)
+
+n <- 1000
+nitems <- 20
+
+a <- matrix(rlnorm(20,.2,.3))
+
+# for the graded model, ensure that there is enough space between the intercepts,
+# otherwise closer categories will not be selected often (minimum distance of 0.3 here)
+diffs <- t(apply(matrix(runif(20*4, .3, 1), 20), 1, cumsum))
+diffs <- -(diffs - rowMeans(diffs))
+d <- diffs + rnorm(20)
+
+zi_p <- 0.2 # Proportion of people in zero/lowest category class
+
+theta <- rnorm(n, 0, 1)
+zeros <- matrix(0, n*zi_p, nitems)
+nonzeros <- simdata(a, d, n*(1-zi_p), itemtype = 'graded',
+                    Theta = as.matrix(theta[1:(n*(1-zi_p))]))
+data <- rbind(nonzeros, zeros)
+
+# intercepts will be labelled as d1 through d4
+apply(data, 2, table)
+
+# ignoring zero inflation (bad idea)
+modGRM <- mirt(data)
+coef(modGRM, simplify=TRUE)
+
+# Define class with extreme theta but fixed item parameters
+#   For GRM in zero-inflated class the intercept values are arbitrary
+#   as the model forces the responses all into the first category (hence,
+#   spacing arbitrarily set to 1)
+ziGRM <- "F = 1-20
+          START [MIXTURE_1] = (GROUP, MEAN_1, -100), (GROUP, COV_11, .00001),
+                              (1-20, a1, 1.0),
+                              (1-20, d1, 2), (1-20, d2, 1), (1-20, d3, 0), (1-20, d4, -1)
+          FIXED [MIXTURE_1] = (GROUP, MEAN_1), (GROUP, COV_11),
+                              (1-20, a1),
+                              (1-20, d1), (1-20, d2), (1-20, d3), (1-20, d4)"
+
+# define custom Theta integration grid that contains extreme theta + normal grid
+technical <- list(customTheta = matrix(c(-100, seq(-6,6,length.out=61))))
+
+# fit zero-inflated GRM
+ziGRM.fit <- multipleGroup(data, ziGRM, dentype = 'mixture-2', technical=technical)
+coef(ziGRM.fit, simplify=TRUE)
+
+# classification estimates
+pi_hat <- fscores(ziGRM.fit, method = 'classify')
+head(pi_hat)
+tail(pi_hat)
+
+# EAP estimates (not useful for zip class)
+fs <- fscores(ziGRM.fit)
+head(fs)
+tail(fs)
+
 }
 }
 \references{
 Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
 Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 \doi{10.18637/jss.v048.i06}
+
+Magnus, B. E. and  Garnier-Villarreal (2022). A multidimensional zero-inflated
+graded response model for ordinal symptom data. \emph{Psychological Methods}, 27, 261-279.
+
+Wall, M., M., Park, J., Y., and Moustaki I. (2015). IRT modeling in the presence of
+zero-inflation with application to psychiatric disorder severity.
+\emph{Applied Psychological Measurement} 39: 583-597.
 }
 \seealso{
 \code{\link{mirt}}, \code{\link{DIF}}, \code{\link{extract.group}}, \code{\link{DRF}}

@@ -47,6 +47,12 @@
 #' bracketed group specifications are useful when modifying priors, starting values, between/within group equality constraints,
 #' and so on when the specifications for each sub-group may differ.
 #'
+#' Additionally, the use of negations can be used to omit specific groups in the constraint specifications
+#' by prefixing the string with a \code{-} operator, such as the following which applies between-group  constraints
+#' to all groups except "Group2" and "Group3":
+#'
+#' \code{CONSTRAINB [-Group2, -Group3] = (1-5, a1)}
+#'
 #' Finally, the keyword \code{GROUP} can be used to specify the group-level
 #' hyper-parameter terms, such as the means and variance of the default Gaussian
 #' distribution. For example, to set the starting value of the variance
@@ -58,7 +64,8 @@
 #'   \item{COV}{Specify the relationship between the latent factors.
 #'   Estimating a correlation between factors is declared by joining the two
 #'   factors with an asterisk (e.g., F1*F2), or with an asterisk between three or more factors
-#'   to estimate all the possible correlations (e.g., F1*F2*F3)}
+#'   to estimate all the possible correlations (e.g., F1*F2*F3). Specifications with the same factor
+#'   (e.g., F1*F1) will free the variance of said factor instead}
 #'
 #'  \item{MEAN}{A comma separated list specifying which latent factor means to freely estimate.
 #'   E.g., \code{MEAN = F1, F2} will free the latent means for factors F1 and F2}
@@ -222,6 +229,18 @@
 #'
 #' # mod <- mirt(dat , mirtmodel)
 #'
+#' # using sprintf() to functionally fill in information (useful for long tests
+#' # or more complex specifications)
+#' nitems <- 100
+#' s <- sprintf('F = 1-%i
+#'       CONSTRAIN = (%s, a1)
+#'       CONSTRAINB = (%s, a1), (1-%i, d)',
+#'       nitems, "1,2,4,50,100",
+#'       paste0(1:45, collapse=','),
+#'       nitems)
+#' cat(s)
+#' model <- mirt.model(s)
+#'
 #'     }
 mirt.model <- function(input = NULL, itemnames = NULL, file = "", COV = NULL, quiet = TRUE, ...)
 {
@@ -361,3 +380,6 @@ mirt.model <- function(input = NULL, itemnames = NULL, file = "", COV = NULL, qu
       	return(mod)
     }
 }
+
+mirt.model_keywords <- function() c('COV', 'MEAN', 'CONSTRAIN', 'CONSTRAINB', 'NEXPLORE',
+                                    'PRIOR', 'LBOUND', 'UBOUND', 'START', 'FIXED', 'FREE')
