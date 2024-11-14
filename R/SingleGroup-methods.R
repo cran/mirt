@@ -227,7 +227,7 @@ setMethod(
                 print(round(Phiprint, 3), na.print = " ")
             }
             if(any(h2 > 1))
-                warning("Solution has Heywood cases. Interpret with caution.",
+                warning("Model has Heywood cases. Interpret with caution.",
                         call.=FALSE)
             invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))
         }
@@ -312,11 +312,11 @@ setMethod(
         z <- abs(qnorm((1 - CI)/2))
         SEnames <- paste0('CI_', c((1 - CI)/2*100, ((1 - CI)/2 + CI)*100))
         J <- object@Data$nitems
-        nfact <- object@Model$nfact + length(object@Model$prodlist)
+        nfe <- max(sapply(1:J, \(i) object@ParObjects$pars[[i]]@nfixedeffects))
+        nfact <- object@Model$nfact + length(object@Model$prodlist) + nfe
         a <- matrix(0, J, nfact)
         for(i in 1:J)
             a[i, ] <- ExtractLambdas(object@ParObjects$pars[[i]])
-
         if (object@Options$exploratory && rotate != 'none'){
             if(verbose) cat("\nRotation: ", rotate, "\n\n")
             so <- summary(object, rotate=rotate, Target=Target, verbose=FALSE, ...)
@@ -377,6 +377,9 @@ setMethod(
         } else {
             for(i in seq_len(J+1L)){
                 allPars[[i]] <- matrix(object@ParObjects$pars[[i]]@par, 1L)
+                if(i < (J+1) && object@ParObjects$pars[[i]]@nfixedeffects > 0)
+                    allPars[[i]] <- allPars[[i]] * c(object@ParObjects$pars[[i]]@fixed.design,
+                                                     rep(1, length(allPars[[i]]) - nfe))
                 colnames(allPars[[i]]) <- object@ParObjects$pars[[i]]@parnames
                 rownames(allPars[[i]]) <- 'par'
             }
@@ -737,7 +740,7 @@ setMethod(
     {
         dots <- list(...)
         if(.hasSlot(object@Model$lrPars, 'beta'))
-            stop('Latent regression models not yet supported')
+            stop('Latent regression models not yet supported', call.=FALSE)
         discrete <- use_dentype_estimate <- FALSE
         if(!is.null(dots$use_dentype_estimate))
             use_dentype_estimate <- dots$use_dentype_estimate
@@ -802,8 +805,13 @@ setMethod(
             for(i in seq_len(J)){
                 for(j in seq_len(J)){
                     if(i < j){
-                        P1 <- ProbTrace(x=object@ParObjects$pars[[i]], Theta=Theta)
-                        P2 <- ProbTrace(x=object@ParObjects$pars[[j]], Theta=Theta)
+                        Theta1 <- Theta2 <- Theta
+                        if(object@ParObjects$pars[[i]]@nfixedeffects > 0)
+                            Theta1 <- cbind(object@ParObjects$pars[[i]]@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], Theta)
+                        if(object@ParObjects$pars[[j]]@nfixedeffects > 0)
+                            Theta2 <- cbind(object@ParObjects$pars[[j]]@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], Theta)
+                        P1 <- ProbTrace(x=object@ParObjects$pars[[i]], Theta=Theta1)
+                        P2 <- ProbTrace(x=object@ParObjects$pars[[j]], Theta=Theta2)
                         tab <- table(data[,i], data[,j], useNA = 'no')
                         Etab <- matrix(0,K[i],K[j])
                         NN <- sum(tab)
@@ -846,7 +854,7 @@ setMethod(
                 }
             }
             if(verbose){
-                cat("LD matrix (lower triangle) and standardized values.\n")
+                cat("LD matrix (lower triangle) and standardized residual correlations (upper triangle)\n")
                 cat("\nUpper triangle summary:\n")
                 print(round(summary(res[upper.tri(res)]), 3))
                 cat("\n")
@@ -940,12 +948,17 @@ setMethod(
             diag(res) <- 1
             for(i in seq_len(J)){
                 ei <- extract.item(object, item=i)
-                EI <- expected.item(ei, Theta=Theta)
+                Thetastar <- Theta
+                if(ei@nfixedeffects > 0)
+                    Thetastar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], Theta)
+                EI <- expected.item(ei, Theta=Thetastar)
                 dat[ ,1L] <- object@Data$data[ ,i] - EI
                 for(j in seq_len(J)){
                     if(i < j){
                         ej <- extract.item(object, item=j)
-                        EJ <- expected.item(ej, Theta=Theta)
+                        if(ej@nfixedeffects > 0)
+                            Thetastar <- cbind(ej@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], Theta)
+                        EJ <- expected.item(ej, Theta=Thetastar)
                         dat[,2L] <- object@Data$data[ ,j] - EJ
                         tmpdat <- na.omit(dat)
                         res[i,j] <- res[j,i] <- cor(tmpdat)[1L,2L]
@@ -1136,12 +1149,12 @@ setMethod(
         if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score', 'itemscore',
                        'infocontour', 'infotrace', 'scorecontour', 'empiricalhist', 'Davidian',
                        'EAPsum', 'posteriorTheta')))
-            stop('type supplied is not supported')
+            stop('type supplied is not supported', call.=FALSE)
         if (any(degrees > 90 | degrees < 0))
             stop('Improper angle specified. Must be between 0 and 90.', call.=FALSE)
         rot <- list(x = rot[[1]], y = rot[[2]], z = rot[[3]])
         nfact <- x@Model$nfact
-        if(nfact > 3) stop("Can't plot high dimensional solutions.", call.=FALSE)
+        if(nfact > 3) stop("Can't plot high dimensional models.", call.=FALSE)
         J <- x@Data$nitems
         if(x@ParObjects$pars[[J + 1L]]@dentype == 'custom')
             theta_lim <- x@Internals$theta_lim
@@ -1347,8 +1360,13 @@ setMethod(
                 if(is.null(main))
                     main <- 'Item Information'
                 I <- matrix(NA, nrow(Theta), J)
-                for(i in which.items)
-                    I[,i] <- iteminfo(extract.item(x, i), ThetaFull, degrees=degrees)
+                for(i in which.items){
+                    ei <- extract.item(x, i)
+                    ThetaFullstar <- ThetaFull
+                    if(ei@nfixedeffects > 0)
+                        ThetaFullstar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], ThetaFull)
+                    I[,i] <- iteminfo(ei, ThetaFullstar, degrees=degrees)
+                }
                 I <- t(na.omit(t(I)))
                 items <- rep(colnames(x@Data$data)[which.items], each=nrow(Theta))
                 plotobj <- data.frame(I = as.numeric(I), Theta=ThetaFull, item=items)
@@ -1364,7 +1382,11 @@ setMethod(
                 names(S) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
                 for(i in which.items){
-                    S[[ind]] <- expected.item(extract.item(x, i), ThetaFull, mins[i])
+                    ei <- extract.item(x, i)
+                    ThetaFullstar <- ThetaFull
+                    if(ei@nfixedeffects > 0)
+                        ThetaFullstar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], ThetaFull)
+                    S[[ind]] <- expected.item(ei, ThetaFullstar, mins[i])
                     ind <- ind + 1L
                 }
                 Sstack <- do.call(c, S)
@@ -1519,7 +1541,11 @@ setMethod(
                 ind <- 1L
                 alltwocats <- all(extract.mirt(x, 'K')[which.items] == 2L)
                 for(i in which.items){
-                    tmp <- probtrace(extract.item(x, i), ThetaFull)
+                    ei <- extract.item(x, i)
+                    ThetaFullstar <- ThetaFull
+                    if(ei@nfixedeffects > 0)
+                        ThetaFullstar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], ThetaFull)
+                    tmp <- probtrace(ei, ThetaFullstar)
                     if(ncol(tmp) == 2L && (facet_items || (!facet_items && alltwocats)) && drop2)
                         tmp <- tmp[,2, drop=FALSE]
                     tmp2 <- data.frame(P=as.numeric(tmp), cat=gl(ncol(tmp), k=nrow(Theta),
@@ -1552,7 +1578,11 @@ setMethod(
                 names(S) <- colnames(x@Data$data)[which.items]
                 ind <- 1L
                 for(i in which.items){
-                    S[[ind]] <- expected.item(extract.item(x, i), ThetaFull, mins[i])
+                    ei <- extract.item(x, i)
+                    ThetaFullstar <- ThetaFull
+                    if(ei@nfixedeffects > 0)
+                        ThetaFullstar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], ThetaFull)
+                    S[[ind]] <- expected.item(ei, ThetaFullstar, mins[i])
                     ind <- ind + 1L
                 }
                 Sstack <- do.call(c, S)
@@ -1574,8 +1604,13 @@ setMethod(
                 if(is.null(main))
                     main <- 'Item Information'
                 I <- matrix(NA, nrow(Theta), J)
-                for(i in which.items)
-                    I[,i] <- iteminfo(extract.item(x, i), ThetaFull)
+                for(i in which.items){
+                    ei <- extract.item(x, i)
+                    ThetaFullstar <- ThetaFull
+                    if(ei@nfixedeffects > 0)
+                        ThetaFullstar <- cbind(ei@fixed.design[rep(1, nrow(Theta)), , drop=FALSE], ThetaFull)
+                    I[,i] <- iteminfo(ei, ThetaFullstar)
+                }
                 I <- t(na.omit(t(I)))
                 items <- rep(colnames(x@Data$data)[which.items], each=nrow(Theta))
                 plotobj <- data.frame(I = as.numeric(I), Theta=Theta, item=items)

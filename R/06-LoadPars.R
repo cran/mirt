@@ -1,6 +1,7 @@
 LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, J, K, nfact,
                      parprior, parnumber, estLambdas, BFACTOR = FALSE, mixed.design, customItems,
-                     key, gpcm_mats, spline_args, itemnames, monopoly.k, customItemsData, item.Q)
+                     key, gpcm_mats, spline_args, itemnames, monopoly.k, customItemsData, item.Q,
+                     factorNames)
 {
     customItemNames <- unique(names(customItems))
     if(is.null(customItemNames)) customItemNames <- 'UsElEsSiNtErNaLNaMe'
@@ -29,9 +30,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                 ggum.start.values[[i]] <- c(rep(1, nfact), numeric(nfact),
                                             seq(3, -3, length.out = K[i]-1))
         } else {
-            tmp <- utils::capture.output(a <- as.list(summary(dca, digits=5, origin=TRUE,
-                                                       display="species")))
-            data.dca <- as.data.frame(a$spec.scores)
+            data.dca <- as.data.frame(scores(dca, display='species'))
             dca.mat <- as.matrix(data.dca[,1:nfact])
 
             for (i in 1L:length(K)) {
@@ -59,7 +58,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
     #start values and free parameters
     startvalues <- freepars <- vector('list', J)
     for(i in seq_len(J)){
-        if(any(itemtype[i] == c('Rasch')) && K[i] == 2L){
+        if(any(itemtype[i] %in% c('Rasch', '1PL')) && K[i] == 2L){
             tmpval <- rep(0, nfact)
             tmpval[lambdas[i,] != 0] <- 1
             val <- c(tmpval, zetas[[i]], guess[i], upper[i])
@@ -83,7 +82,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                                 paste('ak', 0L:(K[i]-1L), sep=''),
                                 paste('d', 0L:(K[i]-1L), sep=''))
             }
-        } else if(any(itemtype[i] == c('2PL', '3PL', '3PLu', '4PL', '5PL'))){
+        } else if(any(itemtype[i] == c('1PL', '2PL', '3PL', '3PLu', '4PL', '5PL'))){
             if(K[i] != 2L)
                 stop(paste0('Item ', i, ' requires exactly 2 unique categories'), call.=FALSE)
             val <- c(lambdas[i,], zetas[[i]], guess[i], upper[i])
@@ -185,12 +184,16 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             fp[c(nfact + K[i] + 1L)] <- FALSE
             names(val) <- c(paste('a', 1L:nfact, sep=''), paste('ak', 0L:(K[i]-1L), sep=''),
                             paste('d', 0L:(K[i]-1L), sep=''))
-        } else if(any(itemtype[i] == c('PC2PL','PC3PL'))){
+        } else if(any(itemtype[i] == c('PC1PL', 'PC2PL','PC3PL'))){
             if(K[i] != 2L)
                 stop(paste0('Item ', i, ' requires exactly 2 unique categories'), call.=FALSE)
             val <- c(lambdas[i,], rep(1, nfact), guess[i], 999)
             fp <- c(estLambdas[i, ], estLambdas[i, ], FALSE, FALSE)
             if(itemtype[i] == 'PC3PL') fp[length(fp) - 1L] <- TRUE
+            if(itemtype[i] == 'PC1PL'){
+                val[1:nfact * estLambdas[i, ]] <- 1
+                fp[1:nfact] <- FALSE
+            }
             names(val) <- c(paste('a', 1L:nfact, sep=''), paste('d', 1L:nfact, sep=''), 'g','u')
         } else if(itemtype[i] == 'ideal'){
             if(K[i] != 2L)
@@ -239,19 +242,33 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
         nfixedeffects <- length(betas)
         nfact <- nfact + nfixedeffects
         for(i in seq_len(J)){
-            freepars[[i]] <- c(estbetas, freepars[[i]])
+            freepars[[i]] <- if(mixed.design$has_idesign[i])
+                c(estbetas & !is.na(mixed.design$fixed[i,]), freepars[[i]])
+                else c(!estbetas, freepars[[i]])
             startvalues[[i]] <- c(betas, startvalues[[i]])
         }
+        mixed.design$fixed[is.na(mixed.design$fixed)] <- 0
         valid.ints <- ifelse(any(K > 2), '', 'd')
-        freepars <- lapply(freepars, function(x, valid){
-            x[names(x) %in% valid] <- FALSE
-            return(x)}, valid=valid.ints)
-        startvalues <- lapply(startvalues, function(x, valid){
-            x[names(x) %in% valid] <- 0
-            return(x)}, valid=valid.ints)
-        N <- nrow(mixed.design$fixed) / J
-        for(i in seq_len(J))
-            fixed.design.list[[i]] <- mixed.design$fixed[1L:N + N*(i-1L), , drop = FALSE]
+        if(mixed.design$from != 'mixedmirt') # for partcomp
+            valid.ints <- c(valid.ints, paste0('d', 1:(nfact-nfixedeffects)))
+        for(i in 1L:J){
+            if(mixed.design$has_idesign[i]){
+                pick <- names(freepars[[i]]) %in% valid.ints
+                freepars[[i]][pick] <- FALSE
+                startvalues[[i]][pick] <- 0
+            }
+        }
+        if(mixed.design$from == 'mixedmirt'){
+            N <- nrow(mixed.design$fixed) / J
+            for(i in seq_len(J))
+                fixed.design.list[[i]] <- mixed.design$fixed[1L:N + N*(i-1L), , drop = FALSE]
+        } else { # TODO from mirt(), for now at least
+            tmp <- matrix(0, 1L, ncol=ncol(fixed.design))
+            colnames(tmp) <- colnames(fixed.design)
+            for(i in seq_len(J))
+                fixed.design.list[[i]] <- if(mixed.design$has_idesign[i])
+                    fixed.design[itemnames[i] == rownames(fixed.design), , drop = FALSE] else tmp
+        }
     }
 
     #load items
@@ -304,7 +321,7 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-        if(any(itemtype[i] == c('2PL', '3PL', '3PLu', '4PL'))){
+        if(any(itemtype[i] == c('1PL', '2PL', '3PL', '3PLu', '4PL'))){
             pars[[i]] <- new('dich',
                              par=startvalues[[i]],
                              est=freepars[[i]],
@@ -572,7 +589,27 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
             next
         }
 
-        if(any(itemtype[i] == c('PC2PL','PC3PL'))){
+        if(any(itemtype[i] %in% c('PC1PL', 'PC2PL', 'PC3PL'))){
+            pick <- 1:(nfact - nfixedeffects)+nfixedeffects
+            cpow <- as.integer(startvalues[[i]][pick] != 0)
+            startvalues[[i]][pick+length(pick)] <- cpow *
+                startvalues[[i]][pick+length(pick)]
+            fixed.ind <- if(nfixedeffects > 0){ # one longer for last index - 1
+                as.integer(c(sapply(paste0(factorNames, '.'), \(x){
+                           mtch <- grep(x, colnames(fixed.design.list[[i]]))
+                           min(mtch)
+                }), (nfixedeffects+1)))
+            } else integer(0)
+            factor.ind <- as.integer(sort(nfact:(nfixedeffects+1)))
+            if(nfixedeffects > 0){
+                for(j in 1:length(cpow)){
+                    if(cpow[j] != 1){
+                        pick2 <- fixed.ind[j]:(fixed.ind[j+1]-1)
+                        freepars[[i]][pick2] <- FALSE
+                        startvalues[[i]][pick2] <- 0
+                    }
+                }
+            }
             pars[[i]] <- new('partcomp',
                              par=startvalues[[i]],
                              parnames=names(freepars[[i]]),
@@ -580,7 +617,10 @@ LoadPars <- function(itemtype, itemloc, lambdas, zetas, guess, upper, fulldata, 
                              nfact=nfact,
                              ncat=2L,
                              itemclass=7L,
+                             cpow=cpow,
                              nfixedeffects=nfixedeffects,
+                             fixed.ind=fixed.ind,
+                             factor.ind=factor.ind,
                              any.prior=FALSE,
                              prior.type=rep(0L, length(startvalues[[i]])),
                              fixed.design=fixed.design.list[[i]],
@@ -819,7 +859,7 @@ LoadGroupPars <- function(gmeans, gcov, estgmeans, estgcov, parnumber, parprior,
         }
     } else {
         nfact <- length(gmeans)
-        if (nfact > 1) stop("Multidimensional DC-IRT models are not supported.")
+        if (nfact > 1) stop("Multidimensional DC-IRT models are not supported.", call.=FALSE)
         # DC Density:
         den <- Theta_DC_den
         fn <- paste('COV_', 1L:nfact, sep='')

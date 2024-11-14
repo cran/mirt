@@ -87,7 +87,7 @@ setMethod(
         ngroups <- x@Data$ngroups
         J <- x@Data$nitems
         nfact <- x@Model$nfact
-        if(nfact > 2) stop("Can't plot high dimensional solutions.", call.=FALSE)
+        if(nfact > 2) stop("Can't plot high dimensional models.", call.=FALSE)
         if(nfact == 1) degrees <- 0
         theta <- seq(theta_lim[1L],theta_lim[2L], length.out=npts/(nfact^2))
         ThetaFull <- Theta <- thetaComb(theta, nfact)
@@ -341,7 +341,7 @@ setMethod(
         for(g in 1L:length(ret)){
             cmod <- object@ParObjects$pars[[g]]
             cmod@Data <- object@Data
-            cmod@Data$data <- object@Data$data[object@Data$group == object@Data$groupName[g], ]
+            cmod@Data$data <- object@Data$data[object@Data$group == object@Data$groupNames[g], ]
             cmod@Data$Freq[[1L]] <- cmod@Data$Freq[[g]]
             cmod@Options$quadpts <- object@Options$quadpts
             cmod@Internals$bfactor <- object@Internals$bfactor

@@ -356,13 +356,13 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 {
     if(!is.null(prob.list)){
         if(!all(sapply(prob.list, function(x) is.matrix(x) || is.data.frame(x))))
-            stop('Elements of prob.list must be either a matrix or data.frame')
+            stop('Elements of prob.list must be either a matrix or data.frame', call.=FALSE)
         prob.list <- lapply(prob.list, as.matrix)
         if(!all(sapply(prob.list, nrow) == nrow(prob.list[[1L]])))
-            stop('prob.list elements have unequal rows')
+            stop('prob.list elements have unequal rows', call.=FALSE)
         K <- sapply(prob.list, ncol)
         nitems <- length(K)
-        if(any(K == 1L)) stop('prob.list elements should have more than 1 column')
+        if(any(K == 1L)) stop('prob.list elements should have more than 1 column', call.=FALSE)
         if(length(mins) == 1L) mins <- rep(mins, nitems)
         stopifnot(length(mins) == nitems)
         data <- matrix(NA, nrow(prob.list[[1L]]), nitems)
@@ -404,6 +404,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
     if(is.vector(a)) a <- matrix(a)
     if(missing(d)) d <- matrix(1, nrow(a))
     if(is.vector(d)) d <- matrix(d)
+    stopifnot(is.matrix(d))
     if(any(itemtype == 'nominal') && is.null(nominal))
         stop('nominal itemtypes require a \'nominal\' matrix input of scoring coefficients (the ak values)',
              call.=FALSE)
@@ -431,7 +432,7 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
         itemtype <- toInternalItemtype(itemtype)
     }
 	if(any(itemtype == 'ggum') && is.null(t))
-	    stop('ggum requires t matrix input')
+	    stop('ggum requires t matrix input', call.=FALSE)
 	for(i in 1L:length(K)){
 	    K[i] <- length(na.omit(d[i, ])) + 1L
 	    if(itemtype[i] =='partcomp') K[i] <- 2L
@@ -473,8 +474,8 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
 	        par <- na.omit(c(a[i, ],d[i,1], guess[i], upper[i], nominal[i,-1L],d[i,-1L]))
 	        obj <- new(itemtype[i], par=par, nfact=nfact, correctcat=1L)
 	    } else {
-            if(itemtype[i] == 'gpcm'){
-                if(!use_gpcm_mats[i]){
+	        if(itemtype[i] == 'gpcm'){
+    	        if(!use_gpcm_mats[i]){
                     par <- na.omit(c(a[i, ],0:(K[i]-1), d[i,]))
                 } else {
                     stopifnot(nrow(gpcm_mats[[i]]) == K[i])
@@ -487,25 +488,35 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
                 par <- na.omit(c(a[i, ],d[i,]))
             } else if(itemtype[i] == 'lca'){
                 par <- na.omit(a[i, ])
-            } else {
-                if(itemtype[i] == 'nominal'){
-                    if(length(na.omit(nominal[i,])) != length(na.omit(d[i,])))
-                        stop('nominal and d inputs must have same length for nominal reponse model', call.=FALSE)
-                }
+                item.Q <- matrix(1, K[i], nfact)
+                item.Q[1,] <- 0
+            } else if(itemtype[i] == 'nominal'){
+                if(length(na.omit(nominal[i,])) != length(na.omit(d[i,])))
+                    stop('nominal and d inputs must have same length for nominal reponse model', call.=FALSE)
                 par <- na.omit(c(a[i, ],nominal[i,],d[i,],guess[i],upper[i]))
+            } else if(itemtype[i] == 'partcomp'){
+                par <- na.omit(c(a[i, ],d[i,],guess[i],upper[i]))
+            } else {
+                par <- na.omit(c(a[i, ],d[i,],guess[i],upper[i]))
             }
             obj <- new(itemtype[i], par=par, nfact=nfact, ncat=K[i])
             if(itemtype[i] %in% c('gpcm', 'nominal')) obj@mat <- FALSE
             if(use_gpcm_mats[i]) obj@mat <- TRUE
-	    }
-	    if(itemtype[i] == 'ggum'){
-	        if(length(na.omit(a[i,])) != length(na.omit(d[i,])))
-	            stop('ggums must have the same number of a and d values per item', call.=FALSE)
-	        par <- c(na.omit(a[i, ]), d[i,], t[i,])
-	        obj <- new(itemtype[i], par=par, nfact=nfact, ncat=K[i])
+    	    if(itemtype[i] == 'lca') obj@item.Q <- item.Q
+    	    if(itemtype[i] == 'ggum'){
+    	        if(length(na.omit(a[i,])) != length(na.omit(d[i,])))
+    	            stop('ggums must have the same number of a and d values per item', call.=FALSE)
+    	        par <- c(na.omit(a[i, ]), d[i,], t[i,])
+    	        obj <- new(itemtype[i], par=par, nfact=nfact, ncat=K[i])
+    	    }
 	    }
         if(any(itemtype[i] == c('gpcm','nominal', 'nestlogit', 'ggum')))
             obj@ncat <- K[i]
+        if(itemtype[i] == 'partcomp'){
+            obj@cpow <- as.integer(a[i,] != 0)
+            obj@factor.ind <- as.integer(1:ncol(Theta))
+            obj@fixed.ind <- integer(0)
+        }
         P <- ProbTrace(obj, Theta)
         data[,i] <- respSample(P)
         itemobjects[[i]] <- obj

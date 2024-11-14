@@ -95,7 +95,7 @@ thetaStack <- function(theta, nclass){
 #' }
 secondOrderTest <- function(mat, ..., method = 'eigen'){
     if(method == 'eigen'){
-        evs <- eigen(mat, ...)$value
+        evs <- eigen(mat, ...)$values
         ret <- all(!sapply(evs, function(x) isTRUE(all.equal(x, 0))) & evs > 0)
     } else if(method == 'chol'){
         chl <- try(chol(mat, ...), silent = TRUE)
@@ -384,7 +384,7 @@ test_info <- function(pars, Theta, Alist, K){
 
 Lambdas <- function(pars, Names){
     J <- length(pars) - 1L
-    lambdas <- matrix(NA, J, length(ExtractLambdas(pars[[1L]])))
+    lambdas <- matrix(NA, J, length(ExtractLambdas(pars[[1L]], include_fixed = FALSE)))
     gcov <- ExtractGroupPars(pars[[J+1L]])$gcov
     if(ncol(gcov) < ncol(lambdas)){
         tmpcov <- diag(ncol(lambdas))
@@ -394,7 +394,7 @@ Lambdas <- function(pars, Names){
     rownames(lambdas) <- Names
     for(i in seq_len(J)){
         tmp <- pars[[i]]
-        lambdas[i,] <- ExtractLambdas(tmp) /1.702
+        lambdas[i,] <- ExtractLambdas(tmp, include_fixed = FALSE) /1.702
     }
     dcov <- if(ncol(gcov) > 1L) diag(sqrt(diag(gcov))) else matrix(sqrt(diag(gcov)))
     lambdas <- lambdas %*% dcov
@@ -610,7 +610,7 @@ fill_neg_groups_with_complement <- function(OptionalGroups, groupNames){
 }
 
 UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngroups, PrepList,
-                            method, itemnames, model, groupNames)
+                            method, itemnames, model, groupNames, mixed.design)
 {
     if(!is.numeric(model)){
         groupNames <- as.character(groupNames)
@@ -714,7 +714,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
     for(g in seq_len(ngroups))
         for(i in seq_len(length(PrepList[[g]]$constrain)))
             constrain[[length(constrain) + 1L]] <- PrepList[[g]]$constrain[[i]]
-    if('covariances' %in% invariance){ #Fix covariance accross groups (only makes sense with vars = 1)
+    if('covariances' %in% invariance){ #Fix covariance across groups (only makes sense with vars = 1)
         tmp <- c()
         tmpmats <- tmpestmats <- matrix(NA, ngroups, nfact*(nfact+1L)/2)
         for(g in seq_len(ngroups)){
@@ -787,7 +787,52 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
             }
         }
     }
-    #remove redundent constraints
+    if(!is.null(mixed.design) && mixed.design$from == 'mirt'){
+        for(g in seq_len(ngroups)){
+            are_partcomp <- sapply(pars[[g]], class) == 'partcomp'
+            are_partcomp <- are_partcomp[-length(are_partcomp)] # no group
+            cpow_unique <- NULL
+            if(any(are_partcomp & mixed.design$has_idesign)){
+                cpowmat <- lapply(1:length(are_partcomp), \(i){
+                    if(are_partcomp[i]){
+                        pars[[g]][[i]]@cpow
+                    } else {
+                        NA
+                    }})
+                cpowmat <- do.call(rbind, cpowmat)
+                cpowgroup <- apply(cpowmat, 1, \(x) paste0(x, collapse=','))
+                cpowgroup[rowSums(is.na(cpowmat)) == ncol(cpowmat)] <- NA
+                cpow_unique <- unique(na.omit(cpowgroup))
+            }
+            if(!is.null(cpow_unique)){
+                for(cp in cpow_unique){
+                    for(p in 1:ncol(mixed.design$fixed)){
+                        constr <- rep(NA, J)
+                        for(i in which(mixed.design$has_idesign & are_partcomp)){
+                            if(cp == cpowgroup[i] && pars[[g]][[i]]@est[p])
+                                constr[i] <- pars[[g]][[i]]@parnum[p]
+                        }
+                        constr <- na.omit(constr)
+                        if(length(constr))
+                            constrain[[length(constrain) + 1L]] <- constr
+                    }
+                }
+            }
+            if(any(!are_partcomp & mixed.design$has_idesign)){
+                for(p in 1:ncol(mixed.design$fixed)){
+                    constr <- rep(NA, J)
+                    for(i in which(mixed.design$has_idesign & !are_partcomp))
+                        if(pars[[g]][[i]]@est[p])
+                            constr[i] <- pars[[g]][[i]]@parnum[p]
+                    constr <- na.omit(constr)
+                    if(length(constr))
+                        constrain[[length(constrain) + 1L]] <- constr
+                }
+            }
+
+        }
+    }
+    #remove redundant constraints
     redun <- rep(FALSE, length(constrain))
     if(length(constrain)){
         for(i in seq_len(length(redun))){
@@ -1111,7 +1156,8 @@ resetPriorConstrain <- function(pars, constrain, nconstrain){
     pars
 }
 
-ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG = FALSE){
+ReturnPars <- function(PrepList, itemnames, random, lrPars, clist, nclist,
+                       itemtype, lr.random = NULL, MG = FALSE){
     parnum <- par <- est <- item <- parname <- gnames <- class <-
         lbound <- ubound <- prior.type <- prior_1 <- prior_2 <- c()
     if(!MG) PrepList <- list(full=PrepList)
@@ -1193,20 +1239,33 @@ ReturnPars <- function(PrepList, itemnames, random, lrPars, lr.random = NULL, MG
     par[parname %in% c('g', 'u')] <- antilogit(par[parname %in% c('g', 'u')])
     lbound[parname %in% c('g', 'u')] <- antilogit(lbound[parname %in% c('g', 'u')])
     ubound[parname %in% c('g', 'u')] <- antilogit(ubound[parname %in% c('g', 'u')])
-    ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum, value=par,
-                      lbound=lbound, ubound=ubound, est=est, prior.type=prior.type,
-                      prior_1=prior_1, prior_2=prior_2, stringsAsFactors = FALSE)
+    constrain <- nconstrain <- rep("none", length(gnames))
+    if(length(clist)){
+        for(i in seq_len(length(clist)))
+            constrain[clist[[i]]] <- i
+    }
+    if(length(nclist)){
+        for(i in seq_len(length(nclist)))
+            nconstrain[nclist[[i]]] <- i
+    }
+    ret <- data.frame(group=gnames, item=item, class=class, name=parname, parnum=parnum,
+                      value=par, lbound=lbound, ubound=ubound, est=est, const=constrain, nconst=nconstrain,
+                      prior.type=prior.type, prior_1=prior_1, prior_2=prior_2, stringsAsFactors = FALSE)
+    ret <- as.mirt_df(ret)
+    attr(ret, 'itemtype') <- itemtype
     ret
 }
 
-UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), MG = FALSE){
+UpdatePrepList <- function(PrepList, pars, random, lr.random, clist, nclist,
+                           itemtype, lrPars = list(), MG = FALSE){
     currentDesign <- ReturnPars(PrepList, PrepList[[1L]]$itemnames, random=random,
+                                clist=clist, nclist=nclist, itemtype=itemtype,
                                 lrPars=lrPars, lr.random=lr.random, MG = TRUE)
     if(nrow(currentDesign) != nrow(pars))
         stop('Rows in supplied and starting value data.frame objects do not match. Were the
              data or itemtype input arguments modified?', call.=FALSE)
-    if(!all(as.matrix(currentDesign[,c('group', 'item', 'class', 'name', 'parnum')]) ==
-                as.matrix(pars[,c('group', 'item', 'class', 'name', 'parnum')])))
+    if(!all(as.matrix(currentDesign[,c('group', 'class', 'name', 'parnum')]) ==
+                as.matrix(pars[,c('group', 'class', 'name', 'parnum')])))
         stop('Critical internal parameter labels do not match those returned from pars = \'values\'',
              call.=FALSE)
     if(!all(sapply(currentDesign, class) == sapply(pars, class)))
@@ -1283,6 +1342,17 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
     }
     if(!MG) PrepList <- PrepList[[1L]]
     return(PrepList)
+}
+
+rebuild_clist <- function(parnum, cvec){
+    ret <- list()
+    if(!all(cvec == 'none')){
+        uniq <- unique(cvec)
+        uniq <- uniq[uniq != 'none']
+        for(i in seq_len(length(uniq)))
+            ret[[i]] <- parnum[uniq[i] == cvec]
+    }
+    ret
 }
 
 #new gradient and hessian with priors
@@ -1754,16 +1824,25 @@ computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, leng
     if(is.null(pis)){
         itemtrace <- .Call('computeItemTrace', pars, Theta, itemloc, offterm)
         if(length(CUSTOM.IND)){
-            for(i in CUSTOM.IND)
-                itemtrace[,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(pars[[i]], Theta=Theta)
+            for(i in CUSTOM.IND){
+                Thetas <- Theta
+                if(pars[[i]]@nfixedeffects > 0 && nrow(pars[[i]]@fixed.design) == 1)
+                    Thetas <- cbind(pars[[i]]@fixed.design[rep(1,nrow(Theta)),], Theta)
+                itemtrace[,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(pars[[i]], Theta=Thetas)
+            }
         }
     } else {
         tmp_itemtrace <- vector('list', length(pis))
         for(g in seq_len(length(pis))){
             tmp_itemtrace[[g]] <- .Call('computeItemTrace', pars[[g]]@ParObjects$pars, Theta, itemloc, offterm)
             if(length(CUSTOM.IND)){
-                for(i in CUSTOM.IND)
-                    tmp_itemtrace[[g]][,itemloc[i]:(itemloc[i+1L] - 1L)] <- ProbTrace(pars[[g]]@ParObjects$pars[[i]], Theta=Theta)
+                for(i in CUSTOM.IND){
+                    Thetas <- Theta
+                    if(pars[[i]]@nfixedeffects > 0 && nrow(pars[[i]]@fixed.design) == 1)
+                        Thetas <- cbind(pars[[i]]@fixed.design[rep(1,nrow(Theta)),], Theta)
+                    tmp_itemtrace[[g]][,itemloc[i]:(itemloc[i+1L] - 1L)] <-
+                        ProbTrace(pars[[g]]@ParObjects$pars[[i]], Theta=Thetas)
+                }
             }
         }
         itemtrace <- do.call(rbind, tmp_itemtrace)
@@ -1791,7 +1870,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     acov <- try(solve(info), TRUE)
     if(is(acov, 'try-error')){
         if(warn)
-            warning('Could not invert information matrix; model may not be empirically identified.',
+            warning('Could not invert information matrix; model may not be (empirically) identified.',
                     call.=FALSE)
         ESTIMATE$fail_invert_info <- TRUE
         return(ESTIMATE)
@@ -1799,7 +1878,7 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     SEtmp <- diag(solve(info))
     if(any(is.na(SEtmp) | is.nan(SEtmp)) || any(SEtmp < 0)){
         if(warn)
-            warning('Could not invert information matrix; model may not be empirically identified.',
+            warning('Could not invert information matrix; model may not be (empirically) identified.',
                     call.=FALSE)
         ESTIMATE$fail_invert_info <- TRUE
         return(ESTIMATE)
@@ -1822,6 +1901,54 @@ loadESTIMATEinfo <- function(info, ESTIMATE, constrain, warn){
     if(length(ESTIMATE$lrPars))
         ESTIMATE$lrPars@SEpar <- SE[ESTIMATE$lrPars@parnum]
     return(ESTIMATE)
+}
+
+make.mixed.design <- function(item.formula, itemdesign, data){
+    mixed.design <- NULL
+    if(!is.null(itemdesign)){
+        stopifnot('itemdesign only supported for dichotmous item tests' =
+                      all(apply(data, 2, \(x) length(na.omit(unique(x)))) == 2))
+        if(nrow(itemdesign) < ncol(data)){
+            has_idesign <- colnames(data) %in% rownames(itemdesign)
+            if(!any(has_idesign))
+                stop('No rownames in itemdesign match colnames(data)', call.=FALSE)
+            dummy <- as.data.frame(matrix(NA, sum(!has_idesign), ncol(itemdesign)))
+            colnames(dummy) <- colnames(itemdesign)
+            itemdesign <- rbind(dummy, itemdesign)
+        } else {
+            has_idesign <- rep(TRUE, nrow(itemdesign))
+            rownames(itemdesign) <- colnames(data)
+        }
+        itemdesignold <- itemdesign
+        if(is.list(item.formula)){
+            mf <- lapply(item.formula, \(x){
+                if(length(x) == 3){
+                    ghost <- x[[2]]
+                    itemdesign[[ghost]] <- 1
+                }
+                model.frame(x, itemdesign, na.action=NULL)
+            })
+            mm <- lapply(1:length(mf), \(i){
+                ret <- model.matrix(item.formula[[i]], mf[[i]])
+                ret[rowSums(is.na(ret)) > 0, ] <- NA
+                ret
+            })
+            names(mm) <- do.call(c, lapply(item.formula,
+                                           \(x) if(length(x) == 3) as.character(x[[2]]) else ""))
+            for(i in 1:length(mm))
+                if(names(mm)[i] != "")
+                    colnames(mm[[i]]) <- paste0(names(mm)[i], '.', colnames(mm[[i]]))
+            mm <- do.call(cbind, mm)
+        } else {
+            mf <- model.frame(item.formula, itemdesign, na.action = NULL)
+            mm <- model.matrix(item.formula, mf)
+        }
+
+        mixed.design <- list(random=NULL, fixed=mm, from='mirt',
+                             lr.random=NULL, lr.fixed=NULL, has_idesign=has_idesign)
+        attr(mixed.design, 'itemdesign') <- itemdesignold
+    }
+    mixed.design
 }
 
 make.randomdesign <- function(random, longdata, covnames, itemdesign, N, LR=FALSE){
@@ -1925,6 +2052,7 @@ make.lrdesign <- function(df, formula, factorNames, EM=FALSE, TOL){
     colnames(beta) <- factorNames
     rownames(beta) <- colnames(X)
     par <- as.numeric(beta)
+    names(par) <- names(est)
     ret <- new('lrPars',
                par=par,
                SEpar=rep(NaN,length(par)),
@@ -2352,7 +2480,7 @@ MGC2SC <- function(x, which){
     }
     tmp@Data <- x@Data
     tmp@Data$completely_missing <- integer(0L)
-    tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupName[which], , drop=FALSE]
+    tmp@Data$data <- tmp@Data$data[tmp@Data$group == tmp@Data$groupNames[which], , drop=FALSE]
     tmp@Data$rowID <- 1L:nrow(tmp@Data$data)
     tmp@Data$Freq[[1L]] <- tmp@Data$Freq[[which]]
     tmp@Data$fulldata[[1L]] <- x@Data$fulldata[[which]]
@@ -2483,7 +2611,8 @@ makeHypothesis <- function (cnames, hypothesis, rhs = NULL)
             0
         else sum(as.numeric(x))
         if (any(is.na(x)))
-            stop("The hypothesis \"", hypothesis, "\" is not well formed: contains bad coefficient/variable names.")
+            stop("The hypothesis \"", hypothesis,
+                 "\" is not well formed: contains bad coefficient/variable names.", call.=FALSE)
         x
     }
     coefvector <- function(x, y) {
@@ -2494,7 +2623,8 @@ makeHypothesis <- function (cnames, hypothesis, rhs = NULL)
             stop("The hypothesis \"", hypothesis, "\" is not well formed.")
         rv <- sum(char2num(unlist(strsplit(y[rv], x, fixed = TRUE))))
         if (is.na(rv))
-            stop("The hypothesis \"", hypothesis, "\" is not well formed: contains non-numeric coefficients.")
+            stop("The hypothesis \"", hypothesis,
+                 "\" is not well formed: contains non-numeric coefficients.", call.=FALSE)
         rv
     }
     if (!is.null(rhs))
@@ -2514,7 +2644,8 @@ makeHypothesis <- function (cnames, hypothesis, rhs = NULL)
                                                                                    cnames_symb[i], hypothesis_symb, fixed = TRUE)
     }
     else {
-        stop("The hypothesis \"", hypothesis, "\" is not well formed: contains non-standard coefficient names.")
+        stop("The hypothesis \"", hypothesis,
+             "\" is not well formed: contains non-standard coefficient names.", call.=FALSE)
     }
     lhs <- strsplit(hypothesis_symb, "=", fixed = TRUE)[[1]]
     if (is.null(rhs)) {
@@ -2524,12 +2655,14 @@ makeHypothesis <- function (cnames, hypothesis, rhs = NULL)
             rhs <- lhs[2]
             lhs <- lhs[1]
         }
-        else stop("The hypothesis \"", hypothesis, "\" is not well formed: contains more than one = sign.")
+        else stop("The hypothesis \"", hypothesis,
+                  "\" is not well formed: contains more than one = sign.", call.=FALSE)
     }
     else {
         if (length(lhs) < 2)
             as.character(rhs)
-        else stop("The hypothesis \"", hypothesis, "\" is not well formed: contains a = sign although rhs was specified.")
+        else stop("The hypothesis \"", hypothesis,
+                  "\" is not well formed: contains a = sign although rhs was specified.", call.=FALSE)
     }
     lhs <- stripchars(lhs)
     rhs <- stripchars(rhs)
@@ -2615,9 +2748,9 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
     digitsBase <- function (x, base = 2, ndigits = 1 + floor(1e-09 + log(max(x), base)))
     {
         if (any(x < 0))
-            stop("'x' must be non-negative integers")
+            stop("'x' must be non-negative integers", call.=FALSE)
         if (any(x != trunc(x)))
-            stop("'x' must be integer-valued")
+            stop("'x' must be integer-valued", call.=FALSE)
         r <- matrix(0, nrow = ndigits, ncol = length(x))
         if (ndigits >= 1)
             for (i in ndigits:1) {
@@ -2805,4 +2938,22 @@ mySapply <- function(X, FUN, progress = FALSE, ...){
     } else {
         return(t(sapply(X=X, FUN=FUN, ...)))
     }
+}
+
+crossprod_miss <- function(x, y){
+    mat <- matrix(0, ncol(x), ncol(x))
+    for(i in 1:ncol(x))
+        for(j in 1:ncol(x))
+            if(i <= j)
+                mat[i,j] <- mat[j,i] <- sum(x[,i] * y[,j], na.rm=TRUE)
+    mat
+}
+
+printf <- function(...) {
+  catf(sprintf(...))
+}
+
+catf <- function(...) {
+    cat(...)
+    flush.console()
 }

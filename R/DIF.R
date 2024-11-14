@@ -267,7 +267,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
             }
             res <- try(wald(model, L), silent = TRUE)
             if(is(res, 'try-error')){
-                warning(sprintf('Wald test for \'%s\' failed.', itemnames[item]))
+                warning(sprintf('Wald test for \'%s\' failed.', itemnames[item]), call.=FALSE)
                 res <- data.frame(W=NA, df=NA, p=NA)
             }
             return(res)
@@ -384,6 +384,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
         items2test <- which(itemnames %in% items2test)
     invariance <- MGmodel@Model$invariance
     values <- mod2values(MGmodel)
+    values$const <- 'none'
     drop <- scheme == 'drop' || scheme == 'drop_sequential'
     invariance <- MGmodel@Model$invariance[MGmodel@Model$invariance %in%
                                          c('free_means', 'free_var')]
@@ -433,7 +434,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
                 lastkeep <- keep | lastkeep
             } else lastkeep <- keep
             if(verbose)
-                cat(sprintf('\rChecking for DIF in %d more items', if(drop) sum(keep) else sum(!keep)))
+                printf('\rChecking for DIF in %d more items', if(drop) sum(keep) else sum(!keep))
             if(ifelse(drop, sum(keep), sum(!keep)) == 0) break
             constrain <- updatedModel@Model$constrain
             for(j in seq_len(length(keep))){

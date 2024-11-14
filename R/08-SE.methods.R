@@ -168,6 +168,8 @@ SE.simple <- function(PrepList, ESTIMATE, Theta, constrain, Ls, N, type,
     npars <- ncol(L)
     gPrior <- t(do.call(rbind, Prior))
     rs <- do.call(rbind, Data$Freq)
+    if(iscross && pars[[1L]][[nitems + 1L]]@itemclass == -1L)
+        SLOW.IND <- SLOW.IND[SLOW.IND != (nitems + 1L)]
     whichitems <- unique(c(CUSTOM.IND, SLOW.IND))
     infolist <- .Call("computeInfo", pars, Theta, gPrior, prior, do.call(rbind, Priorbetween),
                       Data$tabdatalong, rs, sitems, itemloc, gitemtrace, npars, Data$wmiss,
@@ -221,7 +223,7 @@ SE.Oakes <- function(pick, pars, L, constrain, est, shortpars, longpars,
                      rlist, full, Data, specific, itemloc, CUSTOM.IND,
                      delta, prior, Prior, Priorbetween, nfact, mixtype,
                      PrepList, ANY.PRIOR, DERIV, SLOW.IND, Norder, omp_threads,
-                     zero_g = NULL){
+                     lrPars, zero_g = NULL){
     r <- 1L
     Richardson <- if(Norder > 2L) TRUE else FALSE
     if(Richardson){
@@ -247,7 +249,12 @@ SE.Oakes <- function(pick, pars, L, constrain, est, shortpars, longpars,
             longpars <- longpars_constrain(longpars, constrain)
             pars <- reloadPars(longpars=longpars, pars=pars,
                                ngroups=ngroups, J=J)
-            tmp <- updatePrior(pars=pars, gTheta=gTheta,
+            if(length(lrPars)){
+                lrPars@par <- longpars[lrPars@parnum]
+                lrPars@beta[] <- matrix(lrPars@par, lrPars@nfixed, lrPars@nfact)
+                lrPars@mus <- lrPars@X %*% lrPars@beta
+            }
+            tmp <- updatePrior(pars=pars, gTheta=gTheta, lrPars=lrPars,
                                list=list, ngroups=ngroups, nfact=nfact,
                                J=J, dentype=dentype, sitems=sitems, cycles=100L,
                                rlist=rlist, full=full, MC=list$method == 'QMCEM')
@@ -261,6 +268,11 @@ SE.Oakes <- function(pick, pars, L, constrain, est, shortpars, longpars,
             longpars <- longpars_old
             pars <- reloadPars(longpars=longpars, pars=pars,
                                ngroups=ngroups, J=J)
+            if(length(lrPars)){
+                lrPars@par <- longpars[lrPars@parnum]
+                lrPars@beta[] <- matrix(lrPars@par, lrPars@nfixed, lrPars@nfact)
+                lrPars@mus <- lrPars@X %*% lrPars@beta
+            }
             if(pars[[1L]][[J + 1L]]@itemclass == -1L){
                 for(g in seq_len(length(pars))){
                     gp <- pars[[g]][[J + 1L]]
@@ -276,14 +288,19 @@ SE.Oakes <- function(pick, pars, L, constrain, est, shortpars, longpars,
                     pars[[g]][[J+1L]]@rrs <- rlist[[g]]$r3
                 } else pars[[g]][[J+1L]]@rr <- rlist[[g]]$r1g
             }
-            g <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 0L, 0L, 1L, TRUE)$grad
+            usefixed <- pars[[1L]][[1]]@nfixedeffects > 0
+            g <- .Call('computeDPars', pars, gTheta, matrix(0L, 1L, J), length(est), 0L,
+                       usefixed, 1L, TRUE)$grad
             if(length(SLOW.IND)){
                 for(group in seq_len(ngroups)){
                     for (i in SLOW.IND){
+                        Thetas <- gTheta[[group]]
                         deriv <- if(i == (J + 1L)){
-                            Deriv(pars[[group]][[i]], Theta=gTheta[[group]])
+                            Deriv(pars[[group]][[i]], Theta=Thetas)
                         } else {
-                            DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=gTheta[[group]])
+                            if(pars[[group]][[i]]@nfixedeffects > 0 && nrow(pars[[group]][[i]]@fixed.design) == 1)
+                                Thetas <- cbind(pars[[group]][[i]]@fixed.design[rep(1,nrow(Thetas)),], Thetas)
+                            DERIV[[group]][[i]](x=pars[[group]][[i]], Theta=Thetas)
                         }
                         g[pars[[group]][[i]]@parnum] <- deriv$grad
                     }
@@ -296,6 +313,17 @@ SE.Oakes <- function(pick, pars, L, constrain, est, shortpars, longpars,
                                              function(g) sum(pars[[g]][[J+1L]]@rr)), 1L)
                 deriv <- Deriv.mix(mixtype)
                 g[mixtype$parnum] <- deriv$grad
+            }
+            if(length(lrPars)){
+                for(group in seq_len(ngroups)){
+                    gp <- ExtractGroupPars(pars[[group]][[J+1L]])
+                    tmp <- Mstep.LR(Theta=gTheta[[group]], CUSTOM.IND=CUSTOM.IND, pars=pars[[group]],
+                                    itemloc=itemloc, fulldata=Data$fulldata[[1L]], prior=Prior[[group]],
+                                    lrPars=lrPars, retscores=TRUE)
+                    deriv <- Deriv(lrPars, cov=gp$gcov, theta=tmp)
+                    deriv$grad * lrPars@est
+                    g[lrPars@parnum] <- as.vector(deriv$grad * lrPars@est)
+                }
             }
             tmp <- g %*% L
             if(pick == 0L) return(tmp[est])

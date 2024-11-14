@@ -102,8 +102,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     for(g in seq_len(ngroups)){
        for(j in seq_len(J+1L))
            est <- c(est, pars[[g]][[j]]@est)
-       if(length(lrPars))
-           est <- c(est, rep(FALSE, length(lrPars@est)))
+       if(length(lrPars)){
+           tmp <- rep(FALSE, length(lrPars@est))
+           names(tmp) <- names(lrPars@est)
+           est <- c(est, tmp)
+       }
     }
     for(i in seq_len(length(constrain)))
         est[constrain[[i]][-1L]] <- FALSE
@@ -147,7 +150,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         tmp <- tmp[lower.tri(tmp, TRUE)]
         tmpmat <- matrix(0, ns, 2L)
         for(i in seq_len(ns))
-            tmpmat[i, ] <- c(gp$gmean[np + i], gp$gcov[np+i, np+i])
+            tmpmat[i, ] <- c(gp$gmeans[np + i], gp$gcov[np+i, np+i])
         for(g in seq_len(ngroups)){
             pars[[g]][[J+1L]]@bindex <- as.integer(c(gp$gmeans[seq_len(np)], tmp))
             pars[[g]][[J+1L]]@sindex = tmpmat
@@ -314,10 +317,9 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                         longpars[tmpparnum[2L]] <- attr(Prior[[g]], 'mean_var')['var']
                 }
             }
-            EMhistory[cycles+1L,] <- longpars
             if(verbose)
-                cat(sprintf('\rIteration: %d, Log-Lik: %.3f, Max-Change: %.5f',
-                            cycles, LL + LP, max(abs(preMstep.longpars - longpars))))
+                printf('\rIteration: %d, Log-Lik: %.3f, Max-Change: %.5f',
+                            cycles, LL + LP, max(abs(preMstep.longpars - longpars)))
 
             if(hasConverged(preMstep.longpars, longpars, TOL)){
                 pars <- reloadPars(longpars=longpars, pars=pars,
@@ -371,16 +373,20 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                     longpars[!latent_longpars] <- tmp[!latent_longpars]
                 } else stop('acceleration option not defined', call.=FALSE)
             }
+            EMhistory[cycles+1L,] <- longpars
             pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
             for(g in seq_len(ngroups)){
                 if(any(pars[[g]][[J+1L]]@est) && nfact > 1L){
                     gp <- ExtractGroupPars(pars[[g]][[J+1L]])
-                    chl <- try(chol(gp$gcov), silent=TRUE)
-                    if(is(chl, 'try-error')){
-                        if(list$warn)
-                            warning('Latent trait variance-covariance matrix became non-positive definite.',
-                                    call.=FALSE)
-                        converge <- FALSE
+                    ev <- eigen(gp$gcov)
+                    if(any(ev$values <= sqrt(.Machine$double.eps))){
+                        warning('Latent trait covariance matrix became non-positive definite. Model may be unstable', call.=FALSE)
+                        sds <- diag(sqrt(diag(gp$gcov)))
+                        smoothed <- cov2cor(smooth.cov(gp$gcov))
+                        gcov <- sds %*% smoothed %*% sds
+                        longpars[pars[[g]][[J+1]]@parnum] <- c(pars[[g]][[J+1L]]@par[1:nfact],
+                                                               gcov[lower.tri(gcov, TRUE)])
+                        pars <- reloadPars(longpars=longpars, pars=pars, ngroups=ngroups, J=J)
                     }
                 }
             }
@@ -411,11 +417,11 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         }
         if(cycles == NCYCLES){
             if(list$warn)
-                warning('EM cycles terminated after ', cycles, ' iterations.')
+                warning('EM cycles terminated after ', cycles, ' iterations.', call.=FALSE)
             converge <- FALSE
         } else if(cycles == 1L && !all(!est)){
             if(list$warn && !(is.nan(TOL) || is.na(TOL)) && !list$NULL.MODEL)
-                warning('M-step optimizer converged immediately. Solution is either at the ML or
+                warning('M-step optimizer converged immediately. Estimates are either at the ML or
                      starting values are causing issues and should be adjusted. ', call.=FALSE)
         }
         if(Moptim == 'L-BFGS-B' && cycles <= 10L && !all(!est) && !list$NULL.MODEL){
@@ -432,7 +438,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                         call.=FALSE)
         }
     }
-    if(dentype == 'custom'){
+    if(dentype %in% c('custom', 'discrete')){
         if(pars[[1L]][[J + 1L]]@itemclass == -1L){
             for(g in 1L:length(pars)){
                 gp <- pars[[g]][[J + 1L]]
@@ -449,9 +455,14 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
     if(list$SE.type %in% c('SEM', 'Oakes', 'complete', 'sandwich', 'Louis', 'sandwich.Louis') && list$SE){
         h <- matrix(0, nfullpars, nfullpars)
         ind1 <- 1L
+        usefixed <- pars[[1L]][[1]]@nfixedeffects > 0
         for(group in seq_len(ngroups)){
             for (i in seq_len(J)){
-                deriv <- Deriv(x=pars[[group]][[i]], Theta=gTheta[[group]], estHess=TRUE)
+                Thetas <- gTheta[[group]]
+                if(usefixed)
+                    Thetas <- cbind(pars[[group]][[i]]@fixed.design[rep(1, nrow(Thetas)),],
+                                    Thetas)
+                deriv <- Deriv(x=pars[[group]][[i]], Theta=Thetas, estHess=TRUE)
                 ind2 <- ind1 + length(pars[[group]][[i]]@par) - 1L
                 h[ind1:ind2, ind1:ind2] <- pars[[group]][[i]]@hessian <- deriv$hess
                 ind1 <- ind2 + 1L
@@ -476,6 +487,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 for(i in 0L:(ncol(deriv$grad)-1L))
                     h[lrPars@parnum[1L:nrow(deriv$grad) + nrow(deriv$grad)*i],
                       lrPars@parnum[1L:nrow(deriv$grad) + nrow(deriv$grad)*i]] <- deriv$hess
+                est[lrPars@parnum] <- lrPars@est
             }
         }
         if(dentype == 'mixture'){
@@ -493,9 +505,12 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
         } else mixtype <- NULL
         hess <- updateHess(h=h, L=L)
         hess <- as.matrix(hess[estpars & !redun_constr, estpars & !redun_constr])
-        if(list$SE.type %in% c('Oakes', 'sandwich') && length(lrPars) && list$SE){
-            warning('Oakes method not supported for models with latent regression effects', call.=FALSE)
-        } else if(list$SE.type %in% c('Oakes', 'sandwich') && list$SE){
+        # if(list$SE.type %in% c('Oakes', 'sandwich') && length(lrPars) && list$SE){
+        #     warning('Oakes method not supported for models with latent regression effects', call.=FALSE)
+        # } else
+        if(list$SE.type %in% c('Oakes', 'sandwich') && list$SE){
+            if(verbose)
+                catf('\n\nCalculating information matrix...\n')
             complete_info <- hess
             shortpars <- longpars[estpars & !redun_constr]
             tmp <- updatePrior(pars=pars, gTheta=gTheta,
@@ -508,7 +523,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                                        pars=pars, L=L, constrain=constrain, delta=list$delta,
                                        est=est, shortpars=shortpars, longpars=longpars,
                                        gTheta=gTheta, list=list, ngroups=ngroups, J=J,
-                                       dentype=dentype, sitems=sitems, nfact=nfact,
+                                       dentype=dentype, sitems=sitems, nfact=nfact, lrPars=lrPars,
                                        rlist=rlist, full=full, Data=Data, mixtype=mixtype,
                                        specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
                                        prior=prior, Priorbetween=Priorbetween, Prior=Prior,
@@ -518,7 +533,7 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
                 zero_g <- SE.Oakes(0L, pars=pars, L=L, constrain=constrain, delta=0,
                                    est=est, shortpars=shortpars, longpars=longpars,
                                    gTheta=gTheta, list=list, ngroups=ngroups, J=J,
-                                   dentype=dentype, sitems=sitems, nfact=nfact,
+                                   dentype=dentype, sitems=sitems, nfact=nfact, lrPars=lrPars,
                                    rlist=rlist, full=full, Data=Data, mixtype=mixtype,
                                    specific=specific, itemloc=itemloc, CUSTOM.IND=CUSTOM.IND,
                                    prior=prior, Priorbetween=Priorbetween, Prior=Prior,
@@ -539,6 +554,8 @@ EM.group <- function(pars, constrain, Ls, Data, PrepList, list, Theta, DERIV, so
             pars <- reloadPars(longpars=longpars, pars=pars,
                                ngroups=ngroups, J=J)
             is.latent <- grepl('MEAN_', names(shortpars)) | grepl('COV_', names(shortpars))
+            if(length(lrPars))
+                is.latent[names(shortpars) %in% names(lrPars@est)] <- TRUE
             missing_info[is.latent, is.latent] <- 0
             hess <- complete_info + missing_info
         }

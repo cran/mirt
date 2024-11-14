@@ -14,6 +14,8 @@ mirt(
   SE = FALSE,
   covdata = NULL,
   formula = NULL,
+  itemdesign = NULL,
+  item.formula = NULL,
   SE.type = "Oakes",
   method = "EM",
   optimizer = NULL,
@@ -54,16 +56,19 @@ For exploratory IRT models, a single numeric value indicating the number
 of factors to extract is also supported. Default is 1, indicating that a unidimensional
 model will be fit unless otherwise specified}
 
-\item{itemtype}{type of items to be modeled, declared as a vector for each item or a single value
-  which will be recycled for each item. The \code{NULL} default assumes that the items follow a graded or
+\item{itemtype}{type of items to be modeled, declared as either a) a single value to be
+  recycled for each item, b) a vector for each respective item, or c) if applicable,
+  a matrix with columns equal to the number of items and rows equal to the number of
+  latent classes. The \code{NULL} default assumes that the items follow a graded or
   2PL structure, however they may be changed to the following:
   \itemize{
     \item \code{'Rasch'} - Rasch/partial credit model by constraining slopes to 1 and freely estimating
       the variance parameters (alternatively, can be specified by applying equality constraints to the
-      slope parameters in \code{'gpcm'}; Rasch, 1960)
-    \item \code{'2PL'}, \code{'3PL'}, \code{'3PLu'}, and \code{'4PL'} - 2-4 parameter logistic model,
+      slope parameters in \code{'gpcm'} and \code{'2PL'}; Rasch, 1960)
+    \item \code{'1PL'}, \code{'2PL'}, \code{'3PL'}, \code{'3PLu'}, and \code{'4PL'} - 1-4 parameter logistic model,
       where \code{3PL} estimates the lower asymptote only while \code{3PLu} estimates the upper asymptote only
-      (Lord and Novick, 1968; Lord, 1980)
+      (Lord and Novick, 1968; Lord, 1980). Note that specifying \code{'1PL'} will not automatically estimate
+      the variance of the latent trait compared to the \code{'Rasch'} type
     \item \code{'5PL'} - 5 parameter logistic model to estimate asymmetric logistic
      response curves. Currently restricted to unidimensional models
     \item \code{'CLL'} - complementary log-log link model.
@@ -85,9 +90,10 @@ model will be fit unless otherwise specified}
     \item \code{'sequential'} - multidimensional sequential response model (Tutz, 1990) in slope-intercept form
     \item \code{'Tutz'} - same as the \code{'sequential'} itemtype, except the slopes are fixed to 1
       and the latent variance terms are freely estimated (similar to the \code{'Rasch'} itemtype input)
-    \item \code{'PC2PL'} and \code{'PC3PL'} - 2-3 parameter partially compensatory model.
-      Note that constraining the slopes to be equal across items will reduce the model to
-      Embretson's (a.k.a. Whitely's) multicomponent model (1980).
+    \item \code{'PC1PL'}, \code{'PC2PL'}, and \code{'PC3PL'} - 1-3 parameter partially compensatory model.
+      Note that constraining the slopes to be equal across items will also reduce the model to
+      Embretson's (a.k.a. Whitely's) multicomponent model (1980), while for \code{'PC1PL'} the
+      slopes are fixed to 1 while the latent trait variance terms are estimated
     \item \code{'2PLNRM'}, \code{'3PLNRM'}, \code{'3PLuNRM'}, and \code{'4PLNRM'} - 2-4 parameter nested
       logistic model, where \code{3PLNRM} estimates the lower asymptote only while \code{3PLuNRM} estimates
       the upper asymptote only (Suh and Bolt, 2010)
@@ -117,6 +123,22 @@ can be regressed using external covariates in \code{covdata}. If a named list
 of formulas is supplied (where the names correspond to the latent trait names in \code{model})
 then specific regression effects can be estimated for each factor. Supplying a single formula
 will estimate the regression parameters for all latent traits by default}
+
+\item{itemdesign}{a \code{data.frame} with rows equal to the number of items and columns
+containing any item-design effects. If items should be included in the design structure
+(i.e., should be left in their canonical structure) then fewer rows can be used,
+however the \code{rownames} must be defined and matched with \code{colnames} in the \code{data}
+input. The item design matrix is constructed with the use of
+\code{item.formula}. Providing this input will fix the associated \code{'d'} intercepts
+to 0, where applicable}
+
+\item{item.formula}{an R formula used to specify any intercept decomposition (e.g.,
+  the LLTM; Fischer, 1983). Note that only the right-hand side of the formula is required
+  for compensatory models.
+
+  For non-compensatory \code{itemtype}s (e.g., \code{'PC1PL'}) the formula must include
+  the name of the latent trait in the left hand side of the expression to indicate which
+  of the trait specification should have their intercepts decomposed (see MLTM; Embretson, 1984)}
 
 \item{SE.type}{type of estimation method to use for calculating the parameter information matrix
   for computing standard errors and \code{\link{wald}} tests. Can be:
@@ -575,8 +597,9 @@ number of categories (using \eqn{k} for specific category instances).
     'gpcm' below).
      \deqn{P(x = 1|\theta, d) = \frac{1}{1 + exp(-(\theta + d))}}
   }
-  \item{2-4PL}{
-    Depending on the model \eqn{u} may be equal to 1 and \eqn{g} may be equal to 0.
+  \item{1-4PL}{
+    Depending on the model \eqn{u} may be equal to 1 (e.g., 3PL), \eqn{g} may be equal to 0 (e.g., 2PL),
+    or the \code{a}s may be fixed to 1 (e.g., 1PL).
     \deqn{P(x = 1|\theta, \psi) = g + \frac{(u - g)}{
       1 + exp(-(a_1 * \theta_1 + a_2 * \theta_2 + d))}}
   }
@@ -681,11 +704,12 @@ number of categories (using \eqn{k} for specific category instances).
     \deqn{P(x = 1 | \theta, \psi) = exp(-0.5 * (a_1 * \theta_1 + a_2 * \theta_2 + d)^2)}
   }
   \item{partcomp}{Partially compensatory models consist of the product of 2PL probability curves.
-    \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-(a_1 * \theta_1 + d_1))} *
-    \frac{1}{1 + exp(-(a_2 * \theta_2 + d_2))})}
+    \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-(a_1 * \theta_1 + d_1))}^c_1 *
+    \frac{1}{1 + exp(-(a_2 * \theta_2 + d_2))}^c_2)}
 
-    Note that constraining the slopes to be equal across items will reduce the model to
-    Embretson's (a.k.a. Whitely's) multicomponent model (1980).
+    where $c_1$ and $c_2$ are binary indicator variables reflecting whether the item should include
+    the select compensatory component (1) or not (0). Note that constraining the slopes to
+    be equal across items will reduce the model to Embretson's (Whitely's) multicomponent model (1980).
   }
   \item{2-4PLNRM}{Nested logistic curves for modeling distractor items. Requires a scoring key.
     The model is broken into two components for the probability of endorsement. For successful
@@ -1127,7 +1151,7 @@ N <- 1000
 
 # covariates
 X1 <- rnorm(N); X2 <- rnorm(N)
-covdata <- data.frame(X1, X2)
+covdata <- data.frame(X1, X2, X3 = rnorm(N))
 Theta <- matrix(0.5 * X1 + -1 * X2 + rnorm(N, sd = 0.5))
 
 # items and response data
@@ -1135,15 +1159,29 @@ a <- matrix(1, 20); d <- matrix(rnorm(20))
 dat <- simdata(a, d, 1000, itemtype = '2PL', Theta=Theta)
 
 # unconditional Rasch model
-mod0 <- mirt(dat, 1, 'Rasch')
+mod0 <- mirt(dat, 1, 'Rasch', SE=TRUE)
+coef(mod0, printSE=TRUE)
 
-# conditional model using X1 and X2 as predictors of Theta
-mod1 <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2)
+# conditional model using X1, X2, and X3 (bad) as predictors of Theta
+mod1 <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2 + X3, SE=TRUE)
+coef(mod1, printSE=TRUE)
 coef(mod1, simplify=TRUE)
-anova(mod0, mod1)
+anova(mod0, mod1)  # jointly significant predictors of theta
 
-# bootstrapped confidence intervals
-boot.mirt(mod1, R=5)
+# large sample z-ratios and p-values (if one cares)
+cfs <- coef(mod1, printSE=TRUE)
+(z <- cfs$lr.betas[[1]] / cfs$lr.betas[[2]])
+round(pnorm(abs(z[,1]), lower.tail=FALSE)*2, 3)
+
+# drop predictor for nested comparison
+mod1b <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2)
+anova(mod1b, mod1)
+
+# compare to mixedmirt() version of the same model
+mod1.mixed <- mixedmirt(dat, 1, itemtype='Rasch',
+                        covdata=covdata, lr.fixed = ~ X1 + X2 + X3, SE=TRUE)
+coef(mod1.mixed)
+coef(mod1.mixed, printSE=TRUE)
 
 # draw plausible values for secondary analyses
 pv <- fscores(mod1, plausible.draws = 10)
@@ -1228,6 +1266,118 @@ anova(mod2PL, mod2PL_asym)
 plot(mod2PL, type = 'trace')
 plot(mod2PL_asym, type = 'trace')
 
+
+###################
+# LLTM example
+
+a <- matrix(rep(1,30))
+d <- rep(c(1,0, -1),each = 10)  # first easy, then medium, last difficult
+dat <- simdata(a, d, 1000, itemtype = '2PL')
+
+# unconditional model for intercept comparisons
+mod <- mirt(dat, itemtype = 'Rasch')
+coef(mod, simplify=TRUE)
+
+# Suppose that the first 10 items were suspected to be easy, followed by 10 medium difficulty items,
+# then finally the last 10 items are difficult,
+# and we wish to test this item structure hypothesis (more intercept designs are possible
+# by including more columns).
+itemdesign <- data.frame(difficulty =
+   factor(c(rep('easy', 10), rep('medium', 10), rep('hard', 10))))
+rownames(itemdesign) <- colnames(dat)
+itemdesign
+
+# LLTM with mirt()
+lltm <- mirt(dat, itemtype = 'Rasch', SE=TRUE,
+   item.formula = ~ 0 + difficulty, itemdesign=itemdesign)
+coef(lltm, simplify=TRUE)
+coef(lltm, printSE=TRUE)
+anova(lltm, mod)  # models fit effectively the same; hence, intercept variability well captured
+
+# additional information for LLTM
+plot(lltm)
+plot(lltm, type = 'trace')
+itemplot(lltm, item=1)
+itemfit(lltm)
+head(fscores(lltm))  #EAP estimates
+fscores(lltm, method='EAPsum', full.scores=FALSE)
+M2(lltm) # goodness of fit
+head(personfit(lltm))
+residuals(lltm)
+
+# intercept across items also possible by removing ~ 0 portion, just interpreted differently
+lltm.int <- mirt(dat, itemtype = 'Rasch',
+   item.formula = ~ difficulty, itemdesign=itemdesign)
+anova(lltm, lltm.int) # same
+coef(lltm.int, simplify=TRUE)
+
+# using unconditional modeling for first four items
+itemdesign.sub <- itemdesign[5:nrow(itemdesign), , drop=FALSE]
+itemdesign.sub    # note that rownames are required in this case
+lltm.4 <- mirt(dat, itemtype = 'Rasch',
+   item.formula = ~ 0 + difficulty, itemdesign=itemdesign.sub)
+coef(lltm.4, simplify=TRUE) # first four items are the standard Rasch
+anova(lltm, lltm.4) # similar fit, hence more constrained model preferred
+
+# LLTM with mixedmirt() (more flexible in general, but slower)
+LLTM <- mixedmirt(dat, model=1, fixed = ~ 0 + difficulty,
+                  itemdesign=itemdesign, SE=FALSE)
+summary(LLTM)
+coef(LLTM)
+
+# LLTM with random error estimate (not supported with mirt() )
+LLTM.e <- mixedmirt(dat, model=1, fixed = ~ 0 + difficulty,
+                  random = ~ 1|items, itemdesign=itemdesign, SE=FALSE)
+coef(LLTM.e)
+
+
+###################
+# General MLTM example (Embretson, 1984)
+
+set.seed(42)
+
+as <- matrix(rep(1,60), ncol=2)
+as[11:18,1] <- as[1:9,2] <- 0
+d1 <- rep(c(3,1),each = 6)  # first easy, then medium, last difficult for first trait
+d2 <- rep(c(0,1,2),times = 4)    # difficult to easy
+d <- rnorm(18)
+ds <- rbind(cbind(d1=NA, d2=d), cbind(d1, d2))
+(pars <- data.frame(a=as, d=ds))
+dat <- simdata(as, ds, 2500,
+  itemtype = c(rep('dich', 18), rep('partcomp', 12)))
+itemstats(dat)
+
+# unconditional model
+syntax <- "theta1 = 1-9, 19-30
+           theta2 = 10-30
+           COV = theta1*theta2"
+itemtype <- c(rep('Rasch', 18), rep('PC1PL', 12))
+mod <- mirt(dat, syntax, itemtype=itemtype)
+coef(mod, simplify=TRUE)
+data.frame(est=coef(mod, simplify=TRUE)$items, pop=data.frame(a=as, d=ds))
+itemplot(mod, 1)
+itemplot(mod, 30)
+
+# MLTM design only for PC1PL items
+itemdesign <- data.frame(t1_difficulty= factor(d1, labels=c('medium', 'easy')),
+                        t2_difficulty=factor(d2, labels=c('hard', 'medium', 'easy')))
+rownames(itemdesign) <- colnames(dat)[19:30]
+itemdesign
+
+# fit MLTM design, leaving first 18 items as 'Rasch' type
+mltm <- mirt(dat, syntax, itemtype=itemtype, itemdesign=itemdesign,
+             item.formula = list(theta1 ~ 0 + t1_difficulty,
+                                 theta2 ~ 0 + t2_difficulty), SE=TRUE)
+coef(mltm, simplify=TRUE)
+coef(mltm, printSE=TRUE)
+anova(mltm, mod) # similar fit; hence more constrained version preferred
+M2(mltm) # goodness of fit
+head(personfit(mltm))
+residuals(mltm)
+
+# EAP estimates
+fscores(mltm) |> head()
+
 }
 }
 \references{
@@ -1269,9 +1419,15 @@ Models with the MH-RM Algorithm. \emph{Applied Psychological Measurement, 38}, 3
 Chen, W. H. & Thissen, D. (1997). Local dependence indices for item pairs using item
 response theory. \emph{Journal of Educational and Behavioral Statistics, 22}, 265-289.
 
+Embretson, S. E. (1984). A general latent trait model for response processes.
+\emph{Psychometrika, 49}, 175-186.
+
 Falk, C. F. & Cai, L. (2016). Maximum Marginal Likelihood Estimation of a
 Monotonic Polynomial Generalized Partial Credit Model with Applications to
 Multiple Group Analysis. \emph{Psychometrika, 81}, 434-460.
+
+Fischer, G. H. (1983). Logistic latent trait models with linear constraints.
+\emph{Psychometrika, 48}, 3-26.
 
 Lord, F. M. & Novick, M. R. (1968). Statistical theory of mental test scores. Addison-Wesley.
 

@@ -10,12 +10,11 @@ RCI(
   postdat,
   mod_post = mod_pre,
   cutoffs = NULL,
-  rxx.method = "pooled",
-  rxx.pre = NULL,
-  rxx.post = NULL,
-  SD.pre = NULL,
-  SD.post = NULL,
+  SEM.pre = NULL,
+  SEM.post = NULL,
   Fisher = FALSE,
+  shiny = FALSE,
+  main = "Test Scores",
   ...
 )
 }
@@ -37,22 +36,21 @@ otherwise, the pre-test model will be used}
 \item{cutoffs}{optional vector of length 2 indicating the type of cut-offs to
 report (e.g., \code{c(-1.96, 1.96)} reflects the 95 percent z-score type cut-off)}
 
-\item{rxx.method}{which method to use for pooling the reliability
-information. Currently supports \code{'pooled'} to pool the pre-post
-reliability estimates (default) or \code{'pre'} for using just the pre-test}
+\item{SEM.pre}{standard error of measurement for the pretest. This can be used instead of
+\code{rxx.pre} and \code{SD.pre}}
 
-\item{rxx.pre}{CTT reliability of pretest. If not supplied will be computed using coefficient
-alpha from \code{predat}}
-
-\item{rxx.post}{same as \code{rxx.pre}, but for post-test data}
-
-\item{SD.pre}{standard deviation of pretest. If not supplied will be computed from \code{predat}}
-
-\item{SD.post}{same as \code{SD.pre}, but for the post-test data}
+\item{SEM.post}{(optional) standard error of measurement for the post-test.
+Using this will create a pooled version of the SEM; otherwise, \code{SEM.post = SEM.pre}}
 
 \item{Fisher}{logical; use the Fisher/expected information function to compute the
 SE terms? If \code{FALSE} the SE information will be extracted from the select
 \code{\link{fscores}} method (default). Only applicable for unidimensional models}
+
+\item{shiny}{logical; launch an interactive shiny applications for real-time scoring
+of supplied total-scores or response vectors? Only requires \code{mod_pre} and (optional)
+\code{mod_post} inputs}
+
+\item{main}{main label to use when \code{shiny=TRUE}}
 
 \item{...}{additional arguments passed to \code{\link{fscores}}}
 }
@@ -101,17 +99,42 @@ RCI(mod, predat = dat_pre[1:6,], postdat = dat_post[1:6,],
     cutoffs = c(-1.96, 1.96))
 
 ######
-# CTT version by omitting IRT model (easiest to use complete dataset)
-RCI(predat = dat_pre, postdat = dat_post)
+# CTT version by omitting IRT model
+    # Requires either sample or population SEM's as input
+(istats <- itemstats(dat_pre)$overall)
+SEM.alpha <- istats$SEM.alpha    # SEM estimate of dat_pre
 
-# CTT version with pre-computed information
-RCI(predat = dat_pre[1:6,], postdat = dat_post[1:6,],
-    rxx.pre=.6, rxx.post=.6, SD.pre=2, SD.post=3,
-    cutoffs = c(-1.96, 1.96))
+# assumes SEM.post = SEM.pre
+RCI(predat = dat_pre, postdat = dat_post, SEM.pre=SEM.alpha)
 
-# just pre-test rxx
-RCI(predat = dat_pre[1:6,], postdat = dat_post[1:6,],
-    rxx.pre=.6, SD.pre=2, rxx.method = 'pre')
+# include cutoffs
+RCI(predat = dat_pre, postdat = dat_post, SEM.pre=SEM.alpha,
+    cutoffs=c(-1.96, 1.96))
+
+# allows SEM.post != SEM.pre
+(istats.post <- itemstats(dat_post)$overall)
+SEM.alpha.post <- istats.post$SEM.alpha
+
+RCI(predat = dat_pre, postdat = dat_post,
+   SEM.pre=SEM.alpha, SEM.post=SEM.alpha.post)
+
+######
+
+# interactive shiny interfaces for live scoring
+mod_pre <- mirt(Science)
+
+# (optional) setup mod_post to have medium effect size change (d = 0.5)
+sv <- mod2values(mod_pre)
+sv$value[sv$name == 'MEAN_1'] <- 0.5
+mod_post <- mirt(Science, pars=sv, TOL=NA)
+
+# only use pre-test model for scoring
+RCI(mod_pre=mod_pre, shiny=TRUE)
+
+# use both pre-test and post-test models for including empirical priors
+RCI(mod_pre=mod_pre, mod_post=mod_post, shiny=TRUE,
+    main='Perceptions of Science and Technology')
+
 
 ############################
 # Example where individuals take completely different item set pre-post
