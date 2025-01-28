@@ -41,7 +41,7 @@ test_that('IRTpars', {
     cfs <- coef(mod3, printSE = TRUE)
     expect_equal(unname(cfs[[1L]][,'d']), c(1.868016, 0.100416), tolerance = 1e-4)
     cfs <- coef(mod3, IRTpars = TRUE)
-    expect_equal(unname(cfs[[1L]][,'b']), c(-1.868016, -2.064827, -1.671204), tolerance = 1e-4)
+    expect_equal(unname(cfs[[1L]][,'b']), c(-1.868072, -2.064887, -1.671256), tolerance = 1e-4)
     cfs <- coef(mod3, IRTpars = TRUE, printSE = TRUE)
     expect_equal(unname(cfs[[1L]][,'b']), c(-1.868016, 0.100416), tolerance = 1e-4)
 

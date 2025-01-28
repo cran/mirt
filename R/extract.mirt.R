@@ -17,8 +17,6 @@
 #'   \item{BIC}{BIC}
 #'   \item{SABIC}{sample size adjusted BIC}
 #'   \item{HQ}{HQ}
-#'   \item{F}{unrotated standardized loadings matrix}
-#'   \item{h2}{factor communality estimates}
 #'   \item{LLhistory}{EM log-likelihood history}
 #'   \item{tabdata}{a tabular version of the raw response data input. Frequencies are stored
 #'     in \code{freq}}
@@ -88,7 +86,7 @@
 #' mod <- mirt(Science, 1)
 #'
 #' extract.mirt(mod, 'logLik')
-#' extract.mirt(mod, 'F')
+#' extract.mirt(mod, 'K')  # unique categories for each item
 #'
 #' #multiple group model
 #' grp <- rep(c('G1', 'G2'), each = nrow(Science)/2)
@@ -116,8 +114,6 @@ extract.mirt <- function(x, what, item = 1){
                   SABIC = x@Fit$SABIC,
                   method = x@Options$method,
                   logPrior = x@Fit$logPrior,
-                  F = x@Fit$F,
-                  h2 = x@Fit$h2,
                   K = x@Data$K,
                   mins = x@Data$mins,
                   itemtype =  x@Model$itemtype,

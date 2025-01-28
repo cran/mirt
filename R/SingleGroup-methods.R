@@ -131,6 +131,11 @@ setMethod(
 #'
 #' @param object an object of class \code{SingleGroupClass},
 #'   \code{MultipleGroupClass}, or \code{MixedClass}
+#' @param SE logical; include the standard errors for the
+#'   standardized loadings? Requires the initial model to have included
+#'   and estimated of the asymptotic covariance matrix (via, for instance,
+#'   \code{mirt(..., SE = TRUE)}). If \code{TRUE} SEs are computed using the
+#'   delta method
 #' @param rotate a string indicating which rotation to use for exploratory models, primarily
 #'   from the \code{GPArotation} package (see documentation therein).
 #'
@@ -174,17 +179,36 @@ setMethod(
 setMethod(
     f = "summary",
     signature = 'SingleGroupClass',
-    definition = function(object, rotate = 'oblimin', Target = NULL,
+    definition = function(object, SE = TRUE,
+                          rotate = 'oblimin', Target = NULL,
                           suppress = 0, suppress.cor = 0,
                           verbose = TRUE, ...){
+        pars <- object@ParObjects$pars
+        nms <- extract.mirt(object, 'itemnames')
+        fnms <- extract.mirt(object, 'factorNames')
+        F <- Lambdas(pars, Names=nms)
+        colnames(F) <- fnms
+        h2 <- matrix(rowSums(F^2))
+        colnames(h2) <- "h2"
+        nfact <- ncol(F)
+        acov <- vcov(object)
+        SE.F <- NULL
+        org.F <- F
         if (!object@Options$exploratory || rotate == 'none') {
-            F <- object@Fit$F
+            if(SE){
+                SE.F <- SE.Lambdas(pars, acov, nfact)
+                if(!is.null(SE.F)){
+                    colnames(SE.F) <- paste0('SE.', colnames(F))
+                    rownames(SE.F) <- rownames(F)
+                }
+            }
+            ests <- do.call(rbind, lapply(pars[2:length(pars) - 1],
+                                          \(x) x@est[1:nfact]))
+            F[!ests] <- NA
             F[abs(F) < suppress] <- NA
-            h2 <- as.matrix(object@Fit$h2)
-            SS <- apply(F^2,2,sum)
+            SS <- apply(F^2,2,sum, na.rm=TRUE)
             gp <- ExtractGroupPars(object@ParObjects$pars[[object@Data$nitems + 1L]])
             Phi <- cov2cor(gp$gcov)
-            colnames(h2) <- "h2"
             rownames(Phi) <- colnames(Phi) <- names(SS) <-
                 colnames(F)[seq_len(object@Model$nfact)]
             loads <- cbind(F,h2)
@@ -192,6 +216,10 @@ setMethod(
                 if(object@Options$exploratory)
                     cat("\nUnrotated factor loadings: \n\n")
                 print(loads, 3, na.print = " ")
+                if(!is.null(SE.F)){
+                    cat('\n')
+                    print(SE.F, 2, na.print = " ")
+                }
                 cat("\nSS loadings: ", round(SS, 3), "\n")
                 cat("Proportion Var: ",round(SS/nrow(F), 3), "\n")
                 cat("\nFactor correlations: \n\n")
@@ -200,20 +228,16 @@ setMethod(
                 Phiprint[upper.tri(Phiprint, diag = FALSE)] <- NA
                 print(round(Phiprint, 3), na.print = " ")
             }
-            invisible(list(rotF=F,h2=h2,fcor=Phi))
+            ret <- list(rotF=org.F, SE.F=SE.F, h2=h2, fcor=Phi)
         } else {
-            F <- object@Fit$F
-            h2 <- as.matrix(object@Fit$h2)
-            colnames(h2) <- "h2"
             rotF <- Rotate(F, rotate, Target = Target, ...)
             SS <- apply(rotF$loadings^2,2,sum)
             L <- rotF$loadings
             L[abs(L) < suppress] <- NA
             loads <- cbind(L,h2)
             Phi <- diag(ncol(F))
-            if(!rotF$orthogonal){
+            if(!rotF$orthogonal)
                 Phi <- rotF$Phi
-            }
             colnames(Phi) <- rownames(Phi) <- colnames(F)
             if(verbose){
                 cat("\nRotation: ", rotate, "\n")
@@ -229,8 +253,9 @@ setMethod(
             if(any(h2 > 1))
                 warning("Model has Heywood cases. Interpret with caution.",
                         call.=FALSE)
-            invisible(list(rotF=rotF$loadings,h2=h2,fcor=Phi))
+            ret <- list(rotF=rotF$loadings,h2=h2,fcor=Phi)
         }
+        invisible(ret)
     }
 )
 
@@ -749,7 +774,7 @@ setMethod(
         data <- object@Data$data
         N <- nrow(data)
         J <- ncol(data)
-        nfact <- ncol(object@Fit$F)
+        nfact <- extract.mirt(object, 'nfact')
         res <- matrix(0,J,J)
         diag(res) <- NA
         colnames(res) <- rownames(res) <- colnames(data)
@@ -1696,6 +1721,7 @@ setMethod(
 )
 
 mirt2traditional <- function(x, vcov, nfact){
+    xorg <- x
     cls <- class(x)
     opar <- par <- x@par
     which.a <- which(x@par[1L:nfact] != 0)
@@ -1705,23 +1731,9 @@ mirt2traditional <- function(x, vcov, nfact){
         ncat <- x@ncat
     if(cls == 'dich'){
         fns <- vector('list', nfact + 3L)
-        fns[[nfact+1L]] <- function(par, index, opar){
-            if(index == (nfact + 1L)){
-                opar[c(which.a, nfact + 1L)] <- par
-                ret <- -opar[nfact + 1L]/opar[which.a]
-            }
-            ret
-        }
-        fns[[nfact+2L]] <- function(par, index, opar){
-            if(index == nfact + 2L)
-                ret <- plogis(par)
-            ret
-        }
-        fns[[nfact+3L]] <- function(par, index, opar){
-            if(index == nfact + 3L)
-                ret <- plogis(par)
-            ret
-        }
+        fns[[nfact+1L]] <- function(par, index, opar) -par[2]/par[1]
+        fns[[nfact+2L]] <- function(par, index, opar) plogis(par)
+        fns[[nfact+3L]] <- function(par, index, opar) plogis(par)
         delta_index <- c(as.list(rep(NA, nfact)),
                          list(c(which.a, nfact + 1L),
                               nfact + 2L, nfact+3L))
@@ -1729,30 +1741,13 @@ mirt2traditional <- function(x, vcov, nfact){
         par[nfact + 2L] <- plogis(par[nfact + 2L])
         par[nfact + 3L] <- plogis(par[nfact + 3L])
         names(par) <- c(a.nms, 'b', 'g', 'u')
+        index <- delta_index
     } else if(cls == 'fivePL'){
         fns <- vector('list', nfact + 4L)
-        fns[[nfact+1L]] <- function(par, index, opar){
-            if(index == (nfact + 1L)){
-                opar[c(which.a, nfact + 1L)] <- par
-                ret <- -opar[nfact + 1L]/opar[which.a]
-            }
-            ret
-        }
-        fns[[nfact+2L]] <- function(par, index, opar){
-            if(index == nfact + 2L)
-                ret <- plogis(par)
-            ret
-        }
-        fns[[nfact+3L]] <- function(par, index, opar){
-            if(index == nfact + 3L)
-                ret <- plogis(par)
-            ret
-        }
-        fns[[nfact+4L]] <- function(par, index, opar){
-            if(index == nfact + 4L)
-                ret <- exp(par)
-            ret
-        }
+        fns[[nfact+1L]] <- function(par, index, opar) -opar[2]/par[1]
+        fns[[nfact+2L]] <- function(par, index, opar) plogis(par)
+        fns[[nfact+3L]] <- function(par, index, opar) plogis(par)
+        fns[[nfact+4L]] <- function(par, index, opar) exp(par)
         delta_index <- c(as.list(rep(NA, nfact)),
                          list(c(which.a, nfact + 1L),
                               nfact + 2L, nfact+3L, nfact+4L))
@@ -1761,17 +1756,11 @@ mirt2traditional <- function(x, vcov, nfact){
         par[nfact + 3L] <- plogis(par[nfact + 3L])
         par[nfact + 4L] <- exp(par[nfact + 4L])
         names(par) <- c(a.nms, 'b', 'g', 'u', 'S')
+        index <- delta_index
     } else if(cls == 'graded'){
         fns <- vector('list', ncat + nfact-1L)
-        for(i in 2L:ncat - 1L){
-            fns[[i + nfact]] <- function(par, index, opar){
-                if(index > nfact){
-                    opar[c(which.a, index)] <- par
-                    ret <- -opar[index]/opar[which.a]
-                }
-                ret
-            }
-        }
+        for(i in 2L:ncat - 1L)
+            fns[[i + nfact]] <- function(par, index, opar) -par[2]/par[1]
         delta_index <- vector('list', ncat + nfact - 1L)
         for(i in 1:nfact)
             delta_index[[i]] <- NA
@@ -1780,24 +1769,20 @@ mirt2traditional <- function(x, vcov, nfact){
             delta_index[[i+nfact]] <- c(which.a, i+nfact)
         }
         names(par) <- c(a.nms, paste0('b', 2:ncat-1L))
+        index <- delta_index
     } else if(cls == 'gpcm'){
         fns <- vector('list', ncat+nfact)
         for(i in 2L:ncat-1L){
             fns[[i+nfact]] <- function(par, index, opar){
-                if(index > nfact){
-                    if(index == (nfact+1))
-                        opar[c(which.a, ncat + nfact + 2L)] <- par
-                    else opar[c(which.a, ncat + index + nfact - 1L,
-                                ncat + index + nfact)] <- par
-                    par <- opar
-                    ds <- par[(nfact+1):length(par)]/par[which.a]
-                    ds <- ds[-seq_len(ncat)]
-                    newd <- numeric(length(ds)-1L)
-                    for(i in 2:length(ds))
-                        newd[i-1L] <- -(ds[i] - ds[i-1L])
-                    ret <- c(par[1:nfact], newd)
-                    ret <- ret[index]
-                }
+                opar[index] <- par
+                par <- opar
+                ds <- par[(nfact+1):length(par)]/par[which.a]
+                ds <- ds[-seq_len(ncat)]
+                newd <- numeric(length(ds)-1L)
+                for(i in 2:length(ds))
+                    newd[i-1L] <- -(ds[i] - ds[i-1L])
+                ret <- c(par[1:nfact], 1:ncat-1, newd)
+                ret <- ret[index[2]]
                 ret
             }
         }
@@ -1818,21 +1803,18 @@ mirt2traditional <- function(x, vcov, nfact){
         par <- c(x@par[1:nfact], newd)
         names(par) <- c(a.nms, paste0('b', 1:length(newd)))
         x@est <- x@est[c(1:nfact, (ncat+nfact+2L):length(x@est))]
+        index <- delta_index
     } else if(cls == 'nominal'){
-        if(nfact > 1L) return(x)
         fns <- vector('list', ncat*2)
-        for(i in 2L:length(par)-1L){
+        for(i in 1:ncat){
             fns[[i]] <- function(par, index, opar){
-                if(index <= floor(length(opar)/2)){
-                    as <- par[2:(ncat+1)] * par[1]
-                    as <- as - mean(as)
-                    ret <- as[index]
-                } else {
-                    ds <- par
-                    ds <- ds - mean(ds)
-                    ret <- ds[index-ncat]
-                }
-                ret
+                as <- par[-1] * par[1]
+                as <- as - mean(as)
+                as[index]
+            }
+            fns[[i+ncat]] <- function(par, index, opar){
+                ds <- par - mean(par)
+                ds[index]
             }
         }
         delta_index <- vector('list', ncat*2)
@@ -1846,38 +1828,21 @@ mirt2traditional <- function(x, vcov, nfact){
         names(par) <- c(paste0('a', 1:ncat), paste0('c', 1:ncat))
         x@est <- rep(TRUE, ncat*2)
         x@SEpar <- rep(as.numeric(NA), ncat*2)
+        index <- as.list(c(1:ncat, 1:ncat)) ## this differs as everything changes
     } else if(cls == 'nestlogit'){
         if(nfact > 1L) return(x)
-        fns <- vector('list', ncat*2 + 4)
-        fns[[2]] <- function(par, index, opar){
-            if(index == 2L){
-                opar[1L:2L] <- par
-                ret <- -opar[2L]/opar[1L]
-            }
-            ret
-        }
-        fns[[3]] <- function(par, index, opar){
-            if(index == 3L)
-                ret <- plogis(par)
-            ret
-        }
-        fns[[4]] <- function(par, index, opar){
-            if(index == 4L)
-                ret <- plogis(par)
-            ret
-        }
-        for(i in (2L:length(par)-1L) + 4){
+        fns <- vector('list', (ncat-1)*2 + 4)
+        fns[[2]] <- function(par, index, opar) -opar[2L]/opar[1L]
+        fns[[3]] <- function(par, index, opar) plogis(par)
+        fns[[4]] <- function(par, index, opar) plogis(par)
+        for(i in 1:(ncat-1) + 4){
             fns[[i]] <- function(par, index, opar){
-                if(index <= (5 + ncat-2)){
-                    as <- par
-                    as <- as - mean(as)
-                    ret <- as[index-4]
-                } else {
-                    ds <- par
-                    ds <- ds - mean(ds)
-                    ret <- ds[index-4-(ncat-1)]
-                }
-                ret
+                as <- par - mean(par)
+                as[index]
+            }
+            fns[[i+ncat-1]] <- function(par, index, opar){
+                ds <- par - mean(par)
+                ds[index]
             }
         }
 
@@ -1900,29 +1865,36 @@ mirt2traditional <- function(x, vcov, nfact){
         par <- c(par1, as, ds)
         x@est <- c(x@est[1:4], rep(TRUE, (ncat-1)*2))
         x@SEpar <- c(x@SEpar[1], as.numeric(rep(NA, (ncat-1)*2 + 3)))
+        index <- delta_index
+        index[1:(ncat-1) + 4] <- 1:(ncat-1)
+        index[1:(ncat-1) + 4 + (ncat-1)] <- 1:(ncat-1)
+    } else if(cls == 'Luo2001'){
+        fns <- vector('list', nfact + ncat)
+        fns[[nfact+1L]] <- function(par, index, opar) -par[2]/par[1]
+        for(i in 1:(ncat-1))
+            fns[[nfact + 1L + i]] <- function(par, index, opar) exp(par)
+        delta_index <- c(as.list(rep(NA, nfact)),
+                         list(c(which.a, nfact + 1L)),
+                         as.list((nfact + 2L):length(par)))
+        par[nfact + 1L] <- -par[nfact + 1L]/par[which.a]
+        par[(nfact + 2L):length(par)] <- exp(par[(nfact + 2L):length(par)])
+        names(par) <- c(a.nms, 'b', paste0('rho', 1:(ncat-1)))
+        index <- delta_index
     }
     x@par <- par
     names(x@est) <- names(par)
     x@parnames <- names(x@par)
-    if(length(vcov) == 0L || (is.na(vcov[1L,1L]) || !(cls %in%
-                                                      c('dich', 'graded', 'gpcm', 'nominal', 'nestlogit')))){
+    if(!valid_vcov(vcov) || !(cls %in% c('dich', 'graded', 'gpcm', 'nominal', 'nestlogit', 'Luo2001'))){
         x@SEpar <- numeric()
     } else {
-        nms <- colnames(vcov)
-        splt <- strsplit(nms, "\\.")
-        splt <- lapply(splt, function(x) as.integer(x[-1L]))
+        vpick <- subset_vcov(xorg, vcov)
         for(i in 1L:length(delta_index)){
             if(!x@est[i]) next
             if(is.na(delta_index[[i]][1L])) next
-            grad <- numerical_deriv(opar[delta_index[[i]]], fns[[i]], opar=opar, index=i)
-            parnum <- x@parnum[delta_index[[i]]]
-            pick <- numeric(length(grad))
-            for(j in 1L:length(parnum))
-                pick[j] <- suppressWarnings(min(which(do.call(c, lapply(splt, function(x)
-                    any(x %in% parnum[j]))))))
-            grad <- grad[is.finite(pick)]
-            pick <- pick[is.finite(pick)]
-            x@SEpar[i] <- as.vector(sqrt(grad %*% vcov[pick, pick, drop=FALSE] %*% grad))
+            svpick <- vpick[delta_index[[i]], delta_index[[i]], drop=FALSE]
+            spar <- opar[delta_index[[i]]]
+            x@SEpar[i] <- DeltaMethod(fns[[i]], spar, svpick,
+                                      index=index[[i]], opar=opar)$se
         }
         if(cls == 'gpcm') x@SEpar <- x@SEpar[1L:length(x@par)]
     }

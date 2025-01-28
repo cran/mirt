@@ -395,6 +395,13 @@ Lambdas <- function(pars, Names){
     for(i in seq_len(J)){
         tmp <- pars[[i]]
         lambdas[i,] <- ExtractLambdas(tmp, include_fixed = FALSE) /1.702
+        if(tmp@ncat > 2 && (is(tmp, 'gpcm') || is(tmp, 'nominal'))){
+            aks <- tmp@par[ncol(lambdas) + 1:tmp@ncat]
+            d <- nominal_rescale_d(tmp@par[1:(ncol(lambdas) + tmp@ncat)],
+                              nfact=ncol(lambdas), ncat=tmp@ncat)
+            lambdas[i,] <- lambdas[i,] * d
+            lambdas[i,] <- lambdas[i,] * sqrt((tmp@ncat-1)* 1.702)*sign(lambdas[i, 1])
+        }
     }
     dcov <- if(ncol(gcov) > 1L) diag(sqrt(diag(gcov))) else matrix(sqrt(diag(gcov)))
     lambdas <- lambdas %*% dcov
@@ -402,6 +409,33 @@ Lambdas <- function(pars, Names){
     F <- as.matrix(lambdas/norm)
     F
 }
+
+# delta SEs
+SE.Lambdas <- function(pars, acov, nfact){
+
+    lambda_one <- function(par, pars, index=1){
+        stopifnot(length(pars) == 2)
+        pars[[1]]@par[index] <- par[index]
+        out <- Lambdas(pars, 'dummy')
+        out[1, index]
+    }
+
+    if(!valid_vcov(acov)) return(NULL)
+    nitems <- length(pars) - 1
+    SE.F <- matrix(NA, nitems, nfact)
+    for(i in 1:nitems){
+        for(j in 1:nfact){
+            ipars <- pars[c(i,nitems+1)]
+            par <- ipars[[1]]@par
+            if(!ipars[[1]]@est[j]) next
+            iacov <- subset_vcov(ipars[[1]], acov)
+            SE.F[i,j] <- DeltaMethod(lambda_one, par, iacov,
+                                     pars=ipars, index=j)$se
+        }
+    }
+    SE.F
+}
+
 
 #change long pars for groups into mean in sigma
 ExtractGroupPars <- function(x){
@@ -1640,7 +1674,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
                 'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder', 'MCEM_draws',
                 "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain',
-                'standardize_ref', "storeEMhistory")
+                'standardize_ref', "storeEMhistory", 'fixedEtable')
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -2796,6 +2830,13 @@ QUnif <- function (n, min = 0, max = 1, n.min = 1, p, leap = 1, silent = FALSE)
     r
 }
 
+nominal_rescale_d <- function(as, nfact, ncat){
+    a <- sum(as[1:nfact])
+    ask <- a * as[-(1:nfact)]
+    d <- max(as[-(1:nfact)]) / (ncat - 1)
+    d
+}
+
 CA <- function(dat, guess_correction = rep(0, ncol(dat))){
     n <- ncol(dat)
     C <- cov(dat)
@@ -2876,6 +2917,23 @@ as.mirt_matrix <- function(df){
 
 is.latent_regression <- function(mod){
     !is.null(mod@Data$covdata)
+}
+
+valid_vcov <- function(obj){
+    ret <- if(length(obj) == 0 || (length(obj) == 1 && is.na(obj[1]))) FALSE
+      else TRUE
+    ret
+}
+
+# subset of vcov for delta method
+subset_vcov <- function(obj, vcov){
+    nms <- colnames(vcov)
+    splt <- strsplit(nms, "\\.")
+    splt <- lapply(splt, function(x) as.integer(x[-1L]))
+    pick <- sapply(splt, \(ind) any(ind %in% obj@parnum))
+    ret <- matrix(0, length(obj@par), length(obj@par))
+    ret[obj@est, obj@est] <- vcov[pick, pick, drop=FALSE]
+    ret
 }
 
 makeSymMat <- function(mat){

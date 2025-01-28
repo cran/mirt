@@ -2,11 +2,17 @@
 #' Theory)
 #'
 #' \code{mirt} fits a maximum likelihood (or maximum a posteriori) factor analysis model
-#' to any mixture of dichotomous and polytomous data under the item response theory paradigm
+#' to any mixture of dichotomous and polytomous data under the
+#' multidimensional item response theory paradigm
 #' using either Cai's (2010) Metropolis-Hastings Robbins-Monro (MHRM) algorithm, with
 #' an EM algorithm approach outlined by Bock and Aitkin (1981) using rectangular or
 #' quasi-Monte Carlo integration grids, or with the stochastic EM (i.e., the first two stages
-#' of the MH-RM algorithm). Models containing 'explanatory' person or item level predictors
+#' of the MH-RM algorithm). Unidimensional and multidimensional
+#' dominance/compensatory response models or unfolding/pairwise comparison models can
+#' be specified independently via the \code{itemtype} argument.
+#'
+#'
+#' Models containing 'explanatory' person or item level predictors
 #' can only be included by using the \code{\link{mixedmirt}} function, though latent
 #' regression models can be fit using the \code{formula} input in this function.
 #' Tests that form a two-tier or bi-factor structure should be estimated with the
@@ -257,7 +263,7 @@
 #'     \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-(a_1 * \theta_1 + d_1))}^c_1 *
 #'     \frac{1}{1 + exp(-(a_2 * \theta_2 + d_2))}^c_2)}
 #'
-#'     where $c_1$ and $c_2$ are binary indicator variables reflecting whether the item should include
+#'     where \eqn{c_1} and \eqn{c_2} are binary indicator variables reflecting whether the item should include
 #'     the select compensatory component (1) or not (0). Note that constraining the slopes to
 #'     be equal across items will reduce the model to Embretson's (Whitely's) multicomponent model (1980).
 #'   }
@@ -290,6 +296,35 @@
 #'     \eqn{z = 1,2,\ldots, C} (where \eqn{C} is the number of categories minus 1),
 #'     and \eqn{M = 2C + 1}.
 #'     }
+#'   \item{(g)hcm, (g)alm, (g)sslm, and (g)paralla}{Following Luo (2001), this family of response models
+#'     can be characterized under the same ordinal response functioning structure, differing only in their
+#'     linking functions (\eqn{\psi(x)}). For example, for a two-dimensional model the equation used is
+#'     \deqn{p_k =
+#'       \frac{\psi (\rho_k)}{\psi (\rho_k) + \psi (a_1 \theta_1 + a_2 \theta_2 + d)} }
+#'     which is expressed in slope-intercept form to accommodate multidimensionality.
+#'     The "generalized" versions of this family estimate the slope and \code{rho}
+#'     parameters, which allow each item
+#'     to differ in the steepness of the unfolding model functions; otherwise, slopes are fixed to the
+#'     value of 1, though the \code{rho} parameters must be set to 0 manually.
+#'     For ordered polytomous items the response function follows the Guttman-scaling logic
+#'     \deqn{P_1 = q_1\cdot q_2 \cdot q_3 \cdots q_k}
+#'     \deqn{P_2 = p_1\cdot q_2 \cdot q_3 \cdots q_k}
+#'     \deqn{P_3 = p_1\cdot p_2 \cdot q_3 \cdots q_k}
+#'     \deqn{\cdots}
+#'     \deqn{P_K = p_1\cdot p_2 \cdot p_3 \cdots p_k}
+#'     Note that for estimation purposes the \code{rho} parameters are expressed in log units so that they
+#'     remain positive during estimation. Hence, the parameterization used herein is
+#'     \deqn{p_k =
+#'       \frac{\psi (exp(\rho^*_k))}{\psi (exp(\rho^*_k))) + \psi (a_1 \theta_1 + a_2 \theta_2 + d)} }
+#'     where \eqn{\rho^*_k} is in natural log units. Currently supported models in this family are the:
+#'     \itemize{
+#'       \item (generalized) hyperbolic cosine model (\eqn{\psi (x) = cosh(x)}),
+#'       \item (generalized) absolute logistic model (\eqn{\psi (x) = exp(|x|)}),
+#'       \item (generalized) simple squared logistic model (\eqn{\psi (x) = exp(x^2)}), and
+#'       \item (generalized) parallellogram analysis model (\eqn{\psi (x) = x^2}), respectively.
+#'     }
+#'      all of which are available for dichotomous and ordered polytomous response option items.
+#'   }
 #'   \item{spline}{Spline response models attempt to model the response curves uses non-linear and potentially
 #'     non-monotonic patterns. The form is
 #'     \deqn{P(x = 1|\theta, \eta) = \frac{1}{1 + exp(-(\eta_1 * X_1 + \eta_2 * X_2 + \cdots + \eta_n * X_n))}}
@@ -350,6 +385,14 @@
 #'     \item \code{'ideal'} - dichotomous ideal point model (Maydeu-Olivares, 2006)
 #'     \item \code{'ggum'} - generalized graded unfolding model (Roberts, Donoghue, & Laughlin, 2000)
 #'       and its multidimensional extension
+#'     \item \code{'hcm' and 'ghcm'} - (generalized) hyperbolic cosine model (Andrich and Luo, 1993; Andrich, 1996) for
+#'      dichotomous or ordered polytomous items (see Luo, 2001)
+#'     \item \code{'alm' and 'galm'} - (generalized) absolute logistic model (Luo and Andrich, 2005) for dichotomous
+#'      or ordered polytomous items
+#'     \item \code{'sslm' and 'gsslm'} - (generalized) simple squared logistic model (Andrich, 1988) for
+#'      dichotomous or ordered polytomous items (see Luo, 2001)
+#'     \item \code{'paralla' and 'gparalla'} - (generalized) parallellogram analysis model (Hoijtink, 1990)
+#'      for dichotomous or ordered polytomous items (see Luo, 2001)
 #'     \item \code{'sequential'} - multidimensional sequential response model (Tutz, 1990) in slope-intercept form
 #'     \item \code{'Tutz'} - same as the \code{'sequential'} itemtype, except the slopes are fixed to 1
 #'       and the latent variance terms are freely estimated (similar to the \code{'Rasch'} itemtype input)
@@ -695,6 +738,15 @@
 #' Andrich, D. (1978). A rating scale formulation for ordered response categories.
 #' \emph{Psychometrika, 43}, 561-573.
 #'
+#' Andrich, D. (1996). Hyperbolic cosine latent trait models for unfolding direct-responses and pairwise
+#' preferences. \emph{Applied Psychological Measurement, 20}, 269-290.
+#'
+#' Andrich, D., and Luo, G. (1993). A hyperbolic cosine latent trait model for unfolding dichotomous single-
+#'     stimulus responses. \emph{Applied Psychological Measurement, 17}, 253-276.
+#'
+#' Andrich, D. (1988). The application of an unfolding model of the PIRT type to the measurement of
+#' attitude. \emph{Applied Psychological Measurement, 12}, 33-51.
+#'
 #' Bock, R. D., & Aitkin, M. (1981). Marginal maximum likelihood estimation of
 #' item parameters: Application of an EM algorithm. \emph{Psychometrika,
 #' 46}(4), 443-459.
@@ -740,25 +792,21 @@
 #' Fischer, G. H. (1983). Logistic latent trait models with linear constraints.
 #' \emph{Psychometrika, 48}, 3-26.
 #'
+#' Hoijtink H. (1990). PARELLA: Measurement of latent traits by proximity items.
+#' The Netherlands: University of Groningen.
+#'
 #' Lord, F. M. & Novick, M. R. (1968). Statistical theory of mental test scores. Addison-Wesley.
 #'
 #' Lucke, J. F. (2015). Unipolar item response models. In S. P. Reise & D. A. Revicki
 #' (Eds.), Handbook of item response theory modeling: Applications to
 #' typical performance assessment (pp. 272-284). New York, NY:  Routledge/Taylor & Francis Group.
 #'
-#' Ramsay, J. O. (1975). Solving implicit equations in psychometric data analysis.
-#' \emph{Psychometrika, 40}, 337-360.
+#' Luo G. (2001). A class of probabilistic unfolding models for polytomous responses. \emph{Journal of Mathematical
+#' Psychology. 45}(2):224-248. \code{10.1006/jmps.2000.1310}
 #'
-#' Rasch, G. (1960). Probabilistic models for some intelligence and attainment tests.
-#' \emph{Danish Institute for Educational Research}.
-#'
-#' Roberts, J. S., Donoghue, J. R., & Laughlin, J. E. (2000).
-#' A General Item Response Theory Model for Unfolding Unidimensional Polytomous Responses.
-#' \emph{Applied Psychological Measurement, 24}, 3-32.
-#'
-#' Shim, H., Bonifay, W., & Wiedermann, W. (2022). Parsimonious asymmetric item response
-#' theory modeling with the complementary log-log link. \emph{Behavior Research Methods, 55},
-#' 200-219.
+#' Luo G, and Andrich D. (2005). Information functions for the general dichotomous unfolding model. In: Alagumalai S,
+#' Curtis D.D., & Hungi N., editor. \code{Applied Rasch Measurement: A Book of Exemplars: Dordrecht, The
+#' Netherlands: Springer}.
 #'
 #' Maydeu-Olivares, A., Hernandez, A. & McDonald, R. P. (2006).
 #' A Multidimensional Ideal Point Item Response Theory Model for Binary Data.
@@ -773,8 +821,22 @@
 #' Muraki, E. & Carlson, E. B. (1995). Full-information factor analysis for polytomous
 #' item responses. \emph{Applied Psychological Measurement, 19}, 73-90.
 #'
+#' Ramsay, J. O. (1975). Solving implicit equations in psychometric data analysis.
+#' \emph{Psychometrika, 40}, 337-360.
+#'
+#' Rasch, G. (1960). Probabilistic models for some intelligence and attainment tests.
+#' \emph{Danish Institute for Educational Research}.
+#'
+#' Roberts, J. S., Donoghue, J. R., & Laughlin, J. E. (2000).
+#' A General Item Response Theory Model for Unfolding Unidimensional Polytomous Responses.
+#' \emph{Applied Psychological Measurement, 24}, 3-32.
+#'
 #' Samejima, F. (1969). Estimation of latent ability using a response pattern of
 #' graded scores. \emph{Psychometrika Monographs}, 34.
+#'
+#' Shim, H., Bonifay, W., & Wiedermann, W. (2022). Parsimonious asymmetric item response
+#' theory modeling with the complementary log-log link. \emph{Behavior Research Methods, 55},
+#' 200-219.
 #'
 #' Suh, Y. & Bolt, D. (2010). Nested logit models for multiple-choice item response data.
 #' \emph{Psychometrika, 75}, 454-473.
@@ -1282,6 +1344,26 @@
 #'
 #' itemfit(dav) # assume normal prior
 #' itemfit(dav, use_dentype_estimate=TRUE) # use Davidian estimated prior shape
+#'
+#' ############
+#' # Unfolding models
+#'
+#' # polytomous hyperbolic cosine model with
+#' #  estimated latitude of acceptance (rho parameters)
+#' mod <- mirt(Science, model=1, itemtype = 'hcm')
+#' coef(mod, simplify=TRUE)$items
+#' coef(mod, simplify=TRUE, IRTpars=TRUE)$items
+#'
+#' plot(mod)
+#' plot(mod, type = 'trace')
+#' plot(mod, type = 'itemscore')
+#'
+#' # EAP estimates
+#' fs <- fscores(mod)
+#' head(fs)
+#'
+#' itemfit(mod)
+#' M2(mod, type = 'C2')
 #'
 #' ###########
 #' # 5PL and restricted 5PL example

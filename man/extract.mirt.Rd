@@ -34,8 +34,6 @@ Objects which can be extracted from mirt objects include:
   \item{BIC}{BIC}
   \item{SABIC}{sample size adjusted BIC}
   \item{HQ}{HQ}
-  \item{F}{unrotated standardized loadings matrix}
-  \item{h2}{factor communality estimates}
   \item{LLhistory}{EM log-likelihood history}
   \item{tabdata}{a tabular version of the raw response data input. Frequencies are stored
     in \code{freq}}
@@ -89,7 +87,7 @@ Objects which can be extracted from mirt objects include:
 mod <- mirt(Science, 1)
 
 extract.mirt(mod, 'logLik')
-extract.mirt(mod, 'F')
+extract.mirt(mod, 'K')  # unique categories for each item
 
 #multiple group model
 grp <- rep(c('G1', 'G2'), each = nrow(Science)/2)

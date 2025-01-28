@@ -111,6 +111,7 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, quadpts = NULL, theta_lim = c(-
         #     stop('M2 can not be calculated for data with missing values.', call.=FALSE)
         adj <- obj@Data$mins
         dat <- t(t(obj@Data$data) - adj)
+        N.full <- nrow(dat)
         N <- colSums(!is.na(dat))
         cN <- crossprod_miss(!is.na(dat), !is.na(dat))
         p  <- colMeans(dat, na.rm = TRUE)
@@ -325,12 +326,12 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, quadpts = NULL, theta_lim = c(-
             itemloc <- itemloc[-length(itemloc)]
             was_na <- is.na(extract.mirt(obj, 'data'))
             fulldata <- obj@Data$fulldata[[1L]]
-            N <- colSums(!is.na(fulldata))[-itemloc]
             for(i in 1:(nitems)){
-                pick <- if(i == nitems) c(itemloc[i], ncol(fulldata))
-                    else c(itemloc[i], itemloc[i+1]-1)
+                pick <- if(i == nitems) itemloc[i]:ncol(fulldata)
+                    else itemloc[i]:(itemloc[i+1]-1)
                 fulldata[was_na[,i], pick] <- NA
             }
+            N <- colSums(!is.na(fulldata))[-itemloc]
             p <- c(colMeans(fulldata[,-itemloc], na.rm=TRUE),
                    cross[lower.tri(cross)]/cN[lower.tri(cross)])
         } else {
@@ -346,17 +347,20 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, quadpts = NULL, theta_lim = c(-
         Xi2 <- rbind(cbind(Xi2els$Xi11, Xi2els$Xi12), cbind(t(Xi2els$Xi12), Xi2els$Xi22))
         Nstar <- c(N, cN[lower.tri(cN)])
         ret <- list(Xi2=Xi2, delta=delta, estpars=estpars,
-                    p=sqrt(Nstar)*p, e=sqrt(Nstar)*e, SRMSR=SRMSR, N=Nstar)
+                    p=sqrt(Nstar)*p, e=sqrt(Nstar)*e, SRMSR=SRMSR, N=Nstar,
+                    N.ratio=Nstar/N.full)
         ret
     }
 
     #main
     if(residmat) type <- "M2*"
     stopifnot(type %in% c('M2*', 'M2', 'C2'))
-    if(type == "M2")
+    if(all(extract.mirt(obj, 'K') == 2)) type <- 'M2*'
+    if(type == "M2"){
         if(!all(extract.mirt(obj, 'K') == 2L))
             stop("M2 statistic currently not supported for polytomous data. Use M2* or C2 instead",
                  call.=FALSE)
+    }
     if(missing(obj)) missingMsg('obj')
     if(is(obj, 'MixedClass'))
         stop('MixedClass objects are not yet supported', call.=FALSE)
@@ -435,13 +439,15 @@ M2 <- function(obj, type="M2*", calcNull = TRUE, quadpts = NULL, theta_lim = c(-
     delta <- delta[ ,estpars, drop=FALSE]
     tmp <- qr.Q(qr(delta), complete=TRUE)
     if((ncol(delta) + 1L) > ncol(tmp))
-        stop('M2() statistic cannot be calculated due to too few degrees of freedom',
+        stop('Statistic cannot be calculated (too few degrees of freedom)',
              call.=FALSE)
     deltac <- tmp[,(ncol(delta) + 1L):ncol(tmp), drop=FALSE]
+    N <- nrow(extract.mirt(obj, 'data'))
     C2 <- try(deltac %*% solve(t(deltac) %*% Xi2 %*% deltac) %*% t(deltac), TRUE)
     if(is(C2, 'try-error'))
         stop('Could not invert orthogonal complement matrix', call.=FALSE)
-    N <- nrow(extract.mirt(obj, 'data'))
+    Ns.ratio <- do.call(c, lapply(ret, function(x) x$N.ratio))
+    C2 <- outer(sqrt(Ns.ratio), sqrt(Ns.ratio)) * C2
     M2 <- abs(t(p - e) %*% C2 %*% (p - e))
     df <- length(p) - extract.mirt(obj, 'nest')
     # df <- qr(deltac)$rank
