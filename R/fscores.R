@@ -60,13 +60,16 @@
 #'       \code{\link{mdirt}} this will return the posterior classification probabilities
 #'     \item \code{"MAP"} for the maximum a-posteriori (i.e, Bayes modal)
 #'     \item \code{"ML"} for maximum likelihood
-#'     \item \code{"WLE"} for weighted likelihood estimation
+#'     \item \code{"WLE"} or \code{"WML"} for weighted maximum-likelihood estimation
 #'     \item \code{"EAPsum"} for the expected a-posteriori for each sum score
 #'     \item \code{"plausible"} for a single plausible value imputation for each case.
 #'       This is equivalent to setting \code{plausible.draws = 1}
 #'     \item \code{"classify"} for the posteriori classification probabilities (only
 #'       applicable when the input model was of class \code{MixtureClass})
 #'  }
+#' @param expected.info logical; instead of using the observed information when
+#'   \code{method = 'ML'} or \code{method = 'WLE'} use the expected information computed via
+#'   \code{\link{testinfo}}? Only currently supported for unidimensional models
 #' @param quadpts number of quadrature to use per dimension. If not specified, a suitable
 #'   one will be created which decreases as the number of dimensions increases
 #'   (and therefore for estimates such as EAP, will be less accurate). This is determined from
@@ -166,7 +169,7 @@
 #' data.frame(Total_score=rowSums(tabscores[,1:4]),
 #'            E.total, E.total_2.5, E.total_97.5) |> head()
 #'
-#' \dontrun{
+#' \donttest{
 #' fullscores <- fscores(mod)
 #' fullscores_with_SE <- fscores(mod, full.scores.SE=TRUE)
 #' head(fullscores)
@@ -232,11 +235,13 @@
 #' head(fscores(mod, custom_den = fun))
 #' head(fscores(mod, method = 'EAP', mean=.5))
 #'
+#' \dontrun{
 #' # custom MAP prior: standard truncated normal between 5 and -2
 #' library(msm)
 #' # need the :: scope for parallel to see the function (not require if no mirtCluster() defined)
 #' fun <- function(Theta, ...) msm::dtnorm(Theta, mean = 0, sd = 1, lower = -2, upper = 5)
 #' head(fscores(mod, custom_den = fun, method = 'MAP', full.scores = FALSE))
+#' }
 #'
 #'
 #' ####################
@@ -278,8 +283,13 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                     return.acov = FALSE, mean = NULL, cov = NULL, covdata = NULL,
                     verbose = TRUE, full.scores.SE = FALSE, theta_lim = c(-6,6), MI = 0,
                     use_dentype_estimate=FALSE, QMC = FALSE, custom_den = NULL,
-                    custom_theta = NULL, min_expected = 1, max_theta = 20, start = NULL, ...)
+                    custom_theta = NULL, expected.info=FALSE,
+                    min_expected = 1, max_theta = 20, start = NULL, ...)
 {
+    if(method == 'WML') method <- 'WLE'
+    if(expected.info)
+        stopifnot("expected.info only currently supported unidimensional models"=
+                  extract.mirt(object, 'nfact') == 1)
     if(!is(object, 'DiscreteClass')){
         if(QMC && is.null(quadpts)) quadpts <- 5000
         if(is.null(quadpts))
@@ -330,7 +340,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                             plausible.draws = plausible.draws, custom_den=custom_den,
                             custom_theta=custom_theta, Target=Target, min_expected=min_expected,
                             plausible.type=plausible.type, max_theta=max_theta, start=start,
-                            use_dentype_estimate=use_dentype_estimate,
+                            use_dentype_estimate=use_dentype_estimate, expected.info=expected.info,
                             append_response.pattern=append_response.pattern, ...)
     ret
 }

@@ -56,7 +56,7 @@ and whether the respective interval could be found.
 }
 \examples{
 
-\dontrun{
+\donttest{
 if(interactive()) mirtCluster() #use all available cores to estimate CI's in parallel
 dat <- expand.table(LSAT7)
 mod <- mirt(dat, 1)
@@ -64,12 +64,6 @@ mod <- mirt(dat, 1)
 result <- PLCI.mirt(mod)
 result
 
-# model with constraints
-mod <- mirt(dat, 'F = 1-5
-                  CONSTRAIN = (1-5, a1)')
-
-result <- PLCI.mirt(mod)
-result
 
 mod2 <- mirt(Science, 1)
 result2 <- PLCI.mirt(mod2)

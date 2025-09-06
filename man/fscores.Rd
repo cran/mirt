@@ -32,6 +32,7 @@ fscores(
   QMC = FALSE,
   custom_den = NULL,
   custom_theta = NULL,
+  expected.info = FALSE,
   min_expected = 1,
   max_theta = 20,
   start = NULL,
@@ -48,7 +49,7 @@ fscores(
       \code{\link{mdirt}} this will return the posterior classification probabilities
     \item \code{"MAP"} for the maximum a-posteriori (i.e, Bayes modal)
     \item \code{"ML"} for maximum likelihood
-    \item \code{"WLE"} for weighted likelihood estimation
+    \item \code{"WLE"} or \code{"WML"} for weighted maximum-likelihood estimation
     \item \code{"EAPsum"} for the expected a-posteriori for each sum score
     \item \code{"plausible"} for a single plausible value imputation for each case.
       This is equivalent to setting \code{plausible.draws = 1}
@@ -155,6 +156,10 @@ default number of nodes is 5000}
 \item{custom_theta}{a matrix of custom integration nodes to use instead of the default, where
 each column corresponds to the respective dimension in the model}
 
+\item{expected.info}{logical; instead of using the observed information when
+\code{method = 'ML'} or \code{method = 'WLE'} use the expected information computed via
+\code{\link{testinfo}}? Only currently supported for unidimensional models}
+
 \item{min_expected}{when computing goodness of fit tests when \code{method = 'EAPsum'}, this value is used
 to collapse across the conditioned total scores until the expected values are greater than this value. Note
 that this only affect the goodness of fit tests and not the returned EAP for sum scores table}
@@ -213,7 +218,7 @@ E.total_97.5 <- expected.test(mod, Theta=tabscores[,'F1'] +
 data.frame(Total_score=rowSums(tabscores[,1:4]),
            E.total, E.total_2.5, E.total_97.5) |> head()
 
-\dontrun{
+\donttest{
 fullscores <- fscores(mod)
 fullscores_with_SE <- fscores(mod, full.scores.SE=TRUE)
 head(fullscores)
@@ -279,11 +284,13 @@ fun <- function(Theta, ...) as.numeric(dnorm(Theta, mean=.5))
 head(fscores(mod, custom_den = fun))
 head(fscores(mod, method = 'EAP', mean=.5))
 
+\dontrun{
 # custom MAP prior: standard truncated normal between 5 and -2
 library(msm)
 # need the :: scope for parallel to see the function (not require if no mirtCluster() defined)
 fun <- function(Theta, ...) msm::dtnorm(Theta, mean = 0, sd = 1, lower = -2, upper = 5)
 head(fscores(mod, custom_den = fun, method = 'MAP', full.scores = FALSE))
+}
 
 
 ####################

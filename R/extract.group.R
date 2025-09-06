@@ -1,9 +1,10 @@
 #' Extract a group from a multiple group mirt object
 #'
-#' Extract a single group from an object defined by \code{\link{multipleGroup}}.
+#' Extract a single group from an object defined by \code{\link{multipleGroup}},
+#' or as a mixture model from \code{\link{mirt}}.
 #'
 #' @aliases extract.group
-#' @param x mirt model of class 'MultipleGroupClass'
+#' @param x model object of class \code{'MultipleGroupClass'} or \code{'MixtureClass'}
 #' @param group the name of the group to extract
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
@@ -16,7 +17,7 @@
 #' @export extract.group
 #' @examples
 #'
-#' \dontrun{
+#' \donttest{
 #' set.seed(12345)
 #' a <- matrix(abs(rnorm(15,1,.3)), ncol=1)
 #' d <- matrix(rnorm(15,0,.7),ncol=1)
@@ -35,7 +36,7 @@
 #' }
 extract.group <- function(x, group){
     if(missing(x)) missingMsg('x')
-    if(!is(x, 'MultipleGroupClass'))
+    if(!is(x, 'MultipleGroupClass') && !is(x, 'MixtureClass'))
         stop('Model was not estimated with multipleGroup()', call.=FALSE)
     if(missing(group)) stop('Must specify group number or name', call.=FALSE)
     stopifnot(length(group) == 1L)
@@ -46,6 +47,8 @@ extract.group <- function(x, group){
     }
     vals <- mod2values(x)
     vals <- vals[vals$group == groupNames[group], ]
+    if(is(x, 'MixtureClass'))
+        vals <- vals[-nrow(vals),] # remove PI
     dat <- extract.mirt(x, 'data')
     nfact <- extract.mirt(x, 'nfact')
     K <- extract.mirt(x, 'K')
@@ -53,7 +56,9 @@ extract.group <- function(x, group){
     groupNames <- extract.mirt(x, 'groupNames')
     itemtype <- extract.mirt(x, 'itemtype')
     mins <- extract.mirt(x, 'mins')
-    sv <- mirt(dat[groupvec == groupNames[group], ], nfact, itemtype=itemtype,
+    pick <- if(is(x, 'MultipleGroupClass'))
+        groupvec == groupNames[group] else rep(TRUE, length(groupvec))
+    sv <- mirt(dat[pick, ], nfact, itemtype=itemtype,
                 pars = 'values', technical = list(customK = K))
     sv$value <- vals$value
     sv$est <- vals$est
@@ -64,7 +69,7 @@ extract.group <- function(x, group){
         for(i in length(constrain):1L)
             if(!all(constrain[[i]] %in% parnum)) constrain[[i]] <- NULL
     }
-    mod <- mirt(dat[groupvec == groupNames[group], ], nfact, itemtype=itemtype,
+    mod <- mirt(dat[pick, ], nfact, itemtype=itemtype,
                 pars = sv, technical = list(customK = K, warn=FALSE, mins=mins),
                 TOL = NaN, quadpts=1L, constrain=constrain)
     return(mod)

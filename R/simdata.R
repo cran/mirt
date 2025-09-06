@@ -141,7 +141,7 @@
 #' #mod <- mirt(dataset1, 3, method = 'MHRM')
 #' #coef(mod)
 #'
-#' \dontrun{
+#' \donttest{
 #'
 #' ### Unidimensional graded response model with 5 categories each
 #'
@@ -418,8 +418,10 @@ simdata <- function(a, d, N, itemtype, sigma = NULL, mu = NULL, guess = 0,
     if(missing(itemtype)) missingMsg('itemtype')
     if(missing(d) && !all(itemtype == 'lca')) missingMsg('d')
     if(is.vector(a)) a <- matrix(a)
+    a <- as.matrix(a)
     if(missing(d)) d <- matrix(1, nrow(a))
     if(is.vector(d)) d <- matrix(d)
+    d <- as.matrix(d)
     stopifnot(is.matrix(d))
     if(any(itemtype == 'nominal') && is.null(nominal))
         stop('nominal itemtypes require a \'nominal\' matrix input of scoring coefficients (the ak values)',

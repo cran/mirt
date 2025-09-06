@@ -2,21 +2,26 @@
 #'
 #' Computes an IRT version of the "reliable change index" (RCI) proposed by
 #' Jacobson and Traux (1991) but modified to use IRT information about scores
-#' and measurement error (see Jabrayilov, Emons, and Sijtsma (2016).
+#' and measurement error (see Jabrayilov, Emons, and Sijtsma (2016)).
 #' Main benefit of the IRT approach is the inclusion
 #' of response pattern information in the pre/post data score estimates, as well
-#' as conditional standard error of measurement information.
+#' as conditional standard error of measurement information. Models can be specified
+#' as separate unidimensional IRT models fitted via \code{\link{mirt}}
+#' (or extracted from \code{\link{multipleGroup}} via \code{\link{extract.group}}),
+#' or a two-dimensional model where the latent traits correspond to the two
+#' test administrations.
 #'
 #' @param mod_pre single-group model fitted by \code{\link{mirt}}. If not supplied the
 #'  information will be extracted from the data input objects to compute the classical
 #'  test theory version of the RCI statistics
 #' @param mod_post (optional) IRT model for post-test if different from pre-test;
-#'  otherwise, the pre-test model will be used
+#'  otherwise, the pre-test model will be used. Ignored when a two-dimensional model
+#'  IRT is included
 #' @param predat a vector (if one individual) or matrix/data.frame
 #'   of response data to be scored, where each individuals' responses are
 #'   included in exactly one row
 #' @param postdat same as \code{predat}, but with respect to the post/follow-up
-#'   measurement
+#'   measurement. Ignored when a two-dimensional IRT model is included
 #' @param cutoffs optional vector of length 2 indicating the type of cut-offs to
 #'   report (e.g., \code{c(-1.96, 1.96)} reflects the 95 percent z-score type cut-off)
 #' @param SEM.pre standard error of measurement for the pretest. This can be used instead of
@@ -29,6 +34,8 @@
 #' @param shiny logical; launch an interactive shiny applications for real-time scoring
 #'   of supplied total-scores or response vectors? Only requires \code{mod_pre} and (optional)
 #'   \code{mod_post} inputs
+#' @param zero_cor logical; when the supplied \code{mod_pre} is a two-factor model
+#'   should the covariance/correlation between the latent traits be forced to be 0?
 #' @param main main label to use when \code{shiny=TRUE}
 #'
 #' @param ... additional arguments passed to \code{\link{fscores}}
@@ -52,7 +59,7 @@
 #' @export
 #' @examples
 #'
-#' \dontrun{
+#' \donttest{
 #'
 #' # simulate some data
 #' N <- 1000
@@ -145,11 +152,69 @@
 #'
 #' RCI(mod, predat, postdat)
 #'
+#' ######
+#' # Two-dimensional IRT model for each time point, 20 items (no DIF)
+#'
+#' J <- 20
+#' N <- 500
+#' slopes <- rlnorm(J, .2, .2)
+#' a <- matrix(c(slopes, numeric(J*2), slopes),J*2)
+#' ints <- rnorm(J)
+#' d <- matrix(c(ints, ints), ncol=1)
+#' data.frame(a=a, d=d)
+#'
+#' # mean effects across time
+#' mu <- c(0, -1/2)
+#' sigma <- matrix(c(1, .7, .7, 1), 2,2)
+#'
+#' dat <- simdata(a, d, N, mu=mu, sigma=sigma, itemtype = '2PL')
+#'
+#' # build equality constraints across time points
+#' constr <- NULL
+#' for(i in (1:J)){
+#'     constr <- c(constr, paste0("(", i, ',', i+J, ",a1,a2)"))
+#'     constr <- c(constr, paste0("(", i, ',', i+J, ",d)"))
+#' }
+#' constr <- paste0(constr, collapse=',')
+#'
+#' # define model where item parameters constrained over time, and
+#' # latent trait has potential scale-location changes (e.g., regression to the
+#' # mean effects)
+#' model <- sprintf("
+#'                   thetapre = 1-%i,
+#'                   thetapost = %i-%i,
+#'                   COV = thetapre*thetapost, thetapost*thetapost
+#'                   MEAN = thetapost
+#'                   CONSTRAIN = %s", J, J+1, 2*J, constr)
+#' cat(model)
+#'
+#' # fit the model to calibration data
+#' mod <- mirt(dat, model = model, SE=TRUE)
+#' coef(mod, printSE=TRUE)
+#' coef(mod, simplify=TRUE)
+#' summary(mod)
+#'
+#' # test data
+#' Theta <- cbind(c(0, 1, 2), c(0,1,2))
+#' nochange <- simdata(a, d, itemtype = '2PL', Theta = Theta)
+#' change <- simdata(a, d, itemtype = '2PL', Theta = Theta +
+#'                       cbind(0, c(-1, -1, -1)))
+#'
+#' # total score differences
+#' data.frame(pre=rowSums(nochange[,1:J]),
+#'            post=rowSums(nochange[,1:J + J]))
+#' data.frame(pre=rowSums(change[,1:J]),
+#'            post=rowSums(change[,1:J + J]))
+#'
+#'
+#' RCI(mod, predat = nochange)
+#' RCI(mod, predat = change)
+#'
 #' }
 RCI <- function(mod_pre, predat, postdat,
                 mod_post = mod_pre, cutoffs = NULL,
                 SEM.pre = NULL, SEM.post = NULL,
-                Fisher = FALSE,
+                Fisher = FALSE, zero_cor = TRUE,
                 shiny = FALSE, main = 'Test Scores', ...){
 
     if(shiny)
@@ -175,7 +240,7 @@ RCI <- function(mod_pre, predat, postdat,
         diff <- TS_post - TS_pre
         z_JCI <- diff / SEM
         ret <- data.frame(pre.score=TS_pre, post.score=TS_post, diff,
-                          SEM=SEM, z=z_JCI,
+                          SE=SEM, z=z_JCI,
                           p=pnorm(abs(z_JCI), lower.tail = FALSE)*2)
     } else {
         if(is.null(mod_post)) mod_post <- mod_pre
@@ -195,32 +260,28 @@ RCI <- function(mod_pre, predat, postdat,
             converge_post[attr(fs_post, 'failed2converge')] <- FALSE
             ret <- data.frame(pre.score=fs_pre[,1], post.score=fs_post[,1],
                               converged=converge_pre & converge_post, diff,
-                              SEM=pse, z=z,
+                              SE=pse, z=z,
                               p=pnorm(abs(z), lower.tail = FALSE)*2)
         } else {
-            stop('multidimensional IRT models not suppported in RCI()', call.=FALSE)
-            # fs_pre <- fscores(mod_pre, response.pattern=predat, ...)
-            # fs_post <- fscores(mod_post, response.pattern=postdat, ...)
-            # fs_acov <- fs_pre_acov <- fscores(mod_pre, response.pattern = predat,
-            #                                   return.acov=TRUE, ...)
-            # fs_post_acov <- fscores(mod_post, response.pattern=postdat,
-            #                         return.acov=TRUE, ...)
-            # for(i in 1L:length(fs_acov))
-            #     fs_acov[[i]] <- fs_pre_acov[[i]] + fs_post_acov[[i]]
-            # diff <- fs_post[,1L:nfact] - fs_pre[,1L:nfact]
-            # joint <- vector('list', nrow(diff))
-            # for(i in 1:nrow(diff))
-            #     joint[[i]] <- wald.test(diff[i,], covB = fs_acov[[i]],
-            #                             L = diag(ncol(diff)))
-            # joint <- do.call(rbind, joint)
-            # SEs <- do.call(rbind, lapply(fs_acov, \(x) sqrt(diag(x))))
-            # z <- diff/SEs
-            # converge_pre <- converge_post <- rep(TRUE, length(z))
-            # converge_pre[attr(fs_pre, 'failed2converge')] <- FALSE
-            # converge_post[attr(fs_post, 'failed2converge')] <- FALSE
-            # ret <- data.frame(diff=diff, converged=converge_pre & converge_post,
-            #                   joint, z=z,
-            #                   p=pnorm(abs(z), lower.tail = FALSE)*2)
+            # TODO document this later, and include an example
+            stopifnot("Must have exactly 2 latent traits" =
+                          extract.mirt(mod_pre, 'nfact') == 2)
+            if(!missing(postdat))
+                stop('Only mod_pre and predat are required for multidimensional model')
+            cfs <- coef(mod_pre, simplify=TRUE)
+            sigma <- cfs$cov
+            if(zero_cor)
+                sigma[1,2] <- sigma[2,1] <- 0
+            fs <- fscores(mod_pre, response.pattern=predat, cov=sigma, ...)
+            diff <- fs[,2] - fs[,1]
+            pse <- sqrt(fs[,3]^2 + fs[,4]^2)
+            z <- diff/pse
+            converge <- rep(TRUE, length(z))
+            converge[attr(fs, 'failed2converge')] <- FALSE
+            ret <- data.frame(pre.score=fs[,1], post.score=fs[,2],
+                              converged=converge, diff,
+                              SE=pse, z=z,
+                              p=pnorm(abs(z), lower.tail = FALSE)*2)
         }
     }
 
@@ -345,13 +406,13 @@ RCI_shiny <- function(mod_pre, mod_post = NULL, main = 'Test Scores'){
                                  predat=rV.pre + mins, postdat=rV.post + mins,
                                  method='EAPsum')
                 tmp <- tmp[,!(colnames(tmp) %in% c('pre.score', 'post.score', 'converged'))]
-                colnames(tmp) <- c('Change', 'SEM', 'RCI', 'p(>|RCI|)')
+                colnames(tmp) <- c('Change', 'SE', 'RCI', 'p(>|RCI|)')
                 if(!identical(mod_pre, mod_post)){
                     tmp2 <- RCI(mod_pre=mod_pre, mod_post=mod_pre,
                                       predat=rV.pre + mins, postdat=rV.post + mins,
                                       method='EAPsum')
                     tmp2 <- tmp2[,!(colnames(tmp2) %in% c('pre.score', 'post.score', 'converged'))]
-                    colnames(tmp2) <- c('Change', 'SEM', 'RCI', 'p(>|RCI|)')
+                    colnames(tmp2) <- c('Change', 'SE', 'RCI', 'p(>|RCI|)')
                     tmp <- data.frame('Empirical prior' = c('Yes', 'No'), rbind(tmp, tmp2),
                                       check.names = FALSE)
                 }
@@ -379,12 +440,12 @@ RCI_shiny <- function(mod_pre, mod_post = NULL, main = 'Test Scores'){
                 }
                 post.scores <- sapply(collect, \(x) as.numeric(x['post.score']))
                 pre.scores <- as.numeric(collect[[1]]['pre.score'])
-                SEs <- sapply(collect, \(x) as.numeric(x['SEM']))
+                SEs <- sapply(collect, \(x) as.numeric(x['SE']))
                 diff <- post.scores - pre.scores
                 plot(diff ~ rng, pch=16, ylab=expression(theta[post]-theta[pre]),
                      las=1, ylim=c(diff[1]-SEs[1],
                                    diff[length(diff)] + SEs[length(diff)]),
-                     main=sprintf("SEM estimates using fixed prestest score"),
+                     main=sprintf("SE estimates using fixed prestest score"),
                      xlab = 'Sum Score')
                 graphics::polygon(c(rng, rev(rng)), c(diff - SEs, rev(diff+SEs)),
                         col=grDevices::adjustcolor('grey', alpha.f=.5))
@@ -408,13 +469,13 @@ RCI_shiny <- function(mod_pre, mod_post = NULL, main = 'Test Scores'){
                                      predat=rV.pre, postdat=rV.post, method=input$method,
                                      Fisher = input$fisher)
                     colnames(tmp) <- c('Theta [pre]', 'Theta [post]', 'Converged',
-                                       'Change', 'SEM', 'RCI', 'p(>|RCI|)')
+                                       'Change', 'SE', 'RCI', 'p(>|RCI|)')
                     if(!identical(mod_pre, mod_post) && input$method %in% c('EAP', 'MAP')){
                         tmp2 <- RCI(mod_pre=mod_pre, mod_post=mod_pre,
                                           predat=rV.pre, postdat=rV.post, method=input$method,
                                           Fisher = input$fisher)
                         colnames(tmp2) <- c('Theta [pre]', 'Theta [post]', 'Converged',
-                                            'Change', 'SEM', 'RCI', 'p(>|RCI|)')
+                                            'Change', 'SE', 'RCI', 'p(>|RCI|)')
                         tmp <- data.frame('Empirical prior' = c('Yes', 'No'), rbind(tmp, tmp2),
                                           check.names = FALSE)
                     }

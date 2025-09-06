@@ -32,7 +32,7 @@ package). Parameters are organized from the freely estimated values in \code{mod
 }
 \examples{
 
-\dontrun{
+\donttest{
 
 # standard
 mod <- mirt(Science, 1)
@@ -40,10 +40,12 @@ booted <- boot.mirt(mod, R=20)
 plot(booted)
 booted
 
+\dontrun{
 #run in parallel using snow back-end using all available cores
 mod <- mirt(Science, 1)
 booted <- boot.mirt(mod, parallel = 'snow', ncpus = parallel::detectCores())
 booted
+}
 
 ####
 # bootstrapped CIs for standardized factor loadings

@@ -878,7 +878,7 @@
 #' plot(mod1)
 #' plot(mod1, type = 'trace')
 #'
-#' \dontrun{
+#' \donttest{
 #' (mod2 <- mirt(data, 1, SE = TRUE)) #standard errors via the Oakes method
 #' (mod2 <- mirt(data, 1, SE = TRUE, SE.type = 'SEM')) #standard errors with SEM method
 #' coef(mod2)
@@ -1303,6 +1303,7 @@
 #' ############
 #' # Example using Gauss-Hermite quadrature with custom input functions
 #'
+#' \dontrun{
 #' library(fastGHQuad)
 #' data(SAT12)
 #' data <- key2binary(SAT12,
@@ -1328,6 +1329,7 @@
 #' GHmod2 <- mirt(data, 2, optimizer = 'NR', TOL = .0002,
 #'               technical = list(customTheta = Theta2, customPriorFun = prior))
 #' summary(GHmod2, suppress=.2)
+#' }
 #'
 #' ############
 #' # Davidian curve example

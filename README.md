@@ -1,10 +1,6 @@
 [![](http://www.r-pkg.org/badges/version/mirt)](https://www.r-pkg.org:443/pkg/mirt) [![](http://cranlogs.r-pkg.org/badges/grand-total/mirt)](https://CRAN.R-project.org/package=mirt)
 
-# mirt <img src="mirt-logo.png" align="right" height="200px" />
-
-Multidimensional item response theory in R.
-
-## Description
+# *mirt*: Multidimensional item response theory in R <img src="mirt-logo.png" height="139" align="right"/>
 
 Analysis of dichotomous and polytomous response data using unidimensional and
 multidimensional latent trait models under the Item Response Theory paradigm.

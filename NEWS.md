@@ -1,3 +1,18 @@
+# Changes in mirt 1.45.1
+
+- Added argument `fscores(..., expected.info = FALSE)` to allow computation of the 
+  expected vs observed information
+
+- Fixed extraction bug in `randef()` when `lr.random` structures were used
+
+- `extract.item()` and `extract.group()` now support objects 
+  of class `MixtureClass`
+  
+- `RMSD_DIF()` now works for single group models to investigate goodness of fit
+
+- Number of response options (`K`) per item added to `itemstats()` output, as well as 
+  option to report raw counts instead of proportions
+
 # Changes in mirt 1.44
 
 - Added `Attitude` dataset from Andrich (1988) publication to demonstrate

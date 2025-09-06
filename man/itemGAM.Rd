@@ -66,7 +66,7 @@ the items under investigation are unknown.
 }
 \examples{
 
-\dontrun{
+\donttest{
 set.seed(10)
 N <- 1000
 J <- 30
@@ -95,11 +95,13 @@ itemfit(badmod) #clearly a bad fit for the last two items
 mod <- mirt(dat, 1) #fit a model that does not contain the bad items
 itemfit(mod)
 
+\dontrun{
 #### Pure non-parametric way of investigating the items
 library(KernSmoothIRT)
 ks <- ksIRT(newdat, rep(1, ncol(newdat)), 1)
 plot(ks, item=c(1,31,32))
 par(ask=FALSE)
+}
 
 # Using point estimates from the model
 Theta <- fscores(mod)
@@ -127,6 +129,7 @@ dat <- key2binary(SAT12,
 dat <- dat[,-32]
 mod <- mirt(dat, 1)
 
+\dontrun{
 # Kernal smoothing is very sensitive to which category is selected as 'correct'
 # 5th category as correct
 ks <- ksIRT(cbind(dat, SAT12[,32]), c(rep(1, 31), 5), 1)
@@ -135,6 +138,7 @@ plot(ks, items = c(1,2,32))
 # 3rd category as correct
 ks <- ksIRT(cbind(dat, SAT12[,32]), c(rep(1, 31), 3), 1)
 plot(ks, items = c(1,2,32))
+}
 
 # splines approach
 Theta <- fscores(mod)

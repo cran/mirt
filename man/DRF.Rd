@@ -137,7 +137,7 @@ size statistics, such as SIBTEST, DFIT, Wainer's measures of impact, etc,
 which in general can be seen as special-case estimators of this family.
 }
 \examples{
-\dontrun{
+\donttest{
 
 set.seed(1234)
 n <- 30
@@ -269,7 +269,7 @@ head(sDTF)
 
 # DIF
 sDIF <- DRF(mod3, Theta_nodes=Theta_nodes, focal_items = 30, draws=200)
-car::some(sDIF)
+head(sDIF)
 
 ## ----------------------------------------------------------------
 # polytomous example

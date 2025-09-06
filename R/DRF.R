@@ -90,7 +90,7 @@
 #' @keywords differential response functioning
 #' @export DRF
 #' @examples
-#' \dontrun{
+#' \donttest{
 #'
 #' set.seed(1234)
 #' n <- 30
@@ -222,7 +222,7 @@
 #'
 #' # DIF
 #' sDIF <- DRF(mod3, Theta_nodes=Theta_nodes, focal_items = 30, draws=200)
-#' car::some(sDIF)
+#' head(sDIF)
 #'
 #' ## ----------------------------------------------------------------
 #' # polytomous example
@@ -717,7 +717,7 @@ calc_DRFs <- function(mod, Theta, DIF, DIF.cats, plot, max_score, focal_items, d
 #' @export
 #' @examples
 #'
-#' \dontrun{
+#' \donttest{
 #' set.seed(1234)
 #' n <- 40
 #' N <- 500

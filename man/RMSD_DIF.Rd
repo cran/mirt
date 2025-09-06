@@ -8,7 +8,8 @@ RMSD_DIF(pooled_mod, flag = 0, probfun = TRUE, dentype = "norm")
 }
 \arguments{
 \item{pooled_mod}{a multiple-group model (used to compute the model-implied
-probability in the goodness-of-fit test)}
+probability in the goodness-of-fit test) or a single-group model for computing RMSD goodness-of-fit
+values relative to the model-implied information}
 
 \item{flag}{a numeric value used as a cut-off to help flag larger RMSD values
 (e.g., \code{flag = .03} will highlight only categories with RMSD values greater than
@@ -34,9 +35,13 @@ function of the latent traits). If the RSMD fit is poor, indicating non-ignorabl
 then the multiple-group model should be adjusted to better account for the large response bias
 due to using a pooled model. See Lee and von Davier (2020) and Buchholz and Hartig (2019) for details.
 }
+\details{
+This function is generally designed to work with multiple-group models, however if a single-group
+model is passed this will return the RMSD information regarding the observed vs expected response functions.
+}
 \examples{
 
-\dontrun{
+\donttest{
 
 #----- generate some data
 set.seed(12345)
@@ -102,7 +107,18 @@ RMSD_DIF(mod)
 RMSD_DIF(mod, flag = .03)
 
 #################
-# polytomous example
+# Single group model (GOF only)
+mod <- mirt(dat)
+RMSD_DIF(mod)
+RMSD_DIF(mod, probfun=FALSE)
+
+# polytomous
+mod2 <- mirt(Science)
+RMSD_DIF(mod2)
+RMSD_DIF(mod2, probfun=FALSE)
+
+#################
+# polytomous DIF example
 set.seed(12345)
 a <- a2 <- matrix(rlnorm(20,.2,.3))
 
