@@ -35,12 +35,14 @@ setMethod(
         if(x@Options$method == 'EM') EMquad <- c('\n     using ', x@Options$quadpts, ' quadrature')
         method <- x@Options$method
         if(method == 'MIXED') method <- 'MHRM'
-        if(x@OptimInfo$converged)
-            cat("Converged within ", x@Options$TOL, ' tolerance after ', x@OptimInfo$iter, ' ',
-                method, " iterations.\n", sep = "")
-        else
-            cat("FAILED TO CONVERGE within ", x@Options$TOL, ' tolerance after ',
-                x@OptimInfo$iter, ' ', method, " iterations.\n", sep="")
+        if(method != 'none'){
+            if(x@OptimInfo$converged)
+                cat("Converged within ", x@Options$TOL, ' tolerance after ', x@OptimInfo$iter, ' ',
+                    method, " iterations.\n", sep = "")
+            else
+                cat("FAILED TO CONVERGE within ", x@Options$TOL, ' tolerance after ',
+                    x@OptimInfo$iter, ' ', method, " iterations.\n", sep="")
+        }
         cat('mirt version:', as.character(utils::packageVersion('mirt')), '\n')
         cat('M-step optimizer:', x@Options$Moptim, '\n')
         if(method %in% c('EM', 'QMCEM', 'BL', 'MCEM')){
@@ -74,7 +76,7 @@ setMethod(
             if(x@Fit$logPrior != 0){
                 cat("\nLog-posterior = ", x@Fit$logLik + x@Fit$logPrior, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
-                cat('Estimated parameters:', length(extract.mirt(x, 'nestpars')), '\n')
+                cat('Estimated parameters:', extract.mirt(x, 'nestpars'), '\n')
             } else {
                 cat("\nLog-likelihood = ", x@Fit$logLik, if(method == 'MHRM')
                     paste(', SE =', round(x@Fit$SElogLik,3)), "\n",sep='')
@@ -211,7 +213,7 @@ setMethod(
             Phi <- cov2cor(gp$gcov)
             rownames(Phi) <- colnames(Phi) <- names(SS) <-
                 colnames(F)[seq_len(object@Model$nfact)]
-            loads <- cbind(F,h2)
+            loads <- as.mirt_matrix(cbind(F,h2))
             if(verbose){
                 if(object@Options$exploratory)
                     cat("\nUnrotated factor loadings: \n\n")
@@ -234,7 +236,7 @@ setMethod(
             SS <- apply(rotF$loadings^2,2,sum)
             L <- rotF$loadings
             L[abs(L) < suppress] <- NA
-            loads <- cbind(L,h2)
+            loads <- as.mirt_matrix(cbind(L,h2))
             Phi <- diag(ncol(F))
             if(!rotF$orthogonal)
                 Phi <- rotF$Phi
@@ -705,7 +707,7 @@ setMethod(
 #' full_table <- residuals(x, type = 'expfull')
 #' head(full_table)
 #' X2 <- with(full_table, sum((freq - exp)^2 / exp))
-#' df <- nrow(full_table) - extract.mirt(x, 'nest') - 1
+#' df <- nrow(full_table) - extract.mirt(x, 'nestpars') - 1
 #' p <- pchisq(X2, df = df, lower.tail=FALSE)
 #' data.frame(X2, df, p, row.names='Pearson-X2')
 #'
@@ -713,7 +715,7 @@ setMethod(
 #' PearsonX2 <- function(x){
 #'    full_table <- residuals(x, type = 'expfull')
 #'    X2 <- with(full_table, sum((freq - exp)^2 / exp))
-#'    df <- nrow(full_table) - extract.mirt(x, 'nest') - 1
+#'    df <- nrow(full_table) - extract.mirt(x, 'nestpars') - 1
 #'    p <- pchisq(X2, df = df, lower.tail=FALSE)
 #'    data.frame(X2, df, p, row.names='Pearson-X2')
 #' }
@@ -1057,6 +1059,8 @@ setMethod(
 #'     \item{\code{'score'}}{expected total score surface}
 #'     \item{\code{'scorecontour'}}{expected total score contour plot}
 #'     \item{\code{'posteriorTheta'}}{posterior for the latent trait distribution}
+#'     \item{\code{'gen.difficulty'}}{plots items by generalized difficulty estimates
+#'       (see \code{\link{gen.difficulty}})}
 #'     \item{\code{'EAPsum'}}{compares sum-scores to the expected values based
 #'       on the EAP for sum-scores method (see \code{\link{fscores}})}
 #'   }
@@ -1097,6 +1101,7 @@ setMethod(
 #'   plot, potentially squishing the 'meat' of the plot to take up less area than visually desired
 #' @param main argument passed to lattice. Default generated automatically
 #' @param drape logical argument passed to lattice. Default generated automatically
+#' @param gen.diff_type argument passed to \code{type} in \code{\link{gen.difficulty}}
 #' @param colorkey logical argument passed to lattice. Default generated automatically
 #' @param add.ylab2 logical argument passed to lattice. Default generated automatically
 #' @param ... additional arguments to be passed to lattice
@@ -1114,7 +1119,7 @@ setMethod(
 #' @examples
 #'
 #' \donttest{
-#' x <- mirt(Science, 1, SE=TRUE)
+#' x <- mirt(Science, SE=TRUE)
 #' plot(x)
 #' plot(x, type = 'info')
 #' plot(x, type = 'infotrace')
@@ -1122,6 +1127,7 @@ setMethod(
 #' plot(x, type = 'infoSE')
 #' plot(x, type = 'rxx')
 #' plot(x, type = 'posteriorTheta')
+#' plot(x, type = 'gen.difficulty')
 #'
 #' # confidence interval plots when information matrix computed
 #' plot(x)
@@ -1150,6 +1156,7 @@ setMethod(
 #' plot(x2, type = 'itemscore', which.items = 1:2)
 #' plot(x2, type = 'trace', which.items = 1, facet_items = FALSE) #facet by group
 #' plot(x2, type = 'info')
+#' plot(x2, type = 'gen.difficulty')
 #'
 #' x3 <- mirt(Science, 2)
 #' plot(x3, type = 'info')
@@ -1161,7 +1168,7 @@ setMethod(
     signature = signature(x = 'SingleGroupClass', y = 'missing'),
     definition = function(x, y, type = 'score', npts = 200, drop2 = TRUE, degrees = 45,
                           theta_lim = c(-6,6), which.items = 1:extract.mirt(x, 'nitems'),
-                          MI = 0, CI = .95, rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
+                          gen.diff_type = 'IRF', MI = 0, CI = .95, rot = list(xaxis = -70, yaxis = 30, zaxis = 10),
                           facet_items = TRUE, main = NULL,
                           drape = TRUE, colorkey = TRUE, ehist.cut = 1e-10, add.ylab2 = TRUE,
                           par.strip.text = list(cex = 0.7),
@@ -1173,7 +1180,7 @@ setMethod(
         dots <- list(...)
         if(!(type %in% c('info', 'SE', 'infoSE', 'rxx', 'trace', 'score', 'itemscore',
                        'infocontour', 'infotrace', 'scorecontour', 'empiricalhist', 'Davidian',
-                       'EAPsum', 'posteriorTheta')))
+                       'EAPsum', 'posteriorTheta', 'gen.difficulty')))
             stop('type supplied is not supported', call.=FALSE)
         if (any(degrees > 90 | degrees < 0))
             stop('Improper angle specified. Must be between 0 and 90.', call.=FALSE)
@@ -1461,7 +1468,7 @@ setMethod(
             } else {
                 stop('plot type not supported for two dimensional model', call.=FALSE)
             }
-        } else {
+        } else { # one factor
             colnames(plt) <- c("info", "score", "Theta")
             plt$SE <- 1 / sqrt(plt$info)
             plt$rxx <- plt$info / (plt$info + 1/gp$gcov[1L,1L])
@@ -1687,6 +1694,7 @@ setMethod(
                 keep2 <- max(which(Prior > ehist.cut))
                 plt <- data.frame(Theta = Theta, Prior = Prior)
                 plt <- plt[keep1:keep2, , drop=FALSE]
+                plt <- na.omit(plt)
                 return(xyplot(Prior ~ Theta, plt,
                               xlab = expression(theta), ylab = 'Density',
                               type = 'b', main = main,
@@ -1712,8 +1720,15 @@ setMethod(
                               xlab = expression(theta), ylab = 'Density',
                               type = 'b', main = main,
                               par.strip.text=par.strip.text, par.settings=par.settings, ...))
-
-            }else {
+            } else if(type == 'gen.difficulty'){
+                diffs <- gen.difficulty(x, type=gen.diff_type)
+                plt <- data.frame(items=factor(names(diffs), levels=names(diffs)), diffs)
+                return(xyplot(diffs ~ items, plt,
+                              xlab = 'Items', ylab = 'Generalized difficulty',
+                              type = 'b', main = 'Item by Generalized Difficulty',
+                              par.strip.text=par.strip.text, par.settings=par.settings,
+                              scales=list(x=list(rot=90)), ...))
+            } else {
                 stop('plot not supported for unidimensional models', call.=FALSE)
             }
         }

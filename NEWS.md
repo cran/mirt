@@ -1,3 +1,28 @@
+# Changes in mirt 1.46.1
+
+- `mirtCluster()` definition switched from `parallel` to `mirai` package by 
+  default. Should help with performance issues when definition more aggressive 
+  cluster sizes
+
+- `technical = list(fixedTheta)` matrix input added to estimate item parameters 
+  assuming that the true latent trait terms are fixed and known (requested by Richard Luecht)
+
+- Exposed `marginal_moments()` function to compute marginal item/bundle moment 
+  information for the scoring functions
+  
+- Added `itemtype = 'monospline'` for the monotonic spline model 
+
+- `RCI()` gains logical argument `expected.scores` to convert factor scores into metric 
+  of observed scores with their associated delta-method SEs
+
+- Added `plot(.., type = 'gen.difficulty')` to plot item by generalized difficulty.
+  Mainly useful in multi-group/mixture modeling contexts
+
+- `multipleGroup()` gains `nruns` and friends with the same specification
+  as in `mdirt()`. Allows for multiple models to be compared (potentially in 
+  parallel with `mirtCluster()`) where local maximum may be an issue (e.g., 
+  in mixture IRT models)
+
 # Changes in mirt 1.45.1
 
 - Added argument `fscores(..., expected.info = FALSE)` to allow computation of the 

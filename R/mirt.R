@@ -296,6 +296,7 @@
 #'     \eqn{z = 1,2,\ldots, C} (where \eqn{C} is the number of categories minus 1),
 #'     and \eqn{M = 2C + 1}.
 #'     }
+#'
 #'   \item{(g)hcm, (g)alm, (g)sslm, and (g)paralla}{Following Luo (2001), this family of response models
 #'     can be characterized under the same ordinal response functioning structure, differing only in their
 #'     linking functions (\eqn{\psi(x)}). For example, for a two-dimensional model the equation used is
@@ -325,12 +326,20 @@
 #'     }
 #'      all of which are available for dichotomous and ordered polytomous response option items.
 #'   }
+#'
 #'   \item{spline}{Spline response models attempt to model the response curves uses non-linear and potentially
 #'     non-monotonic patterns. The form is
 #'     \deqn{P(x = 1|\theta, \eta) = \frac{1}{1 + exp(-(\eta_1 * X_1 + \eta_2 * X_2 + \cdots + \eta_n * X_n))}}
 #'     where the \eqn{X_n} are from the spline design matrix \eqn{X} organized from the grid of \eqn{\theta}
 #'     values. B-splines with a natural or polynomial basis are supported, and the \code{intercept} input is
 #'     set to \code{TRUE} by default.}
+#'
+#'   \item{monospline}{The structure of the monotone spline is the same as the \code{'spline'} type, however
+#'   is built from a constrained version of an I-spline from \code{\link[splines2]{iSpline}}, which are cumulative
+#'   sums of B-splines. In this case, the intercept is left as an unconstrained parameter to be estimated,
+#'   however all other terms are constrained to
+#'   be positive. For this model to work correctly \code{intercept} must always be \code{TRUE}.}
+#'
 #'   \item{monopoly}{Monotone polynomial model for polytomous response data of the form
 #'     \deqn{P(x = k | \theta, \psi) =
 #'     \frac{exp(\sum_1^k (m^*(\psi) + \xi_{c-1})}
@@ -404,7 +413,9 @@
 #'       logistic model, where \code{3PLNRM} estimates the lower asymptote only while \code{3PLuNRM} estimates
 #'       the upper asymptote only (Suh and Bolt, 2010)
 #'     \item \code{'spline'} - spline response model with the \code{\link{bs}} (default)
-#'       or the \code{\link{ns}} function (Winsberg, Thissen, and Wainer, 1984)
+#'       or the \code{\link{ns}} function
+#'     \item \code{'monospline'} - monotonic spline response model with a constrained version of the
+#'       I-spline basis from \code{\link[splines2]{iSpline}} (Ramsay and Winsberg, 1991; Winsberg, Thissen, and Wainer, 1984)
 #'     \item \code{'monopoly'} - monotonic polynomial model for unidimensional tests
 #'       for dichotomous and polytomous response data (Falk and Cai, 2016)
 #'  }
@@ -626,7 +637,8 @@
 #' @param verbose logical; print observed- (EM) or complete-data (MHRM) log-likelihood
 #'   after each iteration cycle? Default is TRUE
 #' @param spline_args a named list of lists containing information to be passed to the \code{\link{bs}} (default)
-#'   and \code{\link{ns}} for each spline itemtype. Each element must refer to the name of the itemtype with the
+#'   \code{\link{ns}}, and \code{\link[splines2]{iSpline}} for each spline/monospline itemtype.
+#'   Each element must refer to the name of the itemtype with the
 #'   spline, while the internal list names refer to the arguments which are passed. For example, if item 2 were called
 #'   'read2', and item 5 were called 'read5', both of which were of itemtype 'spline' but item 5 should use the
 #'   \code{\link{ns}} form, then a modified list for each input might be of the form:
@@ -639,7 +651,7 @@
 #' @param technical a list containing lower level technical parameters for estimation. May be:
 #'   \describe{
 #'     \item{NCYCLES}{maximum number of EM or MH-RM cycles; defaults are 500 and 2000}
-#'     \item{MAXQUAD}{maximum number of quadratures, which you can increase if you have more than
+#'     \item{MAXQUAD}{maximum number of quadrature, which you can increase if you have more than
 #'       4GB or RAM on your PC; default 20000}
 #'     \item{theta_lim}{range of integration grid for each dimension; default is \code{c(-6, 6)}. Note that
 #'       when \code{itemtype = 'ULL'} a log-normal distribution is used and the range is change to
@@ -676,6 +688,10 @@
 #'       positive or negative infinity. The default is \code{FALSE}}
 #'     \item{customTheta}{a custom \code{Theta} grid, in matrix form, used for integration.
 #'       If not defined, the grid is determined internally based on the number of \code{quadpts}}
+#'     \item{fixedTheta}{a \code{matrix} of latent trait values taken to be fixed and known. This
+#'       will perform a single M-step optimization to obtain item parameter estimates, holding constant
+#'       the elements in \code{fixedTheta}, using the \code{'MHRM'} engine with the BFGS/L-BFGS-B
+#'       algorithm. Matrix input must have as many rows as there are rows in \code{data}}
 #'     \item{nconstrain}{same specification as the \code{constrain} list argument,
 #'       however imposes a negative equality constraint instead (e.g., \eqn{a12 = -a21}, which
 #'       is specified as \code{nconstrain = list(c(12, 21))}). Note that each specification
@@ -823,6 +839,9 @@
 #'
 #' Ramsay, J. O. (1975). Solving implicit equations in psychometric data analysis.
 #' \emph{Psychometrika, 40}, 337-360.
+#'
+#' Ramsay, J. O. & Winsberg, S. (1991). Maximum marginal likelihood estimation for
+#' Semiparametric item analysis. \emph{Psychometrika, 56}(3), 365-379.
 #'
 #' Rasch, G. (1960). Probabilistic models for some intelligence and attainment tests.
 #' \emph{Danish Institute for Educational Research}.
@@ -1247,58 +1266,105 @@
 #'
 #'
 #' #######
-#' # latent regression Rasch model
+#' # Latent regression Rasch model, followed by factor score regression
 #'
-#' # simulate data
+#' # Example assumes that exogenous variables relate to latent trait,
+#' # and latent trait related to endogenous variables not included in the
+#' # measurement model. Equates to the following structure
+#' #
+#' # Exogenous (X3 not related):
+#' # Theta ~ beta*X1 + beta*X2 + 0*X3 + e
+#' #
+#' # Endogenous:
+#' # Y0 ~ 0*Theta + e      (no relationship)
+#' # Y1 ~ gamma*Theta + e
+#' # Y2 ~ gamma*Theta + gamma*Theta^2 + e
+#'
+#' # generate suitable data
 #' set.seed(1234)
 #' N <- 1000
 #'
-#' # covariates
+#' # covariates (exogeneous variables for Theta)
 #' X1 <- rnorm(N); X2 <- rnorm(N)
 #' covdata <- data.frame(X1, X2, X3 = rnorm(N))
-#' Theta <- matrix(0.5 * X1 + -1 * X2 + rnorm(N, sd = 0.5))
+#' Theta <- matrix(0.2 * X1  -0.3 * X2 + rnorm(N, sd=sqrt(1 - .2^2 - .3^2)))
+#' var(Theta)
+#'
+#' # relation to endogenous variables, Y1 and Y2, not included in measurement model
+#' Y0 <- rnorm(N)   # no relationship
+#' Y1 <- .5 * Theta + rnorm(N)
+#' Y2 <- .5 * Theta + .25 * Theta^2 + rnorm(N)
+#'
+#' # true relationship between Y and Theta
+#' lm(Y0 ~ Theta) |> summary()
+#' lm(Y1 ~ Theta) |> summary()
+#' lm(Y2 ~ Theta + I(Theta^2)) |> summary()
 #'
 #' # items and response data
 #' a <- matrix(1, 20); d <- matrix(rnorm(20))
-#' dat <- simdata(a, d, 1000, itemtype = '2PL', Theta=Theta)
+#' dat <- simdata(a, d, N, itemtype = '2PL', Theta=Theta)
 #'
 #' # unconditional Rasch model
 #' mod0 <- mirt(dat, 1, 'Rasch', SE=TRUE)
 #' coef(mod0, printSE=TRUE)
 #'
+#' #######
+#' # For exogenous predictor variables (e.g., Theta ~ X1 + X2 + e)
+#' #   include directly in model, and perform LR/Wald tests
+#' #######
+#' #
 #' # conditional model using X1, X2, and X3 (bad) as predictors of Theta
 #' mod1 <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2 + X3, SE=TRUE)
 #' coef(mod1, printSE=TRUE)
 #' coef(mod1, simplify=TRUE)
 #' anova(mod0, mod1)  # jointly significant predictors of theta
 #'
-#' # large sample z-ratios and p-values (if one cares)
+#' # large sample z-ratios and p-values via Wald tests
 #' cfs <- coef(mod1, printSE=TRUE)
 #' (z <- cfs$lr.betas[[1]] / cfs$lr.betas[[2]])
-#' round(pnorm(abs(z[,1]), lower.tail=FALSE)*2, 3)
+#' ps <- round(pnorm(abs(z[,1]), lower.tail=FALSE)*2, 3)
+#' names(ps) <- paste0('p.', names(ps))
+#' ps
 #'
-#' # drop predictor for nested comparison
+#' # drop X3 predictor for nested LR comparison
 #' mod1b <- mirt(dat, 1, 'Rasch', covdata=covdata, formula = ~ X1 + X2)
-#' anova(mod1b, mod1)
+#' anova(mod1b, mod1)  # same information as Wald test
 #'
-#' # compare to mixedmirt() version of the same model
-#' mod1.mixed <- mixedmirt(dat, 1, itemtype='Rasch',
-#'                         covdata=covdata, lr.fixed = ~ X1 + X2 + X3, SE=TRUE)
-#' coef(mod1.mixed)
-#' coef(mod1.mixed, printSE=TRUE)
+#' #####
+#' # For exogenous Y's, treat scores as in factor score regression.
+#' #  However, update the VCOV/SEs and R^2 as the regression
+#' #  assumes the scores in the IV side are error-free (too optimistic)
+#' #####
 #'
-#' # draw plausible values for secondary analyses
-#' pv <- fscores(mod1, plausible.draws = 10)
-#' pvmods <- lapply(pv, function(x, covdata) lm(x ~ covdata$X1 + covdata$X2),
-#'                  covdata=covdata)
-#' # population characteristics recovered well, and can be averaged over
-#' so <- lapply(pvmods, summary)
-#' so
+#' # EAP estimates and SEs
+#' fs <- fscores(mod1b, full.scores.SE=TRUE)
+#' theta <- fs[,1]
 #'
-#' # compute Rubin's multiple imputation average
-#' par <- lapply(so, function(x) x$coefficients[, 'Estimate'])
-#' SEpar <- lapply(so, function(x) x$coefficients[, 'Std. Error'])
-#' averageMI(par, SEpar)
+#' # relationship with endogenous Y variable
+#' summary(lmmod0 <- lm(Y0 ~ theta))
+#' summary(lmmod1 <- lm(Y1 ~ theta))
+#' summary(lmmod2 <- lm(Y2 ~ theta + I(theta^2)))
+#'
+#' # improve SEs/R^2 in regression model by accounting for unreliability
+#' (rxx <- empirical_rxx(fs))
+#'
+#' # updates most lm() output, but not everything (do not use for other purposes!)
+#' update.summary <- function(lmmod, rxx){
+#'   so <- summary(lmmod)
+#'   so$r.squared <- so$r.squared / rxx
+#'   so$adj.r.squared <- so$adj.r.squared / rxx
+#'   so$cov.unscaled  <- vcov(lmmod) / rxx
+#'   so$coefficients[,2] <- sqrt(diag(so$cov.unscaled))
+#'   so$coefficients[,3] <- so$coefficients[,1] / so$coefficients[,2]
+#'   so$coefficients[,4] <- pt(abs(so$coefficients[,3]), df=lmmod$df.residual,
+#'     lower.tail = FALSE) * 2
+#'   so
+#' }
+#'
+#' update.summary(lmmod0, rxx)
+#' update.summary(lmmod1, rxx)
+#' update.summary(lmmod2, rxx)
+#'
 #'
 #' ############
 #' # Example using Gauss-Hermite quadrature with custom input functions
@@ -1513,7 +1579,8 @@ mirt <- function(data, model = 1, itemtype = NULL, guess = 0, upper = 1, SE = FA
                  calcNull = FALSE, draws = 5000, survey.weights = NULL,
                  quadpts = NULL, TOL = NULL, gpcm_mats = list(), grsm.block = NULL,
                  rsm.block = NULL, monopoly.k = 1L, key = NULL,
-                 large = FALSE, GenRandomPars = FALSE, accelerate = 'Ramsay', verbose = TRUE,
+                 large = FALSE, GenRandomPars = FALSE,
+                 accelerate = 'Ramsay', verbose = interactive(),
                  solnp_args = list(), nloptr_args = list(), spline_args = list(),
                  control = list(), technical = list(), ...)
 {

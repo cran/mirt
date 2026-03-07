@@ -18,12 +18,20 @@
 #' difference between the focal and reference group. The \eqn{f(\theta)}
 #' terms can either be estimated from the posterior via an empirical
 #' histogram approach (default), or can use the best
-#' fitting prior distribution that is obtain post-convergence (default is a Guassian
+#' fitting prior distribution that is obtain post-convergence (default is a Gaussian
 #' distribution). Note that, in comparison to Chalmers (2018), the focal group is
 #' the leftmost scoring function while the reference group is the rightmost
 #' scoring function. This is largely to keep consistent with similar effect
 #' size statistics, such as SIBTEST, DFIT, Wainer's measures of impact, etc,
 #' which in general can be seen as special-case estimators of this family.
+#'
+#' Finally, for unidimensional models the
+#' standardized versions of the above effect sizes are also reported, which are obtained by dividing by the
+#' associated (pooled) standard deviation of the item/bundle/test scoring functions given a  Gaussian density function
+#' with the associated group mean-variance estimates (see \code{\link{marginal_moments}}). These are reported as
+#' \code{DRF*} values in the output to reflect the standardization (in a Cohen's d type metric). Note that
+#' this standardization approach reflects a model-based analogues of the \code{ESSD} and \code{ETSSD} statistics found
+#' in \code{\link{empirical_ES}} (see Meade, 2010).
 #'
 #' @aliases DRF
 #' @param mod a multipleGroup object which estimated only 2 groups
@@ -348,7 +356,7 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                 par.settings = list(strip.background = list(col = '#9ECAE1'),
                                  strip.border = list(col = "black")),
                 auto.key = list(space = 'right', points=FALSE, lines=TRUE),
-                verbose = TRUE, ...){
+                verbose = interactive(), ...){
 
     compute_ps <- function(x, xs, X2=FALSE){
         if(X2){
@@ -405,6 +413,40 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
         MGmod@ParObjects$pars[[whc_grp[1L]]]@ParObjects$pars <- pars[[whc_grp[1L]]]
         MGmod@ParObjects$pars[[whc_grp[2L]]]@ParObjects$pars <- pars[[whc_grp[2L]]]
         fn(NA, omod=MGmod, rs=rs, whc_grp=whc_grp, ...)
+    }
+
+    add_std.DRF <- function(ret, mod, focal_items, bundle, den.type){
+        #TODO this doesn't have to use Gaussian density (and for canonical version, maybe shouldn't)
+        if(!bundle){
+            if(extract.mirt(mod, 'nfact') == 1){
+                moms <- marginal_moments(mod, which.items=focal_items, bundle=FALSE)
+                Ns <- table(extract.mirt(mod, 'group'))
+                if(den.type == 'marginal'){
+                    VAR <- sapply(moms, \(x) x$VAR)
+                    VARp <- colSums(as.numeric((Ns-1)) * t(VAR)) / (sum(Ns)-2)
+                } else {
+                    VARp <- ifelse(den.type == 'reference', VAR[,1], VAR[,2])
+                }
+                std <- ret[,c('sDIF', 'uDIF', 'dDIF')] / sqrt(VARp)
+                names(std) <- paste0(names(std), '*')
+                ret <- cbind(ret, std)
+            }
+        } else {
+            if(extract.mirt(mod, 'nfact') == 1){
+                moms <- marginal_moments(mod, which.items=focal_items)
+                Ns <- table(extract.mirt(mod, 'group'))
+                if(den.type == 'marginal'){
+                    VAR <- sapply(moms, \(x) x$VAR)
+                    VARp <- sum((Ns-1) * VAR) / (sum(Ns)-2)
+                } else {
+                    VARp <- ifelse(den.type == 'reference', VAR[1], VAR[2])
+                }
+                std <- ret[,c('sDRF', 'uDRF', 'dDRF')] / sqrt(VARp)
+                names(std) <- paste0(names(std), '*')
+                ret <- cbind(ret, std)
+            }
+        }
+        ret
     }
 
     if(missing(mod)) missingMsg('mod')
@@ -518,7 +560,7 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                     itemtype = extract.mirt(mod, 'itemtype'),
                     customItems = extract.mirt(mod, 'customItems'),
                     customGroup = extract.mirt(mod, 'customGroup'),
-                    technical = list(storeEtable=TRUE, theta_lim=theta_lim, omp=FALSE),
+                    technical = list(theta_lim=theta_lim, omp=FALSE),
                     quadpts=quadpts, large=large, TOL = NaN)
     if(plot) Theta_nodes <- matrix(seq(theta_lim[1L], theta_lim[2L], length.out=1000))
     oCM <- lapply(1L, fn, omod=mod, Theta_nodes=Theta_nodes, best_fitting=best_fitting,
@@ -549,6 +591,7 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                                 max_score=max_score, Theta=Theta, rslist=rslist,
                                 Theta_nodes=Theta_nodes, plot=plot, details=details, progress=verbose,
                                 DIF=DIF, DIF.cats=DIF.cats, focal_items=focal_items, signs=signs, den.type=den.type)
+        if(verbose) cat('\n')
         scores <- do.call(rbind, list_scores)
         pars <- lapply(1L:length(groupNames), function(ind)
             mod@ParObjects$pars[[ind]]@ParObjects$pars)
@@ -616,6 +659,8 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                                   matrix(oCM, length(oCM)/5L), row.names=NULL)
                 ret <- ret[,-c(6L:7L)]
                 colnames(ret) <- c('groups', 'item', 'sDIF', 'uDIF', 'dDIF')
+                ret <- add_std.DRF(ret, mod=mod, focal_items=focal_items,
+                                   den.type=den.type, bundle=FALSE)
                 ret <- as.mirt_df(ret)
             }
         } else {
@@ -623,6 +668,8 @@ DRF <- function(mod, draws = NULL, focal_items = 1L:extract.mirt(mod, 'nitems'),
                               n_focal_items=length(focal_items),
                               sDRF=oCM[1L], uDRF=oCM[2L], dDRF=oCM[3L],
                               row.names=NULL)
+            ret <- add_std.DRF(ret, mod=mod, focal_items=focal_items,
+                               den.type=den.type, bundle=TRUE)
             ret <- as.mirt_df(ret)
         }
     }

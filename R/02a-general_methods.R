@@ -172,7 +172,7 @@ Deriv.mix <- function(x, estHess=FALSE){
 #' @param ... additional arguments passed to \code{print(...)}
 #' @export
 print.mirt_df <- function(x, digits = 3, ...){
-    cls <- class(x)[2L]
+    cls <- 'data.frame'
     class(x) <- cls
     if(nrow(x) > 0){
         clsss <- sapply(x, class)
@@ -201,10 +201,57 @@ print.mirt_df <- function(x, digits = 3, ...){
 #' @param ... additional arguments passed to \code{print(...)}
 #' @export
 print.mirt_matrix <- function(x, digits = 3, ...){
-    cls <- class(x)[2L]
+    cls <- 'matrix'
     class(x) <- cls
     x <- round(x, digits=digits)
     print(x, ...)
+}
+
+#' @method print matrix
+#' @rdname print.mirt_matrix
+#' @export
+print.matrix <- function(x, ...){
+    if(is(x, 'mirt_matrix')){
+        class(x) <- 'mirt_matrix'
+        print(x, ...)
+    } else {
+        print.default(x, ...)
+    }
+    invisible(NULL)
+}
+
+#' Head generic for customized matrix console output
+#'
+#' Provides a nicer output for most printed \code{matrix}
+#' objects defined by functions in \code{mirt}.
+#'
+#' @method head mirt_matrix
+#' @param x object of class \code{'mirt_matrix'}
+#' @param digits number of digits to round
+#' @param ... additional arguments passed to \code{print(...)}
+#' @export
+head.mirt_matrix <- function(x, digits = 3, ...){
+    cls <- class(x)[2L]
+    class(x) <- cls
+    x <- round(x, digits=digits)
+    head(x, ...)
+}
+
+#' Tail generic for customized matrix console output
+#'
+#' Provides a nicer output for most printed \code{matrix}
+#' objects defined by functions in \code{mirt}.
+#'
+#' @method tail mirt_matrix
+#' @param x object of class \code{'mirt_matrix'}
+#' @param digits number of digits to round
+#' @param ... additional arguments passed to \code{print(...)}
+#' @export
+tail.mirt_matrix <- function(x, digits = 3, ...){
+    cls <- class(x)[2L]
+    class(x) <- cls
+    x <- round(x, digits=digits)
+    tail(x, ...)
 }
 
 #' Print generic for customized list console output

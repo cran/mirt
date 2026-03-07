@@ -174,10 +174,11 @@ draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var
 }
 
 complete.LL <- function(theta, pars, nfact, prior.mu, prior.t.var,
-                        OffTerm, CUSTOM.IND, itemloc, fulldata){
-    log_den <- mirt_dmvnorm(theta[,seq_len(nfact), drop=FALSE], prior.mu, prior.t.var, log=TRUE)
+                        OffTerm, CUSTOM.IND, itemloc, fulldata, FIXEDTHETA=FALSE){
     itemtrace <- computeItemtrace(pars=pars, Theta=theta, itemloc=itemloc,
-                                   offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
+                                  offterm=OffTerm, CUSTOM.IND=CUSTOM.IND)
+    log_den <- if(FIXEDTHETA) 0 else
+        mirt_dmvnorm(theta[,seq_len(nfact), drop=FALSE], prior.mu, prior.t.var, log=TRUE)
     rowSums(fulldata * log(itemtrace)) + log_den
 }
 
@@ -286,8 +287,9 @@ Rotate <- function(F, rotate, Target = NULL, par.strip.text = NULL, par.settings
 	    sign(x[which.max(abs(x))]))
 	rotF$loadings <- t(s * t(rotF$loadings))
 	if(is.null(rotF$Phi)) rotF$Phi <- diag(ncol(rotF$loadings))
-	rotF$Phi <- diag(s) %*% rotF$Phi %*% diag(s)
-	return(unclass(rotF))
+	rotF$Phi <- as.mirt_matrix(diag(s) %*% rotF$Phi %*% diag(s))
+	rotF$loadings <- as.mirt_matrix(rotF$loadings)
+	rotF
 }
 
 # Gamma correlation, mainly for obtaining a sign
@@ -406,7 +408,7 @@ Lambdas <- function(pars, Names){
     dcov <- if(ncol(gcov) > 1L) diag(sqrt(diag(gcov))) else matrix(sqrt(diag(gcov)))
     lambdas <- lambdas %*% dcov
     norm <- sqrt(1 + rowSums(lambdas^2))
-    F <- as.matrix(lambdas/norm)
+    F <- as.mirt_matrix(lambdas/norm)
     F
 }
 
@@ -1547,10 +1549,27 @@ nameInfoMatrix <- function(info, correction, L, npars){
 maketabData <- function(tmpdata, group, groupNames, nitem, K, itemloc,
                         Names, itemnames, survey.weights){
     tmpdata[is.na(tmpdata)] <- 99999L
-    stringfulldata <- apply(tmpdata, 1L, paste, sep='', collapse = '/')
-    stringtabdata <- unique(stringfulldata)
-    tabdata2 <- lapply(strsplit(stringtabdata, split='/'), as.integer)
-    tabdata2 <- do.call(rbind, tabdata2)
+    ord <- do.call(order, as.data.frame(tmpdata))
+    sorted <- tmpdata[ord, , drop=FALSE]
+    if(nrow(sorted) == 1L){
+        change <- TRUE
+    } else {
+        change <- c(TRUE, rowSums(sorted[-1L, , drop=FALSE] != sorted[-nrow(sorted), , drop=FALSE]) > 0L)
+    }
+    pattern_id_sorted <- cumsum(change)
+    pattern_id <- integer(nrow(tmpdata))
+    pattern_id[ord] <- pattern_id_sorted
+    first_idx <- which(change)
+    tabdata2_lex <- sorted[first_idx, , drop=FALSE]
+
+    first_occ <- tapply(seq_along(pattern_id), pattern_id, min)
+    id_perm <- order(as.integer(first_occ))
+    remap <- integer(length(id_perm))
+    remap[id_perm] <- seq_along(id_perm)
+    pattern_id <- remap[pattern_id]
+    tabdata2 <- tabdata2_lex[id_perm, , drop=FALSE]
+    rownames(tabdata2) <- NULL
+
     tabdata2[tabdata2 == 99999L] <- NA
     tabdata <- matrix(0L, nrow(tabdata2), sum(K))
     for(i in seq_len(nitem)){
@@ -1560,20 +1579,19 @@ maketabData <- function(tmpdata, group, groupNames, nitem, K, itemloc,
             tabdata[,itemloc[i] + j - 1L] <- as.integer(tabdata2[,i] == uniq[j])
     }
     tabdata[is.na(tabdata)] <- 0L
+    rownames(tabdata) <- NULL
     colnames(tabdata) <- Names
     colnames(tabdata2) <- itemnames
     groupFreq <- vector('list', length(groupNames))
     names(groupFreq) <- groupNames
     for(g in seq_len(length(groupNames))){
-        Freq <- integer(length(stringtabdata))
-        tmpstringdata <- stringfulldata[group == groupNames[g]]
+        Freq <- numeric(nrow(tabdata))
+        pick <- group == groupNames[g]
         if(!is.null(survey.weights)){
-            Freq <- mySapply(seq_len(nrow(tabdata)), function(x, std, tstd, w)
-                sum(w[stringtabdata[x] == tstd]), std=stringtabdata, tstd=tmpstringdata,
-                w=survey.weights[group == groupNames[g]])
+            ws <- rowsum(survey.weights[pick], group = pattern_id[pick], reorder = FALSE)
+            Freq[as.integer(rownames(ws))] <- ws[,1L]
         } else {
-            Freq[stringtabdata %in% tmpstringdata] <- as.integer(table(
-                match(tmpstringdata, stringtabdata)))
+            Freq <- tabulate(pattern_id[pick], nbins = nrow(tabdata))
         }
         groupFreq[[g]] <- Freq
     }
@@ -1683,7 +1701,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                 'internal_constraints', 'SEM_window', 'delta', 'MHRM_SE_draws', 'Etable', 'infoAsVcov',
                 'PLCI', 'plausible.draws', 'storeEtable', 'keep_vcov_PD', 'Norder', 'MCEM_draws',
                 "zeroExtreme", 'mins', 'info_if_converged', 'logLik_if_converged', 'omp', 'nconstrain',
-                'standardize_ref', "storeEMhistory", 'fixedEtable')
+                'standardize_ref', "storeEMhistory", 'fixedEtable', 'fixedTheta', "IGNOREWARNINGS")
     if(!all(tnames %in% gnames))
         stop('The following inputs to technical are invalid: ',
              paste0(tnames[!(tnames %in% gnames)], ' '), call.=FALSE)
@@ -1746,7 +1764,7 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$delta <- ifelse(is.null(technical$delta), 1e-5, technical$delta)
     opts$Etable <- ifelse(is.null(technical$Etable), TRUE, technical$Etable)
     opts$plausible.draws <- ifelse(is.null(technical$plausible.draws), 0, technical$plausible.draws)
-    opts$storeEtable <- ifelse(is.null(technical$storeEtable), FALSE, technical$storeEtable)
+    opts$storeEtable <- ifelse(is.null(technical$storeEtable), TRUE, technical$storeEtable)
     if(!is.null(TOL))
         if(is.nan(TOL) || is.na(TOL)) opts$calcNull <- opts$verbose <- FALSE
     opts$TOL <- ifelse(is.null(TOL),
@@ -1813,6 +1831,13 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
     opts$USEEM <- ifelse(method == 'EM', TRUE, FALSE)
     opts$returnPrepList <- FALSE
     opts$PrepList <- NULL
+    opts$fixedTheta <- technical$fixedTheta
+    if(!is.null(opts$fixedTheta)){
+        stopifnot("fixedTheta must be a matrix" = is.matrix(opts$fixedTheta))
+        opts$method <- method <- 'MHRM'
+        optimizer <- 'BFGS'
+        opts$calcLL <- FALSE
+    }
     if(is.null(optimizer)){
         opts$Moptim <- if(method %in% c('EM','BL','QMCEM', 'MCEM')) 'BFGS' else 'NR1'
     } else {
@@ -2516,7 +2541,7 @@ collapseCells <- function(O, E, mincell = 1){
 MGC2SC <- function(x, which){
     tmp <- x@ParObjects$pars[[which]]
     tmp@Model$lrPars <- x@ParObjects$lrPars
-    ind <- 1L
+    ind <- max(tmp@ParObjects$pars[[1]]@parnum) + 1
     for(i in seq_len(x@Data$nitems) + 1L){
         tmp@ParObjects$pars[[i]]@parnum[] <- seq(ind, ind + length(tmp@ParObjects$pars[[i]]@parnum) - 1L)
         ind <- ind + length(tmp@ParObjects$pars[[i]]@parnum)
@@ -2551,6 +2576,9 @@ loadSplineParsItem <- function(x, Theta){
     } else if(x@stype == 'ns'){
         splines::ns(Theta, df=sargs$df, knots=sargs$knots,
                     intercept=sargs$intercept)
+    } else if(x@stype == 'iSpline'){
+        cbind(1, splines2::iSpline(Theta, df=sargs$df, knots=sargs$knots,
+                          degree=sargs$degree, intercept=FALSE))
     }
     class(Theta_prime) <- 'matrix'
     x@Theta_prime <- Theta_prime
@@ -2920,7 +2948,7 @@ as.mirt_df <- function(df){
 }
 
 as.mirt_matrix <- function(df){
-    class(df) <- c('mirt_matrix', class(df))
+    class(df) <- c(class(df), 'mirt_matrix')
     df
 }
 

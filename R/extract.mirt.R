@@ -37,12 +37,14 @@
 #'   \item{fulldatalong}{analogous to \code{tabdatafull}, but for the raw input data instead of the
 #'     tabulated frequencies}
 #'   \item{EMhistory}{if saved, extract the EM iteration history}
+#'   \item{F}{unrotated factor loadings matrix}
+#'   \item{Frot}{rotated factor loadings matrix}
 #'   \item{exp_resp}{expected probability of the unique response patterns}
 #'   \item{survey.weights}{if supplied, the vector of survey weights used during estimation (NULL if missing)}
 #'   \item{converged}{a logical value indicating whether the model terminated within
 #'     the convergence criteria}
 #'   \item{iterations}{number of iterations it took to reach the convergence criteria}
-#'   \item{nest}{number of freely estimated parameters}
+#'   \item{nestpars}{number of freely estimated parameters}
 #'   \item{parvec}{vector containing uniquely estimated parameters}
 #'   \item{vcov}{parameter covariance matrix (associated with parvec)}
 #'   \item{condnum}{the condition number of the Hessian (if computed). Otherwise NA}
@@ -64,6 +66,7 @@
 #'   \item{time}{estimation time, broken into different sections}
 #' }
 #'
+#' @param ... additional arguments to pass to \code{summary()} (e.g., for different factor rotations)
 #' @aliases extract.mirt
 #' @export extract.mirt
 #' @param x mirt model of class 'SingleGroupClass', 'MultipleGroupClass', 'MixedClass' or
@@ -88,7 +91,7 @@
 #' extract.mirt(mod, 'logLik')
 #' extract.mirt(mod, 'K')  # unique categories for each item
 #'
-#' #multiple group model
+#' # multiple group model
 #' grp <- rep(c('G1', 'G2'), each = nrow(Science)/2)
 #' mod2 <- multipleGroup(Science, 1, grp)
 #'
@@ -97,9 +100,15 @@
 #' extract.mirt(grp1, 'parvec')
 #'
 #' }
-extract.mirt <- function(x, what, item = 1){
+extract.mirt <- function(x, what, item = 1, ...){
     if(what == 'DIF_coefficients')
         return(attr(x, 'DIF_coefficients'))
+    if(what %in% c('F', 'Frot')){
+        so <- if(what == 'F') summary(x, rotate = 'none', verbose=FALSE, ...)
+        else summary(x, verbose=FALSE, ...)
+        F <- if(is(x, 'MultipleGroupClass'))
+            lapply(so, \(y) y$rotF) else so$rotF
+    }
     ret <- switch(what,
                   G2 = x@Fit$G2,
                   logLik = x@Fit$logLik,
@@ -120,7 +129,6 @@ extract.mirt <- function(x, what, item = 1){
                   itemnames = colnames(x@Data$data),
                   parvec = x@Internals$shortpars,
                   vcov = x@vcov,
-                  nest = x@Model$nest,
                   constrain = x@Model$constrain,
                   nconstrain = x@Model$nconstrain,
                   iterations = x@OptimInfo$iter,
@@ -141,6 +149,8 @@ extract.mirt <- function(x, what, item = 1){
                   covdata = x@Data$covdata,
                   tabdata = x@Data$tabdata,
                   freq = x@Data$Freq,
+                  F = F,
+                  Frot = F,
                   tabdatalong = x@Data$tabdatalong,
                   fulldatalong = x@Data$fulldata,
                   groupNames = x@Data$groupNames,
@@ -150,6 +160,7 @@ extract.mirt <- function(x, what, item = 1){
                   factorNames=x@Model$factorNames,
                   EMhistory=x@Internals$EMhistory,
                   invariance=x@Model$invariance,
+                  bfactor=x@Internals$bfactor,
                   thetaPosterior=x@Internals$thetaPosterior,
                   # undocumented
                   factorNames = x@Model$factorNames,
@@ -167,6 +178,7 @@ extract.mirt <- function(x, what, item = 1){
                   dentype = x@Options$dentype,
                   pis = x@Model$pis,
                   nestpars=x@Model$nestpars,
+                  nest=x@Model$nestpars,
                   prodlist=x@Model$prodlist,
                   completely_missing=x@Data$completely_missing,
                   customGroup=x@Internals$customGroup,

@@ -14,6 +14,10 @@ multipleGroup(
   dentype = "Gaussian",
   itemdesign = NULL,
   item.formula = NULL,
+  nruns = 1,
+  return_max = TRUE,
+  GenRandomPars = FALSE,
+  verbose = interactive(),
   ...
 )
 }
@@ -63,13 +67,32 @@ mixtures}
       where the \code{#} placeholder represents the number of potential grouping variables
       (e.g., \code{'mixture-3'} will estimate 3 underlying classes). Each class is
       assigned the group name \code{MIXTURE_#}, where \code{#} is the class number.
+
       Note that internally the mixture coefficients are stored as log values where
-      the first mixture group coefficient is fixed at 0
+      the first mixture group coefficient is fixed at 0. Additionally, it is recommended
+      to use the \code{nruns} argument as mixture IRT models are known to contain
+      local maximums
    }}
 
 \item{itemdesign}{see \code{\link{mirt}} for details}
 
 \item{item.formula}{see \code{\link{mirt}} for details}
+
+\item{nruns}{a numeric value indicating how many times the model should be fit to the data
+when using random starting values, which is particularly useful
+when evaluating mixture IRT Models. If greater than 1, \code{GenRandomPars} is set to \code{TRUE}
+by default. Using this returns a list of fitted model objects, where the model
+with the highest log-likelihood should generally be selected as the model
+best associated with the MLE (this is done automatically if \code{return_max = TRUE}).
+Note that if a \code{\link{mirtCluster}} was
+defined earlier then the runs will be run in parallel}
+
+\item{return_max}{logical; when \code{nruns > 1}, return the model that has the most optimal
+maximum likelihood criteria? If FALSE, returns a list of all the estimated objects}
+
+\item{GenRandomPars}{see \code{\link{mirt}} for details}
+
+\item{verbose}{see \code{\link{mirt}} for details}
 
 \item{...}{additional arguments to be passed to the estimation engine. See \code{\link{mirt}}
 for details and examples}
@@ -121,7 +144,8 @@ mod_configural <- multipleGroup(dat, 1, group = group) #completely separate anal
 # limited information fit statistics
 M2(mod_configural)
 
-mod_metric <- multipleGroup(dat, 1, group = group, invariance=c('slopes')) #equal slopes
+mod_metric <- multipleGroup(dat, 1, group = group,
+                            invariance=c('slopes', 'free_var')) #equal slopes
 # equal intercepts, free variance and means
 mod_scalar2 <- multipleGroup(dat, 1, group = group,
                              invariance=c('slopes', 'intercepts', 'free_var','free_means'))
@@ -147,7 +171,7 @@ plot(mod_configural, type = 'trace', which.items = 1:4)
 itemplot(mod_configural, 2)
 itemplot(mod_configural, 2, type = 'RE')
 
-anova(mod_metric, mod_configural) #equal slopes only
+anova(mod_metric, mod_configural) #equal slopes
 anova(mod_scalar2, mod_metric) #equal intercepts, free variance and mean
 anova(mod_scalar1, mod_scalar2) #fix mean
 anova(mod_fullconstrain, mod_scalar1) #fix variance
@@ -338,7 +362,8 @@ if(interactive()) mirtCluster()
 
 # EM approach (not as accurate with 3 factors, but generally good for quick model comparisons)
 mod_configural <- multipleGroup(dat, model, group = group) #completely separate analyses
-mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes')) #equal slopes
+mod_metric <- multipleGroup(dat, model, group = group,
+                            invariance=c('slopes', 'free_var')) #equal slopes
 mod_fullconstrain <- multipleGroup(dat, model, group = group, #equal means, slopes, intercepts
                              invariance=c('slopes', 'intercepts'))
 
@@ -347,7 +372,8 @@ anova(mod_fullconstrain, mod_metric)
 
 # same as above, but with MHRM (generally  more accurate with 3+ factors, but slower)
 mod_configural <- multipleGroup(dat, model, group = group, method = 'MHRM')
-mod_metric <- multipleGroup(dat, model, group = group, invariance=c('slopes'), method = 'MHRM')
+mod_metric <- multipleGroup(dat, model, group = group,
+                            invariance=c('slopes', 'free_var'), method = 'MHRM')
 mod_fullconstrain <- multipleGroup(dat, model, group = group, method = 'MHRM',
                              invariance=c('slopes', 'intercepts'))
 
@@ -371,6 +397,7 @@ model <- 'F1 = 1-15'
 mod_configural <- multipleGroup(dat, model, group = group)
 plot(mod_configural)
 plot(mod_configural, type = 'SE')
+plot(mod_configural, type = 'gen.difficulty')
 itemplot(mod_configural, 1)
 itemplot(mod_configural, 1, type = 'info')
 plot(mod_configural, type = 'trace') # messy, score function typically better
@@ -433,14 +460,35 @@ coef(mod_mix, simplify=TRUE)
 summary(mod_mix)
 plot(mod_mix)
 plot(mod_mix, type = 'trace')
+plot(mod_mix, type = 'gen.difficulty')
 itemplot(mod_mix, 1, type = 'info')
 
 head(fscores(mod_mix)) # theta estimates
 head(fscores(mod_mix, method = 'classify')) # classification probability
 itemfit(mod_mix)
 
+# Above works fine, but its generally a good idea to evaluate models
+# with multiple random starting values in case local maximums are an issue.
+# To do this use the argument "nruns", which returns the best model
+if(interactive()) mirtCluster()
+mod_mix <- multipleGroup(dat, models, dentype = 'mixture-2', nruns=5)
+mod_mix
+
+# For obtaining isolated estimates within each mixture, use extract.group()
+#   to construct single-group extractions of the mixtures
+mix1 <- extract.group(mod_mix, group = "MIXTURE_1")
+mix2 <- extract.group(mod_mix, group = "MIXTURE_2")
+
+# EAP estimates per mixture group, ignoring the original mixture structure.
+#   Used to demonstrate the behaviour of how the individuals would have
+#   been scored if they (deterministically) belonged to one class
+data.frame(EAP_mix1=unname(fscores(mix1)),
+           EAP_mix2=unname(fscores(mix2)),
+           EAP=unname(fscores(mod_mix))) |> head()
+
+############
 # Mixture 2PL model
-mod_mix2 <- multipleGroup(dat, 1, dentype = 'mixture-2', GenRandomPars = TRUE)
+mod_mix2 <- multipleGroup(dat, 1, dentype = 'mixture-2', nruns=5)
 anova(mod_mix, mod_mix2)
 coef(mod_mix2, simplify=TRUE)
 itemfit(mod_mix2)

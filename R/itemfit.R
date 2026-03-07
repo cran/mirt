@@ -313,7 +313,7 @@ itemfit <- function(x, fit_stats = 'S_X2',
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
                 if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
-                mod2 <- mirt(dat, model, itemtype=itemtype,
+                mod2 <- mirt(dat, extract.mirt(mod, 'nfact'), itemtype=itemtype,
                              verbose=FALSE, pars=sv, technical=list(warn=FALSE))
                 if(!extract.mirt(mod2, 'converged')) next
                 tmp <- PV_itemfit(mod2, which.items=which.items, draws=draws, ...)
@@ -349,7 +349,9 @@ itemfit <- function(x, fit_stats = 'S_X2',
             dat <- extract.mirt(mod, 'data')
             Emod <- mirt(dat, nfact, itemtype=itemtype,
                          pars=sv, verbose=FALSE,
-                         technical=list(storeEtable=TRUE, customTheta=Theta), ...)
+                         technical=list(customTheta=Theta,
+                                        storeEtable=TRUE,
+                                        customK=extract.mirt(mod, 'K')), ...)
             Etable <- Emod@Internals$Etable[[1]]$r1
             itemloc <- extract.mirt(mod, 'itemloc')
             X2 <- rep(NA, ncol(dat))
@@ -374,6 +376,7 @@ itemfit <- function(x, fit_stats = 'S_X2',
                            ETpoints, ...){
             count <- 0L
             K <- extract.mirt(mod, 'K')
+            nfact <- extract.mirt(mod, 'nfact')
             while(TRUE){
                 count <- count + 1L
                 if(count == 20)
@@ -381,7 +384,7 @@ itemfit <- function(x, fit_stats = 'S_X2',
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
                 if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
-                mod2 <- mirt(dat, model, itemtype=itemtype, verbose=FALSE, pars=sv,
+                mod2 <- mirt(dat, nfact, itemtype=itemtype, verbose=FALSE, pars=sv,
                              technical=list(warn=FALSE, omp=FALSE), ...)
                 if(!extract.mirt(mod2, 'converged')) next
                 ret <- X2star(mod2, which.items=which.items, ETrange=ETrange,
@@ -653,7 +656,7 @@ itemfit <- function(x, fit_stats = 'S_X2',
                 tmpdat <- fulldata[pick[,i], , drop=FALSE]
                 dat <- tmpdat[Groups == j, itemloc[i]:(itemloc[i+1] - 1), drop = FALSE]
                 if(nrow(dat) <= 1L) next
-                colnames(dat) <- paste0("cat_", sort(unique(extract.mirt(x, "data")[,i])))
+                colnames(dat) <- paste0("cat_", 1:x@Data$K[i])
                 r <- colSums(dat)
                 N <- nrow(dat)
                 tmpTheta <- Theta[pick[,i], , drop=FALSE]
@@ -796,6 +799,12 @@ itemfit <- function(x, fit_stats = 'S_X2',
     if(S_X2 || !is.null(S_X2.plot)){
         dat <- x@Data$data
         adj <- x@Data$mins
+        K <- x@Data$K
+        Kobs <- apply(x@Data$data, 2, \(x) length(na.omit(unique(x))))
+        if(!all(K == Kobs))
+            stop(c("S_X2 cannot be computed for subgroups where the observed\n",
+                  "response options are less than the full range of possible response options"),
+                 call.=FALSE)
         dat <- t(t(dat) - adj)
         S_X2 <- df.S_X2 <- rep(NA, J)
         O <- makeObstables(dat, x@Data$K, which.items=which.items)

@@ -147,12 +147,12 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 itemtype[itemtype == 'rsm'] <- 'gpcm'
                 itemtype[itemtype == '3PL' | itemtype == '3PLu' | itemtype == '4PL'] <- '2PL'
                 itemtype[itemtype == '3PLNRM' | itemtype == '3PLuNRM' | itemtype == '4PLNRM'] <- '2PLNRM'
-                itemtype[itemtype == 'spline'] <- '2PL'
+                itemtype[itemtype %in% c('spline', 'monospline')] <- '2PL'
             }
         }
         if(!is.null(itemtype)){
-            if(any(itemtype == 'spline') && !(opts$method %in% c('EM', 'QMCEM', 'MCEM')))
-                stop('spline itemtype only supported for EM algorithm', call.=FALSE)
+            if(any(itemtype %in% c('spline', 'monospline')) && !(opts$method %in% c('EM', 'QMCEM', 'MCEM')))
+                stop('spline and monospline itemtype only supported for EM algorithm', call.=FALSE)
         }
         if(length(group) != nrow(data))
             stop('length of group not equal to number of rows in data.', call.=FALSE)
@@ -570,7 +570,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                 tmp <- apply(subset(Data$data, Data$group == Data$groupNames[j]), 2L,
                              function(x) length(unique(na.omit(x)))) == Data$K
             for(i in which(!tmp)){
-                if(any(PrepList[[j]]$pars[[i]]@est))
+                if(any(PrepList[[j]]$pars[[i]]@est) && !isTRUE(opts$technical$IGNOREWARNINGS))
                     stop(paste0('Multiple Group model will not be identified without ',
                                 'proper constraints (groups contain missing data patterns ',
                                 'where item responses have been completely omitted or, alternatively, ',
@@ -744,9 +744,13 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
             G2 <- G2 + G2group[g]
             logLik <- logLik + sum(rg*log(Pltmp))
         }
-    } else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM estimation
+    } else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM/SEM/JML estimation
         Theta <- matrix(0, Data$N, nitems)
         if(opts$method == 'SEM') opts$NCYCLES <- NA
+        if(!is.null(opts$fixedTheta)){
+            Theta <- opts$fixedTheta
+            stopifnot("fixedTheta must have the same number of rows as response data" = nrow(Theta) == Data$N)
+        }
         ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
                                list = list(NCYCLES=opts$NCYCLES, BURNIN=opts$BURNIN,
                                            SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
@@ -761,7 +765,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                            message=opts$message, expl=PrepList[[1L]]$exploratory,
                                            plausible.draws=opts$plausible.draws,
                                            MSTEPTOL=opts$MSTEPTOL, Moptim=opts$Moptim,
-                                           keep_vcov_PD=opts$keep_vcov_PD),
+                                           keep_vcov_PD=opts$keep_vcov_PD, fixedTheta=opts$fixedTheta),
                                DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
         if(opts$plausible.draws != 0) return(ESTIMATE)
         if(opts$SE && (ESTIMATE$converge || !opts$info_if_converged)){
@@ -780,7 +784,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
                                                cand.t.var=opts$technical$MHcand, warn=opts$warn,
                                                message=opts$message, expl=PrepList[[1L]]$exploratory,
                                                MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
-                                               keep_vcov_PD=opts$keep_vcov_PD),
+                                               keep_vcov_PD=opts$keep_vcov_PD, fixedTheta=opts$fixedTheta),
                                    DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
             ESTIMATE$pars <- tmp$pars
             ESTIMATE$info <- tmp$info
@@ -1016,7 +1020,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
         }
     }
     #missing stats for MHRM
-    if(opts$method %in% c('MHRM', 'MIXED', 'SEM') &&
+    if(opts$method %in% c('MHRM', 'MIXED', 'SEM') && opts$calcLL &&
        (!opts$logLik_if_converged || !(!ESTIMATE$converge && opts$logLik_if_converged))){
         logLik <- G2 <- SElogLik <- 0
         if(opts$draws > 0L){
@@ -1094,8 +1098,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     Model <- list(model=oldmodel, factorNames=PrepList[[1L]]$factorNames, itemtype=PrepList[[1L]]$itemtype,
                   itemloc=PrepList[[1L]]$itemloc, nfact=nfact, pis=pis,
                   Theta=Theta, constrain=constrain, nconstrain= opts$technical$nconstrain,
-                  parprior=parprior, nest=as.integer(nestpars),
-                  invariance=invariance, lrPars=lrPars, formulas=attr(mixed.design, 'formula'),
+                  parprior=parprior, invariance=invariance, lrPars=lrPars, formulas=attr(mixed.design, 'formula'),
                   prodlist=PrepList[[1L]]$prodlist, nestpars=nestpars)
     if(!is.null(opts$technical$Etable)){
         Model$Etable <- ESTIMATE$rlist
@@ -1152,6 +1155,7 @@ ESTIMATION <- function(data, model, group, itemtype = NULL, guess = 0, upper = 1
     if(opts$storeEMhistory)
         Internals$EMhistory <- ESTIMATE$EMhistory
     if(opts$method == 'SEM') Options$TOL <- NA
+    if(!is.null(opts$fixedTheta)) Options$method <- 'none'
     if(opts$odentype == "discrete"){
         mod <- new('DiscreteClass',
                    Data=Data,

@@ -78,7 +78,8 @@
 #'   another good option is 'infotrace'. For ease of viewing, the \code{facet_item} argument to
 #'   mirt's \code{plot()} function is set to \code{TRUE}
 #' @param p.adjust string to be passed to the \code{\link{p.adjust}} function to adjust p-values.
-#'   Adjustments are located in the \code{adj_p} element in the returned list
+#'   Adjustments are located in the \code{adj_p} element in the returned list. Default uses the
+#'   Holm-sequential Bonferroni adjustment
 #' @param verbose logical print extra information to the console?
 #' @param ... additional arguments to be passed to \code{\link{multipleGroup}} and \code{plot}
 #'
@@ -224,9 +225,9 @@
 DIF <- function(MGmodel, which.par, scheme = 'add',
                 items2test = 1:extract.mirt(MGmodel, 'nitems'),
                 groups2test = 'all', seq_stat = 'SABIC', Wald = FALSE,
-                p.adjust = 'none', pairwise = FALSE, return_models = FALSE,
+                p.adjust = 'holm', pairwise = FALSE, return_models = FALSE,
                 return_seq_model = FALSE, max_run = Inf, plotdif = FALSE, type = 'trace',
-                simplify = TRUE, verbose = TRUE, ...){
+                simplify = TRUE, verbose = interactive(), ...){
 
     loop_test <- function(item, model, which.par, values, Wald, itemnames, invariance, drop,
                           return_models, groups2test, large, technical = list(), ...)
@@ -504,7 +505,7 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
             }, stat = 'p'))
         }
         ps <- p.adjust(ps, p.adjust)
-        res$adj_p <- ps
+        attr(res, 'adj_p') <- ps
     }
     if(plotdif && any(scheme %in% c('add', 'add_sequential'))){
         if(seq_stat != 'p'){
@@ -539,20 +540,17 @@ DIF <- function(MGmodel, which.par, scheme = 'add',
             message('No DIF items were detected for plotting.')
         }
     }
-    pick <- names(res)
-    pick <- pick[pick != 'adj_p']
+    adj_p <- attr(res, "adj_p")
     if(Wald && !return_models){
-        adj_p <- res$adj_p
-        res <- do.call(rbind, res[pick])
+        res <- do.call(rbind, res)
         res$adj_p <- adj_p
         res <- data.frame(groups=paste0(groups2test,collapse=','), res)
         res <- as.mirt_df(res)
         return(res)
     }
     if(simplify && !return_models){
-        adj_p <- res$adj_p
         DIF_coefs <- lapply(res, function(x) attr(x, 'coefs'))
-        out <- lapply(res[pick], function(x){
+        out <- lapply(res, function(x){
              r <- x[2L, ] - x[1L, ]
              if(!has_priors)
                 r[,c("X2", 'df', 'p')] <- x[2L, c("X2", 'df', 'p')]
