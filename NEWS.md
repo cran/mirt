@@ -1,3 +1,31 @@
+# Changes in mirt 1.47
+
+- Added `PCgraded` itemtype to estimate the partially non-compensatory
+  GRM described in Chalmers (2020). Follows the same modeling logic as the 
+  partially compensatory models for dichotomous response data
+
+- Added function `pirt()` to perform projective IRT modeling using the method
+  recently described in Chalmers, Falk, and Reise (2026)
+
+- Added score test example for DIF to `lagrange()`
+
+- `DIF()` now supports bifactor/two-tier models for more efficient estimation
+
+- `bfactor()` multiple group option now allows `invariance` arguments 
+  such as `free_means` and `free_vars` to free the general and specific 
+  factors in the focal groups automatically
+
+- `itemplot()` gains `empirical_proportions` argument to plot the model-implied proportion
+  estimates from the E-table in the EM algorithm. Currently limited to 
+  unidimenisonal models only
+
+- `fscores()` also gains `method = 'EAP_general'` to perform the dimension reduction
+  EAP estimates for bifactor/two-tier general factor predictions as 
+  described in Gibbons et al. (2007)
+
+- `fscores()` gains `method = 'EAPsum_2.0'` to obtain the 2.0 version of the 
+  Lord-Wingersky Algorithm described in Cai (2015)
+
 # Changes in mirt 1.46.1
 
 - `mirtCluster()` definition switched from `parallel` to `mirai` package by 

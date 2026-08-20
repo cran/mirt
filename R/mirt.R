@@ -259,13 +259,20 @@
 #'     The ideal point model has the form, with the upper bound constraint on \eqn{d} set to 0:
 #'     \deqn{P(x = 1 | \theta, \psi) = exp(-0.5 * (a_1 * \theta_1 + a_2 * \theta_2 + d)^2)}
 #'   }
-#'   \item{partcomp}{Partially compensatory models consist of the product of 2PL probability curves.
+#'   \item{partcomp}{Partially non-compensatory models consist of the product of 2PL probability curves.
 #'     \deqn{P(x = 1 | \theta, \psi) = g + (1 - g) (\frac{1}{1 + exp(-(a_1 * \theta_1 + d_1))}^c_1 *
 #'     \frac{1}{1 + exp(-(a_2 * \theta_2 + d_2))}^c_2)}
 #'
 #'     where \eqn{c_1} and \eqn{c_2} are binary indicator variables reflecting whether the item should include
 #'     the select compensatory component (1) or not (0). Note that constraining the slopes to
 #'     be equal across items will reduce the model to Embretson's (Whitely's) multicomponent model (1980).
+#'   }
+#'   \item{PCgraded}{Partially non-compensatory models generalization for graded response models
+#'     as described in Chalmers (2020). Note that for numerical stability reasons the intercepts
+#'     per dimension are expressed in a deviation form to satisfy the ordered-intercept constraint
+#'     during optimization. The setup is generally the same as \code{partcomp} in terms of model
+#'     declaration, while in the \code{K=2} case this reduces to the partially non-compensatory
+#'     2PL as a special case.
 #'   }
 #'   \item{2-4PLNRM}{Nested logistic curves for modeling distractor items. Requires a scoring key.
 #'     The model is broken into two components for the probability of endorsement. For successful
@@ -383,6 +390,7 @@
 #'     \item \code{'ULL'} - unipolar log-logistic model (Lucke, 2015). Note the use of this itemtype
 #'       will automatically use a log-normal distribution for the latent traits
 #'     \item \code{'graded'} - graded response model (Samejima, 1969)
+#'     \item \code{'PCgraded'} - partially non-compensatory graded response model (Chalmers, 2020)
 #'     \item \code{'grsm'} - graded ratings scale model in the
 #'       classical IRT parameterization (restricted to unidimensional models; Muraki, 1992)
 #'     \item \code{'gpcm'} and \code{'gpcmIRT'} - generalized partial credit model in the slope-intercept
@@ -781,7 +789,7 @@
 #' item factor analysis. \emph{Journal of Educational and Behavioral
 #' Statistics, 35}, 307-335.
 #'
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #'
@@ -791,7 +799,7 @@
 #' Chalmers, R. P. (2018). Numerical Approximation of the Observed Information Matrix with Oakes' Identity.
 #' \emph{British Journal of Mathematical and Statistical Psychology} \emph{DOI: 10.1111/bmsp.12127}
 #'
-#' Chalmers, R., P. & Flora, D. (2014). Maximum-likelihood Estimation of Noncompensatory IRT
+#' Chalmers, R. P. & Flora, D. (2014). Maximum-likelihood Estimation of Noncompensatory IRT
 #' Models with the MH-RM Algorithm. \emph{Applied Psychological Measurement, 38}, 339-358.
 #' \doi{10.1177/0146621614520958}
 #'

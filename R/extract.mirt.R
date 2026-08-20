@@ -77,7 +77,7 @@
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @keywords extract
@@ -187,6 +187,7 @@ extract.mirt <- function(x, what, item = 1, ...){
                   monopoly.k=x@Internals$monopoly.k,
                   grsm.block=x@Data$grsm.block,
                   rsm.block=x@Data$rsm.block,
+                  exploratory=x@Options$exploratory,
                   stop(sprintf("Could not extract element \'%s\'", what), call.=FALSE))
         ret
 }

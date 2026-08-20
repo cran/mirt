@@ -30,7 +30,11 @@ with missing data coded as \code{NA}}
 
   Alternatively, input can be specified using the \code{\link{mirt.model}} syntax with the
   restriction that each item must load on exactly one specific factor (or no specific factors,
-  if it is only predicted by the general factor specified in \code{model2})}
+  if it is only predicted by the general factor specified in \code{model2})
+
+  IMPORTANT: Additional model information (e.g., keywords such as
+  \code{CONSTRAIN}, \code{MEAN}, etc) must be specified in the \code{model2} input
+  instead of this specification}
 
 \item{model2}{a two-tier model specification object defined by \code{mirt.model()} or
 a string to be passed to \code{\link{mirt.model}}. By default
@@ -100,6 +104,17 @@ specific <- c(2,3,2,3,3,2,1,2,1,1,1,3,1,3,1,2,1,1,3,3,1,1,3,1,3,3,1,3,2,3,1,2)
 mod1 <- bfactor(data, specific)
 summary(mod1)
 itemplot(mod1, 18, drop.zeros = TRUE) #drop the zero slopes to allow plotting
+
+# complete factor score predictions (general + specific factors)
+eaps <- fscores(mod1)
+
+# factor score predictions for general factors only (more accurate due
+# to lower dimensional integration)
+eaps_gen <- fscores(mod1, method = 'EAP_general')
+head(cbind(eaps_gen, NA, eaps))
+
+# similar EAP estimates, but with respect to sum-scores
+fscores(mod1, method = 'EAPsum_2.0', full.scores=FALSE)
 
 # alternative model definition via ?mirt.model syntax
 specific2 <- "S1 = 7,9,10,11,13,15,17,18,21,22,24,27,31
@@ -234,22 +249,22 @@ anova(simmod2, simmod)
 # simulate data
 set.seed(1234)
 a <- matrix(c(
-  0,1,0.5,NA,NA,
-  0,1,0.5,NA,NA,
-  0,1,0.5,NA,NA,
-  0,1,0.5,NA,NA,
-  0,1,0.5,NA,NA,
-  0,1,NA,0.5,NA,
-  0,1,NA,0.5,NA,
-  0,1,NA,0.5,NA,
+  1,0,0.5,NA,NA,
+  1,0,0.5,NA,NA,
+  1,0,0.5,NA,NA,
+  1,0,0.5,NA,NA,
+  1,0,0.5,NA,NA,
   1,0,NA,0.5,NA,
   1,0,NA,0.5,NA,
   1,0,NA,0.5,NA,
-  1,0,NA,NA,0.5,
-  1,0,NA,NA,0.5,
-  1,0,NA,NA,0.5,
-  1,0,NA,NA,0.5,
-  1,0,NA,NA,0.5),ncol=5,byrow=TRUE)
+  0,1,NA,0.5,NA,
+  0,1,NA,0.5,NA,
+  0,1,NA,0.5,NA,
+  0,1,NA,NA,0.5,
+  0,1,NA,NA,0.5,
+  0,1,NA,NA,0.5,
+  0,1,NA,NA,0.5,
+  0,1,NA,NA,0.5),ncol=5,byrow=TRUE)
 
 d <- matrix(rnorm(16))
 items <- rep('2PL', 16)
@@ -268,12 +283,84 @@ model <- '
     COV = G1*G2'
 
 # quadpts dropped for faster estimation, but not as precise
-simmod <- bfactor(dataset, specific, model, quadpts = 9, TOL = 1e-3)
+simmod <- bfactor(dataset, specific, model, quadpts = 15, TOL = 1e-3)
 coef(simmod, simplify=TRUE)
 summary(simmod)
 itemfit(simmod, QMC=TRUE)
 M2(simmod, QMC=TRUE)
 residuals(simmod, QMC=TRUE)
+
+# EAP predictions for all factors (high dimensional)
+eaps_all <- fscores(simmod, QMC=TRUE, quadpts=50000)
+head(eaps_all)
+maps <- fscores(simmod, method = 'MAP')
+head(maps)
+
+######
+# Multiple-group bifactor example from Cai, Yang, Hansen (2011)
+
+# Table 1 info from Cai, Yang, and Hansen (2011)
+intercept <- c(1, .25, -.25, -1, 1, .25, -.25, -1,1,
+               .25, -.25, -1,1, .25, -.25, -1)
+theta0 <- c(1, 1.4,1.7,2,
+            1.4,1.7,2,1,
+            1.7,2,1,1.4,
+            2, 1, 1.4, 1.7)
+thetan <- c(.8,1.5,1.2,1,
+            1,.8,1.5,1.2,
+            1.2,1,.8,1.5,
+            1.5,1.2,1,.8)
+thetaN <- matrix(0, 16, 4)
+thetaN[1:4, 1] <- thetan[1:4]
+thetaN[1:4+4, 2] <- thetan[1:4+4]
+thetaN[1:4+8, 3] <- thetan[1:4+8]
+thetaN[1:4+12, 4] <- thetan[1:4+12]
+
+as <- cbind(theta0, thetaN)
+as
+
+# data generation for focal group in publication does not have response
+# for items 13-16. However, full-data approach presented first
+N <- 1000
+itemtype <- '2PL'
+gmeans <- c(1, -.5, 0, .5, 0)
+sigma <- diag(c(.8, 1.2, 1.5, 1, 1))
+
+datG1 <- simdata(as, intercept, N=N, itemtype='2PL')
+datG2 <- simdata(as, intercept, N=N, itemtype='2PL',
+  mu = gmeans, sigma = sigma)
+
+dat <- rbind(datG1, datG2)
+group <- rep(c('G1', 'G2'), each=N)
+
+specific <- "S1 = 1-4
+             S2 = 5-8
+             S3 = 9-12
+             S4 = 13-16"
+
+mod <- bfactor(dat, specific, group=group, SE=TRUE,
+  invariance=c('free_means', 'free_vars', colnames(dat)))
+coef(mod, simplify=TRUE)
+
+# DIF testing for general dimension only with likelihood ratio tests (not run)
+if(FALSE){
+  mirtCluster()  # allocate computing cores
+  DIF(mod, which.par=c('a1', 'd'), scheme='drop')
+}
+
+## same analysis, however items 13:16 do not exist in the focal group
+datG2[,13:16] <- NA    # use this to match publication
+dat <- rbind(datG1, datG2)
+head(dat)
+tail(dat)
+
+# specify mean/cov structure explicitly
+model2 <- "G = 1-16
+           MEAN [G2] = G, S1, S2, S3
+           COV [G2] = G*G, S1*S1, S2*S2, S3*S3"
+
+mod2 <- bfactor(dat, specific, model2, group=group, invariance=colnames(dat))
+coef(mod2, simplify=TRUE)
 
 }
 
@@ -282,7 +369,7 @@ residuals(simmod, QMC=TRUE)
 Cai, L. (2010). A two-tier full-information item factor analysis model with applications.
 \emph{Psychometrika, 75}, 581-612.
 
-Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 \doi{10.18637/jss.v048.i06}
 

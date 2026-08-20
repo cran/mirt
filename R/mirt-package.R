@@ -34,7 +34,7 @@
 #' @importFrom splines2 iSpline
 #' @exportMethod anova residuals summary logLik vcov
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @keywords package
@@ -64,6 +64,29 @@ NULL
 #'
 #' mod <- mirt(Science, 1)
 #' plot(mod, type = 'trace')
+#' }
+NULL
+
+#' Simulated datasets for PIRT-DIF
+#'
+#' Three associated datasets for PIRT-DIF, stored as a list (more information to come).
+#'
+#' @name pirt_DIF
+#' @docType data
+#' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
+#'
+#' @keywords data
+#' @examples
+#'
+#' \donttest{
+#' data(pirt_DIF)
+#'
+#' # dataset 1
+#' dat1 <- pirt_DIF$dat1
+#' group <- dat1$group
+#' dat <- dat1[,-1]
+#' itemstats(dat, group=group)
+#'
 #' }
 NULL
 

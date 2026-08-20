@@ -55,7 +55,7 @@
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #'
@@ -193,7 +193,9 @@
 #' sigma <- matrix(c(1, .7, .7, 1), 2,2)
 #'
 #' dat <- simdata(a, d, N, mu=mu, sigma=sigma, itemtype = '2PL')
-#' itemstats(dat)$overall
+#' colnames(dat) <- c(paste0('Item.pre_', 1:20), paste0('Item.post_', 1:20))
+#' itemstats(dat[,1:20])$overall
+#' itemstats(dat[,21:40])$overall
 #'
 #' # build equality constraints across time points
 #' constr <- NULL
@@ -224,7 +226,7 @@
 #' Theta <- cbind(c(0, 1, 2), c(0,1,2))
 #' nochange <- simdata(a, d, itemtype = '2PL', Theta = Theta)
 #' change <- simdata(a, d, itemtype = '2PL', Theta = Theta +
-#'                       cbind(0, c(-1, -1, -1)))
+#'                       cbind(0, c(-2, -2, -2)))
 #'
 #' # total score differences
 #' data.frame(pre=rowSums(nochange[,1:J]),
@@ -239,6 +241,90 @@
 #' # expected total-score metric reported instead
 #' RCI(mod, predat = nochange, expected.scores=TRUE)
 #' RCI(mod, predat = change, expected.scores=TRUE)
+#'
+#' ############
+#' # Similar example using the GRM instead, however
+#' #  accounting for missing categories pre-post test (requires
+#' #  the customK technical and strong equality constraints
+#' #  to control the missing parameters)
+#'
+#' J <- 20
+#' N <- 500
+#' slopes <- rlnorm(J, .2, .2)
+#' a <- matrix(c(slopes, numeric(J*2), slopes),J*2)
+#' ints <- rnorm(J)
+#' diffs <- t(apply(matrix(runif(20*4, .3, 1), 20), 1, cumsum))
+#' diffs <- -(diffs - rowMeans(diffs))
+#' d <- diffs + rnorm(20)
+#' d <- rbind(d,d)
+#' data.frame(a=a, d=d)
+#'
+#' # mean effects across time
+#' mu <- c(0, -1/2)
+#' sigma <- matrix(c(1, .7, .7, 1), 2,2)
+#'
+#' dat <- simdata(a, d, N, mu=mu, sigma=sigma, itemtype = 'graded')
+#' colnames(dat) <- c(paste0('Item.pre_', 1:20), paste0('Item.post_', 1:20))
+#' itemstats(dat[,1:20])$overall
+#' itemstats(dat[,21:40])$overall
+#'
+#' # add missing response elements to dataset
+#' datM <- dat
+#' datM[datM[,1] == 4, 1] <- 3
+#' datM[datM[,2] == 1, 2] <- 0
+#' datM[datM[,3] == 0, 3] <- 1
+#' itemstats(datM[,1:20])
+#'
+#' # build equality constraints across time points
+#' constr <- NULL
+#' for(i in (1:J)){
+#'     # constrain slopes across items/dimensions
+#'     constr <- c(constr, paste0("(", i, ',', i+J, ",a1,a2)"))
+#'     # constrain intercepts to be equal (required if any category missing)
+#'     constr <- c(constr, paste0(paste0("(", i, ',', i+J, ",d", 1:4, ")")))
+#' }
+#' constr <- paste0(constr, collapse=',')
+#'
+#' # define model where item parameters constrained over time, and
+#' # latent trait has potential scale-location changes (e.g., regression to the
+#' # mean effects)
+#' model <- sprintf("
+#'                   thetapre = 1-%i,
+#'                   thetapost = %i-%i,
+#'                   COV = thetapre*thetapost, thetapost*thetapost
+#'                   MEAN = thetapost
+#'                   CONSTRAIN = %s", J, J+1, 2*J, constr)
+#' cat(model)
+#'
+#' # fit on original data (no missing responses)
+#' mod <- mirt(dat, model = model, itemtype='graded', SE=TRUE)
+#' coef(mod, printSE=TRUE)
+#' coef(mod, simplify=TRUE)
+#' summary(mod)
+#'
+#' # fit on items with missing responses requires customK
+#' modM <- mirt(datM, model = model, itemtype='graded', SE=TRUE,
+#'              technical = list(customK = rep(5, J*2)))
+#'
+#' # test data
+#' Theta <- cbind(c(0, 1, 2), c(0,1,2))
+#' nochange <- simdata(a, d, itemtype = 'graded', Theta = Theta)
+#' change <- simdata(a, d, itemtype = 'graded', Theta = Theta +
+#'                       cbind(0, c(-2, -2, -2)))
+#'
+#' # total score differences
+#' data.frame(pre=rowSums(nochange[,1:J]),
+#'            post=rowSums(nochange[,1:J + J]))
+#' data.frame(pre=rowSums(change[,1:J]),
+#'            post=rowSums(change[,1:J + J]))
+#'
+#'
+#' RCI(modM, predat = nochange)
+#' RCI(modM, predat = change)
+#'
+#' # expected total-score metric reported instead
+#' RCI(modM, predat = nochange, expected.scores=TRUE)
+#' RCI(modM, predat = change, expected.scores=TRUE)
 #'
 #' }
 RCI <- function(mod_pre, predat, postdat,

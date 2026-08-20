@@ -14,7 +14,7 @@
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @return a matrix with all possible combinations
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @export
@@ -70,7 +70,7 @@ thetaStack <- function(theta, nclass){
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @return a matrix with all possible combinations
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @export
@@ -338,7 +338,7 @@ rotateLambdas <- function(so){
     h2 <- so$h2
     h <- matrix(rep(sqrt(1 - h2), ncol(F)), ncol = ncol(F))
     a <- F / h
-    a
+    a * 1.702
 }
 
 d2r <-function(d) pi*d/180
@@ -936,6 +936,12 @@ UpdateParameters <- function(PrepList, model, groupNames){
                         } else newx <- c(newx, x[i])
                     }
                     x <- c(newx, x[length(x)-1L], x[length(x)])
+                    x
+                })
+                esplit <- lapply(esplit, function(x){
+                    if(x[1] %in% groupNames){
+                        x[1] <- nitems + 1
+                    }
                     x
                 })
                 picks <- lapply(esplit, function(x) as.integer(x[1L:(length(x)-2)]))
@@ -1800,8 +1806,8 @@ makeopts <- function(method = 'MHRM', draws = 2000L, calcLL = TRUE, quadpts = NU
                                          TRUE, technical$internal_constraints)
     opts$keep_vcov_PD  <- ifelse(is.null(technical$keep_vcov_PD), TRUE, technical$keep_vcov_PD)
     if(dentype == 'mixture'){
-        if(opts$method != 'EM')
-            stop('Mixture IRT densities only supported when method = \'EM\' ', call.=FALSE)
+        if(!(opts$method %in% c('EM', 'QMCEM', 'MCEM')))
+            stop('Mixture IRT densities only supported with EM-based methods', call.=FALSE)
         if(SE && !(SE.type %in% c('complete', 'Oakes')))
             stop('Only Oakes and complete SE.types current supported for mixture models', call.=FALSE)
     }
@@ -1888,9 +1894,9 @@ reloadPars <- function(longpars, pars, ngroups, J){
 }
 
 computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, length(itemloc)-1L),
-                             CUSTOM.IND, pis = NULL){
+                             CUSTOM.IND, pis = NULL, omp_threads = .mirtClusterEnv$omp_threads){
     if(is.null(pis)){
-        itemtrace <- .Call('computeItemTrace', pars, Theta, itemloc, offterm)
+        itemtrace <- .Call('computeItemTrace', pars, Theta, itemloc, offterm, as.integer(omp_threads))
         if(length(CUSTOM.IND)){
             for(i in CUSTOM.IND){
                 Thetas <- Theta
@@ -1902,7 +1908,8 @@ computeItemtrace <- function(pars, Theta, itemloc, offterm = matrix(0L, 1L, leng
     } else {
         tmp_itemtrace <- vector('list', length(pis))
         for(g in seq_len(length(pis))){
-            tmp_itemtrace[[g]] <- .Call('computeItemTrace', pars[[g]]@ParObjects$pars, Theta, itemloc, offterm)
+            tmp_itemtrace[[g]] <- .Call('computeItemTrace', pars[[g]]@ParObjects$pars, Theta, itemloc,
+                                        offterm, as.integer(omp_threads))
             if(length(CUSTOM.IND)){
                 for(i in CUSTOM.IND){
                     Thetas <- Theta

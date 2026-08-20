@@ -26,7 +26,7 @@
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @keywords data
@@ -91,19 +91,24 @@ itemstats <- function(data, group = NULL,
         names(out) <- groups
         return(out)
     }
+    odata <- data
+    all_NA <- apply(is.na(data), 2, all)
+    removed <- colnames(data)[all_NA]
+    data <- data[ ,!all_NA]
     TS <- rowSums(data, na.rm = TRUE)
     TS_miss <- rowSums(data)
-    rs <- try(cor(data, use = "pairwise.complete.obs"), silent = TRUE)
+    rs <- suppressWarnings(try(cor(data, use = "pairwise.complete.obs"),
+                               silent = TRUE))
     if(is(rs, 'try-err')) rs <- NaN
     if(use_ts){
         itemcor_drop <- apply(data, 2, function(x, drop){
             tsx <- if(drop) TS-x else TS
-            ret <- cor(x, tsx, use = 'pairwise.complete.obs')
+            ret <- suppressWarnings(cor(x, tsx, use = 'pairwise.complete.obs'))
             ret
         }, drop=TRUE)
         itemcor <- apply(data, 2, function(x, drop){
             tsx <- if(drop) TS-x else TS
-            cor(x, tsx, use = 'pairwise.complete.obs')
+            suppressWarnings(cor(x, tsx, use = 'pairwise.complete.obs'))
         }, drop=FALSE)
         itemalpha <- sapply(1:ncol(data), function(x){
             tmpdat <- na.omit(data[,-x, drop=FALSE])
@@ -170,6 +175,21 @@ itemstats <- function(data, group = NULL,
             tapply(TS_miss, x, sd, na.rm=TRUE)
         }))
     }
+    if(length(removed)){
+        tmp <- data.frame(matrix(NA, nrow=ncol(odata), ncol=ncol(ret$itemstats)))
+        rownames(tmp) <- colnames(odata)
+        colnames(tmp) <- colnames(ret$itemstats)
+        tmp[,"N"] <- 0
+        tmp[rownames(ret$itemstats), ] <- ret$itemstats
+        ret$itemstats <- tmp
+
+        tmp <- data.frame(matrix(NA, nrow=ncol(odata), ncol=ncol(ret$proportions)))
+        rownames(tmp) <- colnames(odata)
+        colnames(tmp) <- colnames(ret$proportions)
+        tmp[rownames(ret$proportions), ] <- ret$proportions
+        ret$proportions <- tmp
+    }
+
     ret
 }
 

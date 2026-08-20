@@ -7,10 +7,10 @@
 #'
 #' @name print-method
 #' @aliases print,SingleGroupClass-method
-#'   print,MultipleGroupClass-method print,MixedClass-method print,DiscreteClass-method
-#'   print,MixtureClass-method
+#' @aliases  print,MultipleGroupClass-method print,MixedClass-method print,DiscreteClass-method
+#' @aliases  print,MixtureClass-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @rdname print-method
@@ -103,11 +103,11 @@ setMethod(
 #'
 #' @name show-method
 #' @aliases show,SingleGroupClass-method
-#'   show,MultipleGroupClass-method show,MixedClass-method show,DiscreteClass-method
-#'   show,MixtureClass-method
+#' @aliases  show,MultipleGroupClass-method show,MixedClass-method show,DiscreteClass-method
+#' @aliases  show,MixtureClass-method
 #' @rdname show-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @examples
@@ -161,12 +161,12 @@ setMethod(
 #'
 #' @name summary-method
 #' @aliases summary,SingleGroupClass-method
-#'   summary,MultipleGroupClass-method summary,MixedClass-method summary,DiscreteClass-method
-#'   summary,MixtureClass-method
+#' @aliases  summary,MultipleGroupClass-method summary,MixedClass-method summary,DiscreteClass-method
+#' @aliases  summary,MixtureClass-method
 #' @export
 #' @rdname summary-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @seealso \code{\link{coef-method}}
@@ -294,11 +294,11 @@ setMethod(
 #'
 #' @name coef-method
 #' @aliases coef,SingleGroupClass-method
-#'   coef,MultipleGroupClass-method coef,MixedClass-method coef,DiscreteClass-method
-#'   coef,MixtureClass-method
+#' @aliases  coef,MultipleGroupClass-method coef,MixedClass-method coef,DiscreteClass-method
+#' @aliases  coef,MixtureClass-method
 #' @rdname coef-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @export
@@ -347,7 +347,7 @@ setMethod(
         if (object@Options$exploratory && rotate != 'none'){
             if(verbose) cat("\nRotation: ", rotate, "\n\n")
             so <- summary(object, rotate=rotate, Target=Target, verbose=FALSE, ...)
-            a <- rotateLambdas(so) * 1.702
+            a <- rotateLambdas(so)
             for(i in 1:J){
                 object@ParObjects$pars[[i]]@par[1:nfact] <- a[i, ]
                 object@ParObjects$pars[[i]]@SEpar <- numeric(0L)
@@ -503,12 +503,12 @@ setMethod(
 #'
 #' @name anova-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @aliases anova,SingleGroupClass-method
-#'   anova,MultipleGroupClass-method anova,MixedClass-method anova,DiscreteClass-method
-#'   anova,MixtureClass-method
+#' @aliases  anova,MultipleGroupClass-method anova,MixedClass-method anova,DiscreteClass-method
+#' @aliases  anova,MixtureClass-method
 #' @export
 #' @rdname anova-method
 #' @examples
@@ -597,7 +597,7 @@ setMethod(
             rownames(ret) <- nms1
             return(ret)
         }
-        df <- object@Fit$df - object2@Fit$df
+        df <- abs(object@Fit$df - object2@Fit$df)
         ret <- data.frame(AIC = c(object@Fit$AIC, object2@Fit$AIC),
                           SABIC = c(object@Fit$SABIC, object2@Fit$SABIC),
                           HQ = c(object@Fit$HQ, object2@Fit$HQ),
@@ -675,10 +675,10 @@ setMethod(
 #'
 #' @name residuals-method
 #' @aliases residuals,SingleGroupClass-method residuals,MixtureClass-method
-#'   residuals,MultipleGroupClass-method residuals,DiscreteClass-method
+#' @aliases  residuals,MultipleGroupClass-method residuals,DiscreteClass-method
 #' @rdname residuals-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #'
@@ -1109,12 +1109,12 @@ setMethod(
 #' @name plot-method
 #' @export
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @aliases plot,SingleGroupClass-method
-#'   plot,MultipleGroupClass-method plot,SingleGroupClass,missing-method
-#'   plot,DiscreteClass,missing-method plot,MixtureClass,missing-method
+#' @aliases  plot,MultipleGroupClass-method plot,SingleGroupClass,missing-method
+#' @aliases  plot,DiscreteClass,missing-method plot,MixtureClass,missing-method
 #' @rdname plot-method
 #' @examples
 #'
@@ -1212,7 +1212,7 @@ setMethod(
         if (x@Options$exploratory){
             if(!is.null(dots$rotate)){
                 so <- summary(x, verbose=FALSE, digits=5, ...)
-                a <- rotateLambdas(so) * 1.702
+                a <- rotateLambdas(so)
                 for(i in 1:J)
                     x@ParObjects$pars[[i]]@par[1:nfact] <- a[i, ]
             }
@@ -2027,12 +2027,12 @@ traditional2mirt <- function(x, cls, ncat){
 #'
 #' @name vcov-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @export
 #' @aliases vcov,SingleGroupClass-method vcov,MixtureClass-method
-#'   vcov,MultipleGroupClass-method vcov,MixedClass-method vcov,DiscreteClass-method
+#' @aliases  vcov,MultipleGroupClass-method vcov,MixedClass-method vcov,DiscreteClass-method
 #' @rdname vcov-method
 #' @examples
 #'
@@ -2058,9 +2058,9 @@ setMethod(
 #'
 #' @name logLik-method
 #' @aliases logLik,SingleGroupClass-method logLik,MixtureClass-method
-#'   logLik,MultipleGroupClass-method logLik,MixedClass-method logLik,DiscreteClass-method
+#' @aliases  logLik,MultipleGroupClass-method logLik,MixedClass-method logLik,DiscreteClass-method
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #' @rdname logLik-method

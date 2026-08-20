@@ -36,11 +36,15 @@
 #'   mixtures
 #' @param invariance a character vector containing the following possible options:
 #'   \describe{
-#'     \item{\code{'free_mean'} or \code{'free_means'}}{freely estimate all latent means in all focal groups
-#'       (reference group constrained to a vector of 0's)}
-#'     \item{\code{'free_var'}, \code{'free_vars'}, \code{'free_variance'}, or \code{'free_variances'}}{
+#'     \item{\code{'free_mean'} or \code{'free_means'}}{freely estimate
+#'       all latent means in all focal groups
+#'       (reference group constrained to a vector of 0's). To estimate all
+#'       means use \code{'free_all_means'}}
+#'     \item{\code{'free_var'} or \code{'free_vars'}}{
 #'       freely estimate all latent variances in focal groups
-#'       (reference group variances all constrained to 1)}
+#'       (reference group variances all constrained to 1). To estimate
+#'       all variances use either To estimate all variances use
+#'       \code{'free_all_vars'}}
 #'     \item{\code{'slopes'}}{to constrain all the slopes to be equal across all groups}
 #'     \item{\code{'intercepts'}}{to constrain all the intercepts to be equal across all
 #'       groups, note for nominal models this also includes the category specific slope parameters}
@@ -87,7 +91,7 @@
 #'
 #' @author Phil Chalmers \email{rphilip.chalmers@@gmail.com}
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #'

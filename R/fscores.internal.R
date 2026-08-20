@@ -10,7 +10,8 @@ setMethod(
 	                      plausible.draws, full.scores.SE, return.acov = FALSE,
                           QMC, custom_den = NULL, custom_theta = NULL,
 	                      min_expected, plausible.type, start, EAPsum.scores,
-	                      use_dentype_estimate, leave_missing = FALSE, expected.info, ...)
+	                      use_dentype_estimate, leave_missing = FALSE, expected.info,
+	                      project = NULL, ...)
 	{
         den_fun <- mirt_dmvnorm
         item_weights_long <- rep(item_weights, extract.mirt(object, "K"))
@@ -25,7 +26,7 @@ setMethod(
             }
         }
         if(!is.null(custom_den)) den_fun <- custom_den
-        if(use_dentype_estimate && !(method %in% c('EAP', 'EAPsum', 'plausible')))
+        if(use_dentype_estimate && !(method %in% c('EAP', 'EAPsum', 'EAPsum_2.0', 'plausible')))
             stop("use_dentype_estimate only supported for EAP, EAPsum, or plausible method",
                  call.=FALSE)
         if(method == 'classify')
@@ -186,7 +187,7 @@ setMethod(
         }
         dots <- list(...)
         discrete <- FALSE
-        if(object@Model$nfact > 3L && !QMC && method %in% c('EAP', 'EAPsum'))
+        if(object@Model$nfact > 3L && !QMC && method %in% c('EAP', 'EAPsum') && is.null(project))
             warning('High-dimensional models factor scores should use quasi-Monte Carlo integration. Pass QMC=TRUE',
                     call.=FALSE)
         if(method == 'Discrete' || method == 'DiscreteSum'){
@@ -216,15 +217,17 @@ setMethod(
         }
         if(!is.null(gmean)) gp$gmeans <- gmean
         if(!is.null(gcov)) gp$gcov <- gcov
-        if(method == 'EAPsum') return(EAPsum(object, full.scores=full.scores, full.scores.SE=full.scores.SE,
-                                             quadpts=quadpts, gp=gp, verbose=verbose,
-                                             EAPsum.scores=EAPsum.scores,
-                                             item_weights=item_weights, return.acov=return.acov,
-                                             CUSTOM.IND=CUSTOM.IND, theta_lim=theta_lim,
-                                             discrete=discrete, QMC=QMC, den_fun=den_fun,
-                                             min_expected=min_expected, pis=pis, mixture=mixture,
-                                             use_dentype_estimate=use_dentype_estimate,
-                                             leave_missing=leave_missing, nfact=nfact, ...))
+        if(method == 'EAPsum' || method == 'EAPsum_2.0')
+            return(EAPsum(object, full.scores=full.scores, full.scores.SE=full.scores.SE,
+                          quadpts=quadpts, gp=gp, verbose=verbose,
+                          EAPsum.scores=EAPsum.scores,
+                          item_weights=item_weights, return.acov=return.acov,
+                          CUSTOM.IND=CUSTOM.IND, theta_lim=theta_lim,
+                          discrete=discrete, QMC=QMC, den_fun=den_fun,
+                          min_expected=min_expected, pis=pis, mixture=mixture,
+                          use_dentype_estimate=use_dentype_estimate,
+                          leave_missing=leave_missing, nfact=nfact,
+                          version2 = method == 'EAPsum_2.0', ...))
 		theta <- as.matrix(seq(theta_lim[1L], theta_lim[2L], length.out=quadpts))
 		LR <- .hasSlot(object@Model$lrPars, 'beta')
 		USETABDATA <- TRUE
@@ -274,26 +277,45 @@ setMethod(
                     if(!is(pars, 'try-error')) break
                 }
             }
-            if(nfact < 3 || method %in% c('EAP', 'classify') && !mirtCAT){
+            if(method == 'EAP_general'){
+                blist <- extract.mirt(object, 'bfactor')
+                if(is.null(blist$specific))
+                    stop('EAP_general only applicable when model was estimated with bfactor()', call.=FALSE)
+                nspec <- ncol(blist$sitems)
+                ngen <- extract.mirt(object, 'nfact') - nspec
+                theta <- theta.unique <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
+                Theta <- thetaComb(theta, ngen + 1)
+                theta <- thetaComb(theta, ngen)
+                prior <- den_fun(theta, mean=gp$gmeans[1:ngen],
+                                 sigma=gp$gcov[1:ngen, 1:ngen, drop=FALSE], ...) # for generals only
+                prior <- prior/sum(prior)
+                Theta <- ThetaShort <- cbind(Theta, matrix(Theta[,2], nrow=nrow(Theta), ncol=nspec-1))
+                sprior <- den_fun(matrix(theta.unique), mean=gp$gmeans[ngen+1], sigma=gp$gcov[ngen+1, ngen+1], ...)
+                sprior <- sprior/sum(sprior)
+                nfact <- ngen
+            }
+            if(nfact < 3 || method %in% c('EAP', 'EAP_general', 'classify') && !mirtCAT){
                 if(discrete){
                     ThetaShort <- Theta <- object@Model$Theta
                     W <- if(mixture) do.call(c, object@Internals$Prior) else object@Internals$Prior[[1L]]
                 } else {
-                    if(is.null(custom_theta)){
-                        ThetaShort <- Theta <- if(QMC){
-                            tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
-                            Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
-                        } else thetaComb(theta,nfact)
-                    } else {
-                        if(ncol(custom_theta) != object@Model$nfact)
-                            stop('ncol(custom_theta) does not match model', call.=FALSE)
-                        ThetaShort <- Theta <- custom_theta
+                    if(method != 'EAP_general'){
+                        if(is.null(custom_theta)){
+                            ThetaShort <- Theta <- if(QMC){
+                                tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+                                Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
+                            } else thetaComb(theta,nfact)
+                        } else {
+                            if(ncol(custom_theta) != object@Model$nfact)
+                                stop('ncol(custom_theta) does not match model', call.=FALSE)
+                            ThetaShort <- Theta <- custom_theta
+                        }
+                        if(length(prodlist) > 0L)
+                            Theta <- prodterms(Theta,prodlist)
+                        W <- if(QMC) rep(1, nrow(Theta)) else
+                            den_fun(ThetaShort, mean=gp$gmeans, sigma=gp$gcov, quad=LR, ...)
+                        W <- W/sum(W)
                     }
-                    if(length(prodlist) > 0L)
-                        Theta <- prodterms(Theta,prodlist)
-                    W <- if(QMC) rep(1, nrow(Theta)) else
-                        den_fun(ThetaShort, mean=gp$gmeans, sigma=gp$gcov, quad=LR, ...)
-                    W <- W/sum(W)
                 }
                 if(use_dentype_estimate){
                     Theta <- ThetaShort <- object@Model$Theta
@@ -303,6 +325,25 @@ setMethod(
                 itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
                                               CUSTOM.IND=CUSTOM.IND, pis=pis)
                 itemtrace <- t(t(itemtrace)^item_weights_long)
+                if(!is.null(project)){
+                    stopifnot(length(project) == 1)
+                    ThetaS <- thetaComb(theta,nfact-1)
+                    WS <- den_fun(ThetaS, mean=gp$gmeans[-project],
+                                  sigma=gp$gcov[-project,-project, drop=FALSE], quad=LR, ...)
+                    WS <- WS / sum(WS)
+                    Theta <- matrix(theta)
+                    W <- den_fun(Theta, mean=gp$gmeans[project],
+                                 sigma=gp$gcov[project,project, drop=FALSE], quad=LR, ...)
+                    W <- W / sum(W)
+                    newitemtrace <- matrix(0, nrow(Theta), ncol(itemtrace))
+                    for(i in 1:nrow(Theta)){
+                        pick <- ThetaShort[,project] == Theta[i]
+                        newitemtrace[i,] <- colSums(itemtrace[pick, ] * WS)
+                    }
+                    ThetaShort <- Theta
+                    itemtrace <- newitemtrace
+                    nfact <- 1
+                }
                 log_itemtrace <- log(itemtrace)
                 if(mixture) ThetaShort <- thetaStack(ThetaShort, length(pis))
                 if(method == 'classify')
@@ -314,11 +355,26 @@ setMethod(
                                    log_itemtrace=log_itemtrace,
                                    tabdata=tabdata, ThetaShort=ThetaShort, W=W, return.acov=TRUE,
                                    scores=scores, classify=discrete, hessian=TRUE)
+                } else if(method == 'EAP_general' && return.acov){
+                    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L,
+                                   FUN=EAP_general, progress=verbose,
+                                   log_itemtrace=log_itemtrace, theta=theta, Theta=Theta,
+                                   sprior=sprior, prior=prior, blist=blist,
+                                   tabdata=tabdata, ThetaShort=ThetaShort, return.acov=TRUE,
+                                   scores=scores, hessian=TRUE)
                 } else {
-            	    tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, progress=FALSE,
-            	                   log_itemtrace=log_itemtrace, classify=discrete & !mixture,
-                                   tabdata=tabdata, ThetaShort=ThetaShort, W=W, scores=scores,
-                                   hessian=estHess && method == 'EAP', return_zeros=method != 'EAP')
+                    tmp <- if(method == 'EAP_general'){
+                        myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L,
+                                FUN=EAP_general, progress=verbose,
+                                log_itemtrace=log_itemtrace, theta=theta, Theta=Theta,
+                                sprior=sprior, prior=prior, blist=blist,
+                                tabdata=tabdata, ThetaShort=ThetaShort, scores=scores)
+                    } else {
+                        myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=EAP, progress=verbose,
+                                log_itemtrace=log_itemtrace, classify=discrete & !mixture,
+                                tabdata=tabdata, ThetaShort=ThetaShort, W=W, scores=scores,
+                                hessian=estHess && method == 'EAP', return_zeros=method != 'EAP')
+                    }
                 }
                 if(method == 'classify') scores <- tmp
                 else {
@@ -330,7 +386,7 @@ setMethod(
                 if(all(dim(scores) == dim(start)))
                     scores <- start
             }
-    		if(method %in% c("EAP", 'classify')){
+    		if(method %in% c("EAP", 'EAP_general', 'classify')){
                 #do nothing
     		} else if(method == "MAP"){
                 tmp <- myApply(X=matrix(seq_len(nrow(scores))), MARGIN=1L, FUN=MAP, progress=verbose,
@@ -374,7 +430,9 @@ setMethod(
     		        scores <- tmp[ ,seq_len(nfact), drop = FALSE]
     		        SEscores <- tmp[ , seq_len(nfact) + nfact, drop = FALSE]
     		        factorNames <- extract.mirt(object, 'factorNames')
-    		        colnames(scores) <- factorNames[!grepl('\\(',factorNames)]
+    		        if(!is.null(project))
+    		            factorNames <- factorNames[project]
+    		        colnames(scores) <- factorNames[!grepl('\\(',factorNames)][1:nfact]
     		        converge_info_vec <- tmp[,ncol(tmp)]
     		    } else converge_info_vec <- rep(1L, nrow(scores))
     		    if(impute){
@@ -722,7 +780,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
                    which.items = 2:length(x@ParObjects$pars)-1,
                    use_dentype_estimate = FALSE, pis, leave_missing,
                    item_weights = rep(1, extract.mirt(x, 'nitems')),
-                   EAPsum.scores, return.acov, nfact, ...){
+                   EAPsum.scores, return.acov, nfact, version2 = FALSE, ...){
     calcL1 <- function(itemtrace, K, itemloc){
         .Call('calcL1_cpp', itemtrace, as.integer(K), as.integer(itemloc))
     }
@@ -753,40 +811,92 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         list(X2=X2, df=df)
     }
 
+    K <- extract.mirt(x, 'K')
     prodlist <- attr(x@ParObjects$pars, 'prodlist')
-    if(discrete){
-        Theta <- ThetaShort <- x@Model$Theta
-        prior <- if(mixture) do.call(c, x@Internals$Prior) else x@Internals$Prior[[1L]]
-    } else {
-        nfact <- x@Model$nfact
-        ThetaShort <- Theta <- if(QMC){
-            tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
-            Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
-        } else {
-            theta <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
-            thetaComb(theta,nfact)
-        }
-        prior <- if(QMC) rep(1, nrow(Theta)) else
-            den_fun(Theta, mean=gp$gmeans, sigma=gp$gcov, ...)
+    if(version2){
+        blist <- extract.mirt(x, 'bfactor')
+        if(is.null(blist$specific))
+            stop('EAPsum_2.0 only applicable when model was estimated with bfactor()', call.=FALSE)
+        L1_lst <- vector('list', ncol(blist$sitems))
+        nspec <- length(L1_lst)
+        stage2K <- integer(nspec)
+        ngen <- extract.mirt(x, 'nfact') - nspec
+        stopifnot("structure must resemble a bifactor model" = ngen == 1)
+        theta <- theta.unique <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
+        Theta <- thetaComb(theta, ngen + 1)
+        Theta <- ThetaShort <- cbind(Theta, matrix(Theta[,2], nrow=nrow(Theta), ncol=nspec-1))
+        prior <- den_fun(Theta, mean=gp$gmeans, sigma=gp$gcov, ...)
         prior <- prior/sum(prior)
-        if(length(prodlist) > 0L)
-            Theta <- prodterms(Theta, prodlist)
+        sprior <- den_fun(matrix(theta), mean=gp$gmeans[ngen+1], sigma=gp$gcov[ngen+1, ngen+1], ...)
+        sprior <- sprior/sum(sprior)
+    } else {
+        if(discrete){
+            Theta <- ThetaShort <- x@Model$Theta
+            prior <- if(mixture) do.call(c, x@Internals$Prior) else x@Internals$Prior[[1L]]
+        } else {
+            nfact <- x@Model$nfact
+            ThetaShort <- Theta <- if(QMC){
+                tmp <- QMC_quad(npts=quadpts, nfact=nfact, lim=theta_lim)
+                Theta_meanSigma_shift(tmp, gp$gmeans, gp$gcov)
+            } else {
+                theta <- seq(theta_lim[1L],theta_lim[2L],length.out = quadpts)
+                thetaComb(theta,nfact)
+            }
+            prior <- if(QMC) rep(1, nrow(Theta)) else
+                den_fun(Theta, mean=gp$gmeans, sigma=gp$gcov, ...)
+            prior <- prior/sum(prior)
+        }
     }
+    if(length(prodlist) > 0L)
+        Theta <- prodterms(Theta, prodlist)
     if(use_dentype_estimate){
         Theta <- ThetaShort <- x@Model$Theta
         prior <- x@Internals$Prior[[1L]]
     }
+
     pars <- x@ParObjects$pars
-    K <- x@Data$K
     J <- length(K)
-    itemloc <- x@Model$itemloc
-    itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
-                                  CUSTOM.IND=CUSTOM.IND, pis=pis)
-    item_weights_long <- rep(item_weights, extract.mirt(x, "K"))
-    itemtrace <- t(itemtrace)^item_weights_long
-    tmp <- calcL1(itemtrace=itemtrace, K=K, itemloc=itemloc)
-    L1 <- tmp$L1
-    Sum.Scores <- tmp$Sum.Scores
+    itemloc <- extract.mirt(x, 'itemloc')
+    nfact <- extract.mirt(x, 'nfact')
+    if(version2){
+        if(length(CUSTOM.IND))
+            stop('Custom items not yet supported for EAPsum_2.0', call.=FALSE) ## TODO
+        for(i in seq_len(nspec)){
+            pick <- blist$specific == i
+            if(i == 1) pick <- blist$specific == i | is.na(blist$specific)
+            tmpitemloc <- c(1, cumsum(K[pick])+1)
+            itemtrace <- computeItemtrace(pars=pars[c(which(pick), length(pars))],
+                                          Theta=Theta, itemloc=tmpitemloc,
+                                          CUSTOM.IND=CUSTOM.IND, pis=pis)
+            item_weights_long <- rep(item_weights[pick], K[pick])
+            itemtrace <- t(itemtrace)^item_weights_long
+            tmp <- calcL1(itemtrace=itemtrace, K=K[pick], itemloc=tmpitemloc)
+            L1 <- t(tmp$L1)
+            stage2K[i] <- length(tmp$Sum.Scores)
+            subL1 <- matrix(0, ncol(L1), length(theta))
+            for(j in 1:length(theta))
+                subL1[,j] <- colSums(L1[Theta[,1] == theta[j], ] * sprior)
+            L1_lst[[i]] <- subL1
+        }
+        itemtrace <- do.call(rbind, L1_lst)
+        K <- stage2K
+        itemloc <- c(1, cumsum(K)+1)
+        tmp <- calcL1(itemtrace=itemtrace, K=K, itemloc=itemloc)
+        L1 <- tmp$L1
+        Sum.Scores <- tmp$Sum.Scores
+        Theta <- ThetaShort <- matrix(theta)
+        prior <- den_fun(Theta, mean=gp$gmeans[1], sigma=gp$gcov[1,1], ...)
+        prior <- prior/sum(prior)
+        nfact <- 1
+    } else {
+        itemtrace <- computeItemtrace(pars=pars, Theta=Theta, itemloc=itemloc,
+                                      CUSTOM.IND=CUSTOM.IND, pis=pis)
+        item_weights_long <- rep(item_weights, K)
+        itemtrace <- t(itemtrace)^item_weights_long
+        tmp <- calcL1(itemtrace=itemtrace, K=K, itemloc=itemloc)
+        L1 <- tmp$L1
+        Sum.Scores <- tmp$Sum.Scores
+    }
     if(S_X2){
         L1total <- L1 %*% prior
         Elist <- vector('list', J)
@@ -808,7 +918,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         return(Elist)
     }
     if(mixture) ThetaShort <- thetaStack(ThetaShort, length(pis))
-    thetas <- SEthetas <- matrix(0, nrow(L1), x@Model$nfact)
+    thetas <- SEthetas <- matrix(0, nrow(L1), nfact)
     if(return.acov){
         vcovs <- vector('list', nrow(thetas))
         names(vcovs) <- Sum.Scores
@@ -845,6 +955,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         }
     }
     factorNames <- extract.mirt(x, 'factorNames')
+    if(version2) factorNames <- factorNames[1]
     colnames(thetas) <- factorNames[!grepl('\\(',factorNames)]
     colnames(SEthetas) <- paste0('SE_', colnames(thetas))
     ret <- data.frame(Sum.Scores=Sum.Scores + sum(x@Data$mins), thetas, SEthetas)
@@ -859,7 +970,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
             return(vcovs[match(scores, Sum.Scores)])
         if(discrete)
             colnames(EAPscores) <- gsub('Theta.', 'Class_', colnames(EAPscores))
-        pick <- if(full.scores.SE) seq_len(x@Model$nfact*2) else 1L:x@Model$nfact
+        pick <- if(full.scores.SE) seq_len(nfact*2) else 1L:nfact
         ret <- as.matrix(EAPscores[,pick, drop=FALSE])
         rownames(ret) <- NULL
         if(!leave_missing){
@@ -885,14 +996,15 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
         df <- tmp$df
         X2 <- tmp$X2
         tmp <- suppressWarnings(expand.table(cbind(ret[,2L:(ncol(ret)-1L)], ret$observed)))
-        pick <- seq_len(x@Model$nfact)
+        pick <- seq_len(nfact)
         EX <- sum(Sum.Scores * rowSums(t(t(L1) * prior))) + sum(mins)
         VARX <- sum(( (Sum.Scores + sum(mins)) - EX)^2 *
                         rowSums(t(t(L1) * prior)))
-        itemx <- matrix(0, nrow=J, ncol=2)
+        itemx <- matrix(0, nrow=length(K), ncol=2)
         colnames(itemx) <- c('E.x', 'VAR.x')
-        rownames(itemx) <- extract.mirt(x, "itemnames")
-        for(i in 1L:J){
+        rownames(itemx) <- if(version2) extract.mirt(x, 'factorNames')[-1]
+          else extract.mirt(x, "itemnames")
+        for(i in 1L:length(K)){
             si <- 0L:(K[i]-1L)
             px <- colSums(t(itemtrace[itemloc[i]:(itemloc[i+1L]-1L),]) * prior)
             ex <- sum(si * px)
@@ -901,7 +1013,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
             itemx[i,2L] <- varx
         }
         rxx <- apply(tmp[,pick, drop=FALSE], 2L, var) /
-            (apply(tmp[,pick, drop=FALSE], 2L, var) + apply(tmp[,pick+x@Model$nfact, drop=FALSE], 2L,
+            (apply(tmp[,pick, drop=FALSE], 2L, var) + apply(tmp[,pick+nfact, drop=FALSE], 2L,
                                                             function(x) mean(x^2)))
         names(rxx) <- paste0('rxx_', factorNames)
         fit <- data.frame(df=df, X2=X2, p.X2 = suppressWarnings(pchisq(X2, df, lower.tail=FALSE)))
@@ -922,7 +1034,7 @@ EAPsum <- function(x, full.scores = FALSE, full.scores.SE = FALSE,
             ret$expected <- NULL
             ret$std.res <- NULL
         }
-        ret <- as.mirt_matrix(ret)
+        ret <- as.mirt_df(ret)
         if(verbose && !discrete && all(item_weights == 1)){
             print(attr(ret, 'fit'))
             cat('\n')
@@ -1051,6 +1163,69 @@ EAP <- function(ID, log_itemtrace, tabdata, ThetaShort, W, hessian, scores,
     } else SE <- rep(NA, nfact)
     return(c(thetas, SE, 1))
 }
+
+EAP_general <- function(ID, theta, Theta, sprior, prior, blist, log_itemtrace,
+                        tabdata, ThetaShort, hessian = TRUE, scores,
+                return.acov = FALSE, return_zeros = FALSE, classify = FALSE){
+
+    if(any(is.na(scores[ID, ])))
+        return(c(scores[ID, ], rep(NA, ncol(scores))))
+    nfact <- ncol(ThetaShort)
+    nspec <- ncol(blist$sitems)
+    ngen <- nfact - nspec
+    resp <- as.logical(tabdata[ID,])
+    Plk <- matrix(0, nrow(theta), nspec)
+    for(i in 1:nspec){
+        pick <- blist$sitems[,i] == 1 & resp
+        if(i == 1) pick & rowSums(blist$sitems == 0)
+        log_itrace <- log_itemtrace[,pick]
+        log_likelihood <- rowSums(log_itrace)
+        likelihood <- exp(log_likelihood)
+        for(j in 1:nrow(theta)){
+            pick2 <- colSums(theta[j, ] == t(Theta[,1:ngen, drop=FALSE])) == ncol(theta)
+            Plk[j, i] <- sum(likelihood[pick2] * sprior)
+        }
+    }
+    L <- rowSums(log(Plk))
+    W <- prior
+    expLW <- if(is.matrix(W)) exp(L) * W[ID, ] else exp(L) * W
+    LW <- if(is.matrix(W)) L + log(W[ID, ]) else L + log(W)
+    maxLW <- max(LW)
+    nc <- sum(exp(LW - maxLW)) * exp(maxLW)
+    if(nc == 0){
+        if(return_zeros){
+            if(return.acov) return(matrix(NA, ngen, ngen))
+            return(numeric(ngen*2L + 1L))
+        }
+        warning(paste0('Unable to compute normalization constant for EAP estimates; ',
+                       'consider using MAP estimates instead. Returning NaNs'),
+                call.=FALSE)
+        return(c(rep(NaN, ngen*2), 0))
+    }
+    thetas <- colSums(theta * expLW / nc)
+    if(hessian && !classify){
+        thetadif <- t((t(theta) - thetas))
+        Thetaprod <- matrix(0, nrow(theta), ngen * (ngen + 1L)/2L)
+        ind <- 1L
+        for(i in seq_len(ngen)){
+            for(j in seq_len(ngen)){
+                if(i <= j){
+                    Thetaprod[,ind] <- thetadif[,i] * thetadif[,j]
+                    ind <- ind + 1L
+                }
+            }
+        }
+        vcov <- matrix(0, ngen, ngen)
+        if(!classify){
+            vcov[lower.tri(vcov, TRUE)] <- colSums(Thetaprod * expLW / nc)
+            if(ngen > 1L) vcov <- vcov + t(vcov) - diag(diag(vcov))
+        }
+        if(return.acov) return(vcov)
+        SE <- sqrt(diag(vcov))
+    } else SE <- rep(NA, ngen)
+    return(c(thetas, SE, 1))
+}
+
 
 EAP_classify <- function(ID, log_itemtrace, tabdata, W, nclass){
     L <- rowSums(log_itemtrace[ ,as.logical(tabdata[ID,]), drop = FALSE])

@@ -22,8 +22,10 @@
 #' If the input object is a discrete latent class object estimated from \code{\link{mdirt}}
 #' then the returned results will be with respect to the posterior classification for each
 #' individual. The method inputs for \code{'DiscreteClass'} objects may only be \code{'EAP'},
-#' for posterior classification of each response pattern, or \code{'EAPsum'} for posterior
-#' classification based on the raw sum-score. For more information on these algorithms refer to
+#' for posterior classification of each response pattern, \code{'EAPsum'} and \code{'EAPsum_2.0'}
+#' for posterior classification based on the raw sum-score (\code{'EAPsum_2.0'} results in marginal
+#' estimates of the primary dimensions only using the 2.0 algorithm described by Cai, 2015).
+#' For more information on these algorithms refer to
 #' the \code{mirtCAT} package and the associated JSS paper (Chalmers, 2016).
 #'
 #'
@@ -39,7 +41,8 @@
 #'   then this argument is ignored
 #' @param Target target rotation; see \code{\link{summary-method}} for details
 #' @param EAPsum.scores logical; include the model-implied expected values and variance for the item
-#'   and total scores when using \code{method = 'EAPsum'} with \code{full.scores=FALSE}?
+#'   and total scores when using \code{method = 'EAPsum'} or \code{method = 'EAPsum_2.0'}
+#'   with \code{full.scores=FALSE}?
 #'   This information is included in the hidden \code{'fit'} attribute which
 #'   can be extracted via \code{attr(., 'fit')} for later use
 #' @param plausible.draws number of plausible values to draw for future researchers
@@ -58,10 +61,17 @@
 #' \itemize{
 #'     \item \code{"EAP"} for the expected a-posteriori (default). For models fit using
 #'       \code{\link{mdirt}} this will return the posterior classification probabilities
+#'     \item \code{"EAP_general"} for the expected a-posteriori estimates using dimension reduction
+#'       to obtain estimates of the general factor(s) only (Gibbons, et al., 2007). This is generally
+#'       more accurate than the \code{'EAP'} approach as the dimensions to integrate are reduced to the
+#'       number of general factors plus one, and therefore higher number of quadrature nodes can be used
+#'       (see \code{quadpts} for the defaults. For a bifactor model, for example,
+#'       this method requires exactly 2 dimensions). Model must have been fit using \code{\link{bfactor}}
 #'     \item \code{"MAP"} for the maximum a-posteriori (i.e, Bayes modal)
 #'     \item \code{"ML"} for maximum likelihood
 #'     \item \code{"WLE"} or \code{"WML"} for weighted maximum-likelihood estimation
-#'     \item \code{"EAPsum"} for the expected a-posteriori for each sum score
+#'     \item \code{"EAPsum"} and \code{"EAPsum_2.0"} for the expected a-posteriori for each sum
+#'       score (the latter is relevant for bifactor models)
 #'     \item \code{"plausible"} for a single plausible value imputation for each case.
 #'       This is equivalent to setting \code{plausible.draws = 1}
 #'     \item \code{"classify"} for the posteriori classification probabilities (only
@@ -136,7 +146,12 @@
 #' @seealso \code{\link{averageMI}}
 #' @export fscores
 #' @references
-#' Chalmers, R., P. (2012). mirt: A Multidimensional Item Response Theory
+#'
+#' Cai, L. (2015). Lord–Wingersky algorithm version 2.0 for hierarchical item
+#' factor models with applications in test scoring, scale alignment, and model fit testing.
+#' \emph{Psychometrika, 80}(2), 535–559.
+#'
+#' Chalmers, R. P. (2012). mirt: A Multidimensional Item Response Theory
 #' Package for the R Environment. \emph{Journal of Statistical Software, 48}(6), 1-29.
 #' \doi{10.18637/jss.v048.i06}
 #'
@@ -145,6 +160,9 @@
 #' 1-39. \doi{10.18637/jss.v071.i05}
 #'
 #' Embretson, S. E. & Reise, S. P. (2000). Item Response Theory for Psychologists. Erlbaum.
+#'
+#' Gibbons. R. D., Bock, R. D., Hedeker, D., et al. (2007). Full-Information item bifactor
+#' analysis of graded response data. \emph{Applied Psychological Measurement, 31}(1), 4-19.
 #'
 #' Thissen, D., Pommerich, M., Billeaud, K., & Williams, V. S. L. (1995).
 #' Item Response Theory for Scores on Tests Including Polytomous Items with Ordered Responses.
@@ -292,8 +310,12 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
                   extract.mirt(object, 'nfact') == 1)
     if(!is(object, 'DiscreteClass')){
         if(QMC && is.null(quadpts)) quadpts <- 5000
+        nfact <- object@Model$nfact
+        if(method == 'EAPsum_2.0') nfact <- 2
+        if(method == 'EAP_general')
+            nfact <- nfact - attr(object@Model$model,"nspec") + 1
         if(is.null(quadpts))
-            quadpts <- switch(as.character(object@Model$nfact),
+            quadpts <- switch(as.character(nfact),
                               '1'=121, '2'=61, '3'=31, '4'=19, '5'=11, '6'=7, 5)
     } else quadpts <- 1
     if(method == 'plausible'){
@@ -303,7 +325,7 @@ fscores <- function(object, method = "EAP", full.scores = TRUE, rotate = 'oblimi
     if(is(object, "MultipleGroupClass") && !is.null(response.pattern))
         stop(c("response.pattern input cannot be used with multiple-group models. ",
                "Please extract the group you want first with the extract.group() and supply this object to fscores()"), call.=FALSE)
-    if(any(extract.mirt(object, 'itemtype') == 'spline') && !(method %in% c('EAP', 'EAPsum')))
+    if(any(extract.mirt(object, 'itemtype') == 'spline') && !(method %in% c('EAP', 'EAPsum', 'EAPsum_2.0')))
         stop('Only EAP and EAPsum method supported when spline items are modeled', call.=FALSE)
     if(returnER) full.scores <- FALSE
     if(na.rm)
