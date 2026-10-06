@@ -1,3 +1,22 @@
+# Changes in mirt 1.48
+
+- `itemstats()` gains `ts_fun` argument to indicate how the composite score
+  should be formed
+
+- `empirical.plot()` gains other `type` inputs: `discrim` to plot reduced
+  item-total correlations, `difficulty` to plot the item means, `discrim_diff`
+  to produced a bivariate plot, `alpha_rm` for item-removal behaviour on coefficient alpha,
+  and `freq` for bar-chart frequencies per item. 
+  The first three can be accompanied by a `sort` logical
+
+- `empirical.plot()` gains an `org.data` argument to substitute un-scored data in 
+  when building empirical trace-lines. Useful for simple distractor analysis visualization,
+  where now the scored key(s) are auto-detected and plotted with higher contrast
+
+- Maximum EM iteration limit warning decreased to `message()` instead. However,
+  if last iteration had Aitken-accelerated criterion discrepancies greater than 1e-3
+  then a warning will be raised to indicate that the EM algorithm is likely still climbing
+
 # Changes in mirt 1.47
 
 - Added `PCgraded` itemtype to estimate the partially non-compensatory

@@ -7,6 +7,7 @@
 itemstats(
   data,
   group = NULL,
+  ts_fun = rowSums,
   use_ts = TRUE,
   itemfreq = "proportions",
   ts.tables = FALSE
@@ -18,6 +19,11 @@ with the response patterns}
 
 \item{group}{optional grouping variable to condition on when computing
 summary information}
+
+\item{ts_fun}{function to use to build the linear composite score?
+Recommend inputs are \code{\link{rowSums}} (default) and
+\code{\link{rowMeans}}, and must include an argument \code{na.rm},
+though users may define their own as well}
 
 \item{use_ts}{logical; include information that is conditional on a
 meaningful total score?}
@@ -35,10 +41,13 @@ Returns a list containing the summary statistics
 \description{
 Function to compute generic item summary statistics that do not require
 prior fitting of IRT models. Contains information about sample sizes (\code{N}),
-number of observed categories (\code{K}), coefficient alpha
-(and alpha if an item is deleted), mean/SD and frequency of total scores,
-reduced item-total correlations, average/sd of the correlation between items,
-response frequencies, and conditional mean/sd information given the
+number of observed categories (\code{K}), (standardized) coefficient alpha
+(and alpha if an item is removed; (\code{alpha_if_rm})),
+mean/SD and frequency of total scores,
+reduced item-total correlations (\code{cor_if_rm}),
+average/sd of the correlation between items,
+squared multiple correlation (\code{smc}), response frequencies,
+and conditional mean/sd information given the
 unweighted sum scores. Summary information involving the total scores
 only included for responses with no missing data to ensure the metric is
 meaningful, however standardized statistics (e.g., correlations) utilize
@@ -51,6 +60,10 @@ LSAT7full <- expand.table(LSAT7)
 head(LSAT7full)
 itemstats(LSAT7full)
 itemstats(LSAT7full, itemfreq='counts')
+
+# composite score expressed as a mean
+itemstats(LSAT7full)$overall
+itemstats(LSAT7full, ts_fun=rowMeans)$overall
 
 # behaviour with missing data
 LSAT7full[1:5,1] <- NA

@@ -98,13 +98,14 @@ test_that('extras', {
     mats[1:4] <- mats2[1:4] <- list(matrix(c(0:3, 0:3), 4))
     mats[5:8] <- list(matrix(c(0:5, 1,1,0,0,0,0), 6))
     mats2[5:8] <- list(matrix(c(0:5, 0:5), 6))
-    mod1 <- mirt(dat, 2, 'gpcm', TOL = 5e-2, verbose=FALSE)
-    mod2 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats2, TOL = 5e-2, verbose=FALSE)
+    mod1 <- mirt(dat, 2, 'gpcm', TOL = 5e-2, verbose=FALSE, technical=list(warn=FALSE))
+    mod2 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats2, TOL = 5e-2, verbose=FALSE, technical=list(warn=FALSE))
     s1 <- coef(mod1, simplify=TRUE)$items
     s2 <- coef(mod2, simplify=TRUE)$items
     pick <- c('a1', 'a2', 'd1', 'd2', 'd3')
     expect_true(sum(abs(s1[,pick] - s2[,pick])) < 1e-8)
-    mod3 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats, TOL = 1e-2, verbose=FALSE)
+    mod3 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats, TOL = 1e-2, verbose=FALSE,
+                 technical=list(warn=FALSE))
     expect_equal(extract.mirt(mod3, 'logLik'), -3721.461, tolerance = 1e-4)
     cfs <- as.vector(coef(mod3, simplify=TRUE)$items)
     expect_equal(abs(cfs), abs(c(0.7835446,2.088519,4.489773,0.6727285,0.2357904,0.3148114,1.736133,0.3861383,0.07062774,6.563708,1.01623,0.05366885,0.2764068,-5.030398,-0.1089204,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,2.737057,9.954572,8.696347,2.051471,1.746521,1.493303,4.871186,2.184036,5.174404,13.00528,12.46809,2.830379,4.335373,6.261805,7.718796,3.259992,3.88189,5.255669,9.140148,1.683119,4.413986,6.18042,8.669859,3.579751,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,4.178023,5.776866,7.750279,3.300487,NA,NA,NA,NA,3.043197,4.313529,5.190609,1.550788)), tolerance=1e-4)

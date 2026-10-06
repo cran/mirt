@@ -21,7 +21,7 @@ test_that('DCIRT', {
     load('testdata/dcirt1.rds')
 
     mod <- mirt(dat_bm, 1, dentype = 'empiricalhist_Woods', verbose=FALSE,
-                technical = list(zeroExtreme = TRUE))
+                technical = list(zeroExtreme = TRUE, warn=FALSE))
     expect_equal(extract.mirt(mod, 'logLik'), -12709.16, tolerance=1e-4)
     fs1 <- fscores(mod)
     fs2 <- fscores(mod, use_dentype_estimate = TRUE)
@@ -39,7 +39,7 @@ test_that('DCIRT', {
     pp <- plot(mod, type = 'empiricalhist')
     expect_class(pp, 'trellis')
 
-    mod2 <- mirt(dat_bm, 1, dentype = 'EHW', verbose=FALSE)
+    mod2 <- mirt(dat_bm, 1, dentype = 'EHW', verbose=FALSE, technical=list(warn=FALSE))
     expect_equal(extract.mirt(mod2, 'logLik'), -12758.689, tolerance=1e-4)
 
     res_bm <- mirt(dat_bm, model = 1, dentype='Davidian-6', verbose=FALSE)
@@ -200,7 +200,8 @@ test_that('DCIRT-MG', {
 
     # equated EHW
     mod_scalarEHW <- multipleGroup(dat, 1, group = group, verbose=FALSE, dentype='EHW',
-                                invariance=c(colnames(dat)[1:10], 'free_var','free_means'))
+                                invariance=c(colnames(dat)[1:10], 'free_var','free_means'),
+                                technical=list(warn=FALSE))
     # plot(mod_scalarEHW)
     expect_equal(extract.mirt(mod_scalarEHW, 'df'), 67108544)
     expect_equal(extract.mirt(mod_scalarEHW, 'logLik'), -23877.63, tolerance=1e-4)

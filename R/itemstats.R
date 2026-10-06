@@ -2,10 +2,13 @@
 #'
 #' Function to compute generic item summary statistics that do not require
 #' prior fitting of IRT models. Contains information about sample sizes (\code{N}),
-#' number of observed categories (\code{K}), coefficient alpha
-#' (and alpha if an item is deleted), mean/SD and frequency of total scores,
-#' reduced item-total correlations, average/sd of the correlation between items,
-#' response frequencies, and conditional mean/sd information given the
+#' number of observed categories (\code{K}), (standardized) coefficient alpha
+#' (and alpha if an item is removed; (\code{alpha_if_rm})),
+#' mean/SD and frequency of total scores,
+#' reduced item-total correlations (\code{cor_if_rm}),
+#' average/sd of the correlation between items,
+#' squared multiple correlation (\code{smc}), response frequencies,
+#' and conditional mean/sd information given the
 #' unweighted sum scores. Summary information involving the total scores
 #' only included for responses with no missing data to ensure the metric is
 #' meaningful, however standardized statistics (e.g., correlations) utilize
@@ -18,6 +21,10 @@
 #' @param itemfreq character vector indicting whether to
 #'   include item response \code{"proportions"} or \code{"counts"}
 #'   for each item. If set to \code{'none'} then this will be omitted
+#' @param ts_fun function to use to build the linear composite score?
+#'   Recommend inputs are \code{\link{rowSums}} (default) and
+#'   \code{\link{rowMeans}}, and must include an argument \code{na.rm},
+#'   though users may define their own as well
 #' @param use_ts logical; include information that is conditional on a
 #'   meaningful total score?
 #' @param ts.tables logical; include mean/sd summary information
@@ -39,6 +46,10 @@
 #' head(LSAT7full)
 #' itemstats(LSAT7full)
 #' itemstats(LSAT7full, itemfreq='counts')
+#'
+#' # composite score expressed as a mean
+#' itemstats(LSAT7full)$overall
+#' itemstats(LSAT7full, ts_fun=rowMeans)$overall
 #'
 #' # behaviour with missing data
 #' LSAT7full[1:5,1] <- NA
@@ -76,6 +87,7 @@
 #' itemstats(merged)
 #'
 itemstats <- function(data, group = NULL,
+                      ts_fun = rowSums,
                       use_ts=TRUE,
                       itemfreq="proportions",
                       ts.tables=FALSE){
@@ -95,8 +107,8 @@ itemstats <- function(data, group = NULL,
     all_NA <- apply(is.na(data), 2, all)
     removed <- colnames(data)[all_NA]
     data <- data[ ,!all_NA]
-    TS <- rowSums(data, na.rm = TRUE)
-    TS_miss <- rowSums(data)
+    TS <- ts_fun(data, na.rm = TRUE)
+    TS_miss <- ts_fun(data, na.rm=FALSE)
     rs <- suppressWarnings(try(cor(data, use = "pairwise.complete.obs"),
                                silent = TRUE))
     if(is(rs, 'try-err')) rs <- NaN
@@ -106,28 +118,37 @@ itemstats <- function(data, group = NULL,
             ret <- suppressWarnings(cor(x, tsx, use = 'pairwise.complete.obs'))
             ret
         }, drop=TRUE)
-        itemcor <- apply(data, 2, function(x, drop){
-            tsx <- if(drop) TS-x else TS
-            suppressWarnings(cor(x, tsx, use = 'pairwise.complete.obs'))
-        }, drop=FALSE)
+        # itemcor <- apply(data, 2, function(x, drop){
+        #     tsx <- if(drop) TS-x else TS
+        #     suppressWarnings(cor(x, tsx, use = 'pairwise.complete.obs'))
+        # }, drop=FALSE)
         itemalpha <- sapply(1:ncol(data), function(x){
             tmpdat <- na.omit(data[,-x, drop=FALSE])
             CA(tmpdat)
         })
+        no.omit_data <- na.omit(data)
+        smc <- sapply(1:ncol(data), function(x){
+            tmpdat <- no.omit_data[,-x, drop=FALSE]
+            mod <- lm(no.omit_data[,x] ~ ., as.data.frame(tmpdat))
+            summary(mod)$r.squared
+        })
         overall <- data.frame(N.complete=sum(!is.na(TS_miss)), N=nrow(data),
-                              mean_total.score=mean(TS_miss, na.rm=TRUE),
-                              sd_total.score=sd(TS_miss, na.rm=TRUE),
-                              ave.r=mean(rs[lower.tri(rs)]),
-                              sd.r=sd(rs[lower.tri(rs)]),
-                              alpha = CA(na.omit(data)))
-        overall$SEM.alpha <- with(overall, sd_total.score * sqrt(1-alpha))
+                              mean.total=mean(TS_miss, na.rm=TRUE),
+                              sd.total=sd(TS_miss, na.rm=TRUE),
+                              std.alpha = NA,
+                              alpha = CA(na.omit(data)),
+                              SEM.alpha = NA,
+                              mean.r=mean(rs[lower.tri(rs)]),
+                              sd.r=sd(rs[lower.tri(rs)]))
+        overall$SEM.alpha <- with(overall, sd.total * sqrt(1-alpha))
+        overall$std.alpha <- CA(scale(na.omit(data)))
         rownames(overall) <- ""
         df <- data.frame(N=apply(data, 2, function(x) sum(!is.na(x))),
                          K=apply(data, 2, \(x) length(unique(na.omit(x)))),
                          mean=colMeans(data, na.rm = TRUE),
                          sd=apply(data, 2, sd, na.rm = TRUE),
-                         total.r=itemcor,
-                         total.r_if_rm=itemcor_drop,
+                         cor_if_rm=itemcor_drop,
+                         smc=smc,
                          alpha_if_rm=itemalpha)
     } else {
         overall <- data.frame(N.complete=sum(!is.na(TS_miss)), N=nrow(data))

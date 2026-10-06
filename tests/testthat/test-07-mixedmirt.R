@@ -20,7 +20,8 @@ test_that('mixed dich', {
     model <- mirt.model(mixedmirt1, quiet = TRUE)
 
     #simple latent regression
-    mod0 <- mirt(data, 1, 'Rasch', covdata=covdata, formula = ~ group + pseudoIQ, verbose=FALSE)
+    mod0 <- mirt(data, 1, 'Rasch', covdata=covdata, formula = ~ group + pseudoIQ,
+                 verbose=FALSE, technical=list(warn=FALSE))
     expect_equal(mod0@Fit$logLik, -4058.968, tolerance = 1e-2)
     cfs <- coef(mod0)
     expect_equal(as.numeric(cfs$lr.betas), c(0.0000000, 0.8916977, 1.9757340, 0.2168971), tolerance=1e-4)
@@ -30,7 +31,7 @@ test_that('mixed dich', {
                  tolerance = 1e-3)
     require(boot, quietly=TRUE, warn.conflicts=FALSE)
     set.seed(1)
-    bs <- boot.mirt(mod0, R = 3)
+    bs <- boot.mirt(mod0, R = 3, technical=list(warn=FALSE))
     expect_class(bs, 'boot')
     fs <- fscores(mod0, full.scores.SE=TRUE, full.scores=FALSE)
     expect_equal(as.numeric(head(fs)), c(-0.3326607,-0.6466616,-0.4794936,-0.3070341,-0.4769525,-0.5488866,0.2940349,0.2963674,0.2951423,0.2938395,0.2951234,0.2956562),
@@ -48,7 +49,7 @@ test_that('mixed dich', {
     wld <- wald(mod1, L, C=1)
     expect_equal(wld$W[1], .7341243, tolerance = 1e-4)
     set.seed(1)
-    bs <- boot.mirt(mod1, R=2)
+    bs <- boot.mirt(mod1, R=2, technical=list(warn=FALSE))
     expect_class(bs, 'boot')
 
     mod1a <- mixedmirt(data, covdata, model, fixed = ~ 0 + items + group, SE=FALSE,
